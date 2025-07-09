@@ -3,6 +3,7 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用卷积神经网络（ConvNets）进行3D模型的姿势估计
 - en: Welcome to our chapter on human pose estimation. In this chapter, we will be
     building a neural network that will predict 3D human poses using 2D images. We
     will do this with the help of transfer learning by using the VGG16 model architecture
@@ -12,6 +13,7 @@
   id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 欢迎来到我们关于人体姿势估计的章节。在本章中，我们将构建一个神经网络，该网络将使用2D图像预测3D人体姿势。我们将借助迁移学习，使用VGG16模型架构，并根据当前问题对其进行修改。到本章结束时，你将拥有一个**深度学习**（**DL**）模型，它能够很好地预测人体姿势。
 - en: '**Visual effects** (**VFX**) in movies are expensive. They involve using a
     lot of expensive sensors that will be placed on the body of the actor when shooting.
     The information from these sensors will then be used to build visual effects,
@@ -22,6 +24,7 @@
   id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 电影中的**视觉效果**（**VFX**）成本高昂。它们涉及使用大量昂贵的传感器，这些传感器将在拍摄时安装在演员的身体上。然后，来自这些传感器的信息将用于构建视觉效果，所有这些都最终变得非常昂贵。在这个假设的案例中，我们被一家大型电影制片厂问是否可以通过构建一个人体姿势估算器来帮助他们的图形部门构建更便宜、更好的视觉效果，他们将使用该估算器来在编辑时更好地估计屏幕上的姿势。
 - en: For this task, we will be using images from **Frames Labeled In Cinema** (**FLIC**).
     These images are not ready to be used for modeling just yet. So, get ready to
     spend a bit more time on preparing the image data in this chapter. Also, we will
@@ -29,35 +32,42 @@
   id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于本任务，我们将使用来自**电影标签框架**（**FLIC**）的图像。这些图像尚未准备好用于建模。所以，请准备好在本章花费更多时间来准备图像数据。此外，我们将只估算手臂、肩膀和头部的姿势。
 - en: 'In this chapter, we''ll learn about the following topics:'
   id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将学习以下主题：
 - en: Processing/preparing images for pose estimation
   id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 为姿势估计处理/准备图像
 - en: The VGG16 model
   id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: VGG16模型
 - en: Transfer learning
   id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 迁移学习
 - en: Building and understanding the training loop
   id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 构建并理解训练循环
 - en: Testing the model
   id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 测试模型
 - en: It would be better if you implement the code snippets as you go along in this
     chapter, either in a Jupyter notebook or any source code editor. This will make
     it easier for you to follow along, as well as understand what each part of the
@@ -65,49 +75,58 @@
   id: totrans-10
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你在本章中逐步实现代码片段，最好使用Jupyter Notebook或任何源代码编辑器。这将使你更容易跟上进度，并理解代码的每一部分的作用。
 - en: All of the Python files and the Jupyter Notebooks for this chapter can be found
     at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12).
   id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章的所有Python文件和Jupyter笔记本可以在[https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12)找到。
 - en: Code implementation
   id: totrans-12
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 代码实现
 - en: In this exercise, we will be using the Keras deep learning library, which is
     a high-level neural network API capable of running on top of TensorFlow, Theano,
     and CNTK.
   id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个练习中，我们将使用Keras深度学习库，它是一个高级神经网络API，能够在TensorFlow、Theano和CNTK之上运行。
 - en: If you ever have a question related to Keras, refer to this easy-to-understand
     Keras documentation at [https://keras.io](https://keras.io).
   id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你有任何关于Keras的问题，请参考这个易于理解的Keras文档：[https://keras.io](https://keras.io)。
 - en: Please download the `Chapter12` folder from GitHub before moving forward with
     this chapter.
   id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 在继续本章内容之前，请从GitHub下载`Chapter12`文件夹。
 - en: 'This project involves downloading files from various sources that will be called
     inside the scripts. To make sure that the Python scripts or the Jupyter Notebook
     have no issues locating the downloaded files, follow these steps:'
   id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 本项目涉及从多个来源下载文件，这些文件将在脚本中调用。为了确保Python脚本或Jupyter Notebook能够正确定位下载的文件，请按照以下步骤操作：
 - en: Open a Terminal and change your directory by using the `cd` command in the `Chapter12`
     folder.
   id: totrans-17
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 打开终端并使用`cd`命令切换到`Chapter12`文件夹。
 - en: 'Download the `FLIC-full` data file with the following command:'
   id: totrans-18
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用以下命令下载`FLIC-full`数据文件：
 - en: '[PRE0]'
   id: totrans-19
   prefs: []
@@ -118,6 +137,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用以下命令解压ZIP文件：
 - en: '[PRE1]'
   id: totrans-21
   prefs: []
@@ -128,6 +148,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用以下命令删除ZIP文件：
 - en: '[PRE2]'
   id: totrans-23
   prefs: []
@@ -138,6 +159,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用以下命令在`FLIC-full`文件夹中切换目录：
 - en: '[PRE3]'
   id: totrans-25
   prefs: []
@@ -148,6 +170,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 下载包含训练索引的文件：
 - en: '[PRE4]'
   id: totrans-27
   prefs: []
@@ -158,21 +181,25 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 将目录切换回`Chapter12`文件夹。
 - en: Launch your Jupyter Notebook or run the Python scripts from the `Chapter12`
     directory.
   id: totrans-29
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 启动你的Jupyter Notebook或从`Chapter12`目录运行Python脚本。
 - en: Further information on the `FLIC-full` data folder can be found at [https://bensapp.github.io/flic-dataset.html](https://bensapp.github.io/flic-dataset.html).
   id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在[https://bensapp.github.io/flic-dataset.html](https://bensapp.github.io/flic-dataset.html)找到关于`FLIC-full`数据文件夹的更多信息。
 - en: Importing the dependencies
   id: totrans-31
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 导入依赖包
 - en: 'We will be using `numpy`, `matplotlib`, `keras`, `tensorflow`, and the `tqdm`
     package in this exercise. Here, TensorFlow is used as the backend for Keras. You
     can install these packages with `pip`. For the MNIST data, we will be using the dataset
@@ -180,6 +207,7 @@
   id: totrans-32
   prefs: []
   type: TYPE_NORMAL
+  zh: 本次练习中我们将使用`numpy`、`matplotlib`、`keras`、`tensorflow`和`tqdm`包。在这里，TensorFlow作为Keras的后端。你可以通过`pip`安装这些包。对于MNIST数据，我们将使用`keras`模块中提供的数据集，使用简单的`import`即可：
 - en: '[PRE5]'
   id: totrans-33
   prefs: []
@@ -189,6 +217,7 @@
   id: totrans-34
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了可重复性，请务必设置`seed`：
 - en: '[PRE6]'
   id: totrans-35
   prefs: []
@@ -199,6 +228,7 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 探索和预处理数据
 - en: With the `FLIC-full` data folder downloaded and unpacked, inside the `FLIC-full` folder
     you should find the `tr_plus_indices.mat` and `examples.mat` MATLAB files, and
     also the folder named `images`, inside which are the images that will be used
@@ -206,6 +236,8 @@
   id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 下载并解压完`FLIC-full`数据文件夹后，你应该能在`FLIC-full`文件夹中找到`tr_plus_indices.mat`和`examples.mat`
+    MATLAB文件，并且还有一个名为`images`的文件夹，里面是将用于本项目的图像。
 - en: You will find that the images have been captured from movies such as *2 Fast
     2 Furious*, *Along Came Polly*, *American Wedding*, and a few others. Each of
     these images is 480*720 px in size. These images are nothing but screenshots of
@@ -213,12 +245,14 @@
   id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 你会发现，这些图像是从电影如*速度与激情 2*、*与波莉同行*、*美国婚礼*等中截取的。每张图像的大小为480*720像素。这些图像只是选定电影中演员场景的截图，我们将使用它们进行姿势估计。
 - en: 'Let''s load the MATLAB file `examples.mat`. We will do this with the help of
     the `loadmat` module, which we have imported already, along with other imports.
     Also, let''s print out some of the information from this file:'
   id: totrans-39
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们加载MATLAB文件`examples.mat`。我们将借助已经导入的`loadmat`模块来完成这项操作，并打印出文件中的一些信息：
 - en: '[PRE7]'
   id: totrans-40
   prefs: []
@@ -228,20 +262,24 @@
   id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/218fec22-6838-416c-af68-de63f548ad27.png)'
   id: totrans-42
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/218fec22-6838-416c-af68-de63f548ad27.png)'
 - en: 'Figure 12.1: Example file information from printout 1'
   id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.1：来自打印输出 1 的示例文件信息
 - en: 'From the printout, we can see that the MATLAB file has been loaded as a dictionary
     with four keys, one of which is the one we need: the `examples` key. Let''s see
     what this key holds:'
   id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 从打印输出中，我们可以看到该MATLAB文件已作为字典加载，其中包含四个键，其中一个是我们需要的：`examples`键。我们来看一下这个键的内容：
 - en: '[PRE8]'
   id: totrans-45
   prefs: []
@@ -251,14 +289,17 @@
   id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/d9b8d6cd-c3f0-4827-884a-2e649bbb0a4b.png)'
   id: totrans-47
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/d9b8d6cd-c3f0-4827-884a-2e649bbb0a4b.png)'
 - en: Figure 12.2: Example file information from printout 1
   id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.2：来自打印输出 1 的示例文件信息
 - en: The notable thing here is that the value of the `examples` key is a numpy array
     of shape (1, 20928). You will also see that the array has been reshaped to shape
     `(20928,)`. The `examples` key contains the IDs of the images (in the `images`
@@ -266,12 +307,14 @@
   id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里需要注意的是，`examples`键的值是一个形状为(1, 20928)的numpy数组。你还会看到，这个数组已经被重塑为形状`(20928,)`。`examples`键包含的是图像（在`images`文件夹中）的ID及其对应的姿势坐标，可用于建模。
 - en: 'Let''s print out an image ID and its corresponding coordinates array with its
     shape. The image ID we need is stored at index `3`, and the corresponding coordinates
     are at index `2`. Let''s print these out:'
   id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们打印出一个图像ID及其对应的坐标数组及其形状。我们需要的图像ID存储在索引`3`中，相关的坐标存储在索引`2`中。我们来打印这些出来：
 - en: '[PRE9]'
   id: totrans-51
   prefs: []
@@ -281,19 +324,23 @@
   id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/212857ff-d2e7-4450-bcdc-f2048900451f.png)'
   id: totrans-53
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/212857ff-d2e7-4450-bcdc-f2048900451f.png)'
 - en: Figure 12.3: Example file information from printout 2
   id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.3：来自打印输出 2 的示例文件信息
 - en: 'From the preceding screenshot, we can see that the coordinates array is of
     shape (2,29):'
   id: totrans-55
   prefs: []
   type: TYPE_NORMAL
+  zh: 从之前的截图中，我们可以看到坐标数组的形状是(2,29)：
 - en: '[PRE10]'
   id: totrans-56
   prefs: []
@@ -303,20 +350,24 @@
   id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/c0036acc-54ae-44b1-8f58-654bf1668521.png)'
   id: totrans-58
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/c0036acc-54ae-44b1-8f58-654bf1668521.png)'
 - en: 'Figure 12.4: List of joint labels'
   id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.4：关节标签列表
 - en: 'But, if you look back at the coordinates array that we printed in the preceding
     screenshot, out of the 29 coordinates, we only have information on 11 of the body
     joints/locations. These are as follows:'
   id: totrans-60
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，如果你回顾前面的截图中我们打印的坐标数组，在29个坐标中，我们只得到了11个身体关节/位置的信息。具体如下：
 - en: '[PRE11]'
   id: totrans-61
   prefs: []
@@ -326,19 +377,23 @@
   id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出结果：
 - en: '![](img/24a820f3-2079-4162-9183-9a3a15431900.png)'
   id: totrans-63
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/24a820f3-2079-4162-9183-9a3a15431900.png)'
 - en: 'Figure 12.5: List of joint labels with coordinates'
   id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.5：带坐标的关节标签列表
 - en: 'For the purpose of this project, we only need information on the following
     body joints/locations:'
   id: totrans-65
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于本项目，我们只需要以下身体关节/位置的信息：
 - en: '[PRE12]'
   id: totrans-66
   prefs: []
@@ -348,50 +403,62 @@
   id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出结果：
 - en: '![](img/33982f76-450e-4511-9f30-0b326d58db3f.png)'
   id: totrans-68
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/33982f76-450e-4511-9f30-0b326d58db3f.png)'
 - en: 'Figure 12.6: Required joints and their indices in the array'
   id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.6：数组中所需的关节及其索引
 - en: '`lsho`: Left shoulder'
   id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lsho`：左肩'
 - en: '`lelb`: Left elbow'
   id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lelb`：左肘'
 - en: '`lwri`: Left wrist'
   id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: '`lwri`：左手腕'
 - en: '`rsho`: Right shoulder'
   id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: '`rsho`：右肩'
 - en: '`relb`: Right elbow'
   id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: '`relb`：右肘'
 - en: '`rwri`: Right wrist'
   id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: '`rwri`：右手腕'
 - en: '`leye`: Left eye'
   id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: '`leye`：左眼'
 - en: '`reye`: Right eye'
   id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: '`reye`：右眼'
 - en: '`nose`: Nose'
   id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: '`nose`：鼻子'
 - en: 'Now, let''s define a function that takes in a dictionary of nine joint labels
     and coordinates and returns a list with seven coordinates (*7* (*x*,*y*) pairs).
     The reason for seven coordinates is that the `leye`, `reye`, and the `nose` coordinates
@@ -399,6 +466,7 @@
   id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们定义一个函数，该函数接受包含九个关节标签和坐标的字典，并返回一个包含七个坐标（*7*（*x*,*y*）对）的列表。七个坐标的原因是，当我们对`leye`、`reye`和`nose`坐标取平均时，它们会合并成一个头部坐标：
 - en: '[PRE13]'
   id: totrans-80
   prefs: []
@@ -408,6 +476,7 @@
   id: totrans-81
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们加载`tr_plus_indices.mat` MATLAB文件，就像我们之前做的那样：
 - en: The reason why we need to use the `tr_plus_indices.mat` file is because it contains
     indices of images that should only be used for training, as well as some unlisted
     ones for testing. The reason for such a split is to make sure that the train set
@@ -416,6 +485,8 @@
   id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要使用`tr_plus_indices.mat`文件的原因是，它包含了仅应用于训练的图像的索引，以及一些未列出的用于测试的图像。这样的划分目的是确保训练集和测试集来自完全不同的电影片段，从而避免过拟合。有关更多信息，请访问
+    [https://bensapp.github.io/flic-dataset.html](https://bensapp.github.io/flic-dataset.html)。
 - en: '[PRE14]'
   id: totrans-83
   prefs: []
@@ -425,20 +496,24 @@
   id: totrans-84
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出结果：
 - en: '![](img/facd390a-cf75-42f5-aa65-a71b2491ef90.png)'
   id: totrans-85
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/facd390a-cf75-42f5-aa65-a71b2491ef90.png)'
 - en: 'Figure 12.7: train_indices file information printout 1'
   id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.7：train_indices文件信息输出1
 - en: 'From the preceding screenshot, you can see that the MATLAB file has been loaded
     as a dictionary with four keys, one of which is `tr_plus_indices`, which is the
     one we need. Let''s look at the content of this key:'
   id: totrans-87
   prefs: []
   type: TYPE_NORMAL
+  zh: 从之前的截图可以看到，MATLAB文件已作为字典加载，包含四个键，其中之一是`tr_plus_indices`，这是我们需要的。让我们看一下这个键的内容：
 - en: '[PRE15]'
   id: totrans-88
   prefs: []
@@ -448,25 +523,30 @@
   id: totrans-89
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出结果：
 - en: '![](img/d444061b-4688-40f8-910a-e6371a2d6dee.png)'
   id: totrans-90
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/d444061b-4688-40f8-910a-e6371a2d6dee.png)'
 - en: 'Figure 12.8: train_indices file information printout 2'
   id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.8：train_indices文件信息输出2
 - en: We can see that the `tr_plus_indices` key corresponds to a (17380*1) shaped
     array. We will reshape this to `(17380, )` for convenience.
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以看到，`tr_plus_indices`键对应一个形状为(17380*1)的数组。为了方便起见，我们将其重塑为`(17380, )`。
 - en: '`tr_plus_indices` contains the indices of the data in the `examples` key of
     the `examples.mat` file, which should only be used for training. Using this information,
     we will subset the data into a train set and a test set:'
   id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: '`tr_plus_indices`包含了`examples.mat`文件中`examples`键的数据索引，这些数据仅应用于训练。使用这些信息，我们将数据划分为训练集和测试集：'
 - en: '[PRE16]'
   id: totrans-94
   prefs: []
@@ -477,12 +557,14 @@
   id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于代码片段的其余部分，请参阅`deeppose.ipynb`文件： [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)
 - en: We can see that the train data has 17,380 data points, with each data point
     having an image ID and *7*(*x*,*y*) joint coordinates. Similarly, the test data
     has 3,548 data points.
   id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以看到，训练数据有17,380个数据点，每个数据点有一个图像ID和*7*（*x*,*y*）的关节坐标。同样，测试数据有3,548个数据点。
 - en: 'In the preceding snippet, we first initialize four empty lists, two for saving
     train and test image IDs, and two for saving train and test joints. Then, for
     each data point in the `examples` key, we do the following:'
@@ -929,23 +1011,27 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本地机器上训练一个深度学习模型，如VGG16，可能需要一周的时间。这是非常耗时的。在我们的案例中，替代方案是通过迁移学习使用已经训练好的VGG16模型的权重。
 - en: We will do this with the help of the applications module in Keras that we imported
     in the beginning, along with the other imports.
   id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将借助于在开始时导入的Keras应用模块以及其他导入来完成此操作。
 - en: 'In the following code, we will load part of the VGG16 model up to, but not
     including, the Flatten layer and the corresponding weights. Setting the `include_top`
     parameter to `False` does this for us:'
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 在以下代码中，我们将加载VGG16模型的一部分，直到但不包括Flatten层以及相应的权重。将`include_top`参数设置为`False`可以实现这一点：
 - en: The first line of the following snippet will also download the VGG16 weights
     from the Keras server, so you don't have to worry about downloading the weights
     file from anywhere else.
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下代码的第一行也将从Keras服务器下载VGG16的权重，因此你无需担心从其他地方下载权重文件。
 - en: '[PRE25]'
   id: totrans-170
   prefs: []
@@ -955,29 +1041,35 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/8ceeddcd-bb4b-4e32-a851-699bd00f3362.png)'
   id: totrans-172
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/8ceeddcd-bb4b-4e32-a851-699bd00f3362.png)'
 - en: 'Figure 12.15: Summary of the VGG16 model (up to Flatten)'
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.15：VGG16模型的总结（直到Flatten）
 - en: From the summary, we can see that all of the layers of the VGG16 model up to, but
     not including, the Flatten layer have been loaded with their weights.
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 从总结中，我们可以看到VGG16模型的所有层（直到但不包括Flatten层）已经加载了它们的权重。
 - en: To learn more about the additional functionality of the applications module
     of Keras, take a look at the official documentation at [https://keras.io/applications/](https://keras.io/applications/).
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 要了解Keras的应用模块的附加功能，请查看官方文档：[https://keras.io/applications/](https://keras.io/applications/)。
 - en: 'We don''t want weights of any of these layers to be trained. So, in the following
     code, we need to set the `trainable` parameter of each layer to `False`:'
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们不希望这些层的任何权重被训练。因此，在以下代码中，我们需要将每个层的`trainable`参数设置为`False`：
 - en: '[PRE26]'
   id: totrans-177
   prefs: []
@@ -991,6 +1083,7 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步，扁平化前面部分的模型输出，然后添加三个Dense层，其中两个层每个有1,024个神经元，并且它们之间有一个dropout，最后添加一个Dense层，包含14个神经元，用来获取14个关节坐标。我们将仅训练以下代码片段中定义的层的权重：
 - en: '[PRE27]'
   id: totrans-179
   prefs: []
@@ -1001,6 +1094,7 @@
   id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: 一旦所有层都被定义和配置完毕，我们将使用Keras中的`Model`函数将它们组合在一起，如下所示：
 - en: '[PRE28]'
   id: totrans-181
   prefs: []
@@ -1010,25 +1104,30 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/656b47f0-c68e-4ac3-9fa9-77310a06ebc9.png)'
   id: totrans-183
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/656b47f0-c68e-4ac3-9fa9-77310a06ebc9.png)'
 - en: 'Figure 12.16: Summary of the customized VGG16 model'
   id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.16：定制化VGG16模型的总结
 - en: From the summary, we can see that `26,755,086` parameters are trainable and
     that `14,714,688` parameters are untrainable, since we have set them as untrainable.
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 从总结中，我们可以看到`26,755,086`个参数是可训练的，而`14,714,688`个参数是不可训练的，因为我们已经将它们设置为不可训练。
 - en: 'The model is then compiled with `mean_squared_error` as `loss`. The `optimizer`
     used here is Adam, which has a learning rate of 0.0001, as defined by the optimizer
     variable in the hyperparameter section:'
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，模型使用`mean_squared_error`作为`loss`进行编译。这里使用的`optimizer`是Adam，其学习率为0.0001，这是在超参数部分通过优化器变量定义的：
 - en: '[PRE29]'
   id: totrans-187
   prefs: []
@@ -1039,12 +1138,14 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 训练循环
 - en: Now that the VGG16 model is all set to be used for training, let's load the
     `train_joints.csv` file from the `train` folder containing the IDs of the cropped
     and resized images with their joint coordinates.
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在VGG16模型已经准备好用于训练，接下来我们加载`train`文件夹中的`train_joints.csv`文件，该文件包含了裁剪和调整大小后的图像的ID以及它们的关节坐标。
 - en: 'Then, split the data into an 80:20 train and validation set by using the `train_test_split`
     module from `sklearn`. We imported it with the other imports at the beginning
     of this chapter. Since the validation data is small, load all of the corresponding
@@ -1052,11 +1153,13 @@
   id: totrans-190
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，使用来自`sklearn`的`train_test_split`模块将数据拆分为80:20的训练集和验证集。我们在本章开头与其他导入一起导入了它。由于验证数据较少，将所有相应的图像加载到内存中：
 - en: Be mindful of how many validation images you load into memory, as this may become
     an issue with systems that have less RAM.
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意加载多少验证图像到内存，因为这可能会在内存较小的系统中成为问题。
 - en: '[PRE30]'
   id: totrans-192
   prefs: []
@@ -1068,6 +1171,8 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用 pandas 的`head`、`tail`和`info`函数探索数据。请注意，在使用 pandas 加载`.csv`文件时，要将`header`参数设置为`False`，这样
+    pandas 就知道文件没有头部。
 - en: 'We will now define the `training()` function, which will train the VGG16 model
     on the train images. This function accepts the VGG16 model, train image IDs, train
     joints, validation images, and validation joints as parameters. The following
@@ -1075,6 +1180,7 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们现在将定义`training()`函数，该函数将在训练图像上训练 VGG16 模型。此函数接受 VGG16 模型、训练图像 ID、训练关节、验证图像和验证关节作为参数。以下步骤定义了`training()`函数的工作过程：
 - en: The function defines empty lists by using `loss_lst` to store the train loss
     and `val_loss_lst` to store the validation loss. It also defines a counter count
     to keep track of the total number of batches.
@@ -1082,38 +1188,45 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 该函数通过使用`loss_lst`定义空列表来存储训练损失，并使用`val_loss_lst`来存储验证损失。它还定义了一个计数器 count，用于跟踪批次的总数。
 - en: It then creates a batch of train image IDs and their corresponding joints.
   id: totrans-196
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 它接着创建了一个包含训练图像 ID 和其对应关节的批次。
 - en: Using the batch image IDs, it loads the corresponding images into memory by
     using the OpenCV `imread()` function.
   id: totrans-197
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 使用批次图像 ID，它通过使用 OpenCV 的`imread()`函数将相应的图像加载到内存中。
 - en: It then converts the loaded train images into a `float`, which it feeds along
     with the joint IDs to the `train_on_batch()` function of the model for the fit.
   id: totrans-198
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 它接着将加载的训练图像转换为`float`，并将其与联合 ID 一起输入到模型的`train_on_batch()`函数进行拟合。
 - en: At every 40^(th) batch, it evaluates the model on the validation data and stores
     the train and validation loss in the defined lists.
   id: totrans-199
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 每经过第 40 次批次，它会在验证数据上评估模型，并将训练和验证损失存储在定义的列表中。
 - en: It then repeats *Steps 2* through *5* for the desired number of epochs.
   id: totrans-200
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 它接着重复*步骤 2* 到 *步骤 5*，直到达到所需的训练轮次。
 - en: 'Following is the code:'
   id: totrans-201
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是代码：
 - en: '[PRE31]'
   id: totrans-202
   prefs: []
@@ -1124,43 +1237,52 @@
   id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于此代码段的其余部分，请参阅`deeppose.ipynb`文件：[https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)
 - en: 'The output is as follows:'
   id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 输出如下：
 - en: '![](img/2296d449-0116-40b7-a1ca-55132b90f859.png)'
   id: totrans-205
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/2296d449-0116-40b7-a1ca-55132b90f859.png)'
 - en: 'The following is the output at the end of the code''s execution:'
   id: totrans-206
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是代码执行完毕后的输出：
 - en: '![](img/048171cb-94b9-4623-a205-f0b0a8cc14c1.png)'
   id: totrans-207
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/048171cb-94b9-4623-a205-f0b0a8cc14c1.png)'
 - en: 'Figure 12.17: Loss output when training the model'
   id: totrans-208
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.17：训练模型时的损失输出
 - en: If you are using a small GPU for training, reduce the batch size to avoid GPU
     memory issues. Also, remember that a smaller batch size may or may not result
     in the same fit that this chapter indicates.
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你使用的是小型 GPU 进行训练，请减少批次大小以避免 GPU 内存问题。还要记住，较小的批次大小可能不会得到本章节中所示的相同拟合结果。
 - en: Plot training and validation loss
   id: totrans-210
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 绘制训练和验证损失图
 - en: 'With `loss_lst` and `val_loss_lst` containing the train and validation MSE
     loss at intervals of 40 batches, let''s plot this and see how the learning has
     progressed:'
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过`loss_lst`和`val_loss_lst`在每 40 个批次的间隔中包含训练和验证的 MSE 损失，让我们绘制图表并查看学习进展：
 - en: '[PRE32]'
   id: totrans-212
   prefs: []
@@ -1170,32 +1292,39 @@
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/445bc33e-63bd-4581-bbce-2f481f74228f.png)'
   id: totrans-214
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/445bc33e-63bd-4581-bbce-2f481f74228f.png)'
 - en: 'Figure 12.18: Plot of train and validation loss'
   id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.18：训练和验证损失图
 - en: A smoother train validation loss plot can be obtained by reducing the store
     hyperparameter. A small store value will result in a longer training time.
   id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 通过减少存储超参数，可以获得平滑的训练验证损失图。较小的存储值将导致更长的训练时间。
 - en: Predictions
   id: totrans-217
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 预测
 - en: This is what we have been waiting for...
   id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是我们一直在等待的……
 - en: Making test predictions!
   id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 进行测试预测！
 - en: 'We will define a function that takes the model as input and tests the model
     on the test data we have preprocessed and saved in the `test` folder. Along with
     predictions, it will also save test images with the true and predicted joints
@@ -1204,6 +1333,7 @@
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将定义一个函数，该函数以模型作为输入，测试我们已经预处理并保存在`test`文件夹中的测试数据。除了预测结果外，它还将通过使用我们在前一部分定义的`plot_limb()`和`plot_joints()`函数，将测试图像上的真实和预测关节绘制出来：
 - en: '[PRE33]'
   id: totrans-221
   prefs: []
@@ -1213,31 +1343,37 @@
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出：
 - en: '![](img/42596d64-7380-405a-8807-c875b26a8887.png)'
   id: totrans-223
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/42596d64-7380-405a-8807-c875b26a8887.png)'
 - en: 'Figure 12.19: Test loss'
   id: totrans-224
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.19：测试损失
 - en: On a test set with 200 images, the test MSE loss is 454.80, which is very close
     to the validation MSE loss of 503.85, indicating that the model is not overfitting
     on the train data.
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 在200张测试图像的测试集中，测试MSE损失为454.80，与验证MSE损失503.85非常接近，这表明该模型没有在训练数据上过拟合。
 - en: Train the model for a few more epochs if possible, and check if a better fit
     is possible. Be mindful of how many test images you want to load into memory for
     evaluation since it might become a problem on machines with RAM limitations.
   id: totrans-226
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果可能的话，继续训练模型更多的周期，并检查是否能得到更好的拟合。注意你想加载多少测试图像到内存中进行评估，因为在内存有限的机器上，这可能会成为问题。
 - en: 'Now let''s plot the images we saved during testing to get a measure of how
     the true joints compare to the predicted joints:'
   id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们绘制在测试期间保存的图像，以衡量真实关节点与预测关节点的对比：
 - en: '[PRE34]'
   id: totrans-228
   prefs: []
@@ -1247,24 +1383,29 @@
   id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是输出结果：
 - en: '![](img/dc8f0519-8697-48cb-98e9-306819b4afd3.png)'
   id: totrans-230
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/dc8f0519-8697-48cb-98e9-306819b4afd3.png)'
 - en: 'Figure 12.20: Test images with true and predicted joints plotted on top'
   id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.20：测试图像及其真实和预测关节点的重叠图
 - en: From the preceding picture, we can see that the model is doing a really good
     job of predicting the seven joints on unseen images.
   id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 从前面的图像中，我们可以看到模型在预测未见图像中的七个关节点时表现得非常好。
 - en: Scripts in modular form
   id: totrans-233
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模块化形式的脚本
 - en: The entire script can be split into four modules named `train.py`, `test.py`,
     `plotting.py`, and `crop_resize_transform.py`. You should be able to find these
     scripts in the `Chapter12` folder. Follow the instructions under the *Code implementation* section
@@ -1273,25 +1414,30 @@
   id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 整个脚本可以分为四个模块，分别是`train.py`、`test.py`、`plotting.py`和`crop_resize_transform.py`。你应该能够在`Chapter12`文件夹中找到这些脚本。按照本章*代码实现*部分的说明来运行这些脚本。在你最喜欢的源代码编辑器中将`Chapter12`设置为项目文件夹，然后运行`train.py`文件。
 - en: The `train.py` Python file will import functions from all of the other modules
     in places where they are needed for execution.
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: '`train.py` Python 文件将在执行所需的位置导入其他模块中的函数。'
 - en: Now let's walk through the contents of each file.
   id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们逐步查看每个文件的内容。
 - en: Module 1 – crop_resize_transform.py
   id: totrans-237
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模块 1 – crop_resize_transform.py
 - en: 'This Python file contains the `image_cropping()`, `image_resize()`, and `model_data()`
     functions, as shown:'
   id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 该Python文件包含`image_cropping()`、`image_resize()`和`model_data()`函数，如下所示：
 - en: '[PRE35]'
   id: totrans-239
   prefs: []
@@ -1302,11 +1448,13 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模块 2 – plotting.py
 - en: 'This Python file contains two functions, namely `plot_limb()` and `plot_joints()`,
     as shown:'
   id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 该Python文件包含两个函数，分别是`plot_limb()`和`plot_joints()`，如下所示：
 - en: '[PRE36]'
   id: totrans-242
   prefs: []
@@ -1317,11 +1465,13 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模块 3 – test.py
 - en: 'This module contains the `test()` function that will be called in the `train_dqn.py`
     script so that it can test the performance of the trained model, as shown:'
   id: totrans-244
   prefs: []
   type: TYPE_NORMAL
+  zh: 该模块包含了`test()`函数，该函数将在`train_dqn.py`脚本中调用，用于测试训练模型的性能，如下所示：
 - en: '[PRE37]'
   id: totrans-245
   prefs: []
@@ -1332,11 +1482,13 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模块 4 – train.py
 - en: 'In this module, we have the `joint_coordinates()` and `training()` functions,
     as well as the calls to train and test the VGG16 model:'
   id: totrans-247
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个模块中，我们有`joint_coordinates()`和`training()`函数，以及用于训练和测试VGG16模型的调用：
 - en: '[PRE38]'
   id: totrans-248
   prefs: []
@@ -1347,6 +1499,7 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 结论
 - en: This project was all about building a **convolutional neural network **(**CNN**)
     classifier to solve the problem of estimating 3D human poses using frames captured
     from movies. Our hypothetical use case was to enable visual effects specialists
@@ -1355,6 +1508,7 @@
   id: totrans-250
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个项目的目的是构建一个**卷积神经网络** (**CNN**)分类器，来解决使用从电影中捕捉的帧估计3D人体姿势的问题。我们的假设用例是让视觉特效专家能够轻松估计演员的姿势（通过视频帧中的肩膀、脖子和头部）。我们的任务是为这个应用程序构建智能。
 - en: The modified VGG16 architecture we built using transfer learning has a test
     mean squared error loss of 454.81 squared units over 200 test images for each
     of the 14 coordinates (that is, the *7*(*x*, *y*) pairs). We can also say that
@@ -1363,63 +1517,75 @@
   id: totrans-251
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们通过迁移学习构建的修改版VGG16架构，其在200个测试图像中对每个14个坐标（即*7*（*x*，*y*）对）的测试均方误差（MSE）为454.81平方单位。我们还可以说，对于每个14个坐标，200个测试图像的测试均方根误差（RMSE）为21.326单位。这意味着什么呢？
 - en: The **root mean squared error** (**RMSE**), in this case, is a measure of how
     far off the predicted joint coordinates/joint pixel location are from the actual
     joint coordinate/joint pixel location.
   id: totrans-252
   prefs: []
   type: TYPE_NORMAL
+  zh: '**均方根误差** (**RMSE**) 在此情况下是衡量预测的关节坐标/关节像素位置与实际关节坐标/关节像素位置之间差距的指标。'
 - en: An RMSE loss of 21.32 units is equivalent to having each predicted coordinate
     off by 21.32 pixels within an image of shape 224*224*3\. The test results plotted
     in *Figure 13.20* represent this measure.
   id: totrans-253
   prefs: []
   type: TYPE_NORMAL
+  zh: RMSE 损失值为 21.32 单位，相当于在形状为 224*224*3 的图像中，每个预测的坐标偏差为 21.32 像素。*图 13.20* 中的测试结果展示了这一度量。
 - en: Each coordinate being off by 21.32 pixels is good at a general level, but we
     want to build a product that will be used in movies for which the margin for error
     is much less, and being off by 21 pixels is not acceptable.
   id: totrans-254
   prefs: []
   type: TYPE_NORMAL
+  zh: 每个坐标偏差 21.32 像素在一般层面上是可以接受的，但我们希望构建的产品将用于电影制作，其中误差的容忍度要低得多，偏差 21 像素是不可接受的。
 - en: 'To improve the model, you can do the following:'
   id: totrans-255
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了改进模型，您可以采取以下措施：
 - en: Try using a lower learning rate for a larger number of epochs
   id: totrans-256
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试使用较低的学习率，增加训练的轮数
 - en: Try using a different loss function (for example, **mean absolute error** (**MAE**))
   id: totrans-257
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试使用不同的损失函数（例如，**均值绝对误差** (**MAE**)）
 - en: Try using an even deeper model, such as RESNET50 or VGG19
   id: totrans-258
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试使用更深的模型，例如 RESNET50 或 VGG19
 - en: Try centering and scaling the data
   id: totrans-259
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试对数据进行中心化和标准化
 - en: Get more data
   id: totrans-260
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 获取更多的数据
 - en: These are some of the additional steps you should take if you are interested
     in becoming an expert in this specific area once you are done with this chapter.
   id: totrans-261
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您在完成本章后有兴趣成为该领域的专家，以下是一些您应该采取的额外步骤。
 - en: Summary
   id: totrans-262
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: In this chapter, we successfully built a deep convolution neural network/VGG16
     model in Keras on FLIC images. We got hands-on experience in preparing these images
     for modeling. We successfully implemented transfer learning, and understood that
@@ -1430,3 +1596,5 @@
   id: totrans-263
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们成功地在 Keras 中构建了一个深度卷积神经网络/VGG16 模型，应用于 FLIC 图像。我们亲手实践了如何准备这些图像以供建模使用。我们成功实现了迁移学习，并理解到这样做将节省大量时间。在某些地方，我们还定义了一些关键的超参数，并推理为什么使用这些参数。最后，我们测试了修改后的
+    VGG16 模型在未见数据上的表现，并确认我们成功达成了目标。
