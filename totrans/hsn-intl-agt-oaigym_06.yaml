@@ -1,4 +1,5 @@
 - en: Implementing an Intelligent Agent for Optimal Control using Deep Q-Learning
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -17,6 +18,7 @@
     the location and velocity of an object to decide what to do next. We simply observe
     what is going on and then learn to take actions that improve over time, eventually
     solving the problem completely.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
 - en: This chapter will guide you in how to progressively build a better agent by
@@ -33,6 +35,7 @@
     the code for this chapter under the `ch6` folder from the book's code repository
     and try out the pre-trained agents on several Atari games! Instructions on how
     to run the pre-trained agents are available in the `ch6/README.md` file.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
 - en: 'This chapter has a lot of technical details to equip you with enough background
@@ -41,61 +44,83 @@
     based on deep Q-learning, along with several modules and tools needed to train
     and test the agent in a systematic manner. The following is an outline of the
     higher-level topics that will be covered in this chapter:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
 - en: 'Various methods to improve the Q-learning agent, including the following:'
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Neural network approximation of action-value functions
+  id: totrans-5
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Experience replay
+  id: totrans-6
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
 - en: Exploration schedules
+  id: totrans-7
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 探索调度
 - en: Implementing deep convolutional neural networks using PyTorch for action-value
     function approximation
+  id: totrans-8
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 PyTorch 实现深度卷积神经网络进行动作-价值函数逼近
 - en: Stabilizing deep Q-networks using target networks
+  id: totrans-9
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用目标网络稳定深度 Q 网络
 - en: Logging and monitoring learning performance of PyTorch agents using TensorBoard
+  id: totrans-10
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 使用 TensorBoard 记录和监控 PyTorch 代理的学习性能
 - en: Managing parameters and configurations
+  id: totrans-11
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 管理参数和配置
 - en: Atari Gym environment
+  id: totrans-12
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: Atari Gym 环境
 - en: Training deep Q-learners to play Atari games
+  id: totrans-13
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 训练深度 Q 学习者玩 Atari 游戏
 - en: Let's get started with the first topic and see how we can start from where we
     left off in the previous chapter and continue making progress toward a more capable
     and intelligent agent.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们从第一个主题开始，看看如何从上一章的内容接续开始，继续朝着更强大、更智能的代理迈进。
 - en: Improving the Q-learning agent
+  id: totrans-15
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 改进 Q 学习代理
 - en: In the last chapter, we revisited the Q-learning algorithm and implemented the `Q_Learner` class.
     For the Mountain car environment, we used a multi-dimensional array of shape 51x51x3
     to represent the action-value function,![](img/00130.jpeg). Note that we had discretized
@@ -113,12 +138,19 @@
     will look into how we can use a more powerful function approximator to represent
     the action-value function instead of a simple n-dimensional array/table that has
     its limitations.
+  id: totrans-16
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章中，我们回顾了 Q 学习算法，并实现了 `Q_Learner` 类。对于 Mountain car 环境，我们使用了形状为 51x51x3 的多维数组来表示动作-价值函数，![](img/00130.jpeg)。请注意，我们已经将状态空间离散化为固定数量的区间，这个数量由
+    `NUM_DISCRETE_BINS` 配置参数给出（我们使用了 50）。我们本质上是对观察进行了量化或近似，用低维离散表示来减少 n 维数组中可能的元素数量。通过对观察/状态空间的这种离散化，我们将小车的可能位置限制为
+    50 个固定位置，速度也限制为 50 个固定值。任何其他位置或速度值都会被近似为这些固定值之一。因此，代理可能会收到相同的位置值，即使小车实际上位于不同的位置。对于某些环境，这可能是一个问题。代理可能无法学会区分从悬崖掉下去和仅站在悬崖边缘以便向前跳跃。在下一节中，我们将研究如何使用更强大的函数逼近器来表示动作-价值函数，而不是使用简单的
+    n 维数组/表格，因为它有一定的局限性。
 - en: Using neural networks to approximate Q-functions
+  id: totrans-17
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用神经网络逼近 Q 函数
 - en: Neural networks are shown to be effective as universal function approximators.
     In fact, there is a universal approximation theorem that states that a single
     hidden layer feed-forward neural network can approximate any continuous function
@@ -139,11 +171,13 @@
     are all powered by neural networks. Even the state-of-the-art techniques that
     generate human-like realistic voices that you hear from voice assistants such
     as Google Assistant, are powered by neural networks.
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: Google Assistant currently uses WaveNet and WaveNet2 developed by Deepmind for
     **Text-To-Speech** (**TTS**) synthesis, which is shown to be much more realistic
     than any other TTS system that has been developed so far.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
 - en: I hope that motivates you enough to use a neural network to approximate the
@@ -155,47 +189,59 @@
     some ways to improve Q-learning with neural network approximation and, in the
     later sections of this chapter, we will look at how we can use deep neural networks
     with much more representation power to approximate the Q-function.
+  id: totrans-20
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let''s get started with the neural network approximation by first revisiting
     the `Q_Learner` class''s `__init__(...)` method that we implemented in the previous
     chapter:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-22
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: In the preceding code, the line in bold font is where we initialize the Q-function
     as a multi-dimensional NumPy array. In the following sections, we will see how
     we can replace the NumPy array representation with a more powerful neural network
     representation.
+  id: totrans-23
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing a shallow Q-network using PyTorch
+  id: totrans-24
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: In this section, we will start implementing a simple neural network using PyTorch's
     neural network module and then look at how we can use that to replace the multi-dimensional
     array-based Q action-value table-like function.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let''s start with the neural network implementation. The following code illustrates
     how you can implement a **Single Layer Perceptron** (**SLP**) using PyTorch:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-27
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: The SLP class implements a single layer neural network with 40 hidden units
     between the input and the output layer using the `torch.nn.Linear`class, and uses
     the **Rectified Linear Unit** (**ReLU** or **relu**) as the activation function.
     This code is available as `ch6/function_approximator/perceptron.py` in this book's
     code repository. The number 40 is nothing special, so feel free to vary the number
     of hidden units in the neural network.
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing the Shallow_Q_Learner
+  id: totrans-29
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -208,35 +254,46 @@
     pass through the neural network. The following code for the `Shallow_Q_Learner` class with
     the changes from the `Q_Learner` class implementation are shown in bold to make
     it easy for you to see the differences at a glance:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-31
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: The `Shallow_Q_Learner` class implementation is discussed here just to make
     it easy for you to understand how a neural network-based Q-function approximation
     can be implemented to replace the traditional tabular Q-learning implementations.
+  id: totrans-32
   prefs: []
   type: TYPE_NORMAL
 - en: Solving the Cart Pole problem using a Shallow Q-Network
+  id: totrans-33
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'In this section, we will implement a full training script to solve the Cart
     Pole problem using the Shallow `Q_Learner` class that we developed in the previous
     section:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: 'Create a script named `shallow_Q_Learner.py` with the preceding code in the
     `ch6` folder and run it like so:'
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-37
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: You will see the agent learning to balance the Pole on the Cart in the Gym's
     `CartPole-v0` environment. You should see the episode number, the number of steps
     the agent took before the episode ended, the episode reward the agent received,
@@ -244,6 +301,7 @@
     reward that the agent has received so far printed on the console. You can uncomment
     the `env.render()` line if you want to visually see the Cart Pole environment
     and how the agent is trying to learn and balance it.
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
 - en: The `Shallow_Q_Learner` class implementation and the full training script shows
@@ -253,14 +311,17 @@
     We will also implement a Deep Convolutional Q-Network that can take the raw screen
     image as the input and predict the Q-values that the agent can use to play various
     Atari games.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
 - en: You may notice that it takes a very long time for the agent to improve and finally
     be able to solve the problem. In the next section, we will implement the concept
     of experience replay to improve the performance.
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
 - en: Experience replay
+  id: totrans-41
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -271,6 +332,7 @@
     because typically, the problems that the agent solves in typical reinforcement
     learning environments are sequential. Neural networks are shown to converge better
     if the samples are i.i.d.
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: Experience replay also enables the reuse of the past experience of the agent.
@@ -279,9 +341,11 @@
     past experience data, especially in mini-batches to update the neural network,
     greatly helps with the convergence of the Q-network which is close to the true
     action values.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing the experience memory
+  id: totrans-44
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -297,91 +361,133 @@
     this particular next observation marked the end of the episode or not. Let''s
     use Python''s `namedtuple` from the collections library to represent such a data
     structure, as shown in the following code snippet:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-46
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: The `namedtuple` data structure makes it convenient to access the elements using
     a name attribute (like 'obs', 'action', and so on) instead of a numerical index
     (like 0, 1 and so on).
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
 - en: We can now move on to implement the experience memory class using the experience
     data structure we just created. To figure out what methods we need to implement
     in the experience memory class, let's think about how we will be using it later.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以继续使用刚刚创建的经验数据结构来实现经验记忆类。为了弄清楚我们需要在经验记忆类中实现哪些方法，让我们考虑一下以后如何使用它。
 - en: First, we want to be able to store new experiences in the experience memory
     that the agent collects. Then, we want to sample or retrieve experiences in batches
     from the experience memory when we want to replay to update the Q-function. So,
     essentially, we will need a method that can store new experiences and a method
     that can sample a single or a batch of experiences.
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们希望能够存储智能体收集的新经验到经验记忆中。然后，当我们想要回放并更新Q函数时，我们希望能从经验记忆中按批次采样或提取经验。因此，基本上，我们将需要一个方法来存储新经验，以及一个可以采样单个或批量经验的方法。
 - en: 'Let''s dive into the experience memory implementation, starting with the initialization
     method where we initialize the memory with the desired capacity, as follows:'
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们深入了解经验记忆的实现，从初始化方法开始，我们用所需的容量初始化内存，如下所示：
 - en: '[PRE6]'
+  id: totrans-51
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: The `mem_idx` member variable will be used to point to the current writing head
     or the index location where we will be storing new experiences when they arrive.
+  id: totrans-52
   prefs: []
   type: TYPE_NORMAL
+  zh: '`mem_idx`成员变量将用于指向当前的写入头或索引位置，我们将在该位置存储新到达的经验。'
 - en: 'A "cyclic buffer" is also known by other names that you may have heard of:
     "circular buffer", "ring buffer", and "circular queue". They all represent the
     same underlying data structure that uses a ring-like fixed-size data representation.'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: “循环缓冲区”也有其他名字，你可能听过：“环形缓冲区”、“环形队列”和“循环队列”。它们都代表相同的底层数据结构，使用类似环形的固定大小数据表示。
 - en: 'Next, we''ll look at the `store` method''s implementation:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将查看`store`方法的实现：
 - en: '[PRE7]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: Simple enough, right? We are storing the experience at `mem_idx`, like we discussed.
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 足够简单，对吧？我们正在存储经验到`mem_idx`，正如我们所讨论的那样。
 - en: 'The next code is our `sample` method implementation:'
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来的代码是我们`sample`方法的实现：
 - en: '[PRE8]'
+  id: totrans-58
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'In the preceding code, we make use of Python''s random library to uniformly
     sample experiences from the experience memory at random. We will also implement
     a simple `get_size` helper method, which we will use to find out how many experiences
     are already stored in the experience memory:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前面的代码中，我们利用Python的random库从经验记忆中均匀地随机采样经验。我们还将实现一个简单的`get_size`辅助方法，用于查找经验记忆中已经存储了多少经验：
 - en: '[PRE9]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: The full implementation of the experience memory class is available at `ch6/utils/experience_memory.py`,
     in this book's code repository.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
+  zh: 经验记忆类的完整实现可以在`ch6/utils/experience_memory.py`中找到，位于本书的代码仓库中。
 - en: Next, we'll look at how we can replay experiences sampled from the experience
     memory to update the agent's Q-function.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将看看如何从经验记忆中回放采样的经验，以更新智能体的Q函数。
 - en: Implementing the replay experience method for the Q-learner class
+  id: totrans-63
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 实现Q-learner类的回放经验方法
 - en: So, we have implemented a memory system for the agent to store its past experience
     using a neat cyclic buffer. In this section, we will look at how we can use the
     experience memory to replay experience in the Q-learner class.
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
+  zh: 因此，我们已经为智能体实现了一个内存系统，使用整洁的循环缓冲区来存储它的过去经验。在本节中，我们将探讨如何在Q-learner类中使用经验记忆来回放经验。
 - en: '[PRE10]'
+  id: totrans-65
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: '[PRE11]'
+  id: totrans-66
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'In the case of online learning methods like SARSA, the action value estimate
     was updated after every step of interaction between the agent and the environment.
     This way, the updates propagated information that the agent just experienced.
@@ -395,11 +501,15 @@
     that extends the `learn` method we implemented in the previous chapter to learn
     from a batch of experiences rather than from a single experience. The following
     is the method''s implementation:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 对于像SARSA这样的在线学习方法，行动值估计在代理与环境交互的每一步之后都会更新。这种方式使得更新传播了代理刚刚经历的信息。如果代理不经常经历某些事物，这样的更新可能会导致代理忘记这些经历，当代理在未来遇到类似情况时可能表现不佳。这是不可取的，特别是对于具有许多参数（或权重）需要调整到正确值的神经网络来说。这是使用经验记忆并在更新Q行动值估计时重播过去经验的主要动机之一。我们现在将实现`learn_from_batch_experience`方法，扩展我们在上一章中实现的`learn`方法，以从一批经验中学习，而不是从单个经验中学习。以下是该方法的实现：
 - en: '[PRE12]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: The method receives a batch (or a mini-batch) of experience and first extracts
     the observation batches, action batches, reward batches, and the next observation
     batches separately in order to use them individually in the subsequent steps.
@@ -407,23 +517,32 @@
     is the end of an episode. We then calculate the **Temporal Difference** (**TD**)
     error with a max over action, which is the Q-learning target. Note that we multiply
     the second term in the `td_target` calculation with `~done_batch`.
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: 该方法接收一批（或小批量）经验，并首先分别提取观察批次、动作批次、奖励批次和下一个观察批次，以便在随后的步骤中单独使用它们。`done_batch`表示每个经验的下一个观察是否是一集的结束。然后，我们计算最大化动作的**时间差分**（**TD**）误差，这是Q学习的目标。请注意，在`td_target`计算中，我们将第二项乘以`~done_batch`。
 - en: This takes care of specifying a zero value for terminal states. So, if a particular
     `next_obs` in the `next_obs_batch` was terminal, the second term would become
     0, resulting in just `td_target = rewards_batch`.
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 这负责为终止状态指定零值。因此，如果`next_obs_batch`中的特定`next_obs`是终止状态，则第二项将变为0，结果仅为`td_target
+    = rewards_batch`。
 - en: We then calculate a mean squared error between the `td_target` (target Q-value)
     and the Q-value predicted by the Q-network. We use this error as the guiding signal
     and back-propagate it to all the nodes in the neural network before making an
     optimization step to update the parameters/weights to minimize the error.
+  id: totrans-71
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后计算`td_target`（目标Q值）与Q网络预测的Q值之间的均方误差。我们将此误差作为指导信号，并在进行优化步骤之前将其反向传播到神经网络中的所有节点，以更新参数/权重以最小化误差。
 - en: Revisiting the epsilon-greedy action policy
+  id: totrans-72
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 重新审视ε-greedy行动策略
 - en: In the previous chapter, we discussed the ![](img/00132.jpeg)-greedy action
     selection policy which takes the best action as per the agent's action-value estimate
     with a probability of 1-![](img/00133.jpeg) and takes a random action with a probability
@@ -435,8 +554,10 @@
     tried actions? Or should I exploit what I already know and take the best action
     to my knowledge which may be limited? This is the exploration-exploitation dilemma
     that a reinforcement learning agent suffers from.
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章，我们讨论了贪心行动选择策略，它根据智能体的行动-价值估计，以1-的概率采取最佳行动， 以给定的epsilon概率采取随机行动。epsilon是一个可以根据实验调节的超参数。较高的epsilon值意味着智能体的行为将更加随机，而较低的epsilon值则意味着智能体更可能利用它已知的环境信息而不会尝试探索。我的目标是通过采取从未尝试或较少尝试的行动来进行更多探索，还是通过采取我已知的最佳行动来进行利用？这是强化学习智能体面临的探索-利用困境。
 - en: Intuitively, it is helpful to have a very high value (the maximum is 1.0) for ![](img/00137.jpeg) during
     the initial stages of the agent's learning process so that the agent can explore
     the state space by taking mostly random actions. Once it has got enough experience
@@ -445,36 +566,50 @@
     more often. It will be useful to have a utility function that takes care of varying
     the ![](img/00139.jpeg) value, right? Let's implement such a function in the next
     section.
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
+  zh: 直观上，在智能体学习过程的初期，保持一个很高的值（最大为1.0）对于epsilon是有帮助的，这样智能体可以通过大多数随机行动来探索状态空间。一旦它积累了足够的经验并对环境有了更好的理解，降低epsilon值将使智能体更常基于它认为的最佳行动来采取行动。我们需要一个工具函数来处理epsilon值的变化，对吧？让我们在下一节实现这样的函数。
 - en: Implementing an epsilon decay schedule
+  id: totrans-75
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 实现epsilon衰减调度
 - en: 'We can decay (or decrease) the ![](img/00140.jpeg) value linearly (in the following
     left-hand side graph), exponentially (in the following right-hand side graph)
     or using some other decay schedule. Linear and exponential schedules are the most
     commonly used decay schedules for the exploration parameter ![](img/00141.jpeg):'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以线性衰减（或减少）epsilon值（如下左侧图表），也可以采用指数衰减（如下右侧图表）或其他衰减方案。线性和指数衰减是探索参数epsilon最常用的衰减调度：
 - en: '![](img/00142.jpeg)'
+  id: totrans-77
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/00142.jpeg)'
 - en: In the preceding graphs, you can see how the epsilon (exploration) value varies
     with the different schedule schemes (linear on the left graph, exponential on
     the right graph). The decay schedule shown in the preceding graphs use an epsilon_max
     (start) value of 1, epsilon_min (final) value of 0.01 in the linear case, and
     exp(-10000/2000) in the exponential case, with both of them maintaining a constant
     value of epsilon_min after 10,000 episodes.
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
+  zh: 在前面的图表中，你可以看到epsilon（探索）值如何随着不同的调度方案变化（左图为线性，右图为指数）。前面图表中显示的衰减调度在线性情况下使用了epsilon_max（初始值）为1，epsilon_min（最终值）为0.01，在指数情况下使用了exp(-10000/2000)，在经过10,000个回合后，它们都保持一个常数值的epsilon_min。
 - en: 'The following code implements the `LinearDecaySchedule`, which we will use
     for our `Deep_Q_Learning` agent implementation to play Atari games:'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下代码实现了`LinearDecaySchedule`，我们将在`Deep_Q_Learning`智能体的实现中使用它来玩Atari游戏：
 - en: '[PRE13]'
+  id: totrans-80
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: The preceding script is available at `ch6/utils/decay_schedule.py` in this book's
     code repository. If you run the script, you will see that the `main `function
     creates a linear decay schedule for epsilon and plots the value. You can experiment
@@ -482,9 +617,11 @@
     and `epsilon_final` to visually see how the epsilon values vary with the number
     of steps. In the next section, we will implement the `get_action(...)` method
     which implements the ![](img/00143.jpeg)-greedy action selection policy.
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing a deep Q-learning agent
+  id: totrans-82
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -495,6 +632,7 @@
     deep Q-learning agent in any learning environments with a discrete action space.
     The Atari game environments are one such interesting class of environments that
     we will use in this book.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: We will start with a deep convolutional Q-network implementation and incorporate
@@ -502,9 +640,11 @@
     Q-networks to improve the stability of the deep Q-learner. We will then combine
     all the techniques we have discussed so far to put together the full implementation
     of our deep Q learning-based agent.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing a deep convolutional Q-network in PyTorch
+  id: totrans-85
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -512,11 +652,14 @@
     that takes the Atari game screen pixels as the input and outputs the action-values
     for each of the possible actions for that particular game, which is defined in
     the OpenAI Gym environment. The following code is for the CNN class:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: As you can see, it is easy to add more layers to the neural network. We could
     use a deeper network that has more than three layers, but it will come at the
     cost of requiring more compute power and time. In deep reinforcement learning,
@@ -524,9 +667,11 @@
     convergence guarantees. We should therefore make sure that our agent's implementation
     is good enough to learn and make progress well before increasing the capacity
     of the Q /value-function representation by using a much deeper neural network.
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
 - en: Using the target Q-network to stabilize an agent's learning
+  id: totrans-89
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -535,17 +680,21 @@
     the deep Q-network was shown to be considerably effective in reducing the oscillations
     and stabilize Q learning with neural network approximation. This technique is
     a relatively simpler one, but it turns out to be very helpful for stable learning.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: 'The implementation is going to be straightforward and simple. We have to make
     two changes or updates to our existing deep Q-learner class:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: Create a target Q-network and sync/update it with the original Q-network periodically
+  id: totrans-92
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Use the target Q-network to generate the Q-learning targets
+  id: totrans-93
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -553,23 +702,32 @@
     can use the parameter manager and the logging and visualization tools that we
     developed in the earlier sections of this chapter to visually verify the performance
     gain with the target Q-network enabled.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: '[PRE16]'
+  id: totrans-96
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'We can then modify the `learn_from_batch_experience` method that we implemented
     earlier to use the target Q-network to create the Q-learning target. The following
     code snippet shows the changes in bold font from our first implementation:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: This completes our target Q-network implementation.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
 - en: How do we know if the agent is benefiting from the target Q-network and other
@@ -577,9 +735,11 @@
     look at ways to log and visualize the agent's performance so that we can monitor
     and figure out whether or not the improvements we discussed actually lead to better
     performances.
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
 - en: Logging and visualizing an agent's learning process
+  id: totrans-101
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -590,6 +750,7 @@
     dumb? How do we see and measure the progress of the agent with time? Should we
     just sit and wait for the training to end? No. There should be some better way,
     don't you think?
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
 - en: Yes, and there is! It is actually important for us, the developers of the agents,
@@ -603,6 +764,7 @@
     if the agent's learning is converging with the learning error decreasing or not,
     and so on. This will enable us to think in the right direction to update our implementation
     or tweak the parameters to improve the learning performance of the agent.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
 - en: The TensorFlow deep learning library offers a tool called TensorBoard. It is
@@ -612,9 +774,11 @@
     to understand, identify, and debug our deep learning algorithm implementations.
     In the next section, we will see how we can use TensorBoard to log and visualize
     our agent's progress.
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
 - en: Using TensorBoard for logging and visualizing a PyTorch RL agent's progress
+  id: totrans-105
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -632,9 +796,11 @@
     will be updated periodically. The following screenshot is an example of what the
     TensorBoard''s output will look like with the kind of information we will be logging
     in our agent training script to visualize its progress:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/00144.jpeg)'
+  id: totrans-107
   prefs: []
   type: TYPE_IMG
 - en: In the preceding screenshot, the bottom-right most plot titled **main/mean_ep_reward** shows
@@ -642,6 +808,7 @@
     over time steps. In all the plots in the preceding screenshot, the *x*-axis shows
     the number of training steps and the *y*-axis has the value of the data that was
     logged, as signified by the titles of each of the plots.
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
 - en: Now, we know how to log and visualize the performance of the agent as it is
@@ -651,9 +818,11 @@
     In order to manage the various hyperparameters and to easily turn on and off the
     improvements and configurations, in the next section, we will discuss a way to
     achieve this by building a simple parameter management class.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
 - en: Managing hyperparameters and configuration parameters
+  id: totrans-110
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -665,74 +834,97 @@
     also helps when we want to automate the training process or run parameter sweeps
     or other methods to tune and find the best set of parameters that work for the
     agent.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: In the following two subsections, we will look at how we can use a JSON file
     to specify the parameters and hyperparameters in an easy to use way and implement
     a parameter manager class to handle these externally configurable parameters to
     update the agent and the environment configuration.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: Using a JSON file to easily configure parameters
+  id: totrans-113
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-114
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: '[PRE19]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: The parameters manager
+  id: totrans-116
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: Did you like the parameter configuration file example that you just saw? I hope
     you did. In this section, we will implement a parameter manger that will help
     us load, get, and set these parameters as necessary.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: 'We will start by creating a Python class named `ParamsManger` that initializes
     the `params` member variable with the dictionary of parameters read from the `params_file` using
     the JSON Python library, as follows:'
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-119
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'We will then implement a few methods that will be convenient for us. We will
     start with the `get_params` method that returns the whole dictionary of parameters
     that we read from the JSON file:'
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-121
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'Sometimes, we may just want to get the parameters that correspond to the agent
     or those that correspond to the environment which we can pass in while we initialize
     the agent or the environment. Since we had neatly separated the agent and the
     environment parameters in the `parameters.json` file that we saw in the previous
     section, the implementation is straightforward, as follows:'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-123
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: 'We will also implement another simple method to update the agent parameters
     so that we can also supply/read the agent parameters from the command line when
     we launch our training script:'
+  id: totrans-124
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-125
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: The preceding parameter manager implementation, along with a simple test procedure,
     is available at `ch6/utils/params_manager.py`, in this book's code repository. In
     the next section, we will consolidate all the techniques we have discussed and
     implemented so far to put together a complete deep Q learning-based agent.
+  id: totrans-126
   prefs: []
   type: TYPE_NORMAL
 - en: A complete deep Q-learner to solve complex problems with raw pixel input
+  id: totrans-127
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -742,53 +934,66 @@
     `deep_Q_Learner.py` script. We will be using this unified agent script to train
     on the Atari Gym environment in the next section and watch the agent improving
     its performance and fetching more and more scores over time.
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following code is the unified version that utilizes the following features
     that we developed in the previous sections of this chapter:'
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: Experience memory
+  id: totrans-130
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Experience replay to learn from (mini) batches of experience
+  id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Linear epsilon decay schedule
+  id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Target network for stable learning
+  id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Parameter management using JSON files
+  id: totrans-134
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Performance visualization and logging using TensorBoard:'
+  id: totrans-135
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: The preceding code, along with some additional changes required for using the
     Atari wrappers that we will be discussing in the next section, are available at `ch6/deep_Q_Learner.py`,
     in this book's code repository. After we complete the next section on *The Atari
     Gym environment*, we will use the agent implementation in `deep_Q_Learner.py` to
     train the agents on the Atari games and see their performance in the end.
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: This book's code repository will have the latest and up-to-date code implementations
     with improvements and bug fixes that will be committed after this book is printed.
     So, it is a good idea to star and watch the book's code repository on GitHub to
     get automatic updates about these changes and improvements.
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: The Atari Gym environment
+  id: totrans-139
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -800,12 +1005,15 @@
     will use the Atari environments and see how we can customize the environments
     with Gym environment wrappers. The following is a collage of 9 screenshots from
     9 different Atari environments:'
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/00145.jpeg)'
+  id: totrans-141
   prefs: []
   type: TYPE_IMG
 - en: Customizing the Atari Gym environment
+  id: totrans-142
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -821,29 +1029,36 @@
     us to subclass and add routines as layers on top of the previous routines. We
     can add custom processing statements to one or more of the following methods of
     the Gym environment class:'
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: '`__init__(self, env)__`'
+  id: totrans-144
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`_seed`'
+  id: totrans-145
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`_reset`'
+  id: totrans-146
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`_step`'
+  id: totrans-147
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`_render`'
+  id: totrans-148
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '`_close`'
+  id: totrans-149
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -852,9 +1067,11 @@
     shape/size of the observation, we can extend the `_step` and `_reset` methods. In
     the next subsection, we will see how we can make use of the wrapper interface
     to customize the Atari Gym environments.
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: Implementing custom Gym environment wrappers
+  id: totrans-151
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -862,43 +1079,54 @@
     very useful for the Gym Atari environments. Most of the wrappers we will implement
     in this section can be used with other environments as well to improve the learning
     performance of the agents.
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following table mentions a list of the wrappers will be implementing in
     the following section with a brief description for each of the wrappers to give
     you an overview:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Wrapper** | **Brief description of the purpose** |'
+  id: totrans-154
   prefs: []
   type: TYPE_TB
 - en: '| `ClipRewardEnv` |  To implement reward clipping |'
+  id: totrans-155
   prefs: []
   type: TYPE_TB
 - en: '| `AtariRescale` |  To rescale the screen pixels to a 84x84x1 gray scale image
     |'
+  id: totrans-156
   prefs: []
   type: TYPE_TB
 - en: '| `NormalizedEnv` | To normalize the images based on the mean and variance
     observed in the environment |'
+  id: totrans-157
   prefs: []
   type: TYPE_TB
 - en: '| `NoopResetEnv` | To perform a random number of `noop` (empty) actions on
     reset to sample different initial states |'
+  id: totrans-158
   prefs: []
   type: TYPE_TB
 - en: '| `FireResetEnv` | To perform a fire action on reset |'
+  id: totrans-159
   prefs: []
   type: TYPE_TB
 - en: '| `EpisodicLifeEnv` | To mark end of life as end of episode and reset when
     game is over |'
+  id: totrans-160
   prefs: []
   type: TYPE_TB
 - en: '| `MaxAndSkipEnv` | Repeats the action for a fixed number (specified using
     the `skip` argument; the default is 4) of steps |'
+  id: totrans-161
   prefs: []
   type: TYPE_TB
 - en: Reward clipping
+  id: totrans-162
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -920,19 +1148,24 @@
     We can implement this simple reward clipping technique and apply it to our environments
     by inheriting from the `gym.RewardWrapper` class and modifying the `reward(...) `function,
     as shown in the following code snippet:'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE25]'
+  id: totrans-164
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: The technique of clipping the reward to (-1, 0, 1) works well for Atari games.
     But, it is good to know that this may not be the the best technique to universally
     handle environments with varying reward magnitudes and frequency. Clipping the
     reward value modifies the learning objective of the agent and may sometimes lead
     to qualitatively different policies being learned by the agent than what is desired.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: Preprocessing Atari screen image frames
+  id: totrans-166
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -943,28 +1176,35 @@
     performance is possible with reduced resolution. Lower resolution means less data
     to be processed by the agent at every step, which translates to faster training
     time, especially on consumer grade computing hardware that you and I own.
+  id: totrans-167
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let''s create a preprocessing pipeline that would take the original observation
     image (of the Atari screen) and perform the following operations:'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/00146.jpeg)'
+  id: totrans-169
   prefs: []
   type: TYPE_IMG
 - en: We can crop out the region on the screen that does not have any useful information
     regarding the environment for the agent.
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: 'Finally, we resize the image to a dimension of 84x84\. We can choose a different
     number, other than 84, as long as it contains a reasonable amount of pixels. However,
     it is efficient to have a square matrix (like 84x84 or 80x80) as the convolution
     operations (for example, with CUDA) are optimized for such square input:'
+  id: totrans-171
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-172
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: Note that with a resolution of 84x84 pixels for one observation frame with a
     data type of `numpy.float32` which takes 4 bytes, we need about 4x84x84 = 28,224
     bytes. As you may recall from the *Experience memory* section, one experience
@@ -975,6 +1215,7 @@
     capacity in the order of 1e6 (million), you may realize that we need about 1e6
     x 0.056448 MB = 56,448 MB or 56.448 GB! This means that we will need 56.448 GB
     of RAM just for the experience memory with a capacity of 1 million experiences!
+  id: totrans-173
   prefs: []
   type: TYPE_NORMAL
 - en: You can do a couple of memory optimizations to reduce the required RAM for training
@@ -988,52 +1229,67 @@
     want to use the stored experiences in our forward pass to the network to the deep
     Q-network to get the Q-value predictions, we can scale the images to be in the
     range 0.0 to 1.0.
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
 - en: Normalizing observations
+  id: totrans-175
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'In some cases, normalizing the observations can help with convergence speed.
     The most commonly used normalization process involves two steps:'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: Zero-centering using mean subtraction
+  id: totrans-177
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Scaling using the standard deviation
+  id: totrans-178
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'In essence, the following is the normalization process:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: 'In the previous process, x is the observation. Note that other normalization
     processes are also used, depending on the range of the normalized value that is
     desired. For example, if we wanted the values after the normalization to lie between
     0 and 1, we could use the following:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-182
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: In the previous process, instead of subtracting the mean, we subtract the minimum
     value and divide by the difference between the maximum and the minimum value.
     This way, the minimum value in the observation/x gets normalized to 0 and the
     maximum value gets normalized to a value of 1.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: 'Alternatively, if we wanted the values after the normalization to lie between
     -1 and +1, then the following can be used:'
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-185
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: 'In our environment normalization wrapper implementation, we will use the first
     method where we zero-center the observation data using mean subtraction and scale
     using the standard deviation of the data in the observation. In fact, we will
@@ -1043,20 +1299,25 @@
     more appropriate as there can be high variance between different observations
     from the same environment. The following is the implementation code for the normalization
     wrapper that we discussed:'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-187
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: The image frames that we get as observation from the environment (even after
     our preprocessing wrapper) is already on the same scale (0-255 or 0.0 to 1.0).
     The scaling step in the normalization procedure may not be very helpful in this
     case. This wrapper in general could be useful for other environment types and
     was also not observed to be detrimental to the performance for already scaled
     image observations from Gym environments like Atari.
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: Random no-ops on reset
+  id: totrans-189
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1072,12 +1333,16 @@
     "NOOP" or no-operation action, which in the Gym library is coded as an action
     with a value of 0\. So, we will step the environment with a random number of *action*=0before
     returning the observation to the agent, as shown in the following code snippet:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE31]'
+  id: totrans-191
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: Fire on reset
+  id: totrans-192
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1095,6 +1360,7 @@
     get that much because the game was reset artificially due to a time limit. Can
     you try scoring that much in the game of Qbert? You can see that agent scoring
     in action here: [https://www.youtube.com/watch?v=meE5aaRJ0Zs](https://youtu.be/meE5aaRJ0Zs).
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: The point is not that the agents are so smart to figure all these things out.
@@ -1103,22 +1369,28 @@
     agent to tackle several different varieties of games (one at a time). We are better
     off starting with simpler assumptions and making them more complicated after we
     have been able to train the agents to play well using the simpler assumptions.
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: 'Therefore, we will implement a `FireResetEnv` Gym wrapper that will press the
     Fire button on every reset and get the environment started for the agent. The
     code''s implementation is as follows:'
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE32]'
+  id: totrans-196
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: Episodic life
+  id: totrans-197
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: In many games, including Atari games, the player gets to play with more than
     one life.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: It was observed, used, and reported by Deepmind that terminating an episode
@@ -1129,17 +1401,22 @@
     If we reset the game after every loss of life, we would be limiting the agent's
     exposure to observations and experiences that can be collected with just one life,
     which is usually bad for the agent's learning performance.
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: 'To implement what we just discussed, we will use the `EpisodicLifeEnv` class
     that marks the end of an episode when a life is lost, and reset the environment
     when the game is over, as shown in the following code snippet:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE33]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Max and skip-frame
+  id: totrans-202
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1157,32 +1434,42 @@
     per second. We can then customize the environment to skip at our choice to skip
     the rate (*k*) to step at a specific rate. The implementation for such a custom
     step/skip rate is as follows:'
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE34]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: Notice that we are also taking the maximum of the pixel values over the frames
     that were skipped and sending that as the observation instead of totally ignoring
     all the intermediate image frames that were skipped.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: Wrapping the Gym environment
+  id: totrans-206
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'Finally, we will apply the preceding wrappers that we developed based on the
     environment configuration we specify using the `parameters.JSON` file:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE35]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: All of the environment wrappers that we discussed previously are implemented
     and available in the `ch6/environment/atari.py` in this book's code repository.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
 - en: Training the deep Q-learner to play Atari games
+  id: totrans-210
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1191,17 +1478,21 @@
     your agents train by themselves to play several Atari games and see how they are
     progressing. What is great about our deep Q-learner is the fact that we can use
     the same agent to train and play any of the Atari games!
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: 'By the end of this section, you should be able to use our deep Q learning agent
     to observe the pixels on the screen and take actions by sending the joystick commands
     to the Atari Gym environment, just like what is shown in the following screenshot:'
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/00148.jpeg)'
+  id: totrans-213
   prefs: []
   type: TYPE_IMG
 - en: Putting together a comprehensive deep Q-learner
+  id: totrans-214
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1210,138 +1501,174 @@
     will use the `environment.atari` module that we created in the previous section
     with several useful Gym environment wrappers. Let''s look at the code outline
     to understand the code''s structure:'
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
 - en: You will notice that some sections of the code are removed for brevity and replaced
     with`...`, signifying that the code in that section has been folded/hidden. You can
     find the latest version of the complete code in this book's code repository at `ch6/deep_Q_Learner.py`.
+  id: totrans-216
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE36]'
+  id: totrans-217
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: Hyperparameters
+  id: totrans-218
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'The following is a list of hyperparameters that our deep Q-learner uses, with
     a brief description of what they are and the types of values they take:'
+  id: totrans-219
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Hyperparameter** | **Brief description** | **Value type** |'
+  id: totrans-220
   prefs: []
   type: TYPE_TB
 - en: '| `max_num_episodes` | Maximum number of episodes to run the agent. | Integer
     (for example, 100,000) |'
+  id: totrans-221
   prefs: []
   type: TYPE_TB
 - en: '| `replay_memory_capacity` | Total capacity of the experience memory capacity.
     | Integer or exponential notation (for example, 1e6) |'
+  id: totrans-222
   prefs: []
   type: TYPE_TB
 - en: '| `replay_batch_size` | Number of transitions used in a (mini) batch to update
     the Q-function in each update iteration during experience replay. | Integer (for
     example, 2,000) |'
+  id: totrans-223
   prefs: []
   type: TYPE_TB
 - en: '| `use_target_network` | Whether a target Q-network is to be used or not. |
     Boolean (true/false) |'
+  id: totrans-224
   prefs: []
   type: TYPE_TB
 - en: '| `target_network_update_freq` | The number of steps after which the target
     Q-network is updated using the main Q-network. | Integer (for example, 1,000)
     |'
+  id: totrans-225
   prefs: []
   type: TYPE_TB
 - en: '| `lr` | The learning rate for the deep Q-network. | float (for example, 1e-4)
     |'
+  id: totrans-226
   prefs: []
   type: TYPE_TB
 - en: '| `gamma` | The discount factor for the MDP. | float (for example, 0.98) |'
+  id: totrans-227
   prefs: []
   type: TYPE_TB
 - en: '| `epsilon_max` | The maximum value of the epsilon from which the decay starts.
     | float (for example, 1.0) |'
+  id: totrans-228
   prefs: []
   type: TYPE_TB
 - en: '| `epsilon_min` | The minimum value for epsilon to which the decay will finally
     settle to. | float (for example, :0.05) |'
+  id: totrans-229
   prefs: []
   type: TYPE_TB
 - en: '| `seed` | The seed used to seed numpy and torch (and `torch.cuda`) to be able
     to reproduce (to some extent) the randomness introduced by those libraries. |
     Integer (for example, :555) |'
+  id: totrans-230
   prefs: []
   type: TYPE_TB
 - en: '| `use_cuda` | Whether or not to use CUDA based GPU if a GPU is available.
     | Boolean (for example, : true) |'
+  id: totrans-231
   prefs: []
   type: TYPE_TB
 - en: '| `load_trained_model` | Whether or not to load a trained model if one exists
     for this environment/problem. If this parameter is set to true but no trained
     model is available, the model will be trained from scratch. | Boolean (for example,
     : true) |'
+  id: totrans-232
   prefs: []
   type: TYPE_TB
 - en: '| `load_dir` | The path to the directory (including the forward slash) from
     where the trained model should be loaded from to resume training. | String (for
     example, : "trained_models/") |'
+  id: totrans-233
   prefs: []
   type: TYPE_TB
 - en: '| `save_dir` | The path to a directory where the models should be saved. New
     models are saved every time the agent achieves a new best score/reward. | string
     (for example, : trained_models/") |'
+  id: totrans-234
   prefs: []
   type: TYPE_TB
 - en: Please refer to the `ch6/parameters.JSON` file in this book's code repository
     for the updated list of parameters used by the agent.
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: Launching the training process
+  id: totrans-236
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: We have now put together all the pieces for the deep Q-learner and are ready
     to train the agent! Be sure to check out/pull/download the latest code from this
     book's code repository.
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
 - en: 'You can pick any environment from the list of Atari environments and train
     the agent we developed using the following command:'
+  id: totrans-238
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE37]'
+  id: totrans-239
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: 'In the previous command, `ENV_ID` is the name/ID of the Atari Gym environment.
     For example, if you want to train the agent on the `pong` environment with no
     frame skip, you would run the following command:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE38]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: 'By default, the training logs will be saved to `./logs/DQL_{ENV}_{T}`, where `{ENV}`
     is the name of the environment and `{T}` is the time stamp obtained when you run
     the agent. If you start a TensorBoard instance using the following command:'
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE39]'
+  id: totrans-243
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: By default, our `deep_Q_learner.py` script will use the `parameters.JSON` file
     located in the same directory as the script for reading the configurable parameter
     values. You can override with a different parameter configuration file using the
     command-line `--params-file` argument.
+  id: totrans-244
   prefs: []
   type: TYPE_NORMAL
 - en: If the `load_trained_model` parameter is set to `true` in the `parameters.JSON`
     file and if a saved model for the chosen environment is available, our script
     will try to initialize the agent with the model that it learned previously so
     that it can resume from where it left off rather than train from scratch.
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: Testing performance of your deep Q-learner in Atari games
+  id: totrans-246
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1353,15 +1680,20 @@
     to enable rendering of the environment, too, so that you can visually see (apart
     from the rewards printed on the console) how the agent is performing. As an example,
     you can test the agent in the `Seaquest` Atari game using the following command:'
+  id: totrans-247
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE40]'
+  id: totrans-248
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: You will see the Seaquest game window come up and the agent showing of its skills!
+  id: totrans-249
   prefs: []
   type: TYPE_NORMAL
 - en: 'A couple of points to note regarding the `test` mode are the following:'
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
 - en: The test mode will turn off the agent's learning routine. Therefore, the agent
@@ -1369,6 +1701,7 @@
     how a trained agent is performing. If you want to see how the agent is performing
     while it is learning, you can just use the `--render` option without the `--test`
     option.
+  id: totrans-251
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1376,6 +1709,7 @@
     in the `trained_models` folder. Otherwise, a newborn agent, without any prior
     knowledge, will start playing the game from scratch. Also, since learning is disabled,
     you will not see the agent improving!
+  id: totrans-252
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1384,15 +1718,18 @@
     the agent can score! If you train an agent to play well in a game, you can show
     and share it to other fellow readers by opening a pull request on this book's
     code repository from your fork. You will be featured on the page!
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
 - en: Once you get comfortable using the code base we developed, you can do several
     experiments with it. For example, you can turn off the target Q-network or increase/decrease
     the experience memory/replay batch size by simply changing the `parameters.JSON`
     file and comparing the performance using the very convenient TensorBoard dashboard.
+  id: totrans-254
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-255
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1409,6 +1746,7 @@
     of the agent's prior experience. We then revisited the epsilon-greedy action selection
     policy and implemented a decay schedule to decrease the exploration based on a
     schedule to let the agent rely more on its learning.
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: We then looked at how to use TensorBoard's logging and visualization capabilities
@@ -1416,6 +1754,7 @@
     progress in a simple and intuitive way. We also implemented a neat little parameter
     manager class that enabled us to configure the hyperparameters of the agent and
     other configuration parameters using an external easy-to-read JSON file.
+  id: totrans-257
   prefs: []
   type: TYPE_NORMAL
 - en: After we got a good baseline and the helpful utility tools implemented, we started
@@ -1425,6 +1764,7 @@
     the idea of using a target Q-network which is known to stabilize the agent's Q
     learning process. We then put together our deep Q learning-based agent that can
     learn to act based on just the raw pixel observations from a Gym environment.
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
 - en: We then laid our eyes and hands on the Atari Gym environments and looked at
@@ -1440,6 +1780,7 @@
     of the agent from a previous saved state instead of rerunning the training from
     scratch. Towards the end, we saw the improving performance of the agent we implemented
     and trained.
+  id: totrans-259
   prefs: []
   type: TYPE_NORMAL
 - en: We hope that you had a lot of fun throughout this whole chapter. We will be
@@ -1447,5 +1788,6 @@
     be used for taking much more complex actions rather than a discrete set of button
     presses and how we can use it to train an agent to autonomously control a car
     in simulation!
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
