@@ -1,0 +1,906 @@
+- en: '10'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Stocks Trading Using RL
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Rather than learning new methods to solve toy reinforcement learning (RL) problems
+    in this chapter, we will try to utilize our deep Q-network (DQN) knowledge to
+    deal with the much more practical problem of financial trading. I can’t promise
+    that the code will make you super rich on the stock market or Forex, because my
+    goal is much less ambitious: to demonstrate how to go beyond the Atari games and
+    apply RL to a different practical domain.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implement our own OpenAI Gym environment to simulate the stock market
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Apply the DQN method that you learned in Chapter [6](#) and Chapter [8](ch012.xhtml#x1-1240008)
+    to train an agent to trade stocks to maximize profit
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Why trading?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are a lot of financial instruments traded on markets every day: goods,
+    stocks, and currencies. Even weather forecasts can be bought or sold using so-called
+    “weather derivatives,” which is just a consequence of the complexity of the modern
+    world and financial markets. If your income depends on future weather conditions,
+    as it does for a business growing crops, then you might want to hedge the risks
+    by buying weather derivatives. All these different items have a price that changes
+    over time. Trading is the activity of buying and selling financial instruments
+    with different goals, like making a profit (investment), gaining protection from
+    future price movement (hedging), or just getting what you need (like buying steel
+    or exchanging USD for JPY to pay a contract).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the first financial market was established, people have been trying to
+    predict future price movements, as this promises many benefits, like “profit from
+    nowhere” or protecting capital from sudden market movements. This problem is known
+    to be complex, and there are a lot of financial consultants, investment funds,
+    banks, and individual traders trying to predict the market and find the best moments
+    to buy and sell to maximize profit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The question is: can we look at the problem from the RL angle? Let’s say that
+    we have some observation of the market, and we want to make a decision: buy, sell,
+    or wait. If we buy before the price goes up, our profit will be positive; otherwise,
+    we will get a negative reward. What we’re trying to do is get as much profit as
+    possible. The connections between market trading and RL are quite obvious. First,
+    let’s define the problem statement more clearly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Problem statement and key decisions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The finance domain is large and complex, so you can easily spend several years
+    learning something new every day. In our example, we will just scratch the surface
+    a bit with our RL tools, and our problem will be formulated as simply as possible,
+    using price as an observation. We will investigate whether it will be possible
+    for our agent to learn when the best time is to buy one single share and then
+    close the position to maximize the profit. The purpose of this example is to show
+    how flexible the RL model can be and what the first steps are that you usually
+    need to take to apply RL to a real-life use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you already know, to formulate RL problems, three things are needed: observation
+    of the environment, possible actions, and a reward system. In previous chapters,
+    all three were already given to us, and the internal machinery of the environment
+    was hidden. Now we’re in a different situation, so we need to decide ourselves
+    what our agent will see and what set of actions it can take. The reward system
+    is also not given as a strict set of rules; rather, it will be guided by our feelings
+    and knowledge of the domain, which gives us lots of flexibility.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Flexibility, in this case, is good and bad at the same time. It’s good that
+    we have the freedom to pass some information to the agent that we feel will be
+    important to learn efficiently. For example, you can provide to the trading agent
+    not only prices, but also news or important statistics (which are known to influence
+    financial markets a lot). The bad part is that this flexibility usually means
+    that to find a good agent, you need to try a lot of variants of data representation,
+    and it’s not always obvious which will work better. In our case, we will implement
+    the basic trading agent in its simplest form, as we discussed in Chapter [1](ch005.xhtml#x1-190001):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Observation:** The observation will include the following information:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: N past bars, where each has open, high, low, and close prices
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An indication that the share was bought some time ago (only one share at a time
+    will be possible)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The profit or loss that we currently have from our current position (the share
+    bought)
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Action:** At every step, after every minute’s bar, the agent can take one
+    of the following actions:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Do nothing: Skip the bar without taking an action'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Buy a share: If the agent has already got the share, nothing will be bought;
+    otherwise, we will pay the commission, which is usually some small percentage
+    of the current price'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Close the position: If we do not have a previously purchased share, nothing
+    will happen; otherwise, we will pay the commission for the trade'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Reward:** The reward that the agent receives can be expressed in various
+    ways:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As the first option, we can split the reward into multiple steps during our
+    ownership of the share. In that case, the reward on every step will be equal to
+    the last bar’s movement.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alternatively, the agent can receive the reward only after the close action
+    and get the full reward at once.
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At first sight, both variants should have the same final result, but maybe with
+    different convergence speeds. However, in practice, the difference could be dramatic.
+    The environment in my implementation supports both variants, so you can experiment
+    with the difference.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: One last decision to make is how to represent the prices in our environment
+    observation. Ideally, we would like our agent to be independent of actual price
+    values and take into account relative movement, such as “the stock has grown 1%
+    during the last bar” or “the stock has lost 5%.” This makes sense, as different
+    stocks’ prices can vary, but they can have similar movement patterns. In finance,
+    there is a branch of analytics called technical analysis that studies such patterns
+    to help to make predictions from them. We would like our system to be able to
+    discover the patterns (if they exist). To achieve this, we will convert every
+    bar’s open, high, low, and close prices to three numbers showing high, low, and
+    close prices represented as a percentage of the open price.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This representation has its own drawbacks, as we’re potentially losing the information
+    about key price levels. For example, it’s known that markets have a tendency to
+    bounce from round price numbers (like $70,000 per bitcoin) and levels that were
+    turning points in the past. However, as already stated, we’re just playing with
+    the data here and checking the concept. Representation in the form of relative
+    price movement will help the system to find repeating patterns in the price level
+    (if they exist, of course), regardless of the absolute price position. Potentially,
+    the neural network (NN) could learn this on its own (it’s just the mean price
+    that needs to be subtracted from the absolute price values), but relative representation
+    simplifies the NN’s task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In our example, we will use the Russian stock market prices from the period
+    of 2015-2016, which are placed in Chapter10/data/ch10-small-quotes.tgz and have
+    to be unpacked before model training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Inside the archive, we have CSV files with M1 bars, which means that every
+    row in each CSV file corresponds to a single minute in time, and price movement
+    during that minute is captured with four prices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Open: The price at the beginning of the minute'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'High: The maximum price during the interval'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Low: The minimum price'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Close: The last price of the minute time interval'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Every minute interval is called a bar and allows us to have an idea of price
+    movement within the interval. For example, in the YNDX_160101_161231.csv file
+    (which has Yandex company stocks for 2016), we have 130k lines in this form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two columns are the date and time for the minute; the next four columns
+    are open, high, low, and close prices; and the last value represents the number
+    of buy and sell orders performed during the bar (also called volume). The exact
+    interpretation of volume is market-dependent, but usually, it give you an idea
+    about how active the market was.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The typical way to represent those prices is called a candlestick chart, where
+    every bar is shown as a candle. Part of Yandex’s quotes for one day in February
+    2016 is shown in the following chart:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file95.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.1: Price data for Yandex in February 2016'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The archive contains two files with M1 data for 2016 and 2015\. We will use
+    data from 2016 for model training and data from 2015 for validation (but the order
+    is arbitrary; you can swap them or even use different time intervals and check
+    the effect).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The trading environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As we have a lot of code that is supposed to work with the Gym API, we will
+    implement the trading functionality following Gym’s Env class, which should be
+    already familiar to you. Our environment is implemented in the StocksEnv class
+    in the Chapter10/lib/environ.py module. It uses several internal classes to keep
+    its state and encode observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s first look at the public API class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We encode all available actions as an enumerator’s fields and provide just
+    three actions: do nothing, buy a single share, and close the existing position.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our market model, we allow only the single share to be bought, neither supporting
+    extending existing positions nor opening “short positions” (when you selling the
+    share you don’t have, expecting the price to decrease in the future). That was
+    an intentional decision, as I tried to keep the example simple and to avoid overcomplications.
+    Why don’t you try experimenting with other options?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we have the environment class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The field spec is required for gym.Env compatibility and registers our environment
+    in the Gym internal registry.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This class provides two ways to create its instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see in the preceding code, the first way is to call the class method
+    from_dir with the data directory as the argument. In that case, it will load all
+    quotes from the CSV files in the directory and construct the environment. To deal
+    with price data in our form, we have several helper functions in Chapter10/lib/data.py.
+    Another way is to construct the class instance directly. In that case, you should
+    pass the prices dictionary, which has to map the quote name to the Prices dataclass
+    declared in data.py. This object has five fields containing open, high, low, close,
+    and volume time series as one-dimensional NumPy arrays. The module data.py also
+    provides several helping functions, like converting the prices into relative format,
+    enumerating files in the given directory, etc.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the constructor of the environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It accepts a lot of arguments to tweak the environment’s behavior and observation
+    representation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'prices: Contains one or more stock prices for one or more instruments as a
+    dict, where keys are the instrument’s name and the value is a container object
+    data.Prices, which holds price data arrays.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'bars_count: The count of bars that we pass in the observation. By default,
+    this is 10 bars.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'commission: The percentage of the stock price that we have to pay to the broker
+    on buying and selling the stock. By default, it’s 0.1%.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'reset_on_close: If this parameter is set to True, which it is by default, every
+    time the agent asks us to close the existing position (in other words, sell a
+    share), we stop the episode. Otherwise, the episode will continue until the end
+    of our time series, which is one year of data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'conv_1d: This Boolean argument switches between different representations of
+    price data in the observation passed to the agent. If it is set to True, observations
+    have a 2D shape, with different price components for subsequent bars organized
+    in rows. For example, high prices (max price for the bar) are placed on the first
+    row, low prices on the second, and close prices on the third. This representation
+    is suitable for doing 1D convolution on time series, where every row in the data
+    has the same meaning as different color planes (red, green, or blue) in Atari
+    2D images. If we set this option to False, we have one single array of data with
+    every bar’s components placed together. This organization is convenient for a
+    fully connected network architecture. Both representations are illustrated in
+    Figure [10.2](#x1-173037r2).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'random_ofs_on_reset: If the parameter is True (by default), on every reset
+    of the environment, the random offset in the time series will be chosen. Otherwise,
+    we will start from the beginning of the data.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'reward_on_close: This Boolean parameter switches between the two reward schemes
+    discussed previously. If it is set to True, the agent will receive a reward only
+    on the “close” action issue. Otherwise, we will give a small reward every bar,
+    corresponding to price movement during that bar.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'volumes: This argument switches on volumes in observations and is disabled
+    by default.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![PIC](img/file96.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.2: Different data representations for the NN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we will continue looking at the environment constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Most of the functionality of the StocksEnv class is implemented in two internal
+    classes: State and State1D. They are responsible for observation preparation and
+    our bought share state and reward. They implement a different representation of
+    our data in the observations, and we will take a look at their code later. In
+    the constructor, we create the state object, action space, and observation space
+    fields that are required by Gym.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method defines the reset() functionality for our environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: According to the gym.Env semantics, we randomly switch the time series that
+    we will work on and select the starting offset in this time series. The selected
+    price and offset are passed to our internal state instance, which then asks for
+    an initial observation using its encode() function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method has to handle the action chosen by the agent and return the next
+    observation, reward, and done flag:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: All real functionality is implemented in our state classes, so this method is
+    a very simple wrapper around the call to state methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The API for gym.Env allows you to define the render() method handler, which
+    is supposed to render the current state in human or machine-readable format. Generally,
+    this method is used to peek inside the environment state and is useful for debugging
+    or tracing the agent’s behavior. For example, the market environment could render
+    current prices as a chart to visualize what the agent sees at that moment. Our
+    environment doesn’t support rendering (as this functionality is optional), so
+    we don’t define this function at all.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s now look at the internal environ.State class, which implements the core
+    of the environment’s functionality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The constructor does nothing more than just check and remember the arguments
+    in the object’s fields.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reset() method is called every time that the environment is asked to reset
+    and has to save the passed prices data and starting offset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the beginning, we don’t have any shares bought, so our state has have_position=False
+    and open_price=0.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The shape property returns the tuple with dimensions of the NumPy array with
+    encoded state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The State class is encoded into a single vector (top part in the Figure [10.2](#x1-173037r2)),
+    which includes prices with optional volumes and two numbers indicating the presence
+    of a bought share and position profit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The encode() method packs prices at the current offset into a NumPy array,
+    which will be the observation of the agent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This helper method calculates the current bar’s close price:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Prices passed to the State class have the relative form with respect to the
+    open price: the high, low, and close components are relative ratios to the open
+    price. This representation was already discussed when we talked about the training
+    data, and it will (probably) help our agent to learn price patterns that are independent
+    of actual price value.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The step() method is the most complicated piece of code in the State class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: It is responsible for performing one step in our environment. On exit, it has
+    to return the reward in a percentage and an indication of the episode ending.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If the agent has decided to buy a share, we change our state and pay the commission:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: In our state, we assume the instant order execution at the current bar’s close
+    price, which is a simplification on our side; normally, an order can be executed
+    on a different price, which is called price slippage.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we have a position and the agent asks us to close it, we pay commission
+    again, change the done flag if we’re in reset_on_close mode, give a final reward
+    for the whole position, and change our state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the rest of the function, we modify the current offset and give the reward
+    for the last bar movement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That’s it for the State class, so let’s look at State1D, which has the same
+    behavior and just overrides the representation of the state passed to the agent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The shape of this representation is different, as our prices are encoded as
+    a 2D matrix suitable for a 1D convolution operator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method encodes the prices in our matrix, depending on the current offset,
+    whether we need volumes, and whether we have stock:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: That’s it for our trading environment. Compatibility with the Gym API allows
+    us to plug it into the familiar classes that we used to handle the Atari games.
+    Let’s do that now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Models
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this example, two architectures of DQN are used: a simple feed-forward network
+    with three layers and a network with 1D convolution as a feature extractor, followed
+    by two fully connected layers to output Q-values. Both of them use the dueling
+    architecture described in Chapter [8](ch012.xhtml#x1-1240008). Double DQN and
+    two-step Bellman unrolling have also been used. The rest of the process is the
+    same as in a classical DQN (from Chapter [6](#)). Both models are in Chapter10/lib/models.py
+    and are very simple. Let’s start with the feed-forward model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The feed forward model uses independent networks for Q-value and advantage prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The convolutional model has a common feature extraction layer with the 1D convolution
+    operations and two fully connected heads to output the value of the state and
+    advantages for actions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the model is very similar to the DQN Dueling architecture we
+    used in Atari examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We have two very similar training modules in this example: one for the feed-forward
+    model and one for 1D convolutions. For both of them, there is nothing new added
+    to our examples from Chapter [8](ch012.xhtml#x1-1240008):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They’re using epsilon-greedy action selection to perform exploration. The epsilon
+    linearly decays over the first 1M steps from 1.0 to 0.1.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A simple experience replay buffer of size 100k is being used, which is initially
+    populated with 10k transitions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For every 1,000 steps, we calculate the mean value for the fixed set of states
+    to check the dynamics of the Q-values during the training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For every 100k steps, we perform validation: 100 episodes are played on the
+    training data and on previously unseen quotes. Validation results are recorded
+    in TensorBoard, such as the mean profit, the mean count of bars, and the share
+    held. This step allows us to check for overfitting conditions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The training modules are in Chapter10/train_model.py (feed-forward model) and
+    Chapter10/train_model_conv.py (with a 1D convolutional layer). Both versions accept
+    the same command-line options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start the training, you need to pass training data with the --data option,
+    which could be an individual CSV file or the whole directory with files. By default,
+    the training module uses Yandex quotes for 2016 (file data/YNDX_160101_161231.csv).
+    For the validation data, there is an option, --val, that takes Yandex 2015 quotes
+    by default. Another required option will be -r, which is used to pass the name
+    of the run. This name will be used in the TensorBoard run name and to create directories
+    with saved models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we’ve implemented them, let’s compare the performance of our two models,
+    starting with feed-forward variant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The feed-forward model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'During the training, the average reward obtained by the agent was slowly but
+    consistently growing. After 300k episodes, the growth slowed down. The following
+    are charts (Figure [10.3](#x1-177003r3)) showing the raw reward during the training
+    and the same data smoothed with the simple moving average of the last 15 values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.3: Reward during the training. Raw values (left) and smoothed (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another pair of charts (Figure [10.4](#x1-177004r4)) shows the reward obtained
+    from testing performed on the same training data but without random actions (𝜖
+    = 0):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.4: Reward from the tests. Raw values (left) and smoothed (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both the training and testing reward charts show that the agent is learning
+    how to increase the profit over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.5: Length of the episodes. Raw values (left) and smoothed (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The length of each episode also increased after 100k episodes, as the agent
+    learned that holding the share might be profitable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, we monitor the predicted value of the random set of states. The
+    following chart shows that the network becomes more and more optimistic about
+    those states during the training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.6: Value predicted for a random set of states'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All charts look good so far, but all of them were obtained using the training
+    data. It is great that our agent is learning how to get profits on the historical
+    data. But will it work on data never seen before? To check that, we perform validation
+    on 2,015 quotes, and the reward is shown in the Figure [10.7](#x1-177009r7):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.7: Reward on validation dataset. Raw values (left) and smoothed (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chart is a bit disappointing: the reward doesn’t have an uptrend. In the
+    smoothed version of the chart, we might even see the opposite — the reward is
+    slowly decreasing after the first hour of training (at that point, we had a significant
+    increase in training episode length on Figure [10.5](#x1-177005r5)). This might
+    be an indication of overfitting of the agent, which starts after 1M training iterations.
+    But still, for the first 4 hours of training, the reward is above -0.2% (which
+    is a broker commission in our environment — 0.1% when we buy stock and 0.1% for
+    selling it) and means that our agent is better than a random “buying-and-selling
+    monkey.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the training, our code saves models for later experiments. It does this
+    every time the mean Q-values on our held-out-states set update the maximum or
+    when the reward on the validation sets beats the previous record. There is a tool
+    that loads the model, trades on prices you’ve provided to it with the command-line
+    option, and draws the plots with the profit change over time. The tool is called
+    Chapter10/run_model.py and it can be used like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The options that the tool accepts are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '-d: This is the path to the quotes to use. In the shown command, we apply the
+    model to the data that it was trained on.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-m: This is the path to the model file. By default, the training code saves
+    it in the saves directory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-b: This shows how many bars to pass to the model in the context. It has to
+    match the count of bars used on training, which is 10 by default and can be changed
+    in the training code.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-n: This is the suffix to be appended to the images produced.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--commission: This allows you to redefine the broker’s commission, which has
+    a default of 0.1%.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At the end, the tool creates a chart of the total profit dynamics (in percentages).
+    The following is the reward chart on Yandex 2016 quotes (used for training):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.8: Trading profit on the training data (left) and validation (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The result on the training data looks amazing: 150% profit in just a year.
+    However, the result on the validation dataset is much worse, as we’ve seen from
+    the validation plots in TensorBoard.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To check that our system is profitable with zero commission, we can rerun on
+    the same data with the --commission 0.0 option:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file108.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.9: Trading profit on validation data without broker’s commission'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have some bad days with drawdown, but the overall results are good: without
+    commission, our agent can be profitable. Of course, the commission is not the
+    only issue. Our order simulation is very primitive and doesn’t take into account
+    real-life situations, such as price spread and a slip in order execution.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we take the model with the best reward on the validation set, the reward
+    dynamics are a bit better. Profitability is lower, but the drawdown on unseen
+    quotes is much lower (and commission was enabled for the following charts):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.10: The reward from the model with the best validation reward. Training
+    data (left) and validation (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: But, of course, taking the best model based on validation data is cheating —
+    by using validation results for model’s selection, we are ruining the idea of
+    validation. So, the charts above are just to illustrate that there are some models
+    that might work alright even on unseen data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The convolution model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The second model implemented in this example uses 1D convolution filters to
+    extract features from the price data. This allows us to increase the number of
+    bars in the context window that our agent sees on every step without a significant
+    increase in the network size. By default, the convolution model example uses 50
+    bars of context. The training code is in Chapter10/train_model_conv.py, and it
+    accepts the same set of command-line parameters as the feed-forward version.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Training dynamics are almost identical, but the reward obtained on the validation
+    set is slightly higher and starts to overfit later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.11: Reward during the training. Raw values (left) and smoothed (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B21150_10_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 10.12: Reward on validation dataset. Raw values (left) and smoothed
+    (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Things to try
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As already mentioned, financial markets are large and complicated. The methods
+    that we’ve tried are just the very beginning. Using RL to create a complete and
+    profitable trading strategy is a large project, which can take several months
+    of dedicated labor. However, there are things that we can try to get a better
+    understanding of the topic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our data representation is definitely not perfect. We don’t take into account
+    significant price levels (support and resistance), round price values, and other
+    financial markets information. Incorporating them into the observation could be
+    a challenging problem, which you could try exploring.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Analyze market prices at different timeframes. Low-level data like one-minute
+    bars are noisy (as they include lots of small price movements caused by individual
+    trades), and it is like looking at the market using a microscope. At larger scales,
+    such as one-hour or one-day bars, you can see large, long trends in data movement,
+    which could be extremely important for price prediction.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In principle, our agent can look at price at various scales at the same time,
+    taking into account not just recent low-level movements but overall trends (and
+    recent natural language processing (NLP) innovations like transformers, attention
+    mechanisms, and long context windows might be really helpful there).
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: More training data is needed. One year of data for one stock is just 130k bars,
+    which might be not enough to capture all market situations. Ideally, a real-life
+    agent should be trained on a much larger dataset, such as the prices for hundreds
+    of stocks for the past 10 years or more.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Experiment with the network architecture. The convolution model has shown a
+    bit faster convergence than the feed-forward model, but there are a lot of things
+    to optimize: the count of layers, kernel size, residual architecture, attention
+    mechanism, and so on.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are lots of similarities between NLP and financial data analysis: both
+    work with human-created sequences of data that have variable length. You can try
+    to represent price bars as “words” in some “financial language” (like “up price
+    movement 1%” → token A, “up price movement 2%” → token B) and then apply NLP methods
+    to this language. For example, train embeddings from the “sentences” to capture
+    financial markets’ structure, or use transformers or even LLMs for data prediction
+    and classification.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we saw a practical example of RL and implemented a trading
+    agent and a custom Gym environment. We tried two different architectures: a feed-forward
+    network with price history on input and a 1D convolution network. Both architectures
+    used the DQN method, with some of the extensions described in Chapter [8](ch012.xhtml#x1-1240008).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This was the last chapter in Part 2 of this book. In Part 3, we will talk about
+    a different family of RL methods: policy gradients. We’ve touched on this approach
+    a bit, but in the upcoming chapters, we will go much deeper into the subject,
+    covering the REINFORCE method and the best method in the family: Asynchronous
+    Advantage Actor-Critic, also known as A3C.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Leave a Review!
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Thank you for purchasing this book from Packt Publishing—we hope you enjoy it!
+    Your feedback is invaluable and helps us improve and grow. Once you’ve completed
+    reading it, please take a moment to leave an Amazon review; it will only take
+    a minute, but it makes a big difference for readers like you. Scan the QR code
+    below to receive a free ebook of your choice. [https://packt.link/NzOWQ](https://packt.link/NzOWQ)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Part 3
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Policy-based methods
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL

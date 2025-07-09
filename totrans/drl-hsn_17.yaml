@@ -1,0 +1,943 @@
+- en: '17'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Black-Box Optimizations in RL
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will change our perspective on reinforcement learning (RL)
+    training again and switch to the so-called black-box optimizations. These methods
+    are at least a decade old, but recently, several research studies were conducted
+    that showed their applicability to large-scale RL problems and their competitiveness
+    with the value iteration and policy gradient methods. Despite their age, this
+    family of methods is still more efficient in some situations. In particular, this
+    chapter will cover two examples of black-box optimization methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evolution strategies
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Genetic algorithms
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Black-box methods
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To begin with, let’s discuss the whole family of black-box methods and how it
+    differs from what we’ve covered so far. Black-box optimization methods are the
+    general approach to the optimization problem, when you treat the objective that
+    you’re optimizing as a black box, without any assumptions about the differentiability,
+    the value function, the smoothness of the objective, and so on. The only requirement
+    that those methods expose is the ability to calculate the fitness function, which
+    should give us the measure of suitability of a particular instance of the optimized
+    entity at hand. One of the simplest examples in this family is random search,
+    which is when you randomly sample the thing you’re looking for (in the case of
+    RL, it’s the policy, π(a|s)), check the fitness of this candidate, and if the
+    result is good enough (according to some reward criteria), then you’re done. Otherwise,
+    you repeat the process again and again. Despite the simplicity and even naivety
+    of this approach, especially when compared to the sophisticated methods that you’ve
+    seen so far, this is a good example to illustrate the idea of black-box methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Furthermore, with some modifications, as you will see shortly, this simple
+    approach can be compared in terms of efficiency and the quality of the resulting
+    policies to the deep Q-network (DQN) and policy gradient methods. In addition
+    to that, black-box methods have several very appealing properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They are at least two times faster than gradient-based methods, as we don’t
+    need to perform the backpropagation step to obtain the gradients.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are very few assumptions about the optimized objective and the policy
+    that are treated as a black box. Traditional methods struggle with situations
+    when the reward function is non-smooth or the policy contains steps with random
+    choice. All of this is not an issue for black-box methods, as they don’t expect
+    much from the black-box internals.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The methods can generally be parallelized very well. For example, the aforementioned
+    random search can easily scale up to thousands of central processing units (CPUs)
+    or graphics processing units (GPUs) working in parallel, without any dependency
+    on each other. This is not the case for DQN or policy gradient methods, when you
+    need to accumulate the gradients and propagate the current policy to all parallel
+    workers, which decreases the parallelism.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The downside of the preceding is usually lower sample efficiency. In particular,
+    the naïve random search of the policy, parameterized with the neural network (NN)
+    with half a million parameters, has a very low probability of succeeding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evolution strategies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One subset of black-box optimization methods is called evolution strategies
+    (ES), and it was inspired by the evolution process. With ES, the most successful
+    individuals have the highest influence on the overall direction of the search.
+    There are many different methods that fall into this class, and in this chapter,
+    we will consider the approach taken by the OpenAI researchers Salimans et al.
+    in their paper, Evolution strategies as a scalable alternative to reinforcement
+    learning [[Sal+17](#)], published in March 2017.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The underlying idea of ES methods is that on every iteration, we perform random
+    perturbation of our current policy parameters and evaluate the resulting policy
+    fitness function. Then, we adjust the policy weights proportionally to the relative
+    fitness function value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The concrete method used by Salimans et al. is called covariance matrix adaptation
+    evolution strategy (CMA-ES), in which the perturbation performed is the random
+    noise sampled from the normal distribution with the zero mean and identity variance.
+    Then, we calculate the fitness function of the policy with weights equal to the
+    weights of the original policy plus the scaled noise. Next, according to the obtained
+    value, we adjust the original policy weights by adding the noise multiplied by
+    the fitness function value, which moves our policy toward weights with a higher
+    value of the fitness function. To improve the stability, the update of the weights
+    is performed by averaging the batch of such steps with different random noise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More formally, this method could be expressed as the following sequence of
+    steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize the learning rate, α, the noise standard deviation, σ, and the initial
+    policy parameters, 𝜃[0].
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For t = 0,1,… perform:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The sample batch of noise with the shape of the weights from the normal distribution
+    with zero mean and variance of one: 𝜖[1],…,𝜖[n] ∼𝒩(0,I)'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Compute returns F[i] = F(𝜃[t] + σ𝜖[i]) for i = 1,…,n
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Update weights:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq69.png)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: This algorithm is the core of the method presented in the paper, but, as usual
+    in the RL domain, the method alone is not enough to obtain good results. So, the
+    paper includes several tweaks to improve the method, although the core is the
+    same.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing ES on CartPole
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s implement and test the method from the paper on our fruit fly environment:
+    CartPole. You’ll find the complete example in Chapter17/01_cartpole_es.py.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, we will use the single environment to check the fitness of
+    the perturbed network weights. Our fitness function will be the undiscounted total
+    reward for the episode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start with the imports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: From the import statements, you will notice how self-contained our example is.
+    We’re not using PyTorch optimizers, as we don’t perform backpropagation at all.
+    In fact, we could avoid using PyTorch completely and work only with NumPy, as
+    the only thing we use PyTorch for is to perform a forward pass and calculate the
+    network’s output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we define the hyperparameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The number of hyperparameters is also small and includes the following values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'MAX_BATCH_EPISODES and MAX_BATCH_STEPS: The limit of episodes and steps we
+    use for training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'NOISE_STD: The standard deviation, σ, of the noise used for weight perturbation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'LEARNING_RATE: The coefficient used to adjust the weights on the training step'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We alse define a type alias for list of tensors containing weights’ noises.
+    It will simplify the code, as we’ll deal with noise a lot.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s check the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The model we’re using is a simple one-hidden-layer NN, which gives us the action
+    to take from the observation. We’re using PyTorch NN machinery here only for convenience,
+    as we need only the forward pass, but it could be replaced by the multiplication
+    of matrices and nonlinearities application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The evaluate() function plays a full episode using the given policy and returns
+    the total reward and the number of steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The reward will be used as a fitness value, while the count of steps is needed
+    to limit the amount of time we spend on forming the batch. The action selection
+    is performed deterministically by calculating argmax from the network output.
+    In principle, we could do the random sampling from the distribution, but we’ve
+    already performed the exploration by adding noise to the network parameters, so
+    the deterministic action selection is fine here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the sample_noise() function, we create random noise with zero mean and unit
+    variance equal to the shape of our network parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The function returns two sets of noise tensors: one with positive noise and
+    another with the same random values taken with a negative sign. These two samples
+    are later used in a batch as independent samples. This technique is known as mirrored
+    sampling and is used to improve the stability of the convergence. In fact, without
+    the negative noise, the convergence becomes very unstable because positive noise
+    pushes weights in a single direction.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The eval_with_noise() function takes the noise array created by sample_noise()
+    and evaluates the network with noise added:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: To achieve this, we add the noise to the network’s parameters and call the evaluate
+    function to obtain the reward and number of steps taken. After this, we need to
+    restore the network weights to their original state, which is completed by loading
+    the state dictionary of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last and the central function of the method is train_step(), which takes
+    the batch with noise and respective rewards and calculates the update to the network
+    parameters by applying the formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq69.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This can be implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the beginning, we normalize rewards to have zero mean and unit variance,
+    which improves the stability of the method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we iterate every pair (noise, reward) in our batch and multiply the noise
+    values with the normalized reward, summing together the respective noise for every
+    parameter in our policy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a final step, we use the accumulated scaled noise to adjust the network
+    parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Technically, what we do here is a gradient ascent, although the gradient was
+    not obtained from backpropagation but from the random sampling (also known as
+    Monte Carlo sampling). This fact was also demonstrated by Salimans et al., where
+    the authors showed that CMA-ES is very similar to the policy gradient methods,
+    differing in just the way that we get the gradients’ estimation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preparation before the training loop is simple; we create the environment
+    and the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Every iteration of the training loop starts with batch creation, where we sample
+    the noise and obtain rewards for both positive and negated noise:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: When we reach the limit of episodes in the batch, or the limit of the total
+    steps, we stop gathering the data and do a training update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To perform the update of the network, we call the train_step() function that
+    we’ve already seen:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The goal of the train_step() function is to scale the noise according to the
+    total reward and then adjust the policy weights in the direction of the averaged
+    noise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final steps in the training loop write metrics into TensorBoard and show
+    the training progress on the console:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: CartPole results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Training can be started by just running the program without the arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: From my experiments, it usually takes ES about 40–60 batches to solve CartPole.
+    The convergence dynamics for the preceding run are shown in Figure [17.1](#x1-315020r1)
+    and Figure [17.2](#x1-315021r2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.1: The maximum reward (left) and policy update (right) for ES on
+    CartPole'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.2: The mean (left) and standard deviation (right) of reward for ES
+    on CartPole'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding graphs looks quite good—being able to solve the environment in
+    30 seconds is on par with the cross-entropy method from Chapter [4](ch008.xhtml#x1-740004).
+  prefs: []
+  type: TYPE_NORMAL
+- en: ES on HalfCheetah
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the next example, we will go beyond the simplest ES implementation and look
+    at how this method can be parallelized efficiently using the shared seed strategy
+    proposed by Salimans et al. To show this approach, we will use the HalfCheetah
+    environment using the MuJoCo physics simulator. We already experimented with it
+    in the previous chapter, so if you haven’t installed the gymnasium[mujoco] package,
+    you should do so.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, let’s discuss the idea of shared seeds. The performance of the ES algorithm
+    is mostly determined by the speed at which we can gather our training batch, which
+    consists of sampling the noise and checking the total reward of the perturbed
+    noise. As our training batch items are independent, we can easily parallelize
+    this step to a large number of workers sitting on remote machines. (That’s a bit
+    similar to the example from Chapter [12](ch016.xhtml#x1-20300012), when we gathered
+    gradients from A3C workers.) However, naïve implementation of this parallelization
+    will require a large amount of data to be transferred from the worker process
+    to the central master, which is supposed to combine the noise checked by the workers
+    and perform the policy update. Most of this data is the noise vectors, the size
+    of which is equal to the size of our policy parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To avoid this overhead, a quite elegant solution was proposed by Salimans et
+    al. As noise sampled on a worker is produced by a pseudo-random number generator,
+    which allows us to set the random seed and reproduce the random sequence generated,
+    the worker can transfer to the master only the seed that was used to generate
+    the noise. Then, the master can generate the same noise vector again using the
+    seed. Of course, the seed on every worker needs to be generated randomly to still
+    have a random optimization process. This has the effect of dramatically decreasing
+    the amount of data that needs to be transferred from workers to the master, improving
+    the scalability of the method. For example, Salimans et al. reported linear speed
+    up in optimizations involving 1,440 CPUs in the cloud. In our example, we will
+    look at local parallelization using the same approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing ES on HalfCheetah
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The code is placed in Chapter17/02_cheetah_es.py. As the code significantly
+    overlaps with the CartPole version, we will focus here only on the differences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will begin with the worker, which is started as a separate process using
+    the PyTorch multiprocessing wrapper. The worker’s responsibilities are simple:
+    for every iteration, it obtains the network parameters from the master process,
+    and then it performs the fixed number of iterations, where it samples the noise
+    and evaluates the reward. The result with the random seed is sent to the master
+    using the queue.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following dataclass is used by the worker to send the results of the perturbed
+    policy evaluation to the master process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: It includes the random seed, the rewards obtained with the positive and negative
+    noise, and the total number of steps we performed in both tests.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On every training iteration, the worker waits for the network parameters to
+    be broadcasted from the master:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The value of None means that the master wants to stop the worker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest is almost the same as the previous example, with the main difference
+    being in the random seed generated and assigned before the noise generation. This
+    allows the master to regenerate the same noise, only from the seed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another difference lies in the function used by the master to perform the training
+    step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the CartPole example, we normalized the batch of rewards by subtracting the
+    mean and dividing by the standard deviation. According to Salimans et al., better
+    results could be obtained using ranks instead of actual rewards. As ES has no
+    assumptions about the fitness function (which is a reward in our case), we can
+    make any rearrangements in the reward that we want, which wasn’t possible in the
+    case of DQN, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, rank transformation of the array means replacing the array with indices
+    of the sorted array. For example, array [0.1, 10, 0.5] will have the rank array
+    [0, 2, 1]. The compute_centered_ranks function takes the array with the total
+    rewards of the batch, calculates the rank for every item in the array, and then
+    normalizes those ranks. For example, an input array of [21.0, 5.8, 7.0] will have
+    ranks [2, 0, 1], and the final centered ranks will be [0.5, -0.5, 0.0].
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another major difference in the training function is the use of PyTorch optimizers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: To understand why they are used and how this is possible without doing backpropagation,
+    some explanations are required.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, Salimans et al. showed that the optimization method used by the ES algorithm
+    is very similar to gradient ascent on the fitness function, with the difference
+    being how the gradient is calculated. The way the stochastic gradient descent
+    (SGD) method is usually applied is that the gradient is obtained from the loss
+    function by calculating the derivative of the network parameters with respect
+    to the loss value. This imposes the limitation on the network and loss function
+    to be differentiable, which is not always the case; for example, the rank transformation
+    performed by the ES method is not differentiable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On the other hand, optimization performed by ES works differently. We randomly
+    sample the neighborhood of our current parameters by adding the noise to them
+    and calculating the fitness function. According to the fitness function change,
+    we adjust the parameters, which pushes our parameters in the direction of a higher
+    fitness function. The result of this is very similar to gradient-based methods,
+    but the requirements imposed on our fitness function are much looser: the only
+    requirement is our ability to calculate it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if we’re estimating some kind of gradient by randomly sampling the
+    fitness function, we can use standard optimizers from PyTorch. Normally, optimizers
+    adjust the parameters of the network using gradients accumulated in the parameters’
+    grad fields.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Those gradients are accumulated after the backpropagation step, but due to
+    PyTorch’s flexibility, the optimizer doesn’t care about the source of the gradients.
+    So, the only thing we need to do is copy the estimated parameters’ update in the
+    grad fields and ask the optimizer to update them. Note that the update is copied
+    with a negative sign, as optimizers normally perform gradient descent (as in a
+    normal operation, we minimize the loss function), but in this case, we want to
+    do gradient ascent. This is very similar to the actor-critic method we covered
+    in Chapter [12](ch016.xhtml#x1-20300012), when the estimated policy gradient is
+    taken with the negative sign, as it shows the direction to improve the policy.
+    The last chunk of differences in the code is taken from the training loop performed
+    by the master process. Its responsibility is to wait for data from worker processes,
+    perform the training update of the parameters, and broadcast the result to the
+    workers. The communication between the master and workers is performed by two
+    sets of queues. The first queue is per-worker and is used by the master to send
+    the current policy parameters to use. The second queue is shared by the workers
+    and is used to send the already mentioned RewardItem structure with the random
+    seed and rewards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: At the beginning of the master, we create all those queues, start the worker
+    processes, and create the optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Every training iteration starts with the network parameters being broadcast
+    to the workers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, in the loop, the master waits for enough data to be obtained from the
+    workers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Every time a new result arrives, we reproduce the noise using the random seed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the last step in the training loop, we call the train_step() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: You’ve already seen this function, which calculates the update from the noise
+    and rewards, and calls the optimizer to adjust the weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: HalfCheetah results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The code supports the optional --dev flag, but from my experiments, I got a
+    slowdown if GPU was enabled: without GPU, the average speed was 20-21k observations
+    per second, but with CUDA, it was just 9k. This might look counter-intuitive,
+    but we can explain this with the very small network and batch size of a single
+    observation. Potentially, we might decrease the gap (or even get some speedup)
+    with a higher batch size, but it will complicate our code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the training, we show the mean reward, the speed of training (in observations
+    per second), and two timing values (showing how long it took to gather data and
+    perform the training step):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The dynamics of the training show very quick policy improvement in the beginning:
+    in just 100 updates, which is 9 minutes of training, the agent was able to reach
+    the score of 1,500-1,600\. After 30 minutes, the peak reward was 2,833; but with
+    more training, the policy was degrading.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The maximum, mean, and standard deviation of reward are shown in Figure [17.3](#x1-318022r3)
+    and Figure [17.4](#x1-318023r4).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.3: The maximum reward (left) and policy update (right) for ES on
+    HalfCheetah'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.4: The mean (left) and standard deviation (right) of reward for ES
+    on HalfCheetah'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Genetic algorithms
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Another popular class of black-box methods is genetic algorithms (GAs). It is
+    a large family of optimization methods with more than two decades of history behind
+    it and a simple core idea of generating a population of N individuals (concrete
+    model parameters), each of which is evaluated with the fitness function. Then,
+    some subset of top performers is used to produce the next generation of the population
+    (this process is called mutation). This process is repeated until we’re satisfied
+    with the performance of our population.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are a lot of different methods in the GA family, for example, how to
+    perform the mutation of the individuals for the next generation or how to rank
+    the performers. Here, we will consider the simple GA method with some extensions,
+    published in the paper by Such et al., called Deep neuroevolution: Genetic algorithms
+    are a competitive alternative for training deep neural networks for reinforcement
+    learning [[Suc+17](#)].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this paper, the authors analyzed the simple GA method, which performs Gaussian
+    noise perturbation of the parent’s weights to perform mutation. On every iteration,
+    the top performer was copied without modification. In an algorithm form, the steps
+    of a simple GA method can be written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Initialize the mutation power, σ, the population size, N, the number of selected
+    individuals, T, and the initial population, P⁰, with N randomly initialized policies
+    and their fitness: F⁰ = {F(P[i]⁰)|i = 1…N}'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For generation g = 1…G:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Sort generation P^(n−1) in the descending order of the fitness function value
+    F^(g−1)
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Copy elite P[1]^g = P[1]^(g−1),F[1]^g = F[1]^(g−1)
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For individual i = 2…N:'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Choose the k: random parent from 1…T'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Sample 𝜖 ∼𝒩(0,I)
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Mutate the parent: P[i]^g = P[i]^(g−1) + σ𝜖'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Get its fitness: F[i]^g = F(P[i]^g)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: There have been several improvements to this basic method from the paper [2],
+    which we will discuss later. For now, let’s check the implementation of the core
+    algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GA on CartPole
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The source code is in Chapter17/03_cartpole_ga.py, and it has a lot in common
+    with our ES example. The difference is in the lack of the gradient ascent code,
+    which was replaced by the network mutation function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The goal of the function is to create a mutated copy of the given policy by
+    adding a random noise to all weights. The parent’s weights are kept untouched,
+    as a random selection of the parent is performed with replacement, so this network
+    could be used again later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The count of hyperparameters is even smaller than with ES and includes the
+    standard deviation of the noise added-on mutation, the population size, and the
+    number of top performers used to produce the subsequent generation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Before the training loop, we create the population of randomly initialized
+    networks and obtain their fitness:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the beginning of every generation, we sort the previous generation according
+    to its fitness and record statistics about future parents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In a separate loop over new individuals to be generated, we randomly sample
+    a parent, mutate it, and evaluate its fitness score:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After starting the implementation, you should see the following (concrete output
+    and count of steps might vary due to randomness in execution):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the GA method is even more efficient than the ES method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GA tweaks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Such et al. proposed two tweaks to the basic GA algorithm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first, with the name deep GA, aimed to increase the scalability of the implementation.
+    We will implement this later in the GA on HalfCheetah section.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second, called novelty search, was an attempt to replace the reward objective
+    with a different metric of the episode. We’ve left this as an exercise for you
+    to try out.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the example used in the following GA on HalfCheetah section, we will implement
+    the first improvement, whereas the second one is left as an optional exercise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep GA
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Being a gradient-free method, GA is potentially even more scalable than ES
+    methods in terms of speed, with more CPUs involved in the optimization. However,
+    the simple GA algorithm that you have seen has a similar bottleneck to ES methods:
+    the policy parameters have to be exchanged between the workers. Such et al. (the
+    authors) proposed a trick similar to the shared seed approach but taken to an
+    extreme (as we’re using seeds to track thousands of mutations). They called it
+    deep GA, and at its core, the policy parameters are represented as a list of random
+    seeds used to create this particular policy’s weights.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, the initial network’s weights were generated randomly on the first
+    population, so the first seed in the list defines this initialization. On every
+    population, mutations are also fully specified by the random seed for every mutation.
+    So, the only thing we need to reconstruct the weights is the seeds themselves.
+    In this approach, we need to reconstruct the weights on every worker, but usually,
+    this overhead is much less than the overhead of transferring full weights over
+    the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Novelty search
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'Another modification to the basic GA method is novelty search (NS), which was
+    proposed by Lehman and Stanley in their paper, Abandoning objectives: Evolution
+    through the search for novelty alone, which was published in 2011 [[LS11](#)].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea of NS is to change the objective in our optimization. We’re no longer
+    trying to increase our total reward from the environment but, rather, reward the
+    agent for exploring the behavior that it has never checked before (that is, novel).
+    According to the authors’ experiments on the maze navigation problem, with many
+    traps for the agent, NS works much better than other reward-driven approaches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To implement NS, we define the so-called behavior characteristic (BC) (π), which
+    describes the behavior of the policy and a distance between two BCs. Then, the
+    k-nearest neighbors approach is used to check the novelty of the new policy and
+    drive the GA according to this distance. In the paper by Such et al., sufficient
+    exploration by the agent was needed. The approach of NS significantly outperformed
+    the ES, GA, and other more traditional approaches to RL problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GA on HalfCheetah
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In our final example in this chapter, we will implement the parallelized deep
+    GA on the HalfCheetah environment. The complete code is in 04_cheetah_ga.py. The
+    architecture is very close to the parallel ES version, with one master process
+    and several workers. The goal of every worker is to evaluate the batch of networks
+    and return the result to the master, which merges partial results into the complete
+    population, ranks the individuals according to the obtained reward, and generates
+    the next population to be evaluated by the workers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Every individual is encoded by a list of random seeds used to initialize the
+    initial network weights and all subsequent mutations. This representation allows
+    very compact encoding of the network, even when the number of parameters in the
+    policy is not very large. For example, in our network with with one hidden layer
+    of 64 neurons, we have 1,542 float values (the input is 17 values and the action
+    is 6 floats, which gives 17 × 64 + 64 + 64 × 6 + 6 = 1542). Every float occupies
+    4 bytes, which is the same size used by the random seed. So, the deep GA representation
+    proposed by the paper will be smaller up to 1,542 generations in the optimization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In our example, we will perform parallelization on local CPUs so the amount
+    of data transferred back and forth doesn’t matter much; however, if you have a
+    couple of hundred cores to utilize, the representation might become a significant
+    issue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The set of hyperparameters is the same as in the CartPole example, with the
+    difference of a larger population size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are two functions used to build the networks based on the seeds given.
+    The first one performs one mutation on the already created policy network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding function can perform the mutation in place or by copying the target
+    network based on arguments (copying is needed for the first generation).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second function creates the network from scratch using the list of seeds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the first seed is passed to PyTorch to influence the network initialization,
+    and subsequent seeds are used to apply network mutations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The worker function obtains the list of seeds to evaluate and outputs individual
+    OutputItem dataclass items for every result obtained:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function maintains the cache of networks to minimize the amount of time
+    spent recreating the parameters from the list of seeds. This cache is cleared
+    for every generation, as every new generation is created from the current generation
+    winners, so there is only a tiny chance that old networks can be reused from the
+    cache.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code of the master process is also straightforward:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: For every generation, we send the current population’s seeds to workers for
+    evaluation and wait for the results. Then, we sort the results and generate the
+    next population based on the top performers. On the master’s side, the mutation
+    is just a seed number generated randomly and appended to the list of seeds of
+    the parent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: In this example, we’re using the MuJoCo HalfCheetah environment, which doesn’t
+    have any health checks internally, so every episode takes 2,000 steps. Because
+    of this, every training step requires about a minute, so be patient. After 300
+    mutation rounds (which took about 7 hours), the best policy was able to get a
+    reward of 6454, which is a great result. If you remember our experiments in the
+    previous chapter, only the SAC method was able to get a higher reward of 7063
+    on MuJoCo HalfCheetah. Of course, HalfCheetah is not very challenging, but still
+    — very good.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The plots are shown in Figure [17.5](#x1-326002r5) and Figure [17.6](#x1-326003r6).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.5: The maximum (left) and mean rewards (right) for GA on HalfCheetah'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_17_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 17.6: Standard deviation of reward for GA on HalfCheetah'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, you saw two examples of black-box optimization methods: evolution
+    strategies and genetic algorithms, which can provide competition for other analytical
+    gradient methods. Their strength lies in good parallelization on a large number
+    of resources and the smaller number of assumptions that they have on the reward
+    function.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next chapter, we will take a look at a very important aspect of RL:
+    advanced exploration methods.'
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,776 @@
+- en: Anomaly Detection and Recommendation Systems
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will look at auto-encoder models and recommendation systems. Although
+    these two use cases may seem very different, they both rely on finding different
+    representations of data. These representations are similar to the embeddings we
+    saw in [Chapter 7](03f666ab-60ce-485a-8090-c158b29ef306.xhtml), *Natural Language
+    Processing Using Deep Learning*. The first part of this chapter introduces unsupervised
+    learning where there is no specific outcome to be predicted. The next section
+    provides a conceptual overview of auto-encoder models in a machine learning and
+    deep neural network context in particular. We will show you how to build and apply
+    an auto-encoder model to identify anomalous data. Such atypical data may be bad
+    data or outliers, but could also be instances that require further investigation,
+    for example, fraud detection. An example of applying anomaly detection is detecting
+    when an individual's credit card spending pattern differs from their usual behavior.
+    Finally, this chapter closes with a use case on how to apply recommendation systems
+    for cross-sell and up-sell opportunities using the retail dataset that was introduced
+    in [Chapter 4](28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml), *Training Deep Prediction
+    Models*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is unsupervised learning?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How do auto-encoders work?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training an auto-encoder in R
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using auto-encoders for anomaly detection
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use case – collaborative filtering
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is unsupervised learning?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, we have focused on models and techniques that broadly fall under the
+    category of supervised learning. Supervised learning is supervised because the
+    task is for the machine to learn the relationship between a set of variables or
+    features and one or more outcomes. For example, in [Chapter 4](28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml),
+    *Training Deep Prediction Models*, we wanted to predict whether someone would
+    visit a store in the next 14 days. In this chapter, we will delve into methods
+    of unsupervised learning. In contrast with supervised learning, where there is
+    an outcome variable(s) or labeled data is being used, unsupervised learning does
+    not use any outcomes or labeled data. Unsupervised learning uses only input features
+    for learning. A common example of unsupervised learning is cluster analysis, such
+    as k-means clustering, where the machine learns hidden or latent clusters in the
+    data to minimize a criterion (for example, the smallest variance within a cluster).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another unsupervised learning method is to find another representation of the
+    data, or to reduce the input data into a smaller dataset without losing too much
+    information in the process, this is known as dimensionality reduction. The goal
+    of dimensionality reduction is for a set of *p* features to find a set of latent
+    variables, *k*, so that *k < p*. However, with *k* latent variables, *p* raw variables
+    can be reasonably reproduced. We used **p****rincipal component analysis** (**PCA**) in
+    the neural networks example from [Chapter 2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml),
+    *Training a Prediction Model*. In that example, we saw that there is a trade-off
+    between the number of dimensions and the information loss, as shown in *Figure
+    2.1*. Principal component analysis uses an orthogonal transformation to go from
+    the raw data to the principal components. In addition to being uncorrelated, the
+    principal components are ordered from the component that explains the most variance
+    to that which explains the least. Although all principal components can be used
+    (in which case the dimensionality of the data is not reduced), only components
+    that explain a sufficiently large amount of variance (for example, based on high
+    eigenvalues) are included and components that account for relatively little variance
+    are dropped as noise or unnecessary. In the neural networks example in [Chapter
+    2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml), *Training a Prediction Model*, we
+    had 624 inputs after eliminating the features with zero variance. When we applied
+    PCA, we found that 50% of our variance (information) by our data could be represented
+    in just 23 principal components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do auto-encoders work?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Auto-encoders are a form of dimensionality reduction technique. When they are
+    used in this manner, they mathematically and conceptually have similarities to
+    other dimensionality reduction techniques such as PCA. Auto-encoders consist of
+    two parts: an encoder which creates a representation of the data, and a decoder
+    which tries to reproduce or predict the inputs. Thus, the hidden layers and neurons
+    are not maps between an input and some other outcome, but are self (auto)-encoding.
+    Given sufficient complexity, auto-encoders can simply learn the identity function,
+    and the hidden neurons will exactly mirror the raw data, resulting in no meaningful
+    benefit. Similarly, in PCA, using all the principal components also provides no
+    benefit. Therefore, the best auto-encoder is not necessarily the most accurate
+    one, but one that reveals some meaningful structure or architecture in the data
+    or one that reduces noise, identifies outliers, or anomalous data, or some other
+    useful side-effect that is not necessarily directly related to accurate predictions
+    of the model inputs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Auto-encoders with a lower dimensionality than the raw data are called **undercomplete**;
+    by using an undercomplete auto-encoder, one can force the auto-encoder to learn
+    the most important features of the data. One common application of auto-encoders
+    is to pre-train deep neural networks or other supervised learning models. In addition,
+    it is possible to use the hidden features themselves. We will see this later on
+    for anomaly detection. Using an undercomplete model is effectively a way to regularize
+    the model. However, it is also possible to train overcomplete auto-encoders where
+    the hidden dimensionality is greater than the raw data, so long as some other
+    form of regularization is used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are broadly two parts to auto-encoders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, an encoding function, *f()**,* encodes the raw data, *x*, to the hidden
+    neurons, *H*
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, a decoding function, *g()*, decodes *H* back to *x*
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following diagram shows an undercomplete encoder, where we have fewer nodes
+    in the hidden layer. The output layer on the right is the decoded version of the
+    input layer on the left. The task of the hidden layer is to store as much information
+    as possible about the input layer (encode the input layer) so that the input layer
+    can be re-constructed (or decoded):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a2f06db4-841d-4384-8a9d-f9d534282ecf.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.1: An example of an auto-encoder'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regularized auto-encoders
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: An undercomplete auto-encoder is a form of a regularized auto-encoder, where
+    the regularization occurs through using a shallower (or in some other way lower)
+    dimensional representation than the data. However, regularization can be accomplished
+    through other means as well. These are penalized auto-encoders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Penalized auto-encoders
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As we have seen in previous chapters, one approach to preventing overfitting is
+    to use penalties, that is, regularization. In general, our goal is to minimize
+    the reconstruction error. If we have an objective function, *F*, we may optimize
+    *F(y, f(x))*, where *f()* encodes the raw data inputs to generate predicted or
+    expected *y* values. For auto-encoders, we have *F(x, g(f(x)))*, so that the machine
+    learns the weights and functional form of *f()* and *g()* to minimize the discrepancy
+    between *x* and the reconstruction of *x*, namely *g(f(x))*. If we want to use
+    an overcomplete auto-encoder, we need to introduce some form of regularization
+    to force the machine to learn a representation that does not simply mirror the
+    input. For example, we might add a function that penalizes based on complexity,
+    so that instead of optimizing *F(x, g(f(x)))*, we optimize *F(x, g(f(x))) + P(f(x))*,
+    where the penalty function, *P*, depends on the encoding or the raw inputs, *f()*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such penalties differ somewhat from those we have seen before, in that the penalty
+    is designed to induce sparseness, not of the parameters but rather of the latent
+    variables, *H*, which are the encoded representations of the raw data. The goal
+    is to learn a latent representation that captures the essential features of the
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another type of penalty that can be used to provide regularization is one based
+    on the derivative. Whereas sparse auto-encoders have a penalty that induces sparseness
+    of the latent variables, penalizing the derivatives results in the model learning
+    a form of *f()* that is relatively insensitive to minor perturbations of the raw
+    input data, *x*. What we mean by this is that it forces a penalty on functions
+    where the encoding varies greatly for changes in *x*, preferring regions where
+    the gradient is relatively flat.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Denoising auto-encoders
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Denoising auto-encoders remove noise or denoise data, and are a useful technique
+    for learning a latent representation of raw data (*Vincent, P., Larochelle, H.,
+    Bengio, Y., and Manzagol, P. A. (2008, July); Bengio, Y.,Courville, A., and Vincent,
+    P. (2013)*). We said that the general task of an auto-encoder was to optimize:
+    *F(x, g(f(x)))*. However, for a denoising auto-encoder, the task is to recover
+    *x* from a noisy or corrupted version of *x*. One application of denoising auto-encoders
+    is to restore old images that may be blurred or corrupted.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Although denoising auto-encoders are used to try and recover the true representation
+    from corrupted data or data with noise, this technique can also be used as a regularization
+    tool. As a method of regularization, rather than having noisy or corrupted data
+    and attempting to recover the truth, the raw data is purposefully corrupted. This
+    forces the auto-encoder to do more than merely learn the identity function, as
+    the raw inputs are no longer identical to the output. This process is shown in
+    the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cecb2097-2cdd-4670-b035-d78abdab2adb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.2: Denoising auto-encoders'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The remaining choice is what the function, *N()*, which adds the noise or corrupts
+    *x*, should be. Two choices are to add noise through a stochastic process or for
+    any given training iteration to only include a subset of the raw *x* inputs. In
+    the next section, we will explore how to actually train auto-encoder models in
+    R.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training an auto-encoder in R
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we are going to train an auto-encoder in R and show you that
+    it can be used as a dimensionality reduction technique. We will compare it with
+    the approach we took in [Chapter 2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml),
+    *Training a Prediction Model*, where we used PCA to find the principal components in
+    the image data. In that example, we used PCA and found that 23 factors was sufficient
+    to explain 50% of the variance in the data. We built a neural network model using
+    just these 23 factors to classify a dataset with either *5* or *6*. We got 97.86%
+    accuracy in that example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We are going to follow a similar process in this example, and we will use the
+    `MINST` dataset again. The following code from `Chapter8/encoder.R` loads the
+    data. We will use half the data for training an auto-encoder and the other half
+    will be used to build a classification model to evaluate how good the auto-encoder
+    is at dimensionality reduction. The first part of the code is similar to what
+    we have seen in previous examples; it loads and normalizes the data so that the
+    values are between 0.0 and 1.0:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we will move on to our first auto-encoder. We will use `16` hidden neurons
+    in our auto-encoder and use tanh as the activation function. We use 20% of our
+    data as validation to provide an unbiased estimate of how the auto-encoder performs.
+    Here is the code. To keep it concise, we are only showing part of the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The validation loss is `0.0275`, which shows that the model is performing quite
+    well. Another nice feature is that if you run the code in RStudio, it will show
+    the training metrics in graphs, which will automatically update as the model is
+    trained. This is shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b5df9a51-7449-4d84-9866-a936851eaa41.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.3: Model metrics showing in the Viewer pane in RStudio'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the model has completed training, you can also plot the model architecture
+    and model metrics using the following code (the output is also included). By calling
+    the plot function, you can see the plots for the accuracy and the loss on the
+    training and validation datasets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This code produces the following plot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b87e1342-5aa0-4420-9dd2-5f4ee19de801.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.4: Auto-encoder model metrics'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding plots shows that the validation accuracy is relatively stable,
+    but it probably peaked after epoch 20\. We will now train a second model with
+    `32` hidden nodes instead in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our validation loss has improved to `0.0175`, so let''s try `64` hidden nodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our validation loss here is `0.0098`, which again is an improvement. We have
+    probably got to the stage where adding more hidden nodes will cause the model
+    to overfit because we are only using `16800` rows to train the autoencoder. We
+    could look at applying regularization, but since our first models have an accuracy
+    of `0.01`, we are doing well enough.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Accessing the features of the auto-encoder model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We can extract the deep features from the model, that is, the values for the
+    hidden neurons in the model. For this, we will use the model with 16 hidden nodes.
+    We will examine the distribution of correlations using the `ggplot2` package,
+    as shown in the following code. The results are shown in *Figure 9.5*. The deep
+    features have small correlations, that is, usually with an absolute value of *<.20*.
+    This is what we expect in order for the auto-encoder to work. This means that
+    the features should not duplicate information between them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code produces the following plot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/03a95bd7-b69b-41c5-8f33-375fb78d513e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.5: Correlation between weights in the hidden layer of the auto-encoder'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In [Chapter 2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml), *Training a Prediction
+    Model*, we used PCA for dimensionality reduction and found that for a binary classification
+    task of telling the difference between 5 and 6, we could still get 97.86% accuracy,
+    even if we only used 23 features as input. These 23 features were the 23 **principal
+    components** and accounted for 50% of the variance in our dataset. We will use
+    the weights in the auto-encoder to perform the same experiment. Note that we trained
+    the auto-encoder on 50% of the data, and that we are using the other 50% of the
+    data for the binary classification task, that is, we do not want to try and build
+    a classification task on data that was used to build the auto-encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our model gets `97.96%` accuracy, which is a slight improvement on the `97.86%`
+    accuracy we achieved in [Chapter 2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml), *Training
+    a Prediction Model*. It is not really a surprise that the two models are very
+    similar as the mathematical foundations for PCA involves matrix decomposition,
+    while the auto-encoder uses back-propagation to set the matrix weights for the
+    hidden layer. In fact, if we dropped the non-linear activation function, our encodings
+    would be very similar to PCA. This demonstrates that auto-encoder models can be
+    used effectively as a dimensionality reduction technique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using auto-encoders for anomaly detection
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have built an auto-encoder and accessed the features of the inner
+    layers, we will move on to an example of how auto-encoders can be used for anomaly
+    detection. The premise here is quite simple: we take the reconstructed outputs
+    from the decoder and see which instances have the most error, that is, which instances
+    are the most difficult for the decoder to reconstruct. The code that is used here
+    is in `Chapter9/anomaly.R`, and we will be using the `UCI HAR` dataset that we
+    have already been introduced to in [Chapter 2](cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml),
+    *Training a Prediction Model*. If you have not already downloaded the data, go
+    back to that chapter for instructions on how to do so.. The first part of the
+    code loads the data, and we subset the features to only use the ones with mean,
+    sd, and skewness in the feature names:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can build our auto-encoder model. This is going to be a stacked auto-encoder
+    with two `40` neuron hidden encoder layers and two 40-neuron hidden decoder layers.
+    For conciseness, we have removed some of the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can see the layers and number of parameters for the model by calling the
+    summary function, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our validation loss is `0.0088`, which means that our model is good at encoding
+    the data. Now, we will use the test set on the auto-encoder and get the reconstructed
+    data. This will create a dataset with the same size as the test set. We will then
+    select any instance where the sum of the squared error (se) between the predicted
+    values and the test set is greater than 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These are the instances that the auto-encoder had the most trouble in reconstructing,
+    and therefore they are potential anomalies. The limit value of 4 is a hyperparameter;
+    if it is set higher, fewer potential anomalies are detected and if it is set lower,
+    more potential anomalies are detected. This value would be different according
+    to the dataset used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are 6 classes in this dataset. We want to analyze if the anomalies are
+    spread over all of our classes or if they are specific to some classes. We will
+    print out a table of the frequencies of our classes in our test set, and we will
+    see that the distribution of our classes is fairly even. When printing out a table
+    of the frequencies of our classes of our potential anomalies, we can see that
+    most of them are in the `WALKING_DOWNSTAIRS` class. The potential anomalies are
+    shown in *Figure 9.6:*
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can plot this with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![](img/85752c3f-a60c-42ca-9ac1-6f3f8d3e92f8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 9.6: Distribution of the anomalies'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this example, we used a deep auto-encoder model to learn the features of
+    actimetry data from smartphones. Such work can be useful for excluding unknown
+    or unusual activities, rather than incorrectly classifying them. For example,
+    as part of an app that classifies what activity you engaged in for how many minutes,
+    it may be better to simply leave out a few minutes where the model is uncertain
+    or the hidden features do not adequately reconstruct the inputs, rather than to
+    aberrantly call an activity walking or sitting when it was actually walking downstairs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such work can also help to identify where the model tends to have more issues.
+    Perhaps further sensors and additional data are needed to represent walking downstairs
+    or more could be done to understand why walking downstairs tends to produce relatively
+    high error rates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These deep auto-encoders are also useful in other contexts where identifying
+    anomalies is important, such as with financial data or credit card usage patterns.
+    Anomalous spending patterns may indicate fraud or that a credit card has been
+    stolen. Rather than attempt to manually search through millions of credit card
+    transactions, one could train an auto-encoder model and use it to identify anomalies
+    for further investigation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Use case – collaborative filtering
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This use-case is about collaborative filtering. We are going to build a recommendation
+    system based on embeddings created from a deep learning model. To do this, we
+    are going to use the same dataset we used in [Chapter 4](28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml), *Training
+    Deep Prediction Models*, which is the retail transactional database. If you have
+    not already downloaded the database, then go to the following link, [https://www.dunnhumby.com/sourcefiles](https://www.dunnhumby.com/sourcefiles),
+    and select *Let’s Get Sort-of-Real*. Select the option for the smallest dataset,
+    titled *All transactions for a randomly selected sample of 5,000 customers*. Once
+    you have read the terms and conditions and downloaded the dataset to your computer,
+    unzip it into a directory called `dunnhumby/in` under the code folder. Ensure
+    that the files are unzipped directly under this folder, and not a subdirectory,
+    as you may have to copy them after unzipping the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The data contains details of retail transactions linked by basket IDs. Each
+    transaction has a date and a store code, and some are also linked to customers.
+    Here are the fields that we will use in this analysis:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Field-name** | **Description** | **Format** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `CUST_CODE` | Customer Code. This links the transactions/visits to a customer.
+    | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `SPEND` | Spend associated to the items bought. | Numeric |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `PROD_CODE` | Product Code. | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `PROD_CODE_10` | Product Hierarchy Level 10 Code. | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `PROD_CODE_20` | Product Hierarchy Level 20 Code. | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `PROD_CODE_30` | Product Hierarchy Level 30 Code. | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `PROD_CODE_40` | Product Hierarchy Level 40 Code. | Char |'
+  prefs: []
+  type: TYPE_TB
+- en: If you want more details on the structure of the files, you can go back and
+    re-read the use case in [Chapter 4](28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml), *Training
+    Deep Prediction Models*. We are going to use this dataset to create a recommendation
+    engine. There are a family of machine learning algorithms called **Market Basket
+    Analysis** that can be used with transactional data, but this use case is based
+    on collaborative filtering. Collaborative filtering are recommendations based
+    on the ratings people give to products. They are commonly used for music and film
+    recommendations, where people rate the items, usually on a scale of 1-5\. Perhaps
+    the best known recommendation system is Netflix because of the Netflix prize ([https://en.wikipedia.org/wiki/Netflix_Prize](https://en.wikipedia.org/wiki/Netflix_Prize)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We are going to use our dataset to create implicit rankings of how much a customer
+    *rates* an item. If you are not familiar with implicit rankings, then they are
+    rankings that are derived from data rather than explicitly assigned by the user.
+    We will use one of the product codes, `PROD_CODE_40`, and calculate the quantiles
+    of the spend for that product code. The quantiles will divide the fields into
+    5 roughly equally sized groups. We will use these to assign a rating to each customer
+    for that product based on how much they spent on that product code. The top 20%
+    of customers will get a rating of 5, the next 20% will get a rating of 4, and
+    so on. Each customer/product code combination that exists will have a rating from
+    1-5:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is a rich history of using quantiles in retail loyalty systems. One of
+    the earliest segmentation approaches for retail loyalty data was called **RFM
+    analysis**. RFM is an acronym for Recency, Frequency, and Monetary spend. It gives
+    each customer a ranking 1 (lowest) – 5 (highest) on each of these categories,
+    with an equal number of customers in each ranking. For *Recency*, the 20% of the
+    customers that visited most recently would be given a 5, the next 20% would be
+    given a 4, and so on. For *Frequency*, the top 20% of customers with the most
+    transactions would be given a 5, the next 20% would be given a 4, and so on. Similarly
+    for *Monetary* spend, the top 20% of the customers by revenue would be given a
+    5, the next 20% would be given a 4, and so on. The numbers would then be concatenated,
+    so a customer with an RFM of 453 would be 4 for Recency, 5 for Frequency, and
+    3 for Monetary spend. Once the score has been calculated, it can be used for many
+    purposes, for example, cross-sell, churn analysis, and so on. RFM analysis was
+    very popular in the late 1990's / early 2000's with many marketing managers because
+    it is easily implemented and well-understood. However, it is not flexible and
+    is being replaced with machine learning techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The code to create our ratings is in `Chapter9/create_recommend.R`. The first
+    part of the code runs through the raw transactional data. The data is in separate
+    CSV files, so it processes each file, selects the records that have a customer
+    linked (that is, `CUST_CODE!=""`) to them, and then groups the sales by `CUST_CODE`
+    and `PROD_CODE_40`. It then appends the results to a temporary file and moves
+    on to the next input file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This section groups by customer and product code for the `117` input files.
+    As we process each file, we rename the customer code to `cust_id` and the product
+    department code to `prod_id`. Once we are done, the combined file will obviously have
+    duplicate customer-product code combinations; that is, we need to group again
+    over the combined data. We do that by opening up the temporary file and grouping
+    over the fields again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: We could have tried to load all of the transactional data and run a group on
+    that data, but that would have been memory and computationally expensive. By running
+    it in two steps, we reduce the amount of data we need to process at each stage,
+    which means it is more likely to run on machines with limited memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once we have the total spend for each customer and product department code
+    combination, we can create the ratings. Thanks to the excellent `tidyr` packages,
+    it only takes a few lines to assign a rating to each row. First, we group by the
+    `prod_id` field, and use the quantile function to return quantiles for the sales
+    for each product code. These quantiles will return the sales ranges that correspond
+    to splitting the customers into `5` equal sized groups. We then use these quantiles
+    to assign rankings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The only thing remaining is to save the results. Before we do, we do a couple
+    of sanity checks to ensure that our ratings are evenly distributed from 1-5 overall.
+    We then select a random product code and check that our ratings are evenly distributed
+    from 1-5 for those products:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Everything looks good here: the count for `rating=1` is higher at `68246` against
+    `62162` to `63682` for ratings `2` to `5`, but that is not really a concern as
+    collaborative filtering models do not expect an even distribution of ratings.
+    For the individual item (`D00008`), the distribution is even at `596` or `597`
+    for each rating.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a collaborative filtering model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Before we jump into applying a deep learning model, we should follow the same
+    practice as we have done in previous chapters and create a benchmark accuracy
+    score using a standard machine learning algorithm. It is quick, easy, and will
+    give us confidence that our deep learning model is working better than just using
+    *normal* machine learning. Here are the 20 lines of code to do collaborative filtering
+    in R. This code can be found in `Chapter8/ml_recommend.R`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code creates a collaborative filtering model, and the MSE for the model
+    is `0.9748`. As before, we do this because most of the work for this sample is
+    in data preparation and not model building, so it is relatively easy to use a
+    base machine learning algorithm to compare the performance against a deep learning
+    model. The code here uses standard R libraries to create a recommendation system,
+    and as you can see, it is relatively simple because the data is already in the
+    expected format. If you want more information on this collaborative filtering
+    algorithm, then search for `user based collaborative filtering in r`, or go through
+    the doc pages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now lets focus on creating a deep learning model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a deep learning collaborative filtering model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here, we will see if we can build a deep learning model to beat the previous
+    approach! The following code is in `Chapter9/keras_recommend.R`. The first part
+    loads the dataset and creates new IDs for the customer and product codes. This
+    is because Keras expects the indexes to be sequential, starting at zero, and unique:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have 5,000 unique customers and 9 unique product codes. This is not typical
+    of most collaborative filtering examples; usually, the number of products is much
+    higher than the number of customers. The next part creates the model. We will
+    create embedding layers for the customer and the products and then calculate the
+    dot product of those embedding layers. An embedding layer is a lower-order representation
+    of the data and is exactly the same as the encoders in the auto-encoder examples
+    we saw earlier. We will also have a bias term for each customer and product –
+    this performs a sort of normalization on the data. If a particular product is
+    very popular, or a customer has a lot of high ratings, this accounts for this.
+    We will use 10 factors in our embedding layer for both customers and products.
+    We will use some L2 regularization in our embeddings to prevent overfitting. The
+    following code defines the model architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we are ready to build the model. We are going to hold out 10% of our data
+    for validation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our model achieved an MSE of `0.9508`, which is an improvement on the MSE of `0.9748`
+    that we got on our machine learning model. Our deep learning model is overfitting,
+    but one reason for this is because we have a relatively small database. I tried
+    increasing the regularization, but this did not improve the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Applying the deep learning model to a business problem
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we have a model, how can we use it? The most typical example of using
+    a collaborative filtering model is to recommend items to people they have not
+    rated yet. That concept works well in domains such as music and movie recommendations
+    where collaborative filtering models are often applied. However, we are going
+    to use it for a different purpose. One concern of marketing managers is the **Share
+    of wallet** they get from a customer. The definition of this (from [https://en.wikipedia.org/wiki/Share_of_wallet](https://en.wikipedia.org/wiki/Share_of_wallet))
+    is the *percentage ('share') of a customer's expenses ('of wallet') for a product
+    that goes to the firm selling the product*. It basically measures the value of
+    a customer on the percentage of the potential spend they could have with us. As
+    an example, we may have customers who visit our shop regularly and spend a considerable
+    amount. But are they buying all of their goods from us? Maybe they buy their fresh
+    food elsewhere, that is, they purchase their meat, fruit, vegetables, and so on, at
+    other stores. We can use collaborative filtering to find customers where the collaborative
+    filtering model predicts that they purchase certain products in our store, but
+    in fact they do not. Remember that collaborative filtering works on the basis
+    of making recommendations based on what other similar customers do. So, if customer
+    A does not purchase meat, fruit, vegetables, and so on, at our store when other
+    similar customers do, then we could try and entice them to spend more at our stores
+    by sending them offers for these products.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will look for customer-product department codes where the prediction is greater
+    than 4, but the actual value is less than 2\. These customers should be purchasing
+    these goods from us (according to the model), so by sending them vouchers for
+    items in these departments, we can capture a greater amount of their spending.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A collaborative filtering model should work well for this type of analysis.
+    The basis of this algorithm is to find the recommend products based on the activity
+    of similar customers, so it already adjusts for the scale of spend. For example,
+    if the prediction for a customer is that their spend on fresh fruit and vegetables
+    should be 5, that is based on the comparison with other similar customers. Here
+    is the evaluation code, which is also in `Chapter8/kerarecommend.R`. The first
+    part of the code generates the predictions and links it back. We output a few
+    metrics, which look impressive, but note that they are run on all the data, including
+    the data that the model was trained on, so these metrics are overly optimistic.
+    We make one adjustment to the predictions – some of these values are greater than
+    5 or less than 1, so we change them back to valid values. This produces a very
+    small improvement on our metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can look at the customer-product department codes that have the biggest
+    difference between predicted ratings and actual ratings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: This gives us a list of customers and the products we should send them offers
+    for. For example, for the second row, the actual rating is `1` and the predicted
+    rating is `4.306837`. This customer is not purchasing the items for this product
+    code and our model *predicts* he should be purchasing these items.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can also look at cases where the actual rating is much higher than the predicted
+    value. These are customers who are over-spending in that department compared to
+    other similar customers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: What can we do with these recommendations? Our model assigns a score of 1-5
+    based on a customers' spend in each product department, so if a customer has a
+    high actual rating compared to the predicted value in general, they are over-spending
+    in these departments compared to similar customers. These people are probably
+    not spending in other departments, so they should be targeted as part of a cross-sell
+    campaign; that is, they should be sent offers for products in other departments
+    to tempt them to purchase there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: I hope that this chapter has shown you that deep learning is not just about
+    computer vision and NLP problems! In this chapter, we covered using Keras to build
+    auto-encoders and recommendation systems. We saw that auto-encoders can be used
+    as a form of dimensionality reduction and, in their simplest forms with only one
+    layer, they are similar to PCA. We used an auto-encoder model to create an anomaly
+    detection system. If the reconstruction error in the auto-encoder model was over
+    a threshold, then we marked that instance as a potential anomaly. Our second major
+    example in this chapter built a recommendation system using Keras. We constructed
+    a dataset of implicit ratings from transactional data and built a recommendation
+    system. We demonstrated the practical application of this model by showing you how
+    it could be used for cross-sell purposes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will look at various options for training your deep
+    learning model in the cloud. If you do not have a GPU on your local machine, cloud
+    providers such as AWS, Azure, Google Cloud, and Paperspace allow you to access
+    GPU instances cheaply. We will cover all of these options in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL

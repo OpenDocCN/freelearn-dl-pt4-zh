@@ -1,0 +1,834 @@
+- en: '4'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Improving Embeddings with Biased Random Walks in Node2Vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Node2Vec** is an architecture largely based on DeepWalk. In the previous
+    chapter, we saw the two main components of this architecture: random walks and
+    Word2Vec. How can we improve the quality of our embeddings? Interestingly enough,
+    not with more machine learning. Instead, Node2Vec brings critical modifications
+    to the way random walks themselves are generated.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will talk about these modifications and how to find the
+    best parameters for a given graph. We will implement the Node2Vec architecture
+    and compare it to using DeepWalk on Zachary’s Karate Club. This will give you
+    a good understanding of the differences between the two architectures. Finally,
+    we will use this technology to build a real application: a movie **recommender
+    system** (**RecSys**) powered by Node2Vec.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will know how to implement Node2Vec on any graph
+    dataset and how to select good parameters. You will understand why this architecture
+    works better than DeepWalk in general, and how to apply it to build creative applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’ll cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing Node2Vec
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing Node2Vec
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building a movie RecSys
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter04](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter04).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing Node2Vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Node2Vec was introduced in 2016 by Grover and Leskovec from Stanford University
+    [1]. It keeps the same two main components from DeepWalk: random walks and Word2Vec.
+    The difference is that instead of obtaining sequences of nodes with a uniform
+    distribution, the random walks are carefully biased in Node2Vec. We will see why
+    these **biased random walks** perform better and how to implement them in the
+    two following sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a **neighborhood**
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing biases in random walks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s start by questioning our intuitive concept of neighborhoods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining a neighborhood
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'How do you define the neighborhood of a node? The key concept introduced in
+    Node2Vec is the flexible notion of a neighborhood. Intuitively, we think of it
+    as something close to the initial node, but what does “close” mean in the context
+    of a graph? Let’s take the following graph as an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.1 – Example of a random graph](img/B19153_04_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.1 – Example of a random graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We want to explore three nodes in the neighborhood of node **A**. This exploration
+    process is also called a **sampling strategy**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A possible solution would be to consider the three closest nodes in terms of
+    connections. In this case, the neighborhood of ![](img/Formula_B19153_04_001.png),
+    noted ![](img/Formula_B19153_04_002.png), would be ![](img/Formula_B19153_04_003.png):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Another possible sampling strategy consists of selecting nodes that are not
+    adjacent to previous nodes first. In our example, the neighborhood of ![](img/Formula_B19153_04_004.png)
+    would be ![](img/Formula_B19153_04_005.png):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In other words, we want to implement a **Breadth-First Search** (**BFS**) in
+    the first case and a **Depth-First Search** (**DFS**) in the second one. You can
+    find more information about these algorithms and implementations in [*Chapter
+    2*](B19153_02.xhtml#_idTextAnchor023)*, Graph Theory for Graph* *Neural Networks.*
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What is important to notice here is that these sampling strategies have opposite
+    behaviors: BFS focuses on the local network around a node while DFS establishes
+    a more macro view of the graph. Considering our intuitive definition of a neighborhood,
+    it is tempting to simply discard DFS. However, Node2Vec’s authors argue that this
+    would be a mistake: each approach captures a different but valuable representation
+    of the network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'They make a connection between these algorithms and two network properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Structural equivalence**, which means that nodes are structurally equivalent
+    if they share many of the same neighbors. So, if they share many neighbors, their
+    structural equivalence is higher.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Homophily**, as seen previously, states that similar nodes are more likely
+    to be connected.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'They argue that BFS is ideal to emphasize structural equivalence since this
+    strategy only looks at neighboring nodes. In these random walks, nodes are often
+    repeated and stay close to each other. DFS, on the other hand, emphasizes the
+    opposite of homophily by creating sequences of distant nodes. These random walks
+    can sample nodes that are far from the source and thus become less representative.
+    This is why we’re looking for a trade-off between these two properties: homophily
+    may be more helpful for understanding certain graphs and vice versa.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you’re confused about this connection, you’re not alone: several papers
+    and blogs wrongly assume that BFS emphasizes homophily and DFS is connected to
+    structural equivalence. In any case, we consider graphs that combine homophily
+    and structural equivalence to be the desired solution. This is why, regardless
+    of these connections, we want to use both sampling strategies to create our dataset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s see how we can implement them to generate random walks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing biases in random walks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As a reminder, random walks are sequences of nodes that are randomly selected
+    in a graph. They have a starting point, which can also be random, and a predefined
+    length. Nodes that often appear together in these walks are like words that appear
+    together in sentences: under the homophily hypothesis, they share a similar meaning,
+    hence a similar representation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Node2Vec, our goal is to bias the randomness of these walks to either one
+    of the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Promoting nodes that are not connected to the previous one (similar to DFS)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Promoting nodes that are close to the previous one (similar to BFS)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s take *Figure 4**.2* as an example. The current node is called ![](img/Formula_B19153_04_006.png),
+    the previous node is ![](img/Formula_B19153_04_007.png), and the future node is
+    ![](img/Formula_B19153_04_008.png). We note ![](img/Formula_B19153_04_009.png),
+    the unnormalized transition probability from node ![](img/Formula_B19153_04_006.png)
+    to node ![](img/Formula_B19153_04_011.png). This probability can be decomposed
+    as ![](img/Formula_B19153_04_012.png) , where ![](img/Formula_B19153_04_013.png)
+    is the **search bias** between nodes ![](img/Formula_B19153_04_0071.png) and ![](img/Formula_B19153_04_011.png)and
+    ![](img/Formula_B19153_04_016.png) is the weight of the edge from ![](img/Formula_B19153_04_006.png)
+    to ![](img/Formula_B19153_04_011.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.2 – Example of a random graph](img/B19153_04_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.2 – Example of a random graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In DeepWalk, we have ![](img/Formula_B19153_04_019.png) for any pair of nodes
+    ![](img/Formula_B19153_04_020.png) and ![](img/Formula_B19153_04_021.png). In
+    Node2Vec, the value of ![](img/Formula_B19153_04_022.png) is defined based on
+    the distance between the nodes and two additional parameters: ![](img/Formula_B19153_04_023.png),
+    the return parameter, and ![](img/Formula_B19153_04_024.png), the in-out parameter.
+    Their role is to approximate DFS and BFS, respectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is how the value of ![](img/Formula_B19153_04_025.png) is defined:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_04_026.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![](img/Formula_B19153_04_027.png) is the shortest path distance between
+    nodes ![](img/Formula_B19153_04_028.png) and ![](img/Formula_B19153_04_021.png).
+    We can update the unnormalized transition probability from the previous graph
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.3 – Graph with transition probabilities](img/B19153_04_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.3 – Graph with transition probabilities
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s decrypt these probabilities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The walk starts from node ![](img/Formula_B19153_04_007.png) and now arrives
+    at node ![](img/Formula_B19153_04_006.png). The probability of going back to the
+    previous node ![](img/Formula_B19153_04_007.png) is controlled by the parameter
+    ![](img/Formula_B19153_04_023.png). The higher it is, the more the random walk
+    will explore new nodes instead of repeating the same ones and looking like DFS.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The unnormalized probability of going to ![](img/Formula_B19153_04_032.png)
+    is ![](img/Formula_B19153_04_033.png) because this node is in the immediate neighborhood
+    of our previous node, ![](img/Formula_B19153_04_0071.png).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the probability of going to node ![](img/Formula_B19153_04_035.png)
+    is controlled by the parameter ![](img/Formula_B19153_04_036.png). The higher
+    it is, the more the random walk will focus on nodes that are close to the previous
+    one and look like BFS.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The best way to understand this is to actually implement this architecture
+    and play with the parameters. Let’s do it step by step on Zachary’s Karate Club
+    (a graph from the previous chapter), as shown in *Figure 4**.4*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.4 – Zachary’s Karate Club](img/B19153_04_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.4 – Zachary’s Karate Club
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that it is an unweighted network, which is why the transition probability
+    is only determined by the search bias.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we want to create a function that will randomly select the next node
+    in a graph based on the previous node, the current node, and the two parameters
+    ![](img/Formula_B19153_04_023.png) and ![](img/Formula_B19153_04_024.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start by importing the required libraries: `networkx`, `random`, and `numpy`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We defined the `next_node` function with the list of our parameters:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We retrieve the list of neighboring nodes from the current node and initialize
+    a list of alpha values:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For each neighbor, we want to calculate the appropriate alpha value: ![](img/Formula_B19153_04_039.png)
+    if this neighbor is the previous node, ![](img/Formula_B19153_04_033.png) if this
+    neighbor is connected to the previous node, and ![](img/Formula_B19153_04_041.png)
+    otherwise:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We normalize these values to create probabilities:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We randomly select the next node based on the transition probabilities calculated
+    in the previous step using `np.random.choice()` and return it:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Before this function can be tested, we need the code to generate the entire
+    random walk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The way we generate these random walks is similar to what we saw in the previous
+    chapter. The difference is that the next node is chosen by the `next_node()` function,
+    which requires additional parameters: ![](img/Formula_B19153_04_023.png) and ![](img/Formula_B19153_04_0241.png),
+    but also the previous and current nodes. These nodes can easily be obtained by
+    looking at the two last elements added to the `walk` variable. We also return
+    strings instead of integers for compatibility reasons.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is the new version of the `random_walk()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We now have every element to generate our random walks. Let’s try one with
+    a length of 5, ![](img/Formula_B19153_04_044.png), and ![](img/Formula_B19153_04_045.png):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function returns the following sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: This should be random since every neighboring node has the same transition probability.
+    With these parameters, we reproduce the exact DeepWalk algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s bias them toward going back to the previous node with ![](img/Formula_B19153_04_046.png):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function returns the following sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This time, the random walk explores more nodes in the graph. You can see that
+    it never goes back to the previous node because the probability is low with ![](img/Formula_B19153_04_047.png):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function returns the following sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s see how to use these properties in a real example and compare it to DeepWalk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing Node2Vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have the functions to generate biased random walks, the implementation
+    of Node2Vec is very similar to implementing DeepWalk. It is so similar that we
+    can reuse the same code and create sequences with ![](img/Formula_B19153_04_048.png)
+    and ![](img/Formula_B19153_04_049.png) to implement DeepWalk as a special case
+    of Node2Vec. Let’s reuse Zachary’s Karate Club for this task:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As in the previous chapter, our goal is to correctly classify each member of
+    the club as part of one of the two groups (“Mr. Hi” and “Officer”). We will use
+    the node embeddings provided by Node2Vec as input to a machine learning classifier
+    (Random Forest in this case).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s see how to implement it step by step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we want to install the `gensim` library to use Word2Vec. This time,
+    we will use version 3.8.0 for compatibility reasons:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We import the required libraries:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the dataset (Zachary’s Karate Club):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We transform the nodes’ labels into numerical values (`0` and `1`):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We generate a list of random walks as seen previously using our `random_walk()`
+    function 80 times for each node in the graph. The parameters ![](img/Formula_B19153_04_023.png)
+    and ![](img/Formula_B19153_04_0241.png) as specified here (2 and 1, respectively):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create an instance of Word2Vec (a skip-gram model) with a hierarchical `softmax`
+    function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The skip-gram model is trained on the sequences we generated for `30` epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create masks to train and test the classifier:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The Random Forest classifier is trained on the training data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We evaluate it in terms of accuracy for the test data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: To implement DeepWalk, we can repeat the exact same process with ![](img/Formula_B19153_04_048.png)
+    and ![](img/Formula_B19153_04_049.png). However, to make a fair comparison, we
+    cannot use a single accuracy score. Indeed, there are a lot of stochastic processes
+    involved – we could be unlucky and get a better result from the worst model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To limit the randomness of our results, we can repeat this process 100 times
+    and take the mean value. This result is a lot more stable and can even include
+    the standard deviation (using `np.std()`) to measure the variability in the accuracy
+    scores.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But just before we do that, let’s play a game. In the previous chapter, we talked
+    about Zachary’s Karate Club as a homophilic network. This property is emphasized
+    by DFS, which is encouraged by increasing the parameter ![](img/Formula_B19153_04_023.png).
+    If this statement and the connection between DFS and homophily are true, we should
+    get better results with higher values of ![](img/Formula_B19153_04_023.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: I repeated the same experiment for values of ![](img/Formula_B19153_04_023.png)
+    and ![](img/Formula_B19153_04_0241.png) between 1 and 7\. In a real machine learning
+    project, we would use validation data to perform this parameter search. In this
+    example, we use the test data because this study is already our final application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following table summarizes the results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.5 – Average accuracy score and standard deviation for different
+    values of p and q](img/B19153_04_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 4.5 – Average accuracy score and standard deviation for different values
+    of p and q
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several noticeable results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'DeepWalk (![](img/Formula_B19153_04_048.png) and ![](img/Formula_B19153_04_049.png))
+    performs worse than any other combination of ![](img/Formula_B19153_04_023.png)
+    and ![](img/Formula_B19153_04_0241.png) that is covered here. This is true for
+    this dataset and shows how useful biased random walks can be. However, it is not
+    always the case: non-biased random walks can also perform better on other datasets.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: High values of ![](img/Formula_B19153_04_023.png) lead to better performance,
+    which validates our hypothesis. Knowing that this is a social network strongly
+    suggests that biasing our random walks toward homophily is a good strategy. This
+    is something to keep in mind when dealing with this kind of graph.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Feel free to play with the parameters and try to find other interesting results.
+    We could explore results with very high values of ![](img/Formula_B19153_04_023.png)
+    (![](img/Formula_B19153_04_064.png)) or, on the contrary, values of ![](img/Formula_B19153_04_023.png)
+    and ![](img/Formula_B19153_04_0242.png) between 0 and 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Zachary’s Karate Club is a basic dataset, but we’ll see in the next section
+    how we can use this technology to build much more interesting applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a movie RecSys
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: One of the most popular applications of GNNs is RecSys. If you think about the
+    foundation of Word2Vec (and, thus, DeepWalk and Node2Vec), the goal is to produce
+    vectors with the ability to measure their similarity. Encode movies instead of
+    words, and you can suddenly ask for movies that are the most similar to a given
+    input title. It sounds a lot like a RecSys, right?
+  prefs: []
+  type: TYPE_NORMAL
+- en: But how to encode movies? We want to create (biased) random walks of movies,
+    but this requires a graph dataset where similar movies are connected to each other.
+    This is not easy to find.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another approach is to look at user ratings. There are different techniques
+    to build a graph based on ratings: bipartite graphs, edges based on pointwise
+    mutual information, and so on. In this section, we’ll implement a simple and intuitive
+    approach: movies that are liked by the same users are connected. We’ll then use
+    this graph to learn movie embeddings using Node2Vec:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s download a dataset. `MovieLens` [2] is a popular choice, with
+    a small version of the latest dataset (09/2018) comprising 100,836 ratings, 9,742
+    movies, and 610 users. We can download it with the following Python code:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We are interested in two files: `ratings.csv` and `movies.csv`. The first one
+    stores all the ratings made by users, and the second one allows us to translate
+    movie identifiers into titles.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Let’s see what they look like by importing them with `pandas` using `pd.read_csv()`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s import `movies.csv` now:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This dataset gives us this output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here, we want to see movies that have been liked by the same users. This means
+    that ratings such as 1, 2, and 3 are not very relevant. We can discard those and
+    only keep scores of 4 and 5:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We now have 48,580 ratings made by 610 users. The next step is to count every
+    time that two movies are liked by the same user. We will repeat this process for
+    every user in the dataset.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'To simplify things, we will use a `defaultdict` data structure, which automatically
+    creates missing entries instead of raising an error. We’ll use this structure
+    to count movies that are liked together:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We loop through the entire list of users in our dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We retrieve the list of movies that have been liked by the current user:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We increment a counter specific to a pair of movies every time they are seen
+    together in the same list:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `pairs` object now stores the number of times two movies have been liked
+    by the same user. We can use this information to build the edges of our graph
+    as follows.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'We create a graph using the `networkx` library:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For each pair of movies in our `pairs` structure, we unpack the two movies
+    and their corresponding score:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'If this score is higher than 10, we add a weighted link to the graph to connect
+    both movies based on this score. We don’t consider scores lower than 10 because
+    that would create a large graph in which connections were less meaningful:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The graph we created has 410 nodes (movies) and 14,936 edges. We can now train
+    Node2Vec on it to learn the node embeddings!
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'We could reuse our implementation from the previous section, but there is actually
+    an entire Python library dedicated to Node2Vec (also called `node2vec`). Let’s
+    try it in this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We install the `node2vec` library and import the `Node2Vec` class:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create an instance of `Node2Vec` that will automatically generate biased
+    random walks based on ![](img/Formula_B19153_04_023.png) and ![](img/Formula_B19153_04_0241.png)
+    parameters:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We train a model on these biased random walks with a window of 10 (5 nodes
+    before, 5 nodes after):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The Node2Vec model is trained and we can now use it the same way we use the
+    Word2Vec object from the `gensim` library. Let’s create a function to recommend
+    movies based on a given title:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create the `recommend()` function, which takes a movie title as input. It
+    starts by converting the title into a movie ID we can use to query our model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We loop through the five most similar word vectors. We convert these IDs into
+    movie titles that we print with their corresponding similarity scores:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We call this function to obtain the five movies that are the most similar to
+    Star Wars in terms of cosine similarity:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We receive the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The model tells us that `Return of the Jedi` and `Raiders of the Lost Ark` are
+    the most similar to `Star Wars`, although with a relatively low score (< 0.7).
+    Nonetheless, this is a good result for our first step into the RecSys world! In
+    later chapters, we’ll see more powerful models and approaches to building state-of-the-art
+    RecSys.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we learned about Node2Vec, a second architecture based on
+    the popular Word2Vec. We implemented functions to generate biased random walks
+    and explained the connection between their parameters and two network properties:
+    homophily and structural equivalence. We showed their usefulness by comparing
+    Node2Vec’s results to DeepWalk’s for Zachary’s Karate Club. Finally, we built
+    our first RecSys using a custom graph dataset and another implementation of Node2Vec.
+    It gave us correct recommendations that we will improve even more in later chapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In [*Chapter 5*](B19153_05.xhtml#_idTextAnchor064)*, Including Node Features
+    with Vanilla Neural Networks*, we will talk about one overlooked issue concerning
+    DeepWalk and Node2Vec: the lack of proper node features. We will try to address
+    this problem using traditional neural networks, which cannot understand the network
+    topology. This dilemma is important to understand before we finally introduce
+    the answer: graph neural networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] A. Grover and J. Leskovec, *node2vec: Scalable Feature Learning for Networks*.
+    arXiv, 2016\. DOI: 10.48550/ARXIV.1607.00653\. Available: [https://arxiv.org/abs/1607.00653](https://arxiv.org/abs/1607.00653).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] F. Maxwell Harper and Joseph A. Konstan. 2015\. *The MovieLens Datasets:
+    History and Context. ACM Transactions on Interactive Intelligent Systems (TiiS)*
+    5, 4: 19:1–19:19\. [https://doi.org/10.1145/2827872](https://doi.org/10.1145/2827872).
+    Available: [https://dl.acm.org/doi/10.1145/2827872](https://dl.acm.org/doi/10.1145/2827872).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

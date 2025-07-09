@@ -1,0 +1,939 @@
+- en: '11'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Policy Gradients
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this first chapter of Part 3 of the book, we will consider an alternative
+    way to handle Markov decision process (MDP) problems, which form a full family
+    of methods called policy gradient methods. In some situations, these methods work
+    better than value-based methods, so it is really important to be familiar with
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cover an overview of the methods, their motivations, and their strengths and
+    weaknesses in comparison to the already familiar Q-learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Start with a simple policy gradient method called REINFORCE and try to apply
+    it to our CartPole environment, comparing it with the deep Q-network (DQN) approach
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Discuss problems with the vanilla REINFORCE method and ways to address them
+    with the Policy Gradient (PG) method, which is a step toward a much more advanced
+    method, A3C, that we’ll take a look at in the next chapter
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Values and policy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Before getting to the main subject of this chapter, policy gradients, let’s
+    refresh our minds with the common characteristics of the methods covered in Part
+    2 of this book. The central topic in value iteration and Q-learning is the value
+    of the state (V [s]) or value of the state and action (Q[s,a]). Value is defined
+    as the discounted total reward that we can gather from this state or by issuing
+    this particular action from the state. If we know this quantity, our decision
+    on every step becomes simple and obvious: we just act greedily in terms of value,
+    and that guarantees us a good total reward at the end of the episode. So, the
+    values of states (in the case of the value iteration method) or state + action
+    (in the case of Q-learning) stand between us and the best reward. To obtain these
+    values, we have used the Bellman equation, which expresses the value in the current
+    step via the value in the next step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Chapter [1](ch005.xhtml#x1-190001), we defined the entity that tells us what
+    to do in every state as the policy. As in Q-learning methods, when values are
+    dictating to us how to behave, they are actually defining our policy. Formally,
+    this can be written as π(s) = arg max[a]Q(s,a), which means that the result of
+    our policy π, at every state s, is the action with the largest Q.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This policy-values connection is obvious, so I haven’t placed emphasis on the
+    policy as a separate entity, and we have spent most of our time talking about
+    values and how to approximate them correctly. Now it’s time to focus on this connection
+    and the policy itself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why the policy?
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There are several reasons why the policy is an interesting topic to explore.
+    First of all, the policy is what we are looking for when we are dealing with a
+    reinforcement learning problem. When the agent obtains the observation and needs
+    to make a decision about what to do next, it needs the policy, not the value of
+    the state or particular action. We do care about the total reward, but at every
+    state, we may have little interest in the exact value of the state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Imagine this situation: you’re walking in the jungle and you suddenly realize
+    that there is a hungry tiger hiding in the bushes. You have several alternatives,
+    such as running, hiding, or trying to throw your backpack at it, but asking, ”What’s
+    the exact value of the run action and is it larger than the value of the do nothing
+    action?” is a bit silly. You don’t care much about the value, because you need
+    to make the decision on what to do quickly and that’s it. Our Q-learning approach
+    tried to answer the policy question indirectly by approximating the values of
+    the states and trying to choose the best alternative, but if we are not interested
+    in values, why do extra work?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another reason why policies may be preferred is related to situations when
+    an environment has lots of actions or, in the extreme case, with continuous action
+    space problems. To be able to decide on the best action to take with Q(s,a), we
+    need to solve a small optimization problem, finding a, which maximizes Q(s,a).
+    In the case of an Atari game with several discrete actions, this wasn’t a problem:
+    we just approximated the values of all actions and took the action with the largest
+    Q. If our action is not a small discrete set but has a scalar value attached to
+    it, such as a steering wheel angle or the speed at which we want to run from the
+    tiger, this optimization problem becomes hard because Q is usually represented
+    by a highly nonlinear neural network (NN), so finding the argument that maximizes
+    the function’s values can be tricky. In such cases, it’s much more feasible to
+    avoid values and work with the policy directly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: An extra benefit of policy learning is an environment with stochasticity. As
+    you saw in Chapter [8](ch012.xhtml#x1-1240008), in a categorical DQN, our agent
+    can benefit a lot from working with the distribution of Q-values, instead of expected
+    mean values, as our network can more precisely capture the underlying probability
+    distribution. As you will see in the next section, the policy is naturally represented
+    as the probability of actions, which is a step in the same direction as the categorical
+    DQN method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy representation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that you know the benefits of the policy, let’s give it a try. So, how
+    do we represent the policy? In the case of Q-values, they were parametrized by
+    the NN that returns values of actions as scalars. If we want our network to parametrize
+    the actions, we have several options. The first and the simplest way could be
+    just returning the identifier of the action (in the case of a discrete set of
+    actions). However, this is not the best way to deal with a discrete set. A much
+    more common solution, which is heavily used in classification tasks, is to return
+    the probability distribution of our actions. In other words, for N mutually exclusive
+    actions, we return N numbers representing the probability of taking each action
+    in the given state (which we pass as an input to the network). This representation
+    is shown in the following illustration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.1: Policy approximation with an NN for a discrete set of actions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Such a representation of actions as probabilities has the additional advantage
+    of smooth representation: if we change our network weights a bit, the output of
+    the network will also change slightly. In the case of a discrete numbers output,
+    even a small adjustment of the weights can lead to a jump to a different action.
+    However, if our output is the probability distribution, a small change of weights
+    will usually lead to a small change in output distribution, such as slightly increasing
+    the probability of one action versus the others. This is a very nice property
+    to have, as gradient optimization methods are all about tweaking the parameters
+    of a model a bit to improve the results.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy gradients
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We have decided on our policy representation, but what we haven’t seen so far
+    is how we are going to change our network’s parameters to improve the policy.
+    If you remember Chapter [4](ch008.xhtml#x1-740004), we solved a very similar problem
+    using the cross-entropy method: our network took observations as inputs and returned
+    the probability distribution of the actions. In fact, the cross-entropy method
+    is a younger brother of the methods that we will discuss in this part of the book.
+    To start, we will get acquainted with the method called REINFORCE, which differs
+    only slightly from the cross-entropy method, but first, we need to look at some
+    mathematical notation that we will use in this and the following chapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We define the policy gradient as ∇J ≈𝔼[Q(s,a)∇log π(a|s)]. Of course, there
+    is strong proof of this, but it’s not that important. What interests us much more
+    is the meaning of this expression.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The policy gradient defines the direction in which we need to change our network’s
+    parameters to improve the policy in terms of the accumulated total reward. The
+    scale of the gradient is proportional to the value of the action taken, which
+    is Q(s,a) in the formula, and the gradient is equal to the gradient of the log
+    probability of the action taken. This means that we are trying to increase the
+    probability of actions that have given us good total rewards and decrease the
+    probability of actions with bad final outcomes. Expectation, 𝔼 in the formula,
+    just means that we average the gradient of several steps that we have taken in
+    the environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From a practical point of view, policy gradient methods could be implemented
+    by performing optimization of this loss function: ℒ = −Q(s,a)log π(a|s). The minus
+    sign is important, as the loss function is minimized during stochastic gradient
+    descent (SGD), but we want to maximize our policy gradient. You will see code
+    examples of policy gradient methods later in this and the following chapters.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The REINFORCE method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The formula of policy gradient that you have just seen is used by most policy-based
+    methods, but the details can vary. One very important point is how exactly gradient
+    scales, Q(s,a), are calculated. In the cross-entropy method from Chapter [4](ch008.xhtml#x1-740004),
+    we played several episodes, calculated the total reward for each of them, and
+    trained on transitions from episodes with a better-than-average reward. This training
+    procedure is a policy gradient method with Q(s,a) = 1 for state and action pairs
+    from good episodes (with a large total reward) and Q(s,a) = 0 for state and action
+    pairs from worse episodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cross-entropy method worked even with those simple assumptions, but the
+    obvious improvement will be to use Q(s,a) for training instead of just 0 and 1\.
+    Why should it help? The answer is a more fine-grained separation of episodes.
+    For example, transitions from the episode with a total reward of 10 should contribute
+    to the gradient more than transitions from the episode with the reward of 1\.
+    Another reason to use Q(s,a) instead of just 0 or 1 constants is to increase the
+    probabilities of good actions at the beginning of the episode and decrease the
+    probability of actions closer to the end of the episode. In the cross-entropy
+    method, we take ”elite” episodes and train on their actions regardless of the
+    actions’ offset in the episode. By using Q(s,a) (which includes discount factor
+    γ), we put more emphasis on good actions in the beginning of the episode than
+    on the actions at the end of the episode. That’s exactly the idea of the method
+    called REINFORCE. Its steps are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize the network with random weights.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Play N full episodes, saving their (s,a,r,s′) transitions.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For every step, t, of every episode, k, calculate the discounted total reward
+    for the subsequent steps:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq40.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: 'Calculate the loss function for all transitions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq41.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Perform an SGD update of weights, minimizing the loss.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat from step 2 until convergence is achieved.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This algorithm is different from Q-learning in several important ways:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'No explicit exploration is needed: In Q-learning, we used an epsilon-greedy
+    strategy to explore the environment and prevent our agent from getting stuck with
+    a non-optimal policy. Now, with the probabilities returned by the network, the
+    exploration is performed automatically. At the beginning, the network is initialized
+    with random weights, and it returns a uniform probability distribution. This distribution
+    corresponds to random agent behavior.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'No replay buffer is used: Policy gradient methods belong to the on-policy methods
+    class, which means that we can’t train on data obtained from the old policy. This
+    is both good and bad. The good part is that such methods usually converge faster.
+    The bad side is that they usually require much more interaction with the environment
+    than off-policy methods such as DQN.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'No target network is needed: Here, we use Q-values, but they are obtained from
+    our experience in the environment. In DQN, we used the target network to break
+    the correlation in Q-value approximation, but we are not approximating anymore.
+    In the next chapter, you will see that the target network trick can still be useful
+    in policy gradient methods.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The CartPole example
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To see the method in action, let’s check the implementation of the REINFORCE
+    method on the familiar CartPole environment. The full code of the example is in
+    Chapter11/02_cartpole_reinforce.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning, we define hyperparameters (imports are omitted):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The EPISODES_TO_TRAIN value specifies how many complete episodes we will use
+    for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following network should also be familiar to you:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that despite the fact our network returns probabilities, we are not applying
+    softmax nonlinearity to the output. The reason behind this is that we will use
+    the PyTorch log_softmax function to calculate the logarithm of the softmax output
+    at once. This method of calculation is much more numerically stable; however,
+    we need to remember that output from the network is not probability, but raw scores
+    (usually called logits).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This next function is a bit tricky:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: It accepts a list of rewards for the whole episode and needs to calculate the
+    discounted total reward for every step. To do this efficiently, we calculate the
+    reward from the end of the local reward list. Indeed, the last step of the episode
+    will have a total reward equal to its local reward. The step before the last will
+    have the total reward of r[t−1] + γ ⋅r[t] (if t is an index of the last step).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our sum_r variable contains the total reward for the previous steps, so to get
+    the total reward for the current step, we need to multiply sum_r by γ and add
+    the local reward from that step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preparation steps before the training loop should also be familiar to you:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The only new element is the agent class from the PTAN library. Here, we are
+    using ptan.agent.PolicyAgent, which needs to make a decision about actions for
+    every observation. As our network now returns the policy as the probabilities
+    of the actions, in order to select the action to take, we need to obtain the probabilities
+    from the network and then perform random sampling from this probability distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we worked with DQN, the output of the network was Q-values, so if one action
+    had a value of 0.4 and another action had a value of 0.5, the second action was
+    preferred 100% of the time. In the case of the probability distribution, if the
+    first action has a probability of 0.4 and the second 0.5, our agent should take
+    the first action with a 40% chance and the second with a 50% chance. Of course,
+    our network can decide to take the second action 100% of the time, and in this
+    case, it returns a probability of 0 for the first action and a probability of
+    1 for the second action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This difference is important to understand, but the change in the implementation
+    is not large. Our PolicyAgent internally calls the NumPy random.choice() function
+    with probabilities from the network. The apply_softmax argument instructs it to
+    convert the network output to probabilities by calling softmax first. The third
+    argument, preprocessor, is a way to get around the fact that the CartPole environment
+    in Gymnasium returns the observation as a float64 instead of the float32 required
+    by PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we can start the training loop, we need several variables:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two variables, total_rewards and done_episodes, are used for reporting
+    and contain the total rewards for the episodes and the count of completed episodes.
+    The next few variables are used to gather the training data. The cur_rewards list
+    contains local rewards for the episode being currently played. As this episode
+    reaches the end, we calculate the discounted total rewards from local rewards
+    using the calc_qvals() function and append them to the batch_qvals list. The batch_states
+    and batch_actions lists contain states and actions that we saw in the last training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code snippet is the beginning of the training loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Every experience that we get from the experience source contains the state,
+    action, local reward, and next state. If the end of the episode has been reached,
+    the next state will be None. For non-terminal experience entries, we just save
+    the state, action, and local reward in our lists. At the end of the episode, we
+    convert the local rewards into Q-values and increment the episodes counter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part of the training loop is performed at the end of the episode and is
+    responsible for reporting the current progress and writing metrics to TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When enough episodes have passed since the last training step, we can optimize
+    the gathered examples. As a first step, we convert states, actions, and Q-values
+    into the appropriate PyTorch form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we calculate the loss from the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we ask our network to calculate states into logits and calculate the logarithm
+    and softmax of them. On the third line, we select log probabilities from the actions
+    taken and scale them with Q-values. On the last line, we average those scaled
+    values and do negation to obtain the loss to minimize. To reiterate, this minus
+    sign is very important because our policy gradient needs to be maximized to improve
+    the policy. As the optimizer in PyTorch minimizes the loss function, we need to
+    negate the policy gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the code is clear:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we perform backpropagation to gather gradients in our variables and ask
+    the optimizer to perform an SGD update. At the end of the training loop, we reset
+    the episodes counter and clear our lists for fresh data to gather.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'For reference, I’ve implemented DQN in the CartPole environment with almost
+    the same hyperparameters as our REINFORCE example. You’ll find it in Chapter11/01_cartpole_dqn.py.
+    Neither example requires any command-line arguments, and they should converge
+    in less than a minute:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The convergence dynamics for both DQN and REINFORCE are shown in the following
+    charts. Your training dynamics may vary due to the randomness of the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.2: Count of episodes played over time (left) and training steps (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These two charts compare the count of episodes played over time and over the
+    training steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next chart compares the smoothed reward for episodes played:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.3: Reward dynamics for two methods'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, the methods converged almost identically (with REINFORCE being
+    slightly faster), but then DQN had problems when the mean reward climbed above
+    400 and had to start almost from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you remember from Chapter [4](ch008.xhtml#x1-740004), the cross-entropy method
+    required about 40 batches of 16 episodes each to solve the CartPole environment,
+    which is 640 episodes in total. The REINFORCE method was able to do the same in
+    fewer than 400 episodes, which is a nice improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy-based versus value-based methods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s now step back from the code that we have just seen and check the differences
+    between these families of methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Policy methods directly optimize what we care about: our behavior. Value methods,
+    such as DQN, do the same indirectly, learning the value first and providing us
+    with the policy based on this value.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Policy methods are on-policy and require fresh samples from the environment.
+    Value methods can benefit from old data, obtained from the old policy, human demonstration,
+    and other sources.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Policy methods are usually less sample-efficient, which means they require more
+    interaction with the environment. Value methods can benefit from large replay
+    buffers. However, sample efficiency doesn’t mean that value methods are more computationally
+    efficient, and very often, it’s the opposite.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the preceding example, during the training, we needed to access our NN only
+    once, to get the probabilities of actions. In DQN, we need to process two batches
+    of states: one for the current state and another for the next state in the Bellman
+    update.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you can see, there is no strong preference for one family or another. In
+    some situations, policy methods will be the more natural choice, like in continuous
+    control problems or cases when access to the environment is cheap and fast. However,
+    there are many situations when value methods will shine, for example, the recent
+    state-of-the-art results on Atari games achieved by DQN variants. Ideally, you
+    should be familiar with both families and understand the strong and weak sides
+    of both camps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will talk about the REINFORCE method’s limitations,
+    ways to improve it, and how to apply a policy gradient method to our favorite
+    Pong game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: REINFORCE issues
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, we discussed the REINFORCE method, which is a natural
+    extension of the cross-entropy method. Unfortunately, both REINFORCE and the cross-entropy
+    method still suffer from several problems, which make both of them limited to
+    simple environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Full episodes are required
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'First of all, we still need to wait for the full episode to complete before
+    we can start training. Even worse, both REINFORCE and the cross-entropy method
+    behave better with more episodes used for training (just because more episodes
+    means more training data, which means more accurate policy gradients). This situation
+    is fine for short episodes in the CartPole, when in the beginning, we can barely
+    handle the bar for more than 10 steps; but in Pong, it is completely different:
+    every episode can last for hundreds or even thousands of frames. It’s equally
+    bad from the training perspective, as our training batch becomes very large, and
+    from the sample efficiency perspective, as we need to communicate with the environment
+    a lot just to perform a single training step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The purpose of the complete episode requirement is to get as accurate a Q-estimation
+    as possible. When we talked about DQN, you saw that, in practice, it’s fine to
+    replace the exact value for a discounted reward with our estimation using the
+    one-step Bellman equation: Q(s,a) = r[a] + γV (s′). To estimate V (s), we used
+    our own Q-estimation, but in the case of the policy gradient, we don’t have V
+    (s) or Q(s,a) anymore.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To overcome this, two approaches exist:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can ask our network to estimate V (s) and use this estimation to obtain Q.
+    This approach will be discussed in the next chapter and is called the actor-critic
+    method, which is the most popular method from the policy gradient family.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alternatively, we can do the Bellman equation, unrolling N steps ahead, which
+    will effectively exploit the fact that the value contribution decreases when gamma
+    is less than 1\. Indeed, with γ = 0.9, the value coefficient at the 10th step
+    will be 0.9^(10) ≈ 0.35\. At step 50, this coefficient will be 0.9^(50) ≈ 0.00515,
+    which is a really small contribution to the total reward. With γ = 0.99, the required
+    count of steps will become larger, but we can still do this.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: High gradient variance
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the policy gradient formula, ∇J ≈𝔼[Q(s,a)∇log π(a|s)], we have a gradient
+    proportional to the discounted reward from the given state. However, the range
+    of this reward is heavily environment-dependent. For example, in the CartPole
+    environment, we get a reward of 1 for every timestamp that we are holding the
+    pole vertically. If we can do this for five steps, we get a total (undiscounted)
+    reward of 5\. If our agent is smart and can hold the pole for, say, 100 steps,
+    the total reward will be 100\. The difference in value between those two scenarios
+    is 20 times, which means that the scale between the gradients of unsuccessful
+    samples will be 20 times lower than for more successful ones. Such a large difference
+    can seriously affect our training dynamics, as one lucky episode will dominate
+    in the final gradient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In mathematical terms, the policy gradient has high variance, and we need to
+    do something about this in complex environments; otherwise, the training process
+    can become unstable. The usual approach to handling this is subtracting a value
+    called the baseline from the Q. The possible choices for the baseline are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Some constant value, which is normally the mean of the discounted rewards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The moving average of the discounted rewards
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The value of the state, V (s)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To illustrate the baseline effect on the training, in Chapter11/03_cartpole_reinforce_baseline.py
+    I implemented the second way of calculating the baseline (the average of rewards).
+    The only difference with the version you’ve already seen is in the calc_qvals()
+    function. I’m not going to discuss the results here; you can experiment yourself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploration problems
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Even with the policy represented as the probability distribution, there is
+    a high chance that the agent will converge to some locally optimal policy and
+    stop exploring the environment. In DQN, we solved this using epsilon-greedy action
+    selection: with the probability epsilon, the agent took a random action instead
+    of the action dictated by the current policy. We can use the same approach, of
+    course, but policy gradient methods allow us to follow a better path, called the
+    entropy bonus.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In information theory, entropy is a measure of uncertainty in a system. Being
+    applied to the agent’s policy, entropy shows how uncertain the agent is about
+    which action to take. In math notation, the entropy of the policy is defined as
+    H(π) = −∑ π(a|s)log π(a|s). The value of entropy is always greater than zero and
+    has a single maximum when the policy is uniform; in other words, all actions have
+    the same probability. Entropy becomes minimal when our policy has 1 for one action
+    and 0 for all others, which means that the agent is absolutely sure what to do.
+    To prevent our agent from being stuck in the local minimum, we subtract the entropy
+    from the loss function, punishing the agent for being too certain about the action
+    to take.
+  prefs: []
+  type: TYPE_NORMAL
+- en: High correlation of samples
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As we discussed in Chapter [6](#), training samples in a single episode are
+    usually heavily correlated, which is bad for SGD training. In the case of DQN,
+    we solved this issue by having a large replay buffer with a size from 100,000
+    to several million observations. This solution is not applicable to the policy
+    gradient family anymore because those methods belong to the on-policy class. The
+    implication is simple: using old samples generated by the old policy, we will
+    get policy gradients for that old policy, not for our current one.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The obvious, but unfortunately wrong, solution would be to reduce the replay
+    buffer size. It might work in some simple cases but, in general, we need fresh
+    training data generated by our current policy. To solve this, parallel environments
+    are normally used. The idea is simple: instead of communicating with one environment,
+    we use several and use their transitions as training data.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy gradient methods on CartPole
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Nowadays, almost nobody uses the vanilla policy gradient method, as the much
+    more stable actor-critic method exists. However, I still want to show the policy
+    gradient implementation, as it establishes very important concepts and metrics
+    to check the policy gradient method’s performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We will start with a much simpler environment of CartPole, and in the next section,
+    we will check its performance in our favorite Pong environment. The complete code
+    for the following example is available in Chapter11/04_cartpole_pg.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides the already familiar hyperparameters, we have two new ones:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The ENTROPY_BETA value is the scale of the entropy bonus and the REWARD_STEPS
+    value specifies how many steps ahead the Bellman equation is unrolled to estimate
+    the discounted total reward of every transition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the network architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is exactly the same as in the previous examples for CartPole: a two-layer
+    network with 128 neurons in the hidden layer. The preparation code is also the
+    same as before, except the experience source is asked to unroll the Bellman equation
+    for 10 steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the part that differs from 04_cartpole_pg.py:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the training loop, we maintain the sum of the discounted reward for every
+    transition and use it to calculate the baseline for the policy scale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the loss calculation, we use the same code as before to calculate the policy
+    loss (which is the negated policy gradient):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then we add the entropy bonus to the loss by calculating the entropy of the
+    batch and subtracting it from the loss. As entropy has a maximum for uniform probability
+    distribution and we want to push the training toward this maximum, we need to
+    subtract from the loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we calculate the Kullback-Leibler (KL) divergence between the new policy
+    and the old policy. KL divergence in information theory measures how one probability
+    distribution diverges from another expected probability distribution, as we saw
+    in Chapter [4](ch008.xhtml#x1-740004). In our example, it is being used to compare
+    the policy returned by the model before and after the optimization step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: High spikes in KL are usually a bad sign since it means that our policy was
+    pushed too far from the previous policy, which is a bad idea most of the time
+    (as our NN is a very nonlinear function in a high-dimensional space, such large
+    changes in the model weight could have a very strong influence on the policy).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we calculate the statistics about the gradients on this training step.
+    It’s usually good practice to show the graph of the maximum and L2 norm (which
+    is the length of the vector) of gradients to get an idea about the training dynamics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the training loop, we dump all the values that we want to monitor
+    in TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this example, we will plot a lot of charts in TensorBoard. Let’s start with
+    the familiar one: reward. As you can see in the following chart, the dynamics
+    and performance are not very different from the REINFORCE method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.4: The reward dynamics of the policy gradient method'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next two charts are related to our baseline and scales of policy gradients.
+    We expect the baseline to converge to 1 + 0.99 + 0.99² + … + 0.99⁹, which is approximately
+    9.56\. Scales of policy gradients should oscillate around zero. That’s exactly
+    what we can see in the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.5: Baseline value (left) and batch scales (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The entropy is decreasing over time from 0.69 to 0.52 (Figure [11.6](#x1-198005r6)).
+    The starting value corresponds to the maximum entropy with two actions, which
+    is approximately 0.69:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq42.png) ![π (a |s) = P[At = a|St = s]
+    ](img/eq43.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The fact that the entropy is decreasing during the training, as indicated by
+    the following chart, shows that our policy is moving from uniform distribution
+    to more deterministic actions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.6: Entropy during the training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The next group of plots (Figure [11.7](#x1-198007r7) and Figure [11.8](#x1-198008r8))
+    is related to loss, which includes policy loss, entropy loss, and their sum. The
+    entropy loss is scaled and is a mirrored version of the preceding entropy chart.
+    The policy loss shows the mean scale and direction of the policy gradient computed
+    on the batch. Here, we should check the relative size of both of them to prevent
+    entropy loss from dominating too much.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.7: Entropy loss (left) and policy loss (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.8: Total loss'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final set of charts (Figure [11.9](#x1-198010r9) and Figure [11.10](#x1-198011r10))
+    shows the gradient’s L2 values, the maximum of L2, and KL. Our gradients look
+    healthy during the whole training: they are not too large and not too small, and
+    there are no huge spikes. The KL charts also look normal as there are some spikes,
+    but they are not very large and don’t exceed 10^(−3):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.9: Gradients L2 (left) and maximum value (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_11_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 11.10: KL divergence'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy gradient methods on Pong
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As we’ve seen in the previous section, the vanilla policy gradient method works
+    well on a simple CartPole environment, but it works surprisingly badly in more
+    complicated environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the relatively simple Atari game Pong, our DQN was able to completely solve
+    it in 1 million frames and showed positive reward dynamics in just 100,000 frames,
+    whereas the policy gradient method failed to converge. Due to the instability
+    of policy gradient training, it became very hard to find good hyperparameters
+    and was still very sensitive to initialization. This doesn’t mean that the policy
+    gradient method is bad, because, as you will see in the next chapter, just one
+    tweak of the network architecture to get a better baseline in the gradients will
+    turn the policy gradient method into one of the best methods (the asynchronous
+    advantage actor-critic method). Of course, there is a good chance that my hyperparameters
+    are completely wrong or the code has some hidden bugs, or there could be other
+    unforeseen problems. Regardless, unsuccessful results still have value, at least
+    as a demonstration of bad convergence dynamics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: You can find the complete code for the example in Chapter11/05_pong_pg.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The three main differences from the previous example’s code are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The baseline is estimated with a moving average for 1 million past transitions,
+    instead of all examples. To make moving average calculations faster, a deque-backed
+    buffer is created:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Several concurrent environments are used. The second difference in this example
+    is working with multiple environments, and this functionality is supported by
+    the PTAN library. The only action we have to take is to pass the array of Env
+    objects to the ExperienceSource class. All the rest is done automatically. In
+    the case of several environments, the experience source asks them for transitions
+    in round-robin fashion, providing us with less-correlated training samples.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gradients are clipped to improve training stability. The last difference from
+    the CartPole example is gradient clipping, which is performed using the PyTorch
+    clip_grad_norm function from the torch.nn.utils package.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The hyperparameters for the best variant are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Despite all my efforts to make the example converge, it wasn’t very successful.
+    Even after hyperparameter tuning (≈ 400 samples of hyperparameters), the best
+    result has the average reward around −19.7 after 1 million training steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can try it yourself, the code is in Chapter11/05_pong_pg.py and Chapter11/05_pong_pg_tune.py.
+    But I can only conclude that Pong turned out to be too complex for the vanilla
+    PG method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, you saw an alternative way of solving RL problems: policy
+    gradient methods, which are different in many ways from the familiar DQN method.
+    We explored a basic method called REINFORCE, which is a generalization of our
+    first method in RL-domain cross-entropy. This policy gradient method is simple,
+    but when applied to the Pong environment, it didn’t produce good results.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will consider ways to improve the stability of policy
+    gradient methods by combining the families of value-based and policy-based methods.
+  prefs: []
+  type: TYPE_NORMAL

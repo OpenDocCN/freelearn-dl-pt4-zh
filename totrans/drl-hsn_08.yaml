@@ -1,0 +1,2178 @@
+- en: '8'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: DQN Extensions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Since DeepMind published its paper on the deep Q-network (DQN) model in 2015,
+    many improvements have been proposed, along with tweaks to the basic architecture,
+    which, significantly, have improved the convergence, stability, and sample efficiency
+    of DeepMind’s basic DQN. In this chapter, we will take a deeper look at some of
+    those ideas.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In October 2017, Hessel et al. from DeepMind published a paper called Rainbow:
+    Combining improvements in deep reinforcement learning [[Hes+18](#)], which presented
+    the six most important improvements to DQN; some were invented in 2015, but others
+    are relatively recent. In this paper, state-of-the-art results on the Atari games
+    suite were reached, just by combining those six methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since 2017, more papers have been published and state-of-the-art results have
+    been pushed further, but all the methods presented in the paper are still relevant
+    and widely used in practice. For example, in 2023, Marc Bellemare published the
+    book Distributional reinforcement learning [[BDR23](#)] about one of the paper’s
+    methods. In addition, the improvements described are relatively simple to implement
+    and understand, so I have not made any major modifications to this chapter in
+    this edition.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The DQN extensions that we will become familiar with are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'N-step DQN: How to improve convergence speed and stability with a simple unrolling
+    of the Bellman equation, and why it’s not an ultimate solution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Double DQN: How to deal with DQN overestimation of the values of the actions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Noisy networks: How to make exploration more efficient by adding noise to the
+    network weights'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Prioritized replay buffer: Why uniform sampling of our experience is not the
+    best way to train'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Dueling DQN: How to improve convergence speed by making our network’s architecture
+    more closely represent the problem that we are solving'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Categorical DQN: How to go beyond the single expected value of the action and
+    work with full distributions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This chapter will go through all these methods. We will analyze the ideas behind
+    them, alongside how they can be implemented and compared to the classic DQN performance.
+    Finally, we will analyze how the combined system with all the methods performs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To get started, we will implement the same DQN method as in Chapter [6](#),
+    but leveraging the high-level primitives described in Chapter [7](ch011.xhtml#x1-1070007).
+    This will make our code much more compact, which is good, as non-relevant details
+    won’t distract us from the method’s logic. At the same time, the purpose of this
+    book is not to teach you how to use the existing libraries but rather how to develop
+    intuition about RL methods and, if necessary, implement everything from scratch.
+    From my perspective, this is a much more valuable skill, as libraries come and
+    go, but true understanding of the domain will allow you to quickly make sense
+    of other people’s code and apply it consciously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the basic DQN implementation, we have three modules in the Chapter08 folder
+    of the GitHub repository for this book:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Chapter08/lib/dqn_model.py: The DQN neural network (NN), which is the same
+    as in Chapter [6](#), so I won’t repeat it'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter08/lib/common.py: Common functions and declarations shared by the code
+    in this chapter'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter08/01_dqn_basic.py: 77 lines of code leveraging the PTAN and Ignite
+    libraries, implementing the basic DQN method'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Common library
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s start with the contents of lib/common.py. First of all, we have hyperparameters
+    for our Pong environment from the previous chapter. The hyperparameters are stored
+    in the dataclass object, which is a standard way to store a bunch of data fields
+    with their type annotations. This makes it easy to add another configuration set
+    for different, more complicated Atari games and allows us to experiment with hyperparameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next function from lib/common.py has the name unpack_batch, and it takes
+    the batch, of transitions and converts it into the set of NumPy arrays suitable
+    for training. Every transition from ExperienceSourceFirstLast has a type of ExperienceFirstLast,
+    which is a dataclass with the following fields:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'state: Observation from the environment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'action: Integer action taken by the agent.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'reward: If we have created ExperienceSourceFirstLast with the attribute steps_count=1,
+    it’s just the immediate reward. For larger step counts, it contains the discounted
+    sum of rewards for this number of steps.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'last_state: If the transition corresponds to the final step in the environment,
+    then this field is None; otherwise, it contains the last observation in the experience
+    chain.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The code of unpack_batch is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note how we handle the final transitions in the batch. To avoid the special
+    handling of such cases, for terminal transitions, we store the initial state in
+    the last_states array. To make our calculations of the Bellman update correct,
+    we have to mask such batch entries during the loss calculation using the dones
+    array. Another solution would be to calculate the value of the last states only
+    for non-terminal transitions, but it would make our loss function logic a bit
+    more complicated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Calculation of the DQN loss function is provided by the calc_loss_dqn function,
+    and the code is almost the same as in Chapter [6](#). One small addition is torch.no_grad(),
+    which stops the PyTorch calculation graph from being recorded for the target net:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Besides those core DQN functions, common.py provides several utilities related
+    to our training loop, data generation, and TensorBoard tracking. The first such
+    utility is a small class that implements epsilon decay during the training. Epsilon
+    defines the probability of taking the random action by the agent. It should be
+    decayed from 1.0 in the beginning (fully random agent) to some small number, like
+    0.02 or 0.01\. The code is trivial but is needed in almost any DQN, so it is provided
+    by the following little class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another small function is batch_generator, which takes ExperienceReplayBuffer
+    (the PTAN class described in Chapter [7](ch011.xhtml#x1-1070007)) and infinitely
+    generates training batches sampled from the buffer. In the beginning, the function
+    ensures that the buffer contains the required amount of samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, a lengthy, but nevertheless very useful, function called setup_ignite
+    attaches the needed Ignite handlers, showing the training progress and writing
+    metrics to TensorBoard. Let’s look at this function piece by piece:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Initially, setup_ignite attaches two Ignite handlers provided by PTAN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: EndOfEpisodeHandler, which emits the Ignite event every time a game episode
+    ends. It can also fire an event when the averaged reward for episodes crosses
+    some boundary. We use this to detect when the game is finally solved.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: EpisodeFPSHandler, a small class that tracks the time the episode has taken
+    and the amount of interactions that we have had with the environment. From this,
+    we calculate frames per second (FPS), which is an important performance metric
+    to track.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Then, we install two event handlers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: One of the event handlers is called at the end of an episode. It will show information
+    about the completed episode on the console. Another function will be called when
+    the average reward grows above the boundary defined in the hyperparameters (18.0
+    in the case of Pong). This function shows a message about the solved game and
+    stops the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the function is related to the TensorBoard data that we want to
+    track. First, we create a TensorboardLogger:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is a special class provided by Ignite to write into TensorBoard. Our processing
+    function will return the loss value, so we attach the RunningAverage transformation
+    (also provided by Ignite) to get a smoothed version of the loss over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we attach the metrics we want to track to the Ignite events:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'TensorboardLogger can track two groups of values from Ignite: outputs (values
+    returned by the transformation function) and metrics (calculated during the training
+    and kept in the engine state). EndOfEpisodeHandler and EpisodeFPSHandler provide
+    metrics, which are updated at the end of every game episode. So, we attach OutputHandler,
+    which will write into TensorBoard information about the episode every time it
+    is completed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we track another group of values, metrics from the training process:
+    loss, FPS, and, possibly, some custom metrics relevant to the specific extension’s
+    logic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Those values are updated every training iteration, but we are going to do millions
+    of iterations, so we will store values in TensorBoard every 100 training iterations;
+    otherwise, the data files will be huge. All this functionality might look too
+    complicated, but it provides us with the unified set of metrics gathered from
+    the training process. In fact, Ignite is not very tricky, given the flexibility
+    it provides. That’s it for common.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now, let’s take a look at 01_dqn_basic.py, which creates the needed classes
+    and starts the training. I’m going to omit non-relevant code and focus only on
+    important pieces (the full version is available in the GitHub repo). First, we
+    create the environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we apply a set of standard wrappers. We discussed them in Chapter [6](#)
+    and will also touch upon them in the next chapter, when we optimize the performance
+    of the Pong solver. Then, we create the DQN model and the target network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we create the agent, passing it an epsilon-greedy action selector:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: During the training, epsilon will be decreased by the EpsilonTracker class that
+    we have already discussed. This will decrease the amount of randomly selected
+    actions and give more control to our NN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next two very important objects are ExperienceSourceFirstLast and ExperienceReplayBuffer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: ExperienceSourceFirstLast takes the agent and environment and provides transitions
+    over game episodes. Those transitions will be kept in the experience replay buffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then we create an optimizer and define the processing function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The processing function will be called for every batch of transitions to train
+    the model. To do this, we call the common.calc_loss_dqn function and then backpropagate
+    on the result. This function also asks EpsilonTracker to decrease the epsilon
+    and does periodical target network synchronization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'And, finally, we create the Ignite Engine object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: We configure it using a function from common.py, and run our training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To make our comparison of DQN extensions fair, we also need to tune hyperparameters.
+    This is essential because even for the same game (Pong), using the fixed set of
+    training parameters might give less optimal results when we change the details
+    of the method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In principle, every explicit or implicit constant in our code could be tuned,
+    such as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Network configuration: Amount and size of layers, activation function, dropout,
+    etc.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Optimization parameters: Method (vanilla SGD, Adam, AdaGrad, etc.), learning
+    rate, and other optimizer parameters'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Exploration parameters: Decay rate of 𝜖, final 𝜖 value'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Discount factor γ in Bellman equation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: But every new parameter we tune has a multiplicative effect on the amount of
+    trial training we need to perform, so having too many hyperparameters might require
+    hundreds or even thousands of trainings. Large companies like Google and Meta
+    have access to a much larger amount of GPUs than individual researchers like us,
+    so we need to keep the balance there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In my case, I’m going to demonstrate how hyperparameter tuning is done in general,
+    but we’ll do the search only on a few values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learning rate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Discount factor γ
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Parameters specific to the DQN extension we’re considering
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'There are several libraries that might be helpful with hyperparameter tuning.
+    Here, I’m using Ray Tune ([https://docs.ray.io/en/latest/tune/index.xhtml](https://docs.ray.io/en/latest/tune/index.xhtml)),
+    which is a part of the Ray project — a distributed computing framework for ML
+    and DL. At a high level, you need to define:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The hyperparameter space you want to explore (boundaries for values to sample
+    from or an explicit list of values to try)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function that performs the training with specific values of hyperparameters
+    and returns the metric you want to optimize with the tuning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This might look very similar to ML problems, and in fact it is — this is also
+    an optimization problem. But there are substantial differences: the function we’re
+    optimizing is not differentiable (so you cannot perform the gradient descent to
+    push your hyperparameters towards the desired direction of the metric) and the
+    optimization space might be discrete (you cannot train the network with the number
+    of layers equal to 2.435, for example, since we cannot take the derivative of
+    a non-smooth function).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In later chapters, we’ll touch on this problem slightly in the context of black-box
+    optimization methods (Chapter [17](ch021.xhtml#x1-31100017)) and RL in discrete
+    optimizations (Chapter [21](ch025.xhtml#x1-39100021)), but for now, we’ll use
+    the simplest approach — a random search of hyperparameters. In this case, the
+    ray.tune library randomly samples concrete parameters several times and calls
+    the function to obtain the metric. The smallest (or highest) metric corresponds
+    to the best hyperparameter combination found in this run.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, our metric (optimization objective) will be the number of games
+    the agent needs to play before solving the game (reaching a mean score of greater
+    than 18 for Pong).
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate the effect of tuning, for every DQN extension, we check the training
+    dynamics using a fixed set of parameters (the same as in Chapter [6](#)), and
+    the dynamics using the best hyperparameters found after 20-30 rounds of tuning.
+    If you wish, you can do your own experiments, optimizing more hyperparameters.
+    Most likely, this will allow you to find a better configuration for the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The core of the process is implemented in the common.tune_params function.
+    Let’s take a look at its code. We start with the type declaration and hyperparameter
+    space:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we first define the type for the training function, which takes the Hyperparams
+    dataclass torch.device to use and a dictionary with extra parameters (as some
+    DQN extensions we’re going to present might require extra parameters besides those
+    declared in Hyperparams).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The result of the function is either the int value, which will be the amount
+    of games we played before reaching the score of 18, or None if we decided to stop
+    the training early. This is required, as some hyperparameter combinations might
+    fail to converge or converge too slowly, so to save time we stop the training
+    without waiting for too long.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then we define the hyperparameter search space — which is a dict with string
+    keys (parameter name) and the tune declaration of possible values to explore.
+    It could be a probability distribution (uniform, loguniform, normal, etc.) or
+    an explicit list of values to try. You can also use tune.grid_search declaration
+    with a list of values. In that case, all the values will be tried.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our case, we sample the learning rate from the loguniform distribution and
+    gamma from the list of 6 values ranging from 0.9 to 0.995.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we have the tune_params function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function is given the following arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic set of hyperparameters that will be used for training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Torch device to use
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Amount of samples to perform during the round
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Additional dictionary with search space
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inside this function, we have an objective function, which creates the Hyperparameters
+    object from the sampled dict, calls the training function, and returns the dictionary
+    (which is a requirement of the ray.tune library).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the tune_params function is simple:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we wrap the objective function to pass the torch device and take into
+    account GPU resources. This is needed to allow Ray to properly parallelize the
+    tuning process. If you have multiple GPUs installed on the machine, it will run
+    several trainings in parallel. Then, we just create the Tuner object and ask it
+    to perform the hyperparameter search.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final piece relevant to hyperparameter tuning is in the setup_ignite function.
+    It checks for situations when the training process is not converging, so we stop
+    the training to avoid infinite waiting. To do this, we install the Ignite event
+    handler if we’re in the hyperparameter tuning mode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, we check for two conditions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the mean reward is lower than tuner_reward_min (which is an argument to the
+    setup_ignite function and equal to -19 by default) after 100 games (provided in
+    the tuner_reward_episode argument). This means that it’s quite unlikely that we’ll
+    converge at all.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We played more than max_episodes amount of games and still haven’t solved the
+    game. In the default config, we set this limit to 500 games.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In both cases, we stop the training and set the solved attribute to False, which
+    will return a high constant metric value in our tuning process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That’s it for the hyperparameter tuning code. Before we run it and check the
+    results, let’s first start a single training using the parameters we used in Chapter [6](#).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results with common parameters
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: If we run the training with the argument --params common, we’ll train the Pong
+    game using hyperparameters from the common.py module. As an option, you can use
+    the --params best command line to train on the best values for this particular
+    DQN extension.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Okay, let’s start the training using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Every line in the output is written at the end of the game episode, showing
+    the episode reward, a count of steps, the speed, and the total training time.
+    For the basic DQN version and common hyperparameters, it usually takes about 700K
+    frames and about 400 games to reach the mean reward of 18, so be patient. During
+    the training, we can check the dynamics of the training process in TensorBoard,
+    which shows charts for epsilon, raw reward values, average reward, and speed.
+    The following charts show the reward and the number of steps for episodes (the
+    bottom x axis shows the wall clock time, and the top axis is the episode number):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.1: Plots with reward (left) and count of steps per episode (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.2: Plots with training speed (left) and average training loss (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is also worth noting how the count of steps per episode changes during the
+    training. Initially, it increases, as our network starts winning more and more
+    games, but after a certain level, the count of steps decreases 2x and stays almost
+    constant. This is driven by our γ parameter, which discounts the agent’s reward
+    over time, so it tries not just to accumulate as much of a reward as possible,
+    but also to do it efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tuned baseline DQN
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'After running the baseline DQN with the command-line argument --tune 30 (which
+    took about a day on one GPU), I was able to find the following parameters, which
+    solves Pong in 340 episodes (instead of 360):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the learning rate is almost the same as before (10^(−4)), but
+    gamma is lower (0.98 versus 0.99). This might be an indication that Pong has relatively
+    short subtrajectories with action-reward causality, so decreasing the γ has a
+    stabilizing effect on the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following figure, you can see a comparison of the reward and steps per
+    episode for both tuned and untuned versions (and the difference is quite minor):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.3: Plots with reward (left) and count of steps per episode (right)
+    for tuned and untuned hyperparameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we have our baseline DQN version and are ready to explore method modifications
+    proposed by Hessel et al.
+  prefs: []
+  type: TYPE_NORMAL
+- en: N-step DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The first improvement that we will implement and evaluate is quite an old one.
+    It was first introduced by Sutton in the paper Learning to Predict by the Methods
+    of Temporal Differences [[Sut88](#)]. To get the idea, let’s look at the Bellman
+    update used in Q-learning once again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq26.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This equation is recursive, which means that we can express Q(s[t+1],a[t+1])
+    in terms of itself, which gives us this result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq27.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Value r[a,t+1] means local reward at time t + 1, after issuing action a. However,
+    if we assume that action a at step t + 1 was chosen optimally, or close to optimally,
+    we can omit the max[a] operation and obtain this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq28.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This value can be unrolled again and again any number of times. As you may
+    guess, this unrolling can be easily applied to our DQN update by replacing one-step
+    transition sampling with longer transition sequences of n-steps. To understand
+    why this unrolling will help us to speed up training, let’s consider the example
+    illustrated in Figure [8.4](#x1-131004r4). Here, we have a simple environment
+    of four states (s[1], s[2], s[3], s[4]) and the only action available at every
+    state, except s[4], which is a terminal state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ssssararar1234123 ](img/B22150_08_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.4: A transition diagram for a simple environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, what happens in a one-step case? We have three total updates possible (we
+    don’t use max, as there is only one action available):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Q(s[1],a) ←r[1] + γQ(s[2],a)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Q(s[2],a) ←r[2] + γQ(s[3],a)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Q(s[3],a) ←r[3]
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Let’s imagine that, at the beginning of the training, we complete the preceding
+    updates in this order. The first two updates will be useless, as our current Q(s[2],a)
+    and Q(s[3],a) are incorrect and contain initial random values. The only useful
+    update will be update 3, which will correctly assign reward r[3] to the state
+    s[3] prior to the terminal state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s perform the updates over and over again. On the second iteration,
+    the correct value will be assigned to Q(s[2],a), but the update of Q(s[1],a) will
+    still be noisy. Only on the third iteration will we get the valid values for every
+    Q. So, even in a one-step case, it takes three steps to propagate the correct
+    values to all the states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s consider a two-step case. This situation again has three updates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Q(s[1],a) ←r[1] + γr[2] + γ²Q(s[3],a)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Q(s[2],a) ←r[2] + γr[3]
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Q(s[3],a) ←r[3]
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In this case, on the first loop over the updates, the correct values will be
+    assigned to both Q(s[2],a) and Q(s[3],a). On the second iteration, the value of
+    Q(s[1],a) will also be properly updated. So, multiple steps improve the propagation
+    speed of values, which improves convergence. You may be thinking, “If it’s so
+    helpful, let’s unroll the Bellman equation, say, 100 steps ahead. Will it speed
+    up our convergence 100 times?” Unfortunately, the answer is no. Despite our expectations,
+    our DQN will fail to converge at all.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand why, let’s again return to our unrolling process, especially where
+    we dropped the max[a]. Was it correct? Strictly speaking, no. We omitted the max
+    operation at the intermediate step, assuming that our action selection during
+    experience gathering (or our policy) was optimal. What if it wasn’t, for example,
+    at the beginning of the training, when our agent acted randomly? In that case,
+    our calculated value for Q(s[t],a[t]) may be smaller than the optimal value of
+    the state (as some steps have been taken randomly, but not following the most
+    promising paths by maximizing the Q-value). The more steps on which we unroll
+    the Bellman equation, the more incorrect our update could be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our large experience replay buffer will make the situation even worse, as it
+    will increase the chance of getting transitions obtained from the old bad policy
+    (dictated by old bad approximations of Q). This will lead to a wrong update of
+    the current Q approximation, so it can easily break our training progress. This
+    problem is a fundamental characteristic of RL methods, as was briefly mentioned
+    in Chapter [4](ch008.xhtml#x1-740004), when we talked about RL methods’ taxonomy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two large classes of methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Off-policy methods: The first class of off-policy methods doesn’t depend on
+    the “freshness of data.” For example, a simple DQN is off-policy, which means
+    that we can use very old data sampled from the environment several million steps
+    ago, and this data will still be useful for learning. That’s because we are just
+    updating the value of the action, Q(s[t],a[t]), with the immediate reward, plus
+    the discounted current approximation of the best action’s value. Even if action
+    a[t] was sampled randomly, it doesn’t matter because for this particular action
+    a[t], in the state s[t], our update will be correct. That’s why in off-policy
+    methods, we can use a very large experience buffer to make our data closer to
+    being independent and identically distributed (iid) .'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'On-policy methods: On the other hand, on-policy methods heavily depend on the
+    training data to be sampled according to the current policy that we are updating.
+    That happens because on-policy methods try to improve the current policy indirectly
+    (as in the previous n-step DQN) or directly (all of Part 3 of the book is devoted
+    to such methods).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So, which class of methods is better? Well, it depends. Off-policy methods allow
+    you to train on the previous large history of data or even on human demonstrations,
+    but they usually are slower to converge. On-policy methods are typically faster,
+    but require much more fresh data from the environment, which can be costly. Just
+    imagine a self-driving car trained with the on-policy method. It will cost you
+    a lot of crashed cars before the system learns that walls and trees are things
+    that it should avoid!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You may have a question: why are we talking about an n-step DQN if this “n-stepness”
+    turns it into an on-policy method, which will make our large experience buffer
+    useless? In practice, this is usually not black and white. You may still use an
+    n-step DQN if it will help to speed up DQNs, but you need to be modest with the
+    selection of n. Small values of two or three usually work well, because our trajectories
+    in the experience buffer are not that different from one-step transitions. In
+    such cases, convergence speed usually improves proportionally, but large values
+    of n can break the training process. So, the number of steps should be tuned,
+    but convergence speeding up usually makes it worth doing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As the ExperienceSourceFirstLast class already supports the multi-step Bellman
+    unroll, our n-step version of a DQN is extremely simple. There are only two modifications
+    that we need to make to the basic DQN to turn it into an n-step version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pass the count of steps that we want to unroll on ExperienceSourceFirstLast
+    creation in the steps_count parameter.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pass the correct gamma to the calc_loss_dqn function. This modification is really
+    easy to overlook, which could be harmful to convergence. As our Bellman is now
+    n-steps, the discount coefficient for the last state in the experience chain will
+    no longer be just γ, but γ^n.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can find the whole example in Chapter08/02_dqn_n_steps.py, with only the
+    modified lines shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The n_steps value is a count of steps passed in command-line arguments; the
+    default is to use four steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another modification is in gamma passed to the calc_loss_dqn function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The training module Chapter08/02_dqn_n_steps.py can be started as before, with
+    the additional command-line option -n, which gives a count of steps to unroll
+    the Bellman equation. These are charts for our baseline and n-step DQN (using
+    a common set of parameters), with n being equal to 2 and 3\. As you can see, the
+    Bellman unroll has given a significant convergence speedup:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.5: The reward and number of steps for basic (one-step) DQN and n-step
+    versions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you can see in the diagram, the three-step DQN converges significantly faster
+    than the simple DQN, which is a nice improvement. So, what about a larger n? Figure [8.6](#x1-133004r6)
+    shows the reward dynamics for n = 3…6:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.6: Reward dynamics for cases with n = 3…6 with common hyperparameters'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, going from three steps to four has given some improvement, but
+    it is much less than before. The variant with n = 5 is worse and very close to
+    n = 2\. The same is true for n = 6\. So, in our case, n = 3 looks optimal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this extension, hyperparameter tuning was done individually for every n
+    from 2 to 7\. The following table shows the best parameters and number of games
+    they require to solve the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| n | Learning rate | γ | Games |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | 3.97 ⋅ 10^(−5) | 0.98 | 293 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | 7.82 ⋅ 10^(−5) | 0.98 | 260 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | 6.07 ⋅ 10^(−5) | 0.98 | 290 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5 | 7.52 ⋅ 10^(−5) | 0.99 | 268 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | 6.78 ⋅ 10^(−5) | 0.995 | 261 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 7 | 8.59 ⋅ 10^(−5) | 0.98 | 284 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Table 8.1: The best hyperparameters (learning rate and gamma) for every n'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This table also confirms the conclusions of the untuned version comparison —
+    unrolling the Bellman equation for two and three steps improves the convergence,
+    but a further increase of n produces worse results. n = 6 gives us a comparable
+    result to n = 3, but the outcomes for n = 4 and n = 5 are worse, so we should
+    stop at n = 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure [8.7](#x1-134003r7) compares the training dynamics of tuned versions
+    of the baseline and N-step DQN with n = 2 and n = 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.7: The reward and number of steps after hyperparameter tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Double DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The next fruitful idea on how to improve a basic DQN came from DeepMind researchers
+    in the paper titled Deep reinforcement learning with double Q-learning [[VGS16](#)].
+    In the paper, the authors demonstrated that the basic DQN tends to overestimate
+    values for Q, which may be harmful to training performance and sometimes can lead
+    to suboptimal policies. The root cause of this is the max operation in the Bellman
+    equation, but the strict proof is a bit complicated (you can find the full explanation
+    in the paper). As a solution to this problem, the authors proposed modifying the
+    Bellman update a bit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the basic DQN, our target value for Q looked like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq29.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Q′(s[t+1],a) was Q-values calculated using our target network, the weights
+    of which are copied from the trained network every n steps. The authors of the
+    paper proposed choosing actions for the next state using the trained network,
+    but taking values of Q from the target network. So, the new expression for target
+    Q-values will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq30.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The authors proved that this simple tweak fixes overestimation completely, and
+    they called this new architecture double DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The core implementation is very simple. What we need to do is slightly modify
+    our loss function. But let’s go a step further and compare action values produced
+    by basic DQN and double DQN. According to the paper author’s our baseline DQN
+    should have consistently higher values predicted for the same states than the
+    double DQN version. To do this, we store a random held-out set of states and periodically
+    calculate the mean value of the best action for every state in the evaluation
+    set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The complete example is in Chapter08/03_dqn_double.py. Let’s first take a look
+    at the loss function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will use this function instead of common.calc_loss_dqn and they both share
+    lots of code. The main difference is in the next Q-values estimation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code snippet calculates the loss in a slightly different way.
+    In the double DQN version, we calculate the best action to take in the next state
+    using our main trained network, but values corresponding to this action come from
+    the target network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This part could be implemented in a faster way, by combining next_states_v with
+    states_v and calling our main network only once, but it will make the code less
+    clear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the function is the same: we mask completed episodes and compute
+    the mean squared error (MSE) loss between Q-values predicted by the network and
+    approximated Q-values.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last function that we consider calculates the values of our held-out state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There is nothing complicated here: we just split our held-out states array
+    into equal chunks and pass every chunk to the network to obtain action values.
+    From those values, we choose the action with the largest value (for every state)
+    and calculate the mean of such values. As our array with states is fixed for the
+    whole training process, and this array is large enough (in the code, we store
+    1,000 states), we can compare the dynamics of this mean value in both DQN variants.
+    The rest of the 03_dqn_double.py file is almost the same; the two differences
+    are usage of our tweaked loss function and keeping a randomly sampled 1,000 states
+    for periodical evaluation. This happens in the process_batch function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: My experiments show that with common hyperparameters, double DQN has a negative
+    effect on reward dynamics. Sometimes, double DQN leads to better initial dynamics
+    and the trained agent learns how to win more games faster, but reaching the end
+    reward boundary takes longer. You can perform your own experiment on other games
+    or try parameters from the original paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are reward charts from the experiment where double DQN was a
+    bit better than the baseline version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.8: Reward dynamics for double and baseline DQN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides the standard metrics, the example also outputs the mean value for the
+    held-out set of states, which are shown in Figure [8.9](#x1-137004r9).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.9: Values predicted by the network for held-out states'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, the basic DQN does an overestimation of values, so values decrease
+    after a certain level. In contrast, the double DQN grows more consistently. In
+    my experiments, the double DQN has only a small effect on the training time, but
+    this doesn’t necessarily mean that the double DQN is useless, as Pong is a simple
+    environment. In more complicated games, the double DQN could give better results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The tuning of hyperparameters also wasn’t very successful for the double DQN.
+    After 30 trials, the best values for the learning rate and gamma were able to
+    solve Pong in 412 games, which is worse than the baseline DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Noisy networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The next improvement that we are going to look at addresses another RL problem:
+    exploration of the environment. The paper that we will draw from is called Noisy
+    networks for exploration [[For+17](#)] and it has a very simple idea for learning
+    exploration characteristics during training instead of having a separate schedule
+    related to exploration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A classical DQN achieves exploration by choosing random actions with a specially
+    defined hyperparameter 𝜖, which is slowly decreased over time from 1.0 (fully
+    random actions) to some small ratio of 0.1 or 0.02\. This process works well for
+    simple environments with short episodes, without much non-stationarity during
+    the game; but even in such simple cases, it requires tuning to make the training
+    processes efficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the Noisy Networks paper, the authors proposed a quite simple solution that,
+    nevertheless, works well. They add noise to the weights of fully connected layers
+    of the network and adjust the parameters of this noise during training using backpropagation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method shouldn’t be confused with “the network decides where to explore
+    more,” which is a much more complex approach that also has widespread support
+    (for example, see articles about intrinsic motivation and count-based exploration
+    methods [[Ost+17](#)], [[Mar+17](#)]). We will discuss advanced exploration techniques
+    in Chapter [21](ch025.xhtml#x1-39100021).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The authors proposed two ways of adding the noise, both of which work according
+    to their experiments, but they have different computational overheads:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Independent Gaussian noise: For every weight in a fully connected layer, we
+    have a random value that we draw from the normal distribution. Parameters of the
+    noise, μ and σ, are stored inside the layer and get trained using backpropagation
+    in the same way that we train weights of the standard linear layer. The output
+    of such a “noisy layer” is calculated in the same way as in a linear layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Factorized Gaussian noise: To minimize the number of random values to be sampled,
+    the authors proposed keeping only two random vectors: one with the size of the
+    input and another with the size of the output of the layer. Then, a random matrix
+    for the layer is created by calculating the outer product of the vectors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In PyTorch, both methods can be easily implemented in a very straightforward
+    way. What we need to do is create our own custom nn.Linear layer with weights
+    calculated as w[i,j] = μ[i,j] + σ[i,j] ⋅𝜖[i,j], where μ and σ are trainable parameters
+    and 𝜖 ∼𝒩(0,1) is random noise sampled from the normal distribution after every
+    optimization step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Previous editions of the book used my implementation of both methods, but now
+    we’ll simply use the implementation from the popular TorchRL library I mentioned
+    in Chapter [7](ch011.xhtml#x1-1070007). Let’s take a look at relevant parts of
+    the implementation (the full code can be found in torchrl/modules/models/exploration.py
+    in the TorchRL repository). The following is the constructor of the NoisyLinear
+    class, which creates all the parameters we need to optimize:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the constructor, we create matrices for μ and σ. This implementation inherits
+    from torch.nn.Linear, but calls the nn.Module.__init__() method, so normal Linear
+    weights and bias buffers are not created.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make new matrices trainable, we need to wrap their tensors in an nn.Parameter.
+    The register_buffer method creates a tensor in the network that won’t be updated
+    during backpropagation, but will be handled by the nn.Module machinery (for example,
+    it will be copied to the GPU with the cuda() call). An extra parameter and buffer
+    are created for the bias of the layer. At the end, we call the reset_parameters()
+    and reset_noise() methods, which perform the initialization of the created trainable
+    parameters and the buffer with the epsilon value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following three methods, we initialize the trainable parameters μ and
+    σ according to the paper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The matrix for μ is initialized with uniform random values. The initial value
+    for σ is constant depending on the count of neurons in the layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the noise initialization, factorized Gaussian noise is used – we sample
+    two random vectors and calculate the outer product to get the matrix for 𝜖. The
+    outer product is a linear algebra operation when two vectors of the same size
+    are producing the square matrix filled with product of all combination of each
+    vector’s element. The rest is simple: we redefine the weight and bias properties,
+    which are expected in nn.Linear layer, so NoisyLinear could be used everywhere
+    nn.Linear is used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: This implementation is simple, but has one very subtle nuance — the 𝜖 values
+    are not updated after every optimization step (and it is not mentioned in the
+    documentation). This issue is already reported in the TorchRL repo, but for the
+    current stable release, we have to call the reset_noise() method explicitly. Hopefully,
+    it will be fixed and the NoisyLinear layer will update the noise automatically.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the implementation point of view, that’s it. What we now need to do to
+    turn the classic DQN into a noisy network variant is just replace nn.Linear (which
+    are the two last layers in our DQN network) with the NoisyLinear layer. Of course,
+    you have to remove all the code related to the epsilon-greedy strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To check the internal noise level during training, we can monitor the signal-to-noise
+    ratio (SNR) of our noisy layers, which is RMS(μ)∕RMS(σ), where RMS is the root
+    mean square of the corresponding weights. In our case, the SNR shows how many
+    times the stationary component of the noisy layer is larger than the injected
+    noise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'After the training, the TensorBoard charts show much better training dynamics.
+    The model was able to reach the mean score of 18 after 250 games, which is an
+    improvement in comparison to 350 for the baseline DQN. But because of extra operations
+    required for noisy networks, their training is a bit slower (194 FPS versus 240
+    FPS for the baseline), so, time-wise, the difference is less impressive. But still,
+    the results look good:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.10: Noisy networks compared to the baseline DQN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After checking the SNR chart (Figure [8.11](#x1-141004r11)), you may notice
+    that both layers’ noise levels have decreased very quickly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.11: SNR change in layer 1 (left) and layer 2 (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first layer has gone from ![1 2](img/eq31.png) to almost ![-1- 2.6](img/eq32.png)
+    ratio of noise. The second layer is even more interesting, as its noise level
+    decreased from ![1 4](img/eq33.png) in the beginning to ![1- 16](img/eq34.png),
+    but after 450K frames (roughly the same time as when raw rewards climbed close
+    to the 20 score), the level of noise in the last layer started to increase again,
+    pushing the agent to explore the environment more. This makes a lot of sense,
+    as after reaching high score levels, the agent basically knows how to play at
+    a good level, but still needs to “polish” its actions to improve the results even
+    more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'After the tuning, the best set of parameters was able to solve the game after
+    273 rounds, which is an improvement over the baseline:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following are charts comparing the reward dynamics and steps for tuned
+    baseline DQN and tuned noisy networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.12: Comparison of tuned baseline DQN and tuned noisy network'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On both charts, we see improvements introduced by noisy networks: it takes
+    fewer games to reach a score of 21 and during the training, games have a smaller
+    amount of steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prioritized replay buffer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The next very useful idea on how to improve DQN training was proposed in 2015
+    in the paper Prioritized experience replay [[Sch+15](#)]. This method tries to
+    improve the efficiency of samples in the replay buffer by prioritizing those samples
+    according to the training loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic DQN used the replay buffer to break the correlation between immediate
+    transitions in our episodes. As we discussed in Chapter [6](#), the examples we
+    experience during the episode will be highly correlated, as most of the time,
+    the environment is ”smooth” and doesn’t change much according to our actions.
+    However, the stochastic gradient descent (SGD) method assumes that the data we
+    use for training has an iid property. To solve this problem, the classic DQN method
+    uses a large buffer of transitions, randomly and uniformly sampled to get the
+    next training batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The authors of the paper questioned this uniform random sample policy and proved
+    that by assigning priorities to buffer samples, according to training loss and
+    sampling the buffer proportional to those priorities, we can significantly improve
+    convergence and the policy quality of the DQN. This method’s basic idea could
+    be explained as “train more on data that surprises you.” The tricky point here
+    is to keep the balance of training on an “unusual” sample and training on the
+    rest of the buffer. If we focus only on a small subset of the buffer, we can lose
+    our i.i.d. property and simply overfit on this subset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the mathematical point of view, the priority of every sample in the buffer
+    is calculated as ![ pα ∑kipα- k](img/eq35.png), where p[i] is the priority of
+    the i-th sample in the buffer and α is the number that shows how much emphasis
+    we give to the priority. If α = 0, our sampling will become uniform as in the
+    classic DQN method. Larger values for α put more stress on samples with higher
+    priority. So, it’s another hyperparameter to tune, and the starting value of α
+    proposed by the paper is 0.6.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There were several options proposed in the paper for how to define the priority,
+    and the most popular is to make it proportional to the loss for this particular
+    example in the Bellman update. New samples added to the buffer need to be assigned
+    a maximum value of priority to be sure that they will be sampled soon.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By adjusting the priorities for the samples, we are introducing bias into our
+    data distribution (we sample some transitions much more frequently than others),
+    which we need to compensate for if SGD is to work. To get this result, the authors
+    of the study used sample weights, which needed to be multiplied by the individual
+    sample loss. The value of the weight for each sample is defined as w[i] = (N ⋅P(i))^(−β),
+    where β is another hyperparameter that should be between 0 and 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With β = 1, the bias introduced by the sampling is fully compensated for, but
+    the authors showed that it’s good for convergence to start with β between 0 and
+    1 and slowly increase it to 1 during the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To implement this method, we have to introduce certain changes in our code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First of all, we need a new replay buffer that will track priorities, sample
+    a batch according to them, calculate weights, and let us update priorities after
+    the loss has become known.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second change will be the loss function itself. Now we not only need to
+    incorporate weights for every sample, but we need to pass loss values back to
+    the replay buffer to adjust the priorities of the sampled transitions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the main module, Chapter08/05_dqn_prio_replay.py, we have all those changes
+    implemented. For the sake of simplicity, the new priority replay buffer class
+    uses a very similar storage scheme to our previous replay buffer. Unfortunately,
+    new requirements for prioritization make it impossible to implement sampling in
+    𝒪(1) time (in other words, sampling time will grow with an increase in buffer
+    size). If we are using simple lists, every time that we sample a new batch, we
+    need to process all the priorities, which makes our sampling have 𝒪(N) time complexity
+    in proportion to the buffer size. It’s not a big deal if our buffer is small,
+    such as 100k samples, but may become an issue for real-life large buffers of millions
+    of transitions. There are other storage schemes that support efficient sampling
+    in 𝒪(log N) time, for example, using the segment tree data structure. There are
+    different versions of such optimized buffers available in various libraries –
+    for example, in TorchRL.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PTAN library also provides an efficient prioritized replay buffer in the
+    class ptan.experience.PrioritizedReplayBuffer. You can update the example to use
+    the more efficient version and check the effect on training performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But, for now, let’s take a look at the naïve version, whose source code you
+    will find in lib/dqn_extra.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning, we define parameters for the β increase rate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our beta will be changed from 0.4 to 1.0 during the first 100k frames.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next comes the prioritized replay buffer class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class for the priority replay buffer inherits from the simple replay buffer
+    in PTAN, which stores samples in a circular buffer (it allows us to keep a fixed
+    amount of entries without reallocating the list). Our subclass uses a NumPy array
+    to keep priorities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The update_beta() method needs to be called periodically to increase beta according
+    to a schedule. The populate() method needs to pull the given number of transitions
+    from the ExperienceSource object and store them in the buffer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As our storage for the transitions is implemented as a circular buffer, we
+    have two different situations with this buffer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When our buffer hasn’t reached the maximum capacity, we just need to append
+    a new transition to the buffer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the buffer is already full, we need to overwrite the oldest transition, which
+    is tracked by the pos class field, and adjust this position modulo buffer’s size.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the sample method, we need to convert priorities to probabilities using
+    our α hyperparameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, using those probabilities, we sample our buffer to obtain a batch of
+    samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the last step, we calculate weights for samples in the batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This returns three objects: the batch, indices, and weights. Indices for batch
+    samples are required to update priorities for sampled items.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last function of the priority replay buffer allows us to update new priorities
+    for the processed batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s the responsibility of the caller to use this function with the calculated
+    losses for the batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next custom function that we have in our example is the loss calculation.
+    As the MSELoss class in PyTorch doesn’t support weights (which is understandable,
+    as MSE is loss used in regression problems, but weighting of the samples is commonly
+    utilized in classification losses), we need to calculate the MSE and explicitly
+    multiply the result on the weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the last part of the loss calculation, we implement the same MSE loss but
+    write our expression explicitly, rather than using the library. This allows us
+    to take into account the weights of samples and keep individual loss values for
+    every sample. Those values will be passed to the priority replay buffer to update
+    priorities. A small value is added to every loss to handle the situation of zero
+    loss value, which will lead to zero priority for an entry in the replay buffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the main section of our program, we have only two updates: the creation
+    of the replay buffer and our processing function. Buffer creation is straightforward,
+    so we will only take a look at a new processing function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'There are several changes here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our batch now contains three entities: the batch of data, indices of sampled
+    items, and samples’ weights.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We call our new loss function, which accepts weights and returns the additional
+    items’ priorities. They are passed to the buffer.update_priorities() function
+    to reprioritize items that we have sampled.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We call the update_beta() method of the buffer to change the beta parameter
+    according to the schedule.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'This example can be trained as usual. According to my experiments, the prioritized
+    replay buffer took almost the same absolute time to solve the environment: almost
+    an hour. But it took fewer training iterations and fewer episodes. So, wall clock
+    time is the same mostly due to the less efficient replay buffer, which, of course,
+    could be resolved by proper 𝒪(log N) implementation of the buffer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is the comparison of reward dynamics of the baseline and prioritized replay
+    buffer (right). The x axis is the game episodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.13: Reward dynamics for prioritized replay buffer in comparison to
+    basic DQN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another difference to note on the TensorBoard charts is a much lower loss for
+    the prioritized replay buffer. The following chart shows the comparison:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.14: The comparison of loss during the training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Lower loss value is also expected and is a good sign that our implementation
+    works. The idea of prioritization is to train more on samples with high loss value,
+    so training becomes more efficient. But there is a danger here: loss value during
+    the training is not the primary objective to optimize; we can have very low loss,
+    but due to a lack of exploration, the final policy learned could be far from being
+    optimal.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Hyperparameter tuning for the prioritized replay buffer was done with an additional
+    parameter for α, which was sampled from a fixed list of values ranging from 0.3
+    to 0.9 (with steps of 0.1). The best combination was able to solve Pong after
+    330 episodes and had α = 0.6 (the same as in the paper):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following are charts comparing the tuned baseline DQN with the tuned prioritized
+    replay buffer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.15: Comparison of tuned baseline DQN and tuned prioritized replay
+    buffer'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we see the prioritized replay buffer had faster gameplay improvement,
+    but it took almost the same amount of games to reach score 21\. On the right chart
+    (with the amount of game steps), the prioritized replay buffer was also a bit
+    better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dueling DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This improvement to DQN was proposed in 2015, in the paper called Dueling network
+    architectures for deep reinforcement learning [[Wan+16](#)]. The core observation
+    of this paper is that the Q-values, Q(s,a), that our network is trying to approximate
+    can be divided into quantities: the value of the state, V (s), and the advantage
+    of actions in this state, A(s,a).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have seen the quantity V (s) before, as it was the core of the value iteration
+    method from Chapter [5](ch009.xhtml#x1-820005). It is just equal to the discounted
+    expected reward achievable from this state. The advantage A(s,a) is supposed to
+    bridge the gap from V (s) to Q(s,a), as, by definition, Q(s,a) = V (s) + A(s,a).
+    In other words, the advantage A(s,a) is just the delta, saying how much extra
+    reward some particular action from the state brings us. The advantage could be
+    positive or negative and, in general, could have any magnitude. For example, at
+    some tipping point, the choice of one action over another can cost us a lot of
+    the total reward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Dueling paper’s contribution was an explicit separation of the value and
+    the advantage in the network’s architecture, which brought better training stability,
+    faster convergence, and better results on the Atari benchmark. The architecture
+    difference from the classic DQN network is shown in the following illustration.
+    The classic DQN network (top) takes features from the convolution layer and, using
+    fully connected layers, transforms them into a vector of Q-values, one for each
+    action. On the other hand, dueling DQN (bottom) takes convolution features and
+    processes them using two independent paths: one path is responsible for V (s)
+    prediction, which is just a single number, and another path predicts individual
+    advantage values, having the same dimension as Q-values in the classic case. After
+    that, we add V (s) to every value of A(s,a) to obtain Q(s,a), which is used and
+    trained as normal. Figure [8.16](#x1-147004r16) (from the paper) compares the
+    basic DQN and dueling DQN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file58.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.16: A basic DQN (top) and dueling architecture (bottom)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These changes in the architecture are not enough to make sure that the network
+    will learn V (s) and A(s,a) as we want it to. Nothing prevents the network, for
+    example, from predicting some state, V (s) = 0, and A(s) = [1,2,3,4], which is
+    completely wrong, as the predicted V (s) is not the expected value of the state.
+    We have yet another constraint to set: we want the mean value of the advantage
+    of any state to be zero. In that case, the correct prediction for the preceding
+    example will be V (s) = 2.5 and A(s) = [−1.5,−0.5,0.5,1.5].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This constraint could be enforced in various ways, for example, via the loss
+    function; but in the Dueling paper, the authors proposed the very elegant solution
+    of subtracting the mean value of the advantage from the Q expression in the network,
+    which effectively pulls the mean for the advantage to zero:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq36.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This keeps the changes that need to be made in the classic DQN very simple:
+    to convert it to the double DQN, you need to change only the network architecture,
+    without affecting other pieces of the implementation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The complete example is available in Chapter08/06_dqn_dueling.py. All the changes
+    sit in the network architecture, so here, I’ll only show the network class (which
+    is in the lib/dqn_extra.py module).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The convolution part is exactly the same as before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Instead of defining a single path of fully connected layers, we create two
+    different transformations: one for advantages and one for value prediction:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Also, to keep the number of parameters in the model comparable to the original
+    network, the inner dimension in both paths is decreased from 512 to 256\. The
+    changes in the forward() function are also very simple, thanks to PyTorch’s expressiveness:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we calculate the value and advantage for our batch of samples and add
+    them together, subtracting the mean of the advantage to obtain the final Q-values.
+    A subtle, but important, difference lies in calculating the mean along the second
+    dimension of the tensor, which produces a vector of the mean advantage for every
+    sample in our batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'After training a dueling DQN, we can compare it to the classic DQN convergence
+    on our Pong benchmark. Dueling architecture has faster convergence in comparison
+    to the basic DQN version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.17: The reward dynamic of dueling DQN compared to the baseline version'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our example also outputs the advantage and value for a fixed set of states,
+    shown in the following charts. They meet our expectations: the advantage is not
+    very different from zero, but the value improves over time (and resembles the
+    value from the Double DQN section):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_18.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.18: Mean advantage (left) and value (right) on a fixed set of states'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The tuning of the hyperparameters was not very fruitful. After 30 tuning iterations,
+    there were no combinations of learning rate and gamma that were able to converge
+    faster than the common set of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Categorical DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The last, and the most complicated, method in our DQN improvements toolbox is
+    from the paper published by DeepMind in June 2017, called A distributional perspective
+    on reinforcement learning [[BDM17](#)]. Although this paper is a few years old
+    now, it remains highly relevant, and active research is still ongoing in this
+    area. The book Distributional reinforcement learning was published in 2023, where
+    the same authors describe the method in greater detail [[BDR23](#)].
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the paper, the authors questioned the fundamental pieces of Q-learning —
+    Q-values — and tried to replace them with a more generic Q-value probability distribution.
+    Let’s try to understand the idea. Both the Q-learning and value iteration methods
+    work with the values of the actions or states represented as simple numbers and
+    showing how much total reward we can achieve from a state, or an action and a
+    state. However, is it practical to squeeze all future possible rewards into one
+    number? In complicated environments, the future could be stochastic, giving us
+    different values with different probabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, imagine the commuter scenario when you regularly drive from home
+    to work. Most of the time, the traffic isn’t that heavy, and it takes you around
+    30 minutes to reach your destination. It’s not exactly 30 minutes, but on average
+    it’s 30\. From time to time, something happens, like road repairs or an accident,
+    and due to traffic jams, it takes you three times longer to get to work. The probability
+    of your commute time can be represented as a distribution of the “commute time”
+    random variable, and it is shown in the following chart:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_19.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.19: The probability distribution of commute time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, imagine that you have an alternative way to get to work: the train. It
+    takes a bit longer, as you need to get from home to the train station and from
+    the station to the office, but they are much more reliable than traveling by car
+    (in some contries, like Germany, it might not be the case, but let’s consider
+    Swiss trains for our example). Say, for instance, that the train commute time
+    is 40 minutes on average, with a small chance of train disruption, which adds
+    20 minutes of extra time to the journey. The distribution of the train commute
+    is shown in the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_20.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.20: The probability distribution of train commute time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine that now we want to make the decision on how to commute. If we know
+    only the mean time for both car and train, a car looks more attractive, as on
+    average it takes 35.43 minutes to travel, which is better than 40.54 minutes for
+    the train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, if we look at full distributions, we may decide to go by train, as
+    even in the worst-case scenario, it will be one hour of commuting versus one hour
+    and 30 minutes. Switching to statistical language, the car distribution has much
+    higher variance, so in situations when you really have to be at the office in
+    60 minutes max, the train is better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The situation becomes even more complicated in the Markov decision process (MDP)
+    scenario, when the sequence of decisions needs to be made and every decision might
+    influence the future situation. In the commute example, it might be the time of
+    an important meeting that you need to arrange given the way that you are going
+    to commute. In that case, working with mean reward values might mean losing lots
+    of information about the underlying environment dynamics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exactly the same idea was proposed by the authors of Distributional Perspective
+    on Reinforcement Learning [9]. Why do we limit ourselves by trying to predict
+    an average value for an action, when the underlying value may have a complicated
+    underlying distribution? Maybe it will help us to work with distributions directly.
+    The results presented in the paper show that, in fact, this idea could be helpful,
+    but at the cost of introducing a more complicated method. I’m not going to put
+    a strict mathematical definition here, but the overall idea is to predict the
+    distribution of value for every action, similar to the distributions for our car/train
+    example. As the next step, the authors showed that the Bellman equation can be
+    generalized for a distribution case, and it will have the form Z(x,a)![D =](img/eq37.png)R(x,a)
+    + γZ(x′,a′), which is very similar to the familiar Bellman equation, but now Z(x,a)
+    and R(x,a) are the probability distributions and are not single numbers. The notation
+    A![ D =](img/eq37.png)B indicates eqality of distributions A and B.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The resulting distribution can be used to train our network to give better predictions
+    of value distribution for every action of the given state, exactly in the same
+    way as with Q-learning. The only difference will be in the loss function, which
+    now has to be replaced with something suitable for distribution comparison. There
+    are several alternatives available, for example, Kullback-Leibler (KL) divergence
+    (or cross-entropy loss), which is used in classification problems, or the Wasserstein
+    metric. In the paper, the authors gave theoretical justification for the Wasserstein
+    metric, but when they tried to apply it in practice, they faced limitations. So,
+    in the end, the paper used KL divergence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As mentioned, the method is quite complex, so it took me a while to implement
+    it and make sure it was working. The complete code is in Chapter08/07_dqn_distrib.py,
+    which uses the distr_projection function in lib/dqn_extra.py to perform distribution
+    projection. Before we check it, I need to say a few words about the implementation
+    logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The central part of the method is the probability distribution, which we are
+    approximating. There are lots of ways to represent the distribution, but the authors
+    of the paper chose a quite generic parametric distribution, which is basically
+    a fixed number of values placed regularly on a values range. The range of values
+    should cover the range of possible accumulated discounted reward. In the paper,
+    the authors did experiments with various numbers of atoms, but the best results
+    were obtained with the range split on N_ATOMS=51 intervals in the range of values
+    from Vmin=-10 to Vmax=10.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For every atom (we have 51 of them), our network predicts the probability that
+    the future discounted value will fall into this atom’s range. The central part
+    of the method is the code, which performs the contraction of distribution of the
+    next state’s best action using gamma, adds local reward to the distribution, and
+    projects the results back into our original atoms. This logic is implemented in
+    the dqn_extra.distr_projection function. In the beginning, we allocate the array
+    that will keep the result of the projection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function expects the batch of distributions with a shape (batch_size,
+    N_ATOMS), the array of rewards, flags for completed episodes, and our hyperparameters:
+    Vmin, Vmax, N_ATOMS, and gamma. The delta_z variable is the width of every atom
+    in our value range.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following code, we iterate over every atom in the original distribution
+    that we have and calculate the place that this atom will be projected to by the
+    Bellman operator, taking into account our value bounds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: For example, the very first atom, with index 0, corresponds with the value Vmin=-10,
+    but for the sample with reward +1 will be projected into the value −10 ⋅ 0.99
+    + 1 = −8.9\. In other words, it will be shifted to the right (assume gamma=0.99).
+    If the value falls beyond our value range given by Vmin and Vmax, we clip it to
+    the bounds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next line, we calculate the atom numbers that our samples have projected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: Of course, samples can be projected between atoms. In such situations, we spread
+    the value in the original distribution at the source atom between the two atoms
+    that it falls between. This spreading should be carefully handled, as our target
+    atom can land exactly at some atom’s position. In that case, we just need to add
+    the source distribution value to the target atom.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code handles the situation when the projected atom lands exactly
+    on the target atom. Otherwise, b_j won’t be the integer value and variables l
+    and u (which correspond to the indices of atoms below and above the projected
+    point):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the projected point lands between atoms, we need to spread the probability
+    of the source atom between the atoms below and above. This is carried out by two
+    lines in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: Of course, we need to properly handle the final transitions of episodes. In
+    that case, our projection shouldn’t take into account the next distribution and
+    should just have a 1 probability corresponding to the reward obtained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, we again need to take into account our atoms and properly distribute
+    this probability if the reward value falls between atoms. This case is handled
+    by the following code branch, which zeroes the resulting distribution for samples
+    with the done flag set and then calculates the resulting projection:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: To give you an illustration of what this function does, let’s look at artificially
+    made distributions processed by this function (Figure [8.21](#x1-152038r21)).
+    I used them to debug the function and make sure that it worked as intended. The
+    code for these checks is in Chapter08/adhoc/distr_test.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_21.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.21: The sample of the probability distribution transformation applied
+    to a normal distribution'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The top chart of Figure [8.21](#x1-152038r21) (named Source) is a normal distribution
+    with μ = 0 and σ = 3\. The second chart (named Projected) is obtained from distribution
+    projection with γ = 0.9 and is shifted to the right with reward=2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the situation where we pass done=True with the same data, the result will
+    be different and is shown in Figure [8.22](#x1-152040r22). In such cases, the
+    source distribution will be ignored completely, and the result will have only
+    the reward projected.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_22.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.22: The projection of distribution for the final step in the episode'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The implementation of this method is in Chapter08/07_dqn_distrib.py, which has
+    an optional command-line parameter, --img-path. If this option is given, it has
+    to be a directory where plots with a probability distribution from a fixed set
+    of states will be stored during the training. This is useful to monitor how the
+    model converges from uniform probability in the beginning of the training to a
+    more spiked weight of probability masses. Sample images from my experiments are
+    shown in Figure [8.24](#x1-153003r24) and Figure [8.25](#x1-153005r25).
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m going to show only essential pieces of the implementation here. The core
+    of the method, the distr_projection function, was already covered, and it is the
+    most complicated piece. What is still missing is the network architecture and
+    modified loss function, which we will describe here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start with the network, which is in lib/dqn_extra.py, in the DistributionalDQN
+    class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: The main difference is the output of the fully connected layer. Now it outputs
+    the vector of n_actions * N_ATOMS values, which is 6 × 51 = 306 for Pong. For
+    every action, it needs to predict the probability distribution on 51 atoms. Every
+    atom (called support) has a value, which corresponds to a particular reward. Those
+    atoms’ rewards are evenly distributed from -10 to 10, which gives a grid with
+    step 0.4\. Those supports are stored in the network’s buffer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The forward() method returns the predicted probability distribution as a 3D
+    tensor (batch, actions, and supports):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: Besides forward(), we define the both() method, which calculates the probability
+    distribution for atoms and Q-values in one call.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The network also defines several helper functions to simplify the calculation
+    of Q-values and apply softmax on the probability distribution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The final change is the new loss function that has to apply distribution projection
+    instead of the Bellman equation, and calculate KL divergence between predicted
+    and projected distributions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code is not very complicated; it just prepares to call distr_projection
+    and KL divergence, which is defined as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq38.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: To calculate the logarithm of probability, we use the PyTorch log_softmax function,
+    which combines both log and softmax in a numerically stable way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: From my experiments, the distributional version of DQN converged a bit slower
+    and less stably than the original DQN, which is not surprising, as the network
+    output is now 51 times larger and the loss function has changed. Without hyperparameter
+    tuning (which will be described in the next subsection), the distributional version
+    requires 20% more episodes to solve the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another factor that might be important here is that Pong is just too simple
+    a game to draw conclusions. In the A Distributional Perspective paper, the authors
+    reported state-of-the-art scores (at the time of publishing in 2017) for more
+    than half of the games from the Atari benchmark (Pong was not among them).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are charts comparing reward dynamics and loss for the distributional
+    DQN. As you can see, the reward dynamics for the distributional method is worse
+    than the baseline DQN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_23.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.23: Reward dynamics (left) and loss decrease (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It might be interesting to look into the dynamics of the probability distribution
+    during the training. If you start the training with the --img-path parameter (providing
+    the directory name), the training process will save plots with the probability
+    distribution for a fixed set of states. For example, the following figure shows
+    the probability distribution for all six actions for one state at the beginning
+    of the training (after 30k frames):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file68.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.24: Probability distribution at the beginning of training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All the distributions are very wide (as the network hasn’t converged yet),
+    and the peak in the middle corresponds to the negative reward that the network
+    expects to get from its actions. The same state after 500k frames of training
+    is shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file69.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.25: Probability distribution produced by the trained network'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we can see that different actions have different distributions. The first
+    action (which corresponds to the NOOP, the do nothing action) has its distribution
+    shifted to the left, so doing nothing in this state usually leads to losing. The
+    fifth action, which is RIGHTFIRE, has the mean value shifted to the right, so
+    this action leads to a better score.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The tuning of hyperparameters was not very fruitful. After 30 tuning iterations,
+    there were no combinations of learning rate and gamma that were able to converge
+    faster than the common set of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining everything
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'You have now seen all the DQN improvements mentioned in the paper Rainbow:
+    Combining Improvements in Deep Reinforcement Learning, but it was done in an incremental
+    way, which (I hope) was helpful to understand the idea and implementation of every
+    improvement. The main point of the paper was to combine those improvements and
+    check the results. In the final example, I’ve decided to exclude categorical DQN
+    and double DQN from the final system, as they haven’t shown too much improvement
+    on our guinea pig environment. If you want, you can add them and try using a different
+    game. The complete example is available in Chapter08/08_dqn_rainbow.py.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First of all, we need to define our network architecture and the methods that
+    have contributed to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Dueling DQN: Our network will have two separate paths for the value of the
+    state distribution and advantage distribution. On the output, both paths will
+    be summed together, providing the final value probability distributions for actions.
+    To force the advantage distribution to have a zero mean, we will subtract the
+    distribution with the mean advantage in every atom.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Noisy networks: Our linear layers in the value and advantage paths will be
+    noisy variants of nn.Linear.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In addition to network architecture changes, we will use the prioritized replay
+    buffer to keep environment transitions and sample them proportionally to the MSE
+    loss.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we will unroll the Bellman equation to n-steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m not going to repeat all the code, as individual methods have already been
+    given in the preceding sections, and it should be obvious what the final result
+    of combining the methods will look like. If you have any trouble, you can find
+    the code on GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The following are charts comparing the smoothed reward and count of steps with
+    the baseline DQN. In both, we can see significant improvement in terms of the
+    amount of games played:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_26.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.26: Comparison of baseline DQN with combined system'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to the averaged reward, it is worth checking the raw reward chart,
+    which is even more dramatic than the smoothed reward. It shows that our system
+    was able to jump from the negative outcome to the positive very quickly – after
+    just 100 games, it won almost every game. So, it took us another 100 games to
+    make the smoothed reward reach +18:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_27.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.27: Raw reward for combined system'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a downside, the combined system is slower than the baseline, as we have
+    a more complicated NN architecture and prioritized replay buffer. The FPS chart
+    shows that the combined system starts at 170 FPS and degrades to 130 FPS due to
+    the 𝒪(n) buffer complexity:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_28.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.28: Performance comparison (in frames per second)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Hyperparameter tuning
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Tuning was done as before and was able to further improve the combined system
+    training in terms of games played before solving the game. The following are charts
+    comparing the tuned baseline DQN with the tuned combined system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_29.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.29: Comparison of tuned baseline DQN with tuned combined system'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another chart showing the effect of the tuning is the comparison of raw game
+    rewards before and after the tuning. The tuned system starts to get the maximum
+    score even earlier — just after 40 games, which is quite impressive:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_08_30.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 8.30: Raw reward for untuned and tuned combined DQN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we have walked through and implemented a lot of DQN improvements
+    that have been discovered by researchers since the first DQN paper was published
+    in 2015\. This list is far from complete. First of all, for the list of methods,
+    I used the paper Rainbow: Combining improvements in deep reinforcement learning
+    [[Hes+18](#)], which was published by DeepMind, so the list of methods is definitely
+    biased to DeepMind papers. Secondly, RL is so active nowadays that new papers
+    come out almost every day, which makes it very hard to keep up, even if we limit
+    ourselves to one kind of RL model, such as a DQN. The goal of this chapter was
+    to give you a practical view of different ideas that the field has developed.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will continue discussing practical DQN applications
+    from an engineering perspective by talking about ways to improve DQN performance
+    without touching the underlying method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Join our community on Discord
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Read this book alongside other users, Deep Learning experts, and the author
+    himself. Ask questions, provide solutions to other readers, chat with the author
+    via Ask Me Anything sessions, and much more. Scan the QR code or visit the link
+    to join the community. [https://packt.link/rl](https://packt.link/rl)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file1.png)'
+  prefs: []
+  type: TYPE_IMG

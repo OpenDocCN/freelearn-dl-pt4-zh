@@ -1,0 +1,734 @@
+- en: '8'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Scaling Up Graph Neural Networks with GraphSAGE
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**GraphSAGE** is a GNN architecture designed to handle large graphs. In the
+    tech industry, **scalability** is a key driver for growth. As a result, systems
+    are inherently designed to accommodate millions of users. This ability requires
+    a fundamental shift in how the GNN model works compared to GCNs and GATs. Thus,
+    it is no surprise that GraphSAGE is the architecture of choice for tech companies
+    such as Uber Eats and Pinterest.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will learn about the two main ideas behind GraphSAGE. First,
+    we will describe its **neighbor sampling** technique, which is at the core of
+    its performance in terms of scalability. We will then explore three aggregation
+    operators used to produce node embeddings. Besides the original approach, we will
+    also detail the variants proposed by Uber Eats and Pinterest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, GraphSAGE offers new possibilities in terms of training. We will implement
+    two ways of training a GNN for two tasks – node classification with `PubMed` and
+    **multi-label classification** for **protein-protein interactions**. Finally,
+    we will discuss the benefits of a new **inductive** approach and how to use it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will understand how and why the neighbor sampling
+    algorithm works. You will be able to implement it to create mini-batches and speed
+    up training on most GNN architectures using a GPU. Furthermore, you will master
+    inductive learning and multi-label classification on graphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing GraphSAGE
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classifying nodes on PubMed
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Inductive learning on protein-protein interactions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter08.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The installation steps required to run the code on your local machine can be
+    found in the *Preface* chapter of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing GraphSAGE
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Hamilton et al. introduced GraphSAGE in 2017 (see item [1] of the *Further
+    reading* section) as a framework for inductive representation learning on large
+    graphs (with over 100,000 nodes). Its goal is to generate node embeddings for
+    downstream tasks, such as node classification. In addition, it solves two issues
+    with GCNs and GATs – scaling to large graphs and efficiently generalizing to unseen
+    data. In this section, we will explain how to implement it by describing the two
+    main components of GraphSAGE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Neighbor sampling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Aggregation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s take a look at them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Neighbor sampling
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'So far, we haven’t discussed an essential concept in traditional neural networks
+    – **mini-batching**. It consists of dividing our dataset into smaller fragments,
+    called batches. They are used in **gradient descent**, the optimization algorithm
+    that finds the best weights and biases during training. There are three types
+    of gradient descent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Batch gradient descent**: Weights and biases are updated after a whole dataset
+    has been processed (every epoch). This is the technique we have implemented so
+    far. However, it is a slow process that requires the dataset to fit in memory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Stochastic gradient descent**: Weights and biases are updated for each training
+    example in the dataset. This is a noisy process because the errors are not averaged.
+    However, it can be used to perform online training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Mini-batch gradient descent**: Weights and biases are updated at the end
+    of every mini-batch of ![](img/Formula_B19153_08_001.png) training examples. This
+    technique is faster (mini-batches can be processed in parallel using a GPU) and
+    leads to more stable convergence. In addition, the dataset can exceed the available
+    memory, which is essential for handling large graphs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In practice, we use more advanced optimizers such as `Adam`, which also implement
+    mini-batching.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dividing a tabular dataset is straightforward; it simply consists of selecting
+    ![](img/Formula_B19153_08_002.png) samples (rows). However, this is an issue regarding
+    graph datasets – how do we choose ![](img/Formula_B19153_08_003.png) nodes without
+    breaking essential connections? If we’re not careful, we could end up with a collection
+    of isolated nodes where we cannot perform any aggregation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have to think about how GNNs use datasets. Every GNN layer computes node
+    embeddings based on their neighbors. This means that computing an embedding only
+    requires the direct neighbors of this node (**1 hop**). If our GNN has two GNN
+    layers, we need these neighbors and their own neighbors (**2 hops**), and so on
+    (see *Figure 8**.1*). The rest of the network is irrelevant to computing these
+    individual node embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.1 – A graph with node 0 as the target node and the 1-hop and 2-hop
+    neighbors](img/B19153_08_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.1 – A graph with node 0 as the target node and the 1-hop and 2-hop
+    neighbors
+  prefs: []
+  type: TYPE_NORMAL
+- en: This technique allows us to fill batches with computation graphs, which describe
+    the entire sequence of operations for calculating a node embedding. *Figure 8**.2*
+    shows the computation graph of node `0` in a more intuitive representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.2 – A computation graph for node 0](img/B19153_08_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.2 – A computation graph for node 0
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We need to aggregate 2-hop neighbors in order to compute the embedding of 1-hop
+    neighbors. These embeddings are then aggregated to obtain the embedding of node
+    0\. However, there are two problems with this design:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The computation graph becomes exponentially large with respect to the number
+    of hops
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Nodes with very high degrees of connectivity (such as celebrities on an online
+    social network a social network), also called **hub nodes**, create enormous computation
+    graphs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To solve these issues, we have to limit the size of our computation graphs.
+    In GraphSAGE, the authors propose a technique called neighbor sampling. Instead
+    of adding every neighbor in the computation graph, we sample a predefined number
+    of them. For instance, we choose only to keep (at most) three neighbors during
+    the first hop and five neighbors during the second hop. Hence, the computation
+    graph cannot exceed ![](img/Formula_B19153_08_004.png) nodes in this case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.3 – A computation graph with neighbor sampling to keep two 1-hop
+    neighbors and two 2-hop neighbors](img/B19153_08_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.3 – A computation graph with neighbor sampling to keep two 1-hop neighbors
+    and two 2-hop neighbors
+  prefs: []
+  type: TYPE_NORMAL
+- en: A low sampling number is more efficient but makes the training more random (higher
+    variance). Additionally, the number of GNN layers (hops) must stay low to avoid
+    exponentially large computation graphs. Neighbor sampling can handle large graphs,
+    but it causes a trade-off by pruning important information, which can negatively
+    impact performance such as accuracy. Note that computation graphs involve a lot
+    of redundant calculations, which makes the entire process computationally less
+    efficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nonetheless, this random sampling is not the only technique we can use. Pinterest
+    has its own version of GraphSAGE, called PinSAGE, to power its recommender system
+    (see *Further reading* [2]). It implements another sampling solution using random
+    walks. PinSAGE keeps the idea of a fixed number of neighbors but implements random
+    walks to see which nodes are the most frequently encountered. This frequency determines
+    their relative importance. PinSAGE’s sampling strategy allows it to select the
+    most critical nodes and proves more efficient in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Aggregation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Now that we’ve seen how to select the neighboring nodes, we still need to compute
+    embeddings. This is performed by the aggregation operator (or aggregator). In
+    GraphSAGE, the authors have proposed three solutions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A mean aggregator
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A **long short-term memory** (**LSTM**) aggregator
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A pooling aggregator
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We will focus on the mean aggregator, as it is the easiest to understand. First,
+    the mean aggregator takes the embeddings of target nodes and their sampled neighbors
+    to average them. Then, a linear transformation with a weight matrix, ![](img/Formula_B19153_08_005.png),
+    is applied to this result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The mean aggregator can be summarized by the following formula, where ![](img/Formula_B19153_08_006.png)
+    is a non-linear function such as ReLU or tanh:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_08_007.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the case of PyG’s and Uber Eats’ implementation of GraphSAGE [3], we use
+    two weight matrices instead of one; the first one is dedicated to the target node,
+    and the second to the neighbors. This aggregator can be written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_08_008.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The LSTM aggregator is based on LSTM architecture, a popular recurrent neural
+    network type. Compared to the mean aggregator, the LSTM aggregator can, in theory,
+    discriminate between more graph structures and, thus, produce better embeddings.
+    The issue is that recurrent neural networks only consider sequences of inputs,
+    such as a sentence with a beginning and an end. However, nodes do not have any
+    sequence. Therefore, we perform random permutations of the node’s neighbors to
+    address this problem. This solution allows us to use the LSTM architecture without
+    relying on any sequence of inputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, the pooling aggregator works in two steps. First, every neighbor’s
+    embedding is fed to an MLP to produce a new vector. Secondly, an elementwise max
+    operation is performed to only keep the highest value for each feature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are not limited to these three options and could implement other aggregators
+    in the GraphSAGE framework. Indeed, the main idea behind GraphSAGE resides in
+    its efficient neighbor sampling. In the next section, we will use it to perform
+    node classification on a new dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classifying nodes on PubMed
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will implement a GraphSAGE architecture to perform node
+    classification on the `PubMed` dataset (available under the MIT license from [https://github.com/kimiyoung/planetoid](https://github.com/kimiyoung/planetoid))
+    [4].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Previously, we saw two other citation network datasets from the same Planetoid
+    family – `Cora` and `CiteSeer`. The `PubMed` dataset displays a similar but larger
+    graph, with 19,717 nodes and 88,648 edges. *Figure 8**.3* shows a visualization
+    of this dataset as created by Gephi ([https://gephi.org/](https://gephi.org/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.4 – A visualization of the PubMed dataset](img/B19153_08_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.4 – A visualization of the PubMed dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Node features are TF-IDF-weighted word vectors with 500 dimensions. The goal
+    is to correctly classify nodes into three categories – diabetes mellitus experimental,
+    diabetes mellitus type 1, and diabetes mellitus type 2\. Let’s implement it step
+    by step using PyG:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We load the `PubMed` dataset from the `Planetoid` class and print some information
+    about the graph:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This produces the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: As you can see, there are only 60 training nodes for 1,000 test nodes, which
+    is quite challenging (a 6/94 split). Fortunately for us, with only 19,717 nodes,
+    `PubMed` will be extremely fast to process with GraphSAGE.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first step in the GraphSAGE framework is neighbor sampling. PyG implements
+    the `NeighborLoader` class to perform it. Let’s keep 10 neighbors of our target
+    node and 10 of their own neighbors. We will group our 60 target nodes into batches
+    of 16 nodes, which should result in four batches:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'By printing their information, let’s verify that we obtained four subgraphs
+    (batches):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'These subgraphs contain more than 60 nodes, which is normal, since any neighbor
+    can be sampled. We can even plot them like graphs using `matplotlib`’s subplots:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following plot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 8.5 – A plot of the subgraphs obtained with neighbor sampling](img/B19153_08_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.5 – A plot of the subgraphs obtained with neighbor sampling
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most of these nodes have a degree of 1 because of the way neighbor sampling
+    works. In this case, it’s not an issue, since their embeddings are only used once
+    in the computation graph to calculate the embeddings of the second layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We implement the following function to evaluate the accuracy of our model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s create a `GraphSAGE` class using two `SAGEConv` layers (the mean aggregator
+    is selected by default):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Embeddings are computed using two mean aggregators. We also use a nonlinear
+    function (`ReLU`) and a dropout layer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Now that we have to consider batches, the `fit()` function has to change to
+    loop through epochs and then through batches. The metrics we want to measure have
+    to be reinitialized at every epoch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The second loop trains the model on every batch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We also want to print our metrics. They must be divided by the number of batches
+    to represent an epoch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `test()` function does not change, since we don’t use batches for the test
+    set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s create a model with a hidden dimension of 64 and train it for 200 epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Note that the mean aggregator was automatically selected for both SAGEConv layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let’s test it on the test set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Considering this dataset’s unfavorable train/test split, we obtain a decent
+    test accuracy of 74.70%. However, GraphSAGE gets a lower average accuracy than
+    a GCN (-0.5%) or a GAT (-1.4%) on `PubMed`. So why should we use it?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The answer is evident when you train the three models – GraphSAGE is extremely
+    fast. On a consumer GPU, it is 4 times faster than a GCN and 88 times faster than
+    a GAT. Even if GPU memory was not an issue, GraphSAGE could handle larger graphs,
+    producing better results than small networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To complete this deep-dive into GraphSAGE’s architecture, we must discuss one
+    more feature – its inductive capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inductive learning on protein-protein interactions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In GNNs, we distinguish two types of learning – **transductive** and **inductive**.
+    They can be summarized as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In inductive learning, the GNN only sees data from the training set during training.
+    This is the typical supervised learning setting in machine learning. In this situation,
+    labels are used to tune the GNN’s parameters.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In transductive learning, the GNN sees data from the training and test sets
+    during training. However, it only learns data from the training set. In this situation,
+    the labels are used for information diffusion.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The transductive situation should be familiar, since it is the only one we have
+    covered so far. Indeed, you can see in the previous example that GraphSAGE makes
+    predictions using the whole graph during training (`self(batch.x, batch.edge_index)`).
+    We then mask part of these predictions to calculate the loss and train the model
+    only using training data (`criterion(out[batch.train_mask], batch.y[batch.train_mask])`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transductive learning can only generate embeddings for a fixed graph; it does
+    not generalize for unseen nodes or graphs. However, thanks to neighbor sampling,
+    GraphSAGE is designed to make predictions at a local level with pruned computation
+    graphs. It is considered an inductive framework, since it can be applied to any
+    computation graph with the same feature schema.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s apply it to a new dataset – the protein-protein interaction (`PPI`) network,
+    described by Agrawal et al. [5]. This dataset is a collection of 24 graphs, where
+    nodes (21,557) are human proteins and edges (342,353) are physical interactions
+    between proteins in a human cell. *Figure 8**.6* shows a representation of `PPI`
+    made with Gephi.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 8.6 – A visualization of the protein-protein interaction network](img/B19153_08_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 8.6 – A visualization of the protein-protein interaction network
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of the dataset is to perform multi-label classification with 121 labels.
+    This means that every node can range from 0 to 121 labels. This differs from a
+    multi-class classification, where every node would only have one class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s implement a new GraphSAGE model using PyG:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We load the `PPI` dataset with three different splits – train, validation,
+    and test:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The training set comprises 20 graphs, while the validation and test sets only
+    have two. We want to apply neighbor sampling to the training set. For convenience,
+    let’s unify all the training graphs in a single set, using `Batch.from_data_list()`,
+    and then apply neighbor sampling:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The training set is ready. We can create our batches using the `DataLoader`
+    class. We define a `batch_size` value of `2`, corresponding to the number of graphs
+    in each batch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'One of the main benefits of these batches is that they can be processed on
+    a GPU. We can get a GPU if one is available, or take a CPU otherwise:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Instead of implementing GraphSAGE by ourselves, we can directly use PyTorch
+    Geometric’s implementation from `torch_geometric.nn`. We initialize it with two
+    layers and a hidden dimension of 512\. In addition, we need to place the model
+    on the same device as our data, using `to(device)`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `fit()` function is similar to the one we used in the previous section,
+    with two exceptions. First, we want to move the data to a GPU when possible. Secondly,
+    we have two graphs per batch, so we multiply the individual loss by two (`data.num_graphs`):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: In the `test()` function, we take advantage of the fact that `val_loader` and
+    `test_loader` have two graphs and a `batch_size` value of 2\. That means that
+    the two graphs are in the same batch; we don’t need to loop through the loaders
+    like during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Instead of accuracy, let’s use another metric – the F1 score. It corresponds
+    to the harmonic mean of precision and recall. However, our predictions are 121-dim
+    vectors of real numbers. We need to transform them into binary vectors, using
+    `out > 0` to compare them to `data.y`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s train our model for 300 epochs and print the validation F1 score during
+    training:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, we calculate the F1 score on the test set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We obtain an excellent F1 score of 0.9360 in an inductive setting. This value
+    dramatically changes when you increase or decrease the size of the hidden channels.
+    You can try it for yourself with different values, such as 128 and 1,024 instead
+    of 512.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you look carefully at the code, there is no masking involved. Indeed, inductive
+    learning is forced by the `PPI` dataset; the training, validation, and test data
+    are in different graphs and loaders. Naturally, we could merge them using `Batch.from_data_list()`
+    and fall back into a transductive situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We could also train GraphSAGE without labels using unsupervised learning. This
+    is particularly useful when labels are scarce or provided by downstream applications.
+    However, it requires a new loss function to encourage nearby nodes to have similar
+    representations while ensuring that distant nodes have distant embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_08_009.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![](img/Formula_B19153_08_014.png) is a neighbor of ![](img/Formula_B19153_08_011.png)
+    in a random walk, ![](img/Formula_B19153_08_012.png) is the sigmoid function,
+    ![](img/Formula_B19153_08_013.png) is the negative sampling distribution for ![](img/Formula_B19153_08_014.png),
+    and ![](img/Formula_B19153_08_015.png) is the number of negative samples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, PinSAGE and Uber Eats’ versions of GraphSAGE are recommender systems.
+    They combine the unsupervised setting with a different loss because of this application.
+    Their objective is to rank the most relevant entities (food, restaurants, pins,
+    and so on) for each user, which is an entirely different task. To perform that,
+    they implement a max-margin ranking loss that considers pairs of embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you need to scale up GNNs, other solutions can be considered. Here are short
+    descriptions of two standard techniques:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Cluster-GCN** [6] provides a different answer to the question of how to create
+    mini-batches. Instead of neighbor sampling, it divides the graph into isolated
+    communities. These communities are then processed as independent graphs, which
+    can negatively impact the quality of the resulting embeddings.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Simplifying GNNs can decrease training and inference times. In practice, simplification
+    consists of discarding nonlinear activation functions. Linear layers can then
+    be compressed into one matrix multiplication using linear algebra. Naturally,
+    these simplified versions are not as accurate as real GNNs on small datasets but
+    are efficient for large graphs, such as Twitter [7].
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As you can see, GraphSAGE is a flexible framework that can be tweaked and fine-tuned
+    to suit your goals. Even if you don’t reuse its exact formulation, it introduces
+    key concepts that greatly influence GNN architectures in general.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter introduced the GraphSAGE framework and its two components – the
+    neighbor sampling algorithm and three aggregation operators. Neighbor sampling
+    is at the core of GraphSAGE’s ability to process large graphs in a short amount
+    of time. It is also responsible for its inductive setting, which allows it to
+    generalize predictions to unseen nodes and graphs. We tested a transductive situation
+    on `PubMed` and an inductive one to perform a new task on the `PPI` dataset –
+    multi-label classification. While not as accurate as a GCN or a GAT, GraphSAGE
+    is a popular and efficient framework for processing massive amounts of data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 9*](B19153_09.xhtml#_idTextAnchor106), *Defining Expressiveness
+    for Graph Classification*, we will try to define what makes a GNN powerful in
+    terms of representation. We will introduce a famous graph algorithm called the
+    Weisfeiler-Lehman isomorphism test. It will act as a benchmark to evaluate the
+    theoretical performance of numerous GNN architectures, including the graph isomorphism
+    network. We will apply this GNN to perform a new prevalent task – graph classification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] W. L. Hamilton, R. Ying, and J. Leskovec. *Inductive Representation Learning
+    on Large Graphs*. arXiv, 2017\. DOI: 10.48550/ARXIV.1706.02216.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] R. Ying, R. He, K. Chen, P. Eksombatchai, W. L. Hamilton, and J. Leskovec.
+    *Graph Convolutional Neural Networks for Web-Scale Recommender Systems*. Jul.
+    2018\. DOI: 10.1145/3219819.3219890.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] Ankit Jain. *Food Discovery with Uber Eats: Using Graph Learning to Power*
+    *Recommendations*: [https://www.uber.com/en-US/blog/uber-eats-graph-learning/](https://www.uber.com/en-US/blog/uber-eats-graph-learning/).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] Galileo Mark Namata, Ben London, Lise Getoor, and Bert Huang. *Query-Driven
+    Active Surveying for Collective Classification*. International Workshop on Mining
+    and Learning with Graphs. 2012.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[5] M. Agrawal, M. Zitnik, and J. Leskovec. *Large-scale analysis of disease
+    pathways in the human interactome*. Nov. 2017\. DOI: 10.1142/9789813235533_0011.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[6] W.-L. Chiang, X. Liu, S. Si, Y. Li, S. Bengio, and C.-J. Hsieh. *Cluster-GCN*.
+    Jul. 2019\. DOI: 10.1145/3292500.3330925.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[7] F. Frasca, E. Rossi, D. Eynard, B. Chamberlain, M. Bronstein, and F. Monti.
+    *SIGN: Scalable Inception Graph Neural Networks*. arXiv, 2020\. DOI: 10.48550/ARXIV.2004.11198.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

@@ -1,0 +1,665 @@
+- en: State Inference - Predicting the States
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapters, we introduced Markov chains and the **Hidden Markov
+    Model** (**HMM**), and saw examples of modeling problems using them. In this chapter,
+    we will see how we can make predictions using these models or ask the models questions
+    (known as **inference**). The algorithms used for computing these values are known
+    as **inference algorithms**. In this chapter, we will specifically look into computing
+    probability distribution over the state variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: State inference in HMM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dynamic programming
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Forward-backward algorithm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Viterbi algorithm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: State inference in HMM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's start with a simple example to show what kind of interesting questions
+    we can ask our HMM models. We are taking an example of *robot localization.* There
+    are a lot of variations of this example, but we are assuming that a robot is moving
+    in a 2D grid, as shown in *Figure 3.1*. The robot also has four sensors on it.
+    Each of these sensors detects whether there's a wall right next to the robot in
+    the sensor's direction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We would like to model the movement of the robot in the following grid along
+    with the observations from our sensors:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a54806be-d44a-44da-b9b7-3bdcd05907c7.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.1: The probability distribution of the position of the robot over
+    time'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In *Figure 3.1*, we see how the observations at different time instances change
+    the probability of the location of the robot in the grid. Initially, we start
+    with a uniform probability over all the positions in the grid. Now, at time *t=1*,
+    let's say the sensors of our robot show that there are walls on the top and bottom
+    sides. Having this observation will change our perception of the location of the
+    robot. Now we will have a higher probability of the robot being in either blocks
+    2, 4, 10, or 12, as shown in the second block in *Figure 3.1*. If we are at time
+    instance *t=2*, our robot's sensors say that there is a wall only at the top,
+    we will have the highest probability of it being in block 3, as shown in the third
+    block in *Figure 3.1*. This is because we knew its last most probable position
+    and, when combining that information with the current sensor readings, block 3 is
+    the robot's likely location. Now, if we are at time *t=3*, the robot's sensors
+    indicate there are walls on the left and right, then it would mean that the robot
+    is most likely in in block 7\. This process enables us able to locate the position
+    of our robot in the grid based on just the sensor readings over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we are modelling the transition of state (position in the grid) of the
+    robot over some duration of time along with an outcome at each instance (sensor
+    output), HMM seems to be the perfect model in the situation. In this example,
+    we are assuming that we know the transition probability of the robot''s position.
+    We are also assuming that we know the structure of the grid and therefore we will
+    know the emission probabilities. We can use the emission probability to also model
+    the uncertainty in the output of the sensors since they might give noise results
+    at some instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0b2385a5-9df2-418b-8e35-ba8f977e0712.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.2: An example HMM for the robot localization'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let's think about the kind of questions we might want to ask our model.
+    We might be interested in knowing the position of our robot at any time instance
+    given all the observations till that time instance. Another question that we might
+    want to ask is the probability of our sensor output at some time instance given
+    all the positions of the robot until that time instance. We might also be interested
+    in computing the joint distribution over our observed variables and the position
+    of the robot. All these values can be easily computed using the *forward algorithm,
+    backward algorithm, or forward-backward algorithm*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, instead of asking for distributions, we might be interested in the most
+    probable path the robot took. To compute the most probable path, we would need
+    to do a MAP inference over the state at each time instance of the robot. This
+    can be done efficiently using the Viterbi algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, we will introduce these algorithms formally and see
+    how we can implement them. All of these algorithms rely on a very important programming
+    paradigm known as **dynamic programming***.* Dynamic programming allows us to
+    run these inference algorithms in HMMs in tractable time. We will discuss dynamic
+    programming in detail in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dynamic programming
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Dynamic programming is a programming paradigm in which we divide a complex problem
+    into smaller sub-problems. We solve these sub-problems and store the results.
+    Whenever we need to recompute the same sub-problem again, we just used our stored
+    results, thus saving us computation time at the expense of using storage space.
+    This technique of caching the results of sub-problems is known as **memoization***. *Therefore,
+    using dynamic programming allows us to speed up our computations by using memoization,
+    and in some cases, it can bring the computational complexity from exponential
+    to linear, as we will see in the following example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One of the simplest examples of optimization using dynamic programming is computing
+    the *n^(th)* member of the Fibonacci sequence. Any term in a Fibonacci sequence
+    is the sum of the last two terms, which can be formally defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*fib(0)=0*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*fib(1)=1*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*fib(n)=fib(n-1)+fib(n-2)*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, *fib(n)* represents the *n*^(*th* )number in the Fibonacci sequence.
+    From the definition, we can easily compute the Fibonacci sequence as: *0, 1, 1,
+    2, 3, 5, 8, 13*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let''s say we want to write a function which would return the *n*^(*th* )number
+    in the Fibonacci sequence. A simple way to write this function could be to use
+    recursion, as shown in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code, we have a simple `if ... else` condition, where if `n`
+    is less than or equal to 1, we return the value of `n`; otherwise, we use recursion
+    to compute the sum of the previous two numbers in the sequence. Now let''s try
+    to determine the number of calls to the `fibonacci` function for a small `n`,
+    let''s say 5\. Our function calls would look something like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: For such a small value of `n`, we can still see the repetition in the number
+    of calls to the function with the same argument. We can see that `fibonacci(1)`
+    is being called five times and `fibonacci(0)` is getting called three times. If
+    we move a level up, we can see that `fibonacci(2)` is also getting called multiple
+    times. In this case, the computation is still tractable, but for large values
+    of `n` the run time of this function would grow exponentially; the runtime complexity
+    is given by *O(2^n)*. To give an idea of how fast the runtime grows, to compute
+    the 1,000^(th )term in the Fibonacci sequence using this algorithm, we would need
+    more time than the age of our universe on a computer built with all the electrons
+    in our observable universe.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we have proved that it is impossible to compute the *n^(th)* term of
+    the Fibonacci sequence for any moderately large `n`, we will look at another algorithm
+    that is based on dynamic programming and looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case, we are storing the result of each of our calls to the function
+    in a dictionary, which allows us to access it in *O(1)*. Because of this cache, we
+    only need to compute each term of the Fibonacci sequence exactly once. For each
+    call, we first check whether we have already computed the value. If we have already
+    computed it, we directly access it from the dictionary, otherwise we compute the
+    value. The runtime complexity of this algorithm is *O(n)* since we are computing
+    each term in the sequence exactly once. We can see, therefore, that using dynamic
+    programming facilitates a trade-off between the runtime complexity and memory
+    complexity, and this allows us to bring down the runtime complexity from being
+    exponential to linear.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we think about the way we have programmed the Fibonacci series, we start
+    with trying to compute the *n^(th)* number and then compute the values we are
+    missing. This can be thought of as a top-down approach. Another approach could
+    be a bottom-up approach, in which we start by computing the 0th term and then
+    move to the first, second, and so on. The concept of dynamic programming is the
+    same in both cases, but with just a minor difference in how we write the code,
+    shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the code in the preceding example is much simpler, and we don't
+    need to check whether we have already computed the values. This works well in
+    problems where we need all the previous values to compute the next value. However,
+    if we don't need all the previous values, we will end up computing unnecessary
+    values with the bottom-up approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will see in the next sections that the inference algorithms in HMMs allow
+    us to use dynamic programming to break the problem into sub-problems, which makes
+    computations tractable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Forward algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s now formally define our problem for the forward algorithm. In the case
+    of the forward algorithm, we are trying to compute the joint distribution of the
+    position of the robot at any time instance using the output of the sensors till
+    that time instance, as shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Forward algorithm: P(Z[k], X[1:k])*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d6e7d007-0276-4568-b8ed-40a03bd69f3c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.3: HMM showing two time slices, *k-1* and **k**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To compute this probability distribution, we will try to split the joint distribution
+    term into smaller known terms. As we will see, we can write a recursion formula
+    over time for the distribution. We start by introducing a new variable, *Z[k-1]*,
+    in the distribution, *P(Z[k], X[1:k])*, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/977c0d76-4972-4f48-a30e-222d265ded21.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The marginalization rule of probability is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/131323d8-8601-4e5f-ae64-4c1516addb41.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The product rule of probability is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/30fffc1c-1dc9-4264-ac07-c6ed7aca8d43.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, we are basically using the *marginalization* rule of probability to introduce
+    *Z[k-1]* and then summing its states. In this case, we have assumed that *Z[k-1]* has
+    *m* states, so now we can use the *product* rule of probability to split this
+    term as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3ab6d5f2-d643-4210-a8e7-53a250ee6837.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the last chapter, we saw how the d-separation property of HMM can make variables
+    independent from each other. Here, we will apply some of those conditions to simplify
+    our terms in the preceding equation. As we know that, given the hidden state,
+    the observation is independent of all the terms in previous time instances, we
+    also know: ![](img/f44ce271-c1e0-44c8-9470-a60440d4adab.png). Applying this to
+    the first term of our preceding equation, we can write it as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/db86faa7-0606-446f-ba4d-48c84d6dfa3c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Similarly, we know that the current hidden state is dependent on the last hidden
+    state and is independent of hidden states before that. Hence, in this case, the
+    formula is ![](img/2b04e26f-a094-4bec-8aa0-00e2354cb748.png). Using this property,
+    we can write our second term in the equation as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/71356e3f-001a-4d41-9e86-f5e1d2e9d021.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, if we compare our last term with the term we were trying to compute, we
+    should see there is a similarity between them. Let''s define a new function, *α*,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/416b9ab8-b5e5-47ff-9062-70ce86c78097.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now we can rewrite our original equation as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/67167be6-e5a5-4b3e-8b52-1e37241c9da0.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'So, we now have a nice recursive equation and we are familiar with all the
+    terms in the equation. The first term, *P(X[k]|Z[k])*, is the emission probability
+    of the HMM. The second term of the equation, *P(Z[k]|Z[k-1])*, is the transition
+    probability and is also known. Now we can focus on solving this recursive equation.
+    When solving any recursive equation, we need to know at least one of the values,
+    so we can start computing consecutive terms. In this case, we know the value of *α(1)*,
+    which is given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/09011cb7-a601-4e74-ac6b-9345eea4806f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, *P(Z[1])* is the initial probability of the position of the robot, which
+    we know, and *P(X[1]|Z[1])* is the emission probability of HMM, which is also
+    known. Using these two values, we can compute the value of *α(1)*. Once we have
+    the value of *α(1)*, we can use our recursive equation to compute all the *α* values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let's talk about the computational complexity of this algorithm to see whether
+    the inference is tractable. As we can see in the equation for computing each *α*, we
+    are doing a sum over all the states of *Z[k-1]*, and we have assumed that it has
+    *m* states; for each one of these steps, we do *m* multiplications for computing
+    *P(X[k]|Z[k])P(Z[k]|Z[k-1])α(k-1)*. Therefore, to compute the next *α*, we do
+    *m²* computations. If we want to compute *α(n)*, we will need *nm²* computations,
+    which gives us the computational complexity of the algorithm as *O(nm²)*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s now try to write the code for our robot localization problem to compute
+    the joint distribution using the forward algorithm. For simplicity, let''s assume
+    that we have only one sensor on the robot that checks whether there is a wall
+    on the left-hand side of the robot. To define the model, we mainly need two quantities:
+    the transition matrix and the emission matrix. In our example, we assume that
+    the robot can either stay at its original position or move a block in any possible
+    direction in any given time instance. Therefore, if the robot is at position 1 at
+    any given time, it can be in positions 1, 2, or 6 at the next time instance with
+    equal probabilities of *0.33*.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this way, we can write the transition probability from state 1 as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/541137a6-293c-47fd-ac6c-ca4c82b141c8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In a similar way, we can write the transition probabilities, *P(Z[t+1]|Z[t])*,
+    from each of the position, and we will get the following transition matrix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Coming to the emission probability in this problem, *P(X[t]|Z[t])*, we should
+    have the emission probability of 1 for the states that have a wall on their left.
+    Hence, the emission probability would be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, as we don''t know the position of our robot at *t=0*, we will assume
+    that it has a uniform distribution over all the possible states. Therefore, the
+    initial probability, *P(Z[0])*, can be written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With these values in hand, we should be able to run the forward algorithm,
+    but before that, we need to code up the algorithm, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can try to compute the probability by running it over some observations,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Computing the conditional distribution of the hidden state given the observations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Using the forward algorithm, we have been able to compute the value of *P(Z[x],
+    X)*, so we might be tempted to think that we will easily be able to compute the
+    conditional distribution *P(Z[k], X)* using the following product rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f073c302-f6fb-418e-a47e-fc2251c1bbf8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Computing the distribution, *P(X) *however, is computationally intractable,
+    as we will see. We can express *P(Z[k], X)* as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e096c04f-37ba-49dc-b4c8-71ee2075d680.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'And hence we can compute *P(X)* as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a2dce95f-8bbd-4860-8b21-7bb07cbe76d6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: If we look at the computational complexity of computing *P(X)* using the preceding
+    equation, it is *O(m^n)*, which is intractable for any sufficiently large value
+    of *m* and *n*. And hence it is impossible to compute the conditional distribution
+    of our hidden state using just the forward algorithm. In the next sections, we
+    will introduce the backward algorithm and then we will show you how can we compute
+    these conditional distributions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Backward algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s formally define the problem statement for the backward algorithm. In
+    this case, we are trying to compute the probability of observation variables given
+    the current state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Backward algorithm: P(X[k+1:n]|Z[k])*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/248cab76-6c07-4fd9-b983-0c2260796b9f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.4: HMM showing two time slices, *k* and *k+1*
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Similar to what we did in the case of the forward algorithm, we will again
+    try to convert this probability term into a recursive equation in terms of known
+    distributions, so that we can recursively compute the probabilities at different
+    time instances. First, we introduce a new term, *Z[k+1]* in *P(X[k+1:n]|Z[k])*,
+    using the marginalization rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f45ee6a4-7335-44a5-b5ed-e6053c05dd50.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, we are marginalizing over the *Z[k+1]* variable by summing over all of
+    its possible states, which we have assumed to be *m*. Now, we can use the product
+    rule of probability to split the preceding equation as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/41cf8de5-41f6-470f-88d7-0491774cd25c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, from the d-separation property of our model, we know that ![](img/19fa7ae2-606d-455a-a00b-877849f4f47f.png).
+    Also, we know from the definition of HMMs that ![](img/29e48e7c-7ec1-4193-b98d-fd5c4aadffbb.png).
+    Using these independent conditions, we can write our equation as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/50c41c81-088c-456b-ae74-bdcc33dc0353.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, the terms in our equation look familiar. The second term is the emission
+    probability and the last term is the transition probability of our HMM. Now, to
+    express it as a recursion, let''s define a new function, *β*, given as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ba205953-f863-4c95-8556-9a3edb5c2b36.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can use β in the previous equation to represent it as a recursion:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/593de81a-b69a-4a7b-9c4d-e90a34ff2e47.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, since we have the recursive equation, we can start computing the different
+    values of *β[k]*. But for computing the values, we will need to know at least
+    one term of the recursion, so let''s compute the value of *β(1)*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f054c7f4-dca8-4097-b091-39108f9712ca.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can run this algorithm also on the same observations to see whether the
+    results were correct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Forward-backward algorithm (smoothing)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Coming to the forward-backward algorithm, we are now trying to compute the conditional
+    distribution of the hidden state given the observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Taking the example of our robot localization, we are trying to now find the
+    probability distribution of the robot''s position at some time instance given
+    the sensor readings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Forward-backward algorithm: P(Z[k]|X)*![](img/2dabbe7b-8dd2-483d-95ee-02dec8abe31a.png)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure 3.5: HMM showing three time slices, *k-1*, *k*, and *k+1*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, since we have been given all the observed variables in the model, we can
+    say that the value of *P(Z[k]|X)* is going to be proportional to the joint distribution
+    over *Z[k] *and *X:*
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/75a59eb6-4820-417e-bc30-83812de77d87.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, we know that we can write *X={X[1:k], X[k+1:n]}*. Replacing this in the
+    preceding equation, we get:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/23870c17-ec20-471e-bb16-c765f703fe13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can apply the chain rule in the preceding equation to write it as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/144e7b06-2f9f-441a-93ee-df59e8c423ca.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'From our model structure, we know that ![](img/190acd23-d62f-45e4-b819-e738501e7fd1.png),
+    and using this independence property we can write the preceding equation as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c7b78595-168f-423a-8967-d78ebe606723.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Now if we look at the preceding terms, the first term is *P(X[k+1:n]|Z[k])*,
+    which is what we computed in our backward algorithm. The second term is *P(Z[k],
+    X[1:k])*, which we computed in the case of the forward algorithm. So for computing
+    *P(Z[k|]X)*, we can compute both the terms using the forward and the backward
+    algorithm. But since *P(Z[k|]X)* is proportional to the product of these two terms,
+    we will need to normalize the distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Viterbi algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'So far, we have been trying to compute the different conditional and joint
+    probabilities in our model. But one thing that we can''t do with the forward-backward
+    algorithm is find the most probable state of the hidden variables in the model
+    given the observations. Formally, we can write this problem as, we know the observed
+    variable, the transition probabilities and the emission probability of the network
+    and we would like to compute *Z^**, which is defined as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7d6cea05-5fb3-4358-8e3a-28ecf75e8f75.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Z={Z[1], Z[2], …, Z[n]} *'
+  prefs: []
+  type: TYPE_NORMAL
+- en: And,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*X={X[1], X[2], …, X[n]}*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Properties of operations on probability distributions**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we do operations on the probability distributions (marginalization, maximization,
+    and so on), we can push in the operation through the independent terms of the
+    distribution. We can see these examples in the case of marginalization and *argmax*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d204b37c-5438-4ec5-a374-f41c3001efbd.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/c0471f50-a6ac-4a65-9332-aa98eb651a98.png)![](img/9ae3544c-a122-499b-8149-bdaf63d3f6bb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3.6: HMM showing three time slices *k-2*, *k-1*, and *k*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we saw that *P(Z|X)∝ P(Z, X),* and since we are trying to compute the
+    *argmax*, it wouldn''t matter if we compute on either of these two terms. And
+    hence we can say that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/882e1637-33ba-4ede-8df9-a406e31676d6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, we will again try to formulate our equation as a recursion so that it
+    is easier for us to compute. So, let''s introduce a new term, *µ(k)*, defined
+    as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/bb9faaee-1dc9-4f2c-9841-95bdb643c854.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'And again, we will try to break this term into known terms. Using the chain
+    rule, we can write it as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dfa9fde2-0cba-4d20-ac7d-65e036d531b9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now, we start pushing in the *argmax* argument using the property (see information
+    box for details). And this gives us:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/fe6663ef-9bc3-4841-abf1-e236f46646cd.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'These terms look familiar, *P(X[k]|Z[k])* is the emission probability, *P(Z[k]|Z[k-1])* is
+    the transition probability, and ![](img/330530a0-916e-4819-8419-92860b1171ae.png)
+    is *µ(k-1)*. So now we have a recursive equation to work with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a88a719c-ae24-4c87-8cc6-01f0c1b4ee7f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Since we have the recursive formula, we can compute the values for any *k* if
+    we have the first term. So, let's look at the first term of the recursion, which
+    is *µ(1):*
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/690c4938-4439-4cc2-8350-248e46e1f012.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, the first term is *P(Z[1])*, which is our initial probability, which
+    is known. The second term is *P(X[1]|Z[1])*, which is the emission probability
+    of our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can try it out with the same observations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we introduced algorithms for doing inference over our HMM models.
+    We looked at the forward-backward algorithm to do predictions for our hidden states
+    given the observations. We also discussed the Viterbi algorithm, which is used
+    to compute the most probable states in our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In all these algorithms, we assumed that we knew the transition and the emission
+    probabilities of the model. But in real-world problems, we need to compute these
+    values from the data. In the next chapter, we will introduce algorithms for computing
+    transition and emission probabilities using the maximum-likelihood approach.
+  prefs: []
+  type: TYPE_NORMAL

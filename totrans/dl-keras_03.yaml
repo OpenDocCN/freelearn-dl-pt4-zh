@@ -1,0 +1,828 @@
+- en: Deep Learning with ConvNets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In previous chapters, we discussed dense nets, in which each layer is fully
+    connected to the adjacent layers. We applied those dense networks to classify
+    the MNIST handwritten characters dataset. In that context, each pixel in the input
+    image is assigned to a neuron for a total of 784 (28 x 28 pixels) input neurons.
+    However, this strategy does not leverage the spatial structure and relations of
+    each image. In particular, this piece of code transforms the bitmap representing
+    each written digit into a flat vector, where the spatial locality is gone:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Convolutional neural networks (also called ConvNet) leverage spatial information
+    and are therefore very well suited for classifying images. These nets use an ad
+    hoc architecture inspired by biological data taken from physiological experiments
+    done on the visual cortex. As discussed, our vision is based on multiple cortex
+    levels, each one recognizing more and more structured information. First, we see
+    single pixels; then from them, we recognize simple geometric forms. And then...
+    more and more sophisticated elements such as objects, faces, human bodies, animals,
+    and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Convolutional neural networks are indeed fascinating. Over a short period of
+    time, they become a *disruptive* technology, breaking all the state-of-the-art
+    results in multiple domains, from text, to video, to speech going well beyond
+    the initial image processing domain where they were originally conceived.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep convolutional neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Image classification
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep convolutional neural network — DCNN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'A **deep convolutional neural network** (**DCNN**) consists of many neural
+    network layers. Two different types of layers, convolutional and pooling, are
+    typically alternated. The depth of each filter increases from left to right in
+    the network. The last stage is typically made of one or more fully connected layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'There are three key intuitions beyond ConvNets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Local receptive fields
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Shared weights
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pooling
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's review them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Local receptive fields
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If we want to preserve spatial information, then it is convenient to represent
+    each image with a matrix of pixels. Then, a simple way to encode the local structure
+    is to connect a submatrix of adjacent input neurons into one single hidden neuron
+    belonging to the next layer. That single hidden neuron represents one local receptive
+    field. Note that this operation is named convolution and it gives the name to
+    this type of network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, we can encode more information by having overlapping submatrices.
+    For instance, let's suppose that the size of each single submatrix is 5 x 5 and
+    that those submatrices are used with MNIST images of 28 x 28 pixels. Then we will
+    be able to generate 23 x 23 local receptive field neurons in the next hidden layer.
+    In fact it is possible to slide the submatrices by only 23 positions before touching
+    the borders of the images. In Keras, the size of each single submatrix is called
+    **stride length**, and this is a hyperparameter that can be fine-tuned during
+    the construction of our nets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's define the feature map from one layer to another layer. Of course, we
+    can have multiple feature maps that learn independently from each hidden layer.
+    For instance, we can start with 28 x 28 input neurons for processing MINST images
+    and then recall *k* feature maps of size 23 x 23 neurons each (again with a stride
+    of 5 x 5) in the next hidden layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shared weights and bias
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's suppose that we want to move away from the pixel representation in a row
+    by gaining the ability to detect the same feature independently from the location
+    where it is placed in the input image. A simple intuition is to use the same set
+    of weights and bias for all the neurons in the hidden layers. In this way, each
+    layer will learn a set of position-independent latent features derived from the
+    image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Assuming that the input image has shape *(256, 256)* on three channels with
+    *tf* (TensorFlow) ordering, this is represented as *(256, 256, 3)*. Note that
+    with th (Theano) mode, the channel's dimension (the depth) is at index *1*; in
+    *tf* (TensoFlow) mode, it is at index *3*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Keras, if we want to add a convolutional layer with dimensionality of the
+    output 32 and extension of each filter 3 x 3, we will write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Alternatively, we will write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This means that we are applying a 3 x 3 convolution on a 256 x 256 image with
+    three input channels (or input filters), resulting in 32 output channels (or output
+    filters).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An example of convolution is provided in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Pooling layers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's suppose that we want to summarize the output of a feature map. Again,
+    we can use the spatial contiguity of the output produced from a single feature
+    map and aggregate the values of a submatrix into a single output value that synthetically
+    describes the *meaning* associated with that physical region.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Max-pooling
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'One easy and common choice is *max-pooling*, which simply outputs the maximum
+    activation as observed in the region. In Keras, if we want to define a max-pooling
+    layer of size 2 x 2, we will write:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An example of max-pooling is shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Average pooling
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Another choice is average pooling, which simply aggregates a region into the
+    average values of the activations observed in that region.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that Keras implements a large number of pooling layers and a complete
+    list is available at: [https://keras.io/layers/pooling/](https://keras.io/layers/pooling/).
+    In short, all pooling operations are nothing more than a summary operation on
+    a given region.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ConvNets summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, we have described the basic concepts of ConvNets. CNNs apply convolution
+    and pooling operations in one dimension for audio and text data along the time
+    dimension, in two dimensions for images along the (height x width) dimensions,
+    and in three dimensions for videos along the (height x width x time) dimensions.
+    For images, sliding the filter over input volume produces a map that gives the
+    responses of the filter for each spatial position. In other words, a ConvNet has
+    multiple filters stacked together which learn to recognize specific visual features
+    independently of the location in the image. Those visual features are simple in
+    the initial layers of the network, and then more and more sophisticated deeper
+    in the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example of DCNN — LeNet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Yann le Cun proposed (for more information refer to: *Convolutional Networks
+    for Images, Speech, and Time-Series*, by Y. LeCun and Y. Bengio, brain theory
+    neural networks, vol. 3361, 1995) a family of ConvNets named LeNet trained for
+    recognizing MNIST handwritten characters with robustness to simple geometric transformations
+    and to distortion. The key intuition here is to have low-layers alternating convolution
+    operations with max-pooling operations. The convolution operations are based on
+    carefully chosen local receptive fields with shared weights for multiple feature
+    maps. Then, higher levels are fully connected layers based on a traditional MLP
+    with hidden layers and softmax as the output layer.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: LeNet code in Keras
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To define LeNet code, we use a convolutional 2D module, which is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `filters` is the number of convolution kernels to use (for example, the
+    dimensionality of the output), `kernel_size` is an integer or tuple/list of two
+    integers, specifying the width and height of the 2D convolution window (can be
+    a single integer to specify the same value for all spatial dimensions), and `padding='same'`
+    means that padding is used. There are two options: `padding='valid'` means that
+    the convolution is only computed where the input and the filter fully overlap,
+    and therefore the output is smaller than the input, while `padding='same'` means
+    that we have an output that is the *same* size as the input, for which the area
+    around the input is padded with zeros.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, we use a `MaxPooling2D` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `pool_size=(2, 2)` is a tuple of two integers representing the factors
+    by which the image is vertically and horizontally downscaled. So *(2, 2)* will
+    halve the image in each dimension, and `strides=(2, 2)` is the stride used for
+    processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let us review the code. First we import a number of modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we define the LeNet network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have a first convolutional stage with ReLU activations followed by a max-pooling.
+    Our net will learn 20 convolutional filters, each one of which has a size of 5
+    x 5\. The output dimension is the same one of the input shape, so it will be 28
+    x 28\. Note that since the `Convolution2D` is the first stage of our pipeline,
+    we are also required to define its `input_shape`. The max-pooling operation implements
+    a sliding window that slides over the layer and takes the maximum of each region
+    with a step of two pixels vertically and horizontally:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then a second convolutional stage with ReLU activations follows, again by a
+    max-pooling. In this case, we increase the number of convolutional filters learned
+    to 50 from the previous 20\. Increasing the number of filters in deeper layers
+    is a common technique used in deep learning:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we have a pretty standard flattening and a dense network of 500 neurons,
+    followed by a softmax classifier with 10 classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Congratulations, You have just defined the first deep learning network! Let''s
+    see how it looks visually:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now we need some additional code for training the network, but this is very
+    similar to what we have already described in [Chapter 1](c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml),
+    *Neural Network Foundations*. This time, we also show the code for printing the
+    loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now let''s run the code. As you can see, the time had a significant increase
+    and each iteration in our deep net now takes ~134 seconds against ~1-2 seconds
+    for the net defined in [Chapter 1](c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml),
+    *Neural Network Foundations*. However, the accuracy has reached a new peak at
+    99.06%:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let''s plot the model accuracy and the model loss, and we understand that we
+    can train in only 4 - 5 iterations to achieve a similar accuracy of 99.2%:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| ![](img/B06258_04_06.png) | ![](img/B06258_04_07.png) |'
+  prefs: []
+  type: TYPE_TB
+- en: 'In the following screenshot, we show the final accuracy achieved by our model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let''s see some of the MNIST images just to understand how good the number
+    99.2% is! For instance, there are many ways in which humans write a 9, one of
+    them appearing in the following diagram. The same holds for 3, 7, 4, and 5\. The
+    number **1** in this diagram is so difficult to recognize that probably even a
+    human will have issues with it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can summarize all the progress made so far with our different models in
+    the following graph. Our simple net started with an accuracy of 92.22%, which
+    means that about 8 handwritten characters out of 100 are not correctly recognized.
+    Then, we gained 7% with the deep learning architecture by reaching an accuracy
+    of 99.20%, which means that about 1 handwritten character out of 100 is incorrectly
+    recognized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Understanding the power of deep learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Another test that we can run to better understand the power of deep learning
+    and ConvNet is to reduce the size of the training set and observe the consequent
+    decay in performance. One way to do this is to split the training set of 50,000
+    examples into two different sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The proper training set used for training our model will progressively reduce
+    its size of (5,900, 3,000, 1,800, 600, and 300) examples
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The validation set used to estimate how well our model has been trained will
+    consist of the remaining examples
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our test set is always fixed and it consists of 10,000 examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this setup, we compare the just-defined deep learning ConvNet against
+    the first example of neural network defined in [Chapter 1](c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml),
+    *Neural Network Foundations*. As we can see in the following graph, our deep network
+    always outperforms the simple network and the gap is more and more evident when
+    the number of examples provided for training is progressively reduced. With 5,900
+    training examples the deep learning net had an accuracy of 96.68% against an accuracy
+    of 85.56% of the simple net. More important, with only 300 training examples our
+    deep learning net still has an accuracy of 72.44% while the simple net shows a
+    significant decay at 48.26%. All the experiments are run for only four training
+    iterations. This confirms the breakthrough progress achieved with deep learning.
+    At first glance this could be surprising from a mathematical point of view because
+    the deep network has many more unknowns (the weights), so one would think we need
+    many more data points. However, preserving the spatial information, adding convolution,
+    pooling, and feature maps is innovation with ConvNets, and this was optimized
+    on millions of years (since this organization has been inspired by the visual
+    cortex):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'A list of state-of-the-art results for MNIST is available at: [http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html](http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html).
+    As of January, 2017, the best result has an error rate of 0.21%.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recognizing CIFAR-10 images with deep learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The CIFAR-10 dataset contains 60,000 color images of 32 x 32 pixels in 3 channels
+    divided into 10 classes. Each class contains 6,000 images. The training set contains
+    50,000 images, while the test sets provides 10,000 images. This image taken from
+    the CIFAR repository ([https://www.cs.toronto.edu/~kriz/cifar.html](https://www.cs.toronto.edu/~kriz/cifar.html)) describes
+    a few random examples from the 10 classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The goal is to recognize previously unseen images and assign them to one of
+    the 10 classes. Let us define a suitable deep net.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First of all we import a number of useful modules, define a few constants,
+    and load the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now let''s do a one-hot encoding and normalize the images:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our net will learn 32 convolutional filters, each of which with a 3 x 3 size.
+    The output dimension is the same one of the input shape, so it will be 32 x 32
+    and activation is ReLU, which is a simple way of introducing non-linearity. After
+    that we have a max-pooling operation with pool size 2 x 2 and a dropout at 25%:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next stage in the deep pipeline is a dense network with 512 units and ReLU
+    activation followed by a dropout at 50% and by a softmax layer with 10 classes
+    as output, one for each category:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After defining the network, we can train the model. In this case, we split
+    the data and compute a validation set in addition to the training and testing
+    sets. The training is used to build our models, the validation is used to select
+    the best performing approach, while the test set is to check the performance of
+    our best models on fresh unseen data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this case we save the architecture of our deep network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let us run the code. Our network reaches a test accuracy of 66.4% with 20 iterations.
+    We also print the accuracy and loss plot, and dump the network with `model.summary()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_13-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the following graph, we report the accuracy and the lost achieved by our
+    net on both train and test datasets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| ![](img/B06258_04_14.png) | ![](img/B06258_04_15.png) |'
+  prefs: []
+  type: TYPE_TB
+- en: Improving the CIFAR-10 performance with deeper a network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'One way to improve the performance is to define a deeper network with multiple
+    convolutional operations. In this example, we have a sequence of modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*conv+conv+maxpool+dropout+conv+conv+maxpool*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Followed by a standard *dense+dropout+dense*. All the activation functions are
+    ReLU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let us see the code for the new network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Congratulations! You have defined a deeper network. Let us run the code! First
+    we dump the network, then we run for 40 iterations reaching an accuracy of 76.9%:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the following screenshot, we will see the accuracy reached after 40 iterations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_17-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'So we have an improvement of 10.5% with respect to the previous simpler deeper
+    network. For the sake of completeness, let us also report the accuracy and loss
+    during training, shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| ![](img/B06258_04_18.png) | ![](img/B06258_04_19-1.png) |'
+  prefs: []
+  type: TYPE_TB
+- en: Improving the CIFAR-10 performance with data augmentation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Another way to improve the performance is to generate more images for our training.
+    The key intuition is that we can take the standard CIFAR training set and augment
+    this set with multiple types of transformations including rotation, rescaling,
+    horizontal/vertical flip, zooming, channel shift, and many more. Let us see the
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `rotation_range` is a value in degrees (`0` - `180`) for randomly rotating
+    pictures. `width_shift` and `height_shift` are ranges for randomly translating
+    pictures vertically or horizontally. `zoom_range` is for randomly zooming pictures. `horizontal_flip`
+    is for randomly flipping half of the images horizontally. `fill_mode` is the strategy
+    used for filling in new pixels that can appear after a rotation or a shift:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After augmentation, we will have generated many more training images starting
+    from the standard CIFAR-10 set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_20.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now we can apply this intuition directly for training. Using the same ConvNet
+    defined previously we simply generate more augmented images and then we train.
+    For efficiency, the generator runs in parallel to the model. This allows an image
+    augmentation on the CPU and in parallel to training on the GPU. Here is the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Each iteration is now more expensive because we have more training data. So
+    let us run for 50 iterations only and see that we reach an accuracy of 78.3%:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_21.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The results obtained during our experiments are summarized in the following
+    graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_22.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'A list of state-of-the-art results for CIFAR-10 is available at: [http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html](http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html).
+    As of January, 2017, the best result has an accuracy of 96.53%.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predicting with CIFAR-10
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now let us suppose that we want to use the deep learning model we just trained
+    for CIFAR-10 for a bulk evaluation of images. Since we saved the model and the
+    weights, we do not need to train every time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now let us get the prediction for a ![](img/B06258_04_23-2.jpg) and for a ![](img/B06258_04_24-1.jpg).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We get categories `3` (cat) and `5` (dog) as output, as expected:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_25-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Very deep convolutional networks for large-scale image recognition
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In 2014, an interesting contribution for image recognition was presented (for
+    more information refer to: *Very Deep Convolutional Networks for Large-Scale Image
+    Recognition*, by K. Simonyan and A. Zisserman, 2014). The paper shows that, *a
+    significant improvement on the prior-art configurations can be achieved by pushing
+    the depth to 16-19 weight layers*. One model in the paper denoted as *D* or VGG-16
+    has 16 deep layers. An implementation in Java Caffe ([http://caffe.berkeleyvision.org/](http://caffe.berkeleyvision.org/)) has
+    been used for training the model on the ImageNet ILSVRC-2012 ([http://image-net.org/challenges/LSVRC/2012/](http://image-net.org/challenges/LSVRC/2012/)) dataset,
+    which includes images of 1,000 classes and is split into three sets: training
+    (1.3 million images), validation (50,000 images), and testing (100,000 images).
+    Each image is (224 x 224) on three channels. The model achieves 7.5% top 5 error
+    on ILSVRC-2012-val and 7.4% top 5 error on ILSVRC-2012-test.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'According to the ImageNet site:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of this competition is to estimate the content of photographs for the
+    purpose of retrieval and automatic annotation using a subset of the large hand-labeled
+    ImageNet dataset (10 million labeled images depicting 10,000 + object categories)
+    as training. Test images will be presented with no initial annotation—no segmentation
+    or labels—and algorithms will have to produce labelings specifying what objects
+    are present in the images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The weights learned by the model implemented in Caffe have been directly converted in
+    Keras (for more information refer to: [https://gist.github.com/baraldilorenzo/07d7802847aaad0a35d3](https://gist.github.com/baraldilorenzo/07d7802847aaad0a35d3))
+    and can be used for preloading into the Keras model, which is implemented next
+    as described in the paper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Recognizing cats with a VGG-16 net
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now let us test the image of a ![](img/B06258_04_26.jpg):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the code is executed, the class `285` is returned, which corresponds (for
+    more information refer to: [https://gist.github.com/yrevar/942d3a0ac09ec9e5eb3a](https://gist.github.com/yrevar/942d3a0ac09ec9e5eb3a))
+    to Egyptian cat:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_27-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Utilizing Keras built-in VGG-16 net module
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Keras applications are pre-built and pre-trained deep learning models. Weights
+    are downloaded automatically when instantiating a model and stored at `~/.keras/models/`.
+    Using built-in code is very easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let us consider a train:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_28.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'It''s like the ones my grandfather drove. If we run the code, we get result
+    `820`, which is the image net code for *steaming train*. Equally important is
+    the fact that all the other classes have very weak support, as shown in the following
+    graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_29-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'To conclude this section, note that VGG-16 is only one of the modules that
+    are pre-built in Keras. A full list of pre-trained Keras models is available at:
+    [https://keras.io/applications/](https://keras.io/applications/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recycling pre-built deep learning models for extracting features
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'One very simple idea is to use VGG-16 and, more generally, DCNN, for feature
+    extraction. This code implements the idea by extracting features from a specific
+    layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now you might wonder why we want to extract the features from an intermediate
+    layer in a DCNN. The key intuition is that, as the network learns to classify
+    images into categories, each layer learns to identify the features that are necessary
+    to do the final classification. Lower layers identify lower order features such
+    as color and edges, and higher layers compose these lower order feature into higher
+    order features such as shapes or objects. Hence the intermediate layer has the
+    capability to extract important features from an image, and these features are
+    more likely to help in different kinds of classification. This has multiple advantages.
+    First, we can rely on publicly available large-scale training and transfer this
+    learning to novel domains. Second, we can save time for expensive large training.
+    Third, we can provide reasonable solutions even when we don't have a large number
+    of training examples for our domain. We also get a good starting network shape
+    for the task at hand, instead of guessing it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Very deep inception-v3 net used for transfer learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Transfer learning is a very powerful deep learning technique which has more
+    applications in different domains. The intuition is very simple and can be explained
+    with an analogy. Suppose you want to learn a new language, say Spanish; then it
+    could be useful to start from what you already know in a different language, say
+    English.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Following this line of thinking, computer vision researchers now commonly use
+    pre-trained CNNs to generate representations for novel tasks, where the dataset
+    may not be large enough to train an entire CNN from scratch. Another common tactic
+    is to take the pre-trained ImageNet network and then to fine-tune the entire network
+    to the novel task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Inception-v3 net is a very deep ConvNet developed by Google. Keras implements
+    the full network described in the following diagram and it comes pre-trained on
+    ImageNet. The default input size for this model is 299 x 299 on three channels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04_59.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This skeleton example is inspired by a scheme available at: [https://keras.io/applications/](https://keras.io/applications/).
+    We suppose to have a training dataset *D* in a domain, different from ImageNet.
+    *D* has 1,024 features in input and 200 categories in output. Let us see a code
+    fragment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We use a trained inception-v3; we do not include the top model because we want
+    to fine-tune on *D*. The top level is a dense layer with 1,024 inputs and where
+    the last output level is a softmax dense layer with 200 classes of output. `x
+    = GlobalAveragePooling2D()(x)` is used to convert the input to the correct shape
+    for the dense layer to handle. In fact, `base_model.output` tensor has the shape
+    *(samples, channels, rows, cols)* for `dim_ordering="th"` or *(samples, rows,
+    cols, channels)* for `dim_ordering="tf"` but dense needs them as *(samples, channels)*
+    and `GlobalAveragePooling2D` averages across *(rows, cols)*. So if you look at
+    the last four layers (where `include_top=True`), you see these shapes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When you do `include_top=False,` you are removing the last three layers and
+    exposing the `mixed10` layer, so the `GlobalAveragePooling2D` layer converts the
+    *(None, 8, 8, 2048)* to *(None, 2048)*, where each element in the *(None, 2048)*
+    tensor is the average value for each corresponding *(8, 8)* subtensor in the *(None,
+    8, 8, 2048)* tensor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the convolutional levels are pre-trained, so we freeze them during the
+    training of the full model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model is then compiled and trained for a few epochs so that the top layers
+    are trained:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we freeze the top layers in inception and fine-tune some inception layer.
+    In this example, we decide to freeze the first 172 layers (an hyperparameter to
+    tune):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The model is then recompiled for fine-tune optimization. We need to recompile
+    the model for these modifications to take effect:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we have a new deep network that reuses the standard Inception-v3 network,
+    but it is trained on a new domain *D* via transfer learning. Of course, there
+    are many parameters to fine-tune for achieving good accuracy. However, we are
+    now reusing a very large pre-trained network as a starting point via transfer
+    learning. In doing so, we can save the need to train on our machines by reusing
+    what is already available in Keras.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned how to use Deep Learning ConvNets for recognizing
+    MNIST handwritten characters with high accuracy. Then we used the CIFAR 10 dataset
+    to build a deep learning classifier in 10 categories, and the ImageNet datasets
+    to build an accurate classifier in 1,000 categories. In addition, we investigated
+    how to use large deep learning networks such as VGG16 and very deep networks such
+    as InceptionV3\. The chapter concluded with a discussion on transfer learning
+    in order to adapt pre-built models trained on large datasets so that they can
+    work well on a new domain.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will introduce generative adversarial networks used
+    to reproduce synthetic data that looks like data generated by humans; and we will
+    present WaveNet, a deep neural network used for reproducing human voice and musical
+    instruments with high quality.
+  prefs: []
+  type: TYPE_NORMAL

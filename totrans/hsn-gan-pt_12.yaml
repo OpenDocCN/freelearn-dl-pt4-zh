@@ -1,0 +1,839 @@
+- en: Sequence Synthesis with GANs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will work on GANs that directly generate sequential data,
+    such as text and audio. While doing so, we will go back to the previous image-synthesizing
+    models we've looked at so that you can become familiar with NLP models quickly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Throughout this chapter, you will get to know the commonly used techniques of
+    the NLP field, such as RNN and LSTM. You will also get to know some of the basic
+    concepts of **reinforcement learning** (**RL**) and how it differs from supervised
+    learning (such as SGD-based CNNs). Later on, we will learn how to build a custom
+    vocabulary from a collection of text so that we can train our own NLP models and
+    learn how to train SeqGAN so that it can generate short English jokes. You will
+    also learn how to use SEGAN to remove background noise and enhance the quality
+    of speech audio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Text generation via SeqGAN – teaching GANs how to tell jokes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Speech quality enhancement with SEGAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Text generation via SeqGAN – teaching GANs how to tell jokes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we learned how to generate high-quality images based
+    on description text with GANs. Now, we will move on and look at sequential data
+    synthesis, such as text and audio, using various GAN models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When it comes to the generation of text, the biggest difference in terms of
+    image generation is that text data is discrete while image pixel values are more
+    continuous, though digital images and text are both essentially discrete. A pixel
+    typically has 256 values and slight changes in the pixels won't necessarily affect
+    the image's meaning to us. However, a slight change in the sentence – even a single
+    letter (for example, turning *we* into *he*) – may change the whole meaning of
+    the sentence. Also, we tend to have a higher tolerance bar for synthesized images
+    compared to text. For example, if 90% of the pixels in the generated image of
+    a dog are nearly perfect, we may have little trouble recognizing the dog because
+    our brains are smart enough to automatically fill in the missing pixels. However,
+    if you are reading a piece of news in which every one out of 10 words doesn't
+    make any sense, you will definitely find it hard to enjoy reading it. This is
+    why text generation is hard and there's less remarkable progress in text generation
+    than image synthesis.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'SeqGAN was one of the first successful attempts of text generation with adversarial
+    learning. It was proposed by Lantao Yu, Weinan Zhang, and Jun Wang, et. al. in
+    their paper, *SeqGAN: Sequence Generative Adversarial Nets with Policy Gradient*.
+    In this section, we will walk you through the design of SeqGAN, how to create
+    your own vocabulary for NLP tasks, and how to train SeqGAN so that it can generate
+    short jokes.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Design of SeqGAN – GAN, LSTM, and RL
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Like other GAN models, SeqGAN is built upon the idea of adversarial learning.
+    Some major changes have to be made so that it can accommodate NLP tasks. For example,
+    the generation network is built with LSTM instead of CNNs, similar to some of
+    the other GANs we looked at in the previous chapters. Also, reinforcement learning
+    is used to optimize discrete objectives, unlike the SGD-family methods that were
+    used in previous GAN models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we will provide a quick introduction to LSTM and RL. However, we won't
+    go too deep into these topics since we want to focus on the adversarial learning
+    part of the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A quick introduction to RNN and LSTM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Recurrent neural networks** (**RNNs**) are designed to process sequential
+    data such as text and audio. Their biggest difference to CNNs is that the weights
+    in the hidden layers (that is, certain functions) are used repeatedly on multiple
+    inputs and the order of the inputs affects the final results of the functions.
+    The typical design of an RNN can be seen in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/59435150-acdf-4e3b-99c8-68dd0f502411.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.1 Basic computational units of a recurrent neural network
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we can see, the most distinctive characteristic of an RNN unit is that the
+    hidden state, ![](img/54184b1f-1edb-4bf2-a92f-130f4bfc14b4.png), has an outgoing
+    connection pointing to itself. This self-loop is where the name "recurrent" comes
+    from. Let''s say the self-loop is performed three times. The extended version
+    of this computational unit is shown on the right in the preceding diagram. The
+    computational process is expressed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/8ffcd1a0-c001-48f7-a31b-da950dd05d5a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/bd4676e8-94ff-4550-9319-f85aad178b67.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Thus, after proper training, this RNN unit is capable of handling sequential
+    data with a maximum length of 3.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs are widely used in voice recognition, natural language translation, language
+    modeling, and image captioning. However, a critical flaw remains in RNN that we
+    need to address with LSTM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An RNN model assumes that a strong connection only exists between the neighboring
+    inputs (for example, ![](img/3b929bf1-1c43-45d5-96f2-0c8b330bdc0c.png) and ![](img/2e5776b3-de79-4395-b77d-e941cba14a75.png), as
+    shown in the preceding diagram) and that the connections between the inputs that
+    are far apart from each other are ignored (for example, ![](img/f60506e1-eeb9-4c81-9a89-d56b18043f1c.png) and
+    ![](img/8baa2dde-5c82-4cf0-afb4-4b797035ef16.png)). This becomes troublesome when
+    we try to translate a long sentence into another language that has totally different grammatical
+    rules and we need to look through all the parts of the sentence to make sense
+    of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**LSTM** (**Long Short-Term Memory**) was proposed by Sepp Hochreiter and Jürgen
+    Schmidhuber in 1997 to preserve the long-term memory of sequential data and address
+    the gradient explosion and vanishing issues in RNNs. Its computational process
+    is illustrated in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d7025e9b-c99f-41e3-b7ba-93443626748e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.2 Computational process of LSTM
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we can see, an addition term, ![](img/3f4f4e24-7a3e-401e-93f8-457cb2e03a18.png),
+    is included to help us choose what long-term information should be memorized.
+    The detailed computational process is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2dfda1e3-d735-4bf0-9784-8bea0de02215.png) and ![](img/15c720a7-08a8-45e7-8ba8-ef713ce6eca4.png) are
+    passed through the Forget Gate to decide what information should be forgotten:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/c75f9a60-d34c-48f0-add0-b9b3c60d463c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The same inputs are also passed through the Input Gate so that we can calculate
+    the updated ![](img/2c9501bf-f00a-4967-a448-ff5210863135.png) at the next step:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/8ad3118d-ae7c-4b58-bd9d-dab83283b4b3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The updated ![](img/f6adc698-8d81-4745-ba20-f770ee4c1205.png) and ![](img/38a54135-0454-41f2-92c6-242b2ad566be.png) are
+    calculated by the Output Gate:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/5991df60-f54b-4c6b-a98f-94a18ed6137f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Then, the new ![](img/2d0aaa6b-e7ba-4a49-a362-8018613c4751.png) and ![](img/3f4f4e24-7a3e-401e-93f8-457cb2e03a18.png) are
+    used to calculate the next pair of ![](img/d77ae7d9-a5b5-43f0-872e-da13bf39d901.png) and
+    ![](img/7555bd34-4191-4e83-8ddc-4a3ae8084bcc.png). Although the structure of an
+    LSTM cell is much more complicated than the vanilla RNN cell, thanks to the delicate
+    design of the three gates (Forget, Input, and Output), LSTM can be seen in almost
+    every milestone NLP model in the past few years. If you want to find out more
+    about LSTM and its variants, check out [https://colah.github.io/posts/2015-08-Understanding-LSTMs](https://colah.github.io/posts/2015-08-Understanding-LSTMs)
+    and [https://towardsdatascience.com/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21](https://towardsdatascience.com/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reinforcement learning versus supervised learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Reinforcement learning is another optimization method family in machine learning.
+    It is often used when it's hard to provide standard correct answers for the tasks
+    that the model is trying to solve, especially when the solution involves *free
+    exploration* and the end goal of the task is somewhat *vague* compared to the
+    specific decisions the model needs to make.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For example, if we want to teach a robot to walk, we can use reinforcement learning
+    to let the robot teach itself to walk. We don't need to tell the robot how to
+    move which body part at what time. We only tell it that its final goal is to *take
+    yourself to that location 10 meters in front of you* and let it randomly move
+    its limbs. At some point, a certain combination of movements for the robot's legs
+    will bring the robot a step forward and a certain combination of movements for
+    the robot's arms makes sure it won't fall out of balance. Similarly, reinforcement
+    learning is also used to teach machines to play Go ([https://www.alphago-games.com](https://www.alphago-games.com))
+    and video games ([https://openai.com/blog/openai-five](https://openai.com/blog/openai-five)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: SGD-based optimization methods are often used in supervised learning (they were
+    used in the models in the previous chapters where real data is always used to
+    measure the quality of synthesized data), whereas, in unsupervised learning, the
+    optimization strategies are totally different.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Currently, Policy Gradients and Q-Learning are two of the most commonly used
+    methods in RL. Let''s explain them in brief:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Policy Gradient** is a policy-based method. The model directly gives actions
+    (output) based on the current states (input). It alternates between evaluating
+    the policy (takes actions based on states) and updating the policy (updates the
+    mappings between states and actions). It is often used in large and continuous
+    action spaces.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Q-Learning** is a value-based method. It maintains a Q-table that keeps track
+    of the rewards of various actions. It chooses the action that leads to the maximum
+    reward value and then updates the Q-table, based on the new environment as a result
+    of the action. It can be trained faster than the Policy Gradient method and is
+    often used for simple tasks with small action spaces.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: So, how can we choose between reinforcement learning and supervised learning
+    (such as SGD methods in CNNs) when both of them are available? A simple rule of
+    thumb is the **continuity** of the search space and the **differentiability**
+    of the objective function. If the objective function is differentiable and the
+    search space is continuous, it's better to use SGD methods. If the search space
+    is discrete or the objective function is nondifferentiable, we need to stick to
+    reinforcement learning. However, if the search space isn't very large and you
+    have extra computing power to spare, **Evolutionary Search** (**ES**) methods
+    are also a good option. When your variables are assumed to obey Gaussian distribution,
+    you can always give the CMA-ES ([http://cma.gforge.inria.fr](http://cma.gforge.inria.fr))
+    method a try.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are two extra reading materials if you want to learn more about Policy
+    Gradients:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://medium.com/@jonathan_hui/rl-policy-gradients-explained-9b13b688b146](https://medium.com/@jonathan_hui/rl-policy-gradients-explained-9b13b688b146)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://lilianweng.github.io/lil-log/2018/04/08/policy-gradient-algorithms.html](https://lilianweng.github.io/lil-log/2018/04/08/policy-gradient-algorithms.html)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Architecture of SeqGAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The idea behind SeqGAN is to get it to solve problems that vanilla GANs can't,
+    since they are good at synthesizing discrete data, and discriminator networks
+    can't, since they can't evaluate sequential data with various lengths. To solve
+    the first problem, Policy Gradients are used for updating the generator network.
+    The second problem is addressed by generating the remaining data with the **Monte
+    Carlo Tree Search** (**MCTS**) method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reinforcement learning strategy in SeqGAN is designed as follows. Let''s
+    assume that at time ![](img/968d471c-2b1b-42a8-9c28-ad6358aa650f.png), the generated
+    sequence is denoted as ![](img/6cc4ad05-2814-4019-827b-9c763601285a.png) and that
+    the current action, ![](img/fecafdf9-7338-4c4b-9d12-8cb53b5d2d35.png), needs to
+    be given by the generator network, ![](img/d3cc5c60-c47a-47a8-aacd-68b41d882508.png),
+    in which ![](img/555b91db-e108-404f-a68b-5e0b61d13df5.png) is the initial state.
+    The generation of ![](img/43f5aadd-a184-4c99-a92f-3951ac78e84a.png) based on ![](img/fef5a57f-bb22-48a5-9a1b-92290afb70e9.png) is
+    done by LSTM (or any of its variants). The objective of the generator is to maximize
+    the cumulative rewards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0b2631cf-8640-4697-9e51-9bc966795221.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/e6c5ed41-a6a3-4921-95c1-a83888146822.png) is the cumulative rewards, ![](img/bc008ce8-371b-4d4b-9eca-189aad473605.png) is
+    the parameters to be optimized (that is, parameters in ![](img/66c2b854-dc58-45e0-970c-e555c8362e9a.png)),
+    and ![](img/db34895b-1687-40ee-ad8c-b8090906a2c1.png) is called the **action-value
+    function**. The action-value function, ![](img/26713f87-4914-4848-a523-a54070d61713.png), gives
+    us the reward of taking the action, ![](img/1e773778-6365-4fe5-abe8-6146c0cd9943.png), by
+    following policy, ![](img/c826ad81-ef12-430c-aedc-59d6b1608688.png), starting
+    from the initial state, ![](img/e5f6cb1c-7e78-41e1-bc98-c7aaeabcceff.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normally, we would expect to use the discriminator network to give us reward
+    values. However, the discriminator cannot be used directly to calculate the cumulative
+    rewards because it can only evaluate a full-length sequence, ![](img/be89d748-38d2-4897-b0ec-506ae4cd6f31.png).
+    At time ![](img/9e8f42b8-3dfc-4277-b2a6-c46e8e71f07b.png), all we have is ![](img/b50d186b-900f-4e29-bdad-8ecb9903eddf.png).
+    How do we get the rest of the sequence?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In SeqGAN, the remaining sequence, ![](img/2aec922b-2d4a-45d9-a159-7fa86af0acb2.png), is
+    generated by the MCTS method. MCTS is a tree-based search method and widely used
+    in chess- and poker-playing programs and video game AI algorithms. All the actions
+    that can be made are represented by nodes in a very large tree. It takes four
+    steps to do a complete search in the Monte Carlo tree, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Selection**, which is where you select a path from the root node to a leaf
+    node. Normally, the selection of the existing nodes is based on **Upper Confidence
+    Bounds** (**UCB**). Nodes with high scores are more likely to be chosen and nodes
+    that haven''t been chosen that many times before are more likely to be selected.
+    It is a balance between **exploration and exploitation**.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Expansion**, which is where you add new child nodes to the selected leaf
+    node.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Simulation**, which is where you evaluate the newly added nodes and get the
+    final results (rewards).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Backpropagation**, which is where you update the scores and counts statistics
+    of all the nodes on the selected path.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In fact, only the third step, simulation, is used to generate the remaining
+    sequence, where it performs the simulation (generating the remaining sequence
+    with ![](img/d8b164aa-836e-4c56-898c-e5ba4f5d43fe.png)) multiple times generate
+    and get the averaged reward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, the definition of ![](img/68e90681-3d82-4476-84d9-ec342c6a7d4f.png) is
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/5716dd43-c145-4ce2-9891-57ac1383612d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The generator network is an LSTM network with an embedding layer as an input
+    layer and a linear layer as an output layer. The discriminator network consists
+    of an embedding layer, a convolution layer, a max-pooling layer, and a softmax
+    layer. The code that was published by the authors of this paper was written for
+    TensorFlow. Luckily, a PyTorch version can be found on GitHub at [https://github.com/suragnair/seqGAN](https://github.com/suragnair/seqGAN).
+    In this version, two differences should be noted: first, the Monte Carlo simulation
+    is only performed once, and second, the discriminator network is also a recurrent
+    network and a variant of LSTM called **Gated Recurrent Unit** (**GRU**) is used
+    in both networks. Feel free to adjust the network architectures and try out the
+    tricks and techniques we have learned in the previous chapters of this book. Our
+    modified code is also available under the `seqgan` folder in the code repository
+    for this chapter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating your own vocabulary for training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Reading code that's been written by someone else in GitHub is easy. The most
+    important thing we need to do is apply the models we know to new applications
+    and create our own samples. Here, we will walk through the basic steps of creating
+    a vocabulary from a huge collection of text and use it to train our NLP models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the NLP model, a vocabulary set is normally a table that maps each word or
+    symbol to a unique token (typically, an `int` value) so that any sentence can
+    be represented by a vector of `int`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, let's find some data to play with. To get started, here's a list of NLP
+    datasets available on GitHub: [https://github.com/niderhoff/nlp-datasets](https://github.com/niderhoff/nlp-datasets).
+    From this list, you will find an English joke dataset ([https://github.com/taivop/joke-dataset](https://github.com/taivop/joke-dataset))
+    that contains more than 200,000 jokes parsed from Reddit ([https://www.reddit.com/r/jokes](https://www.reddit.com/r/jokes)),
+    Stupid Stuff ([stupidstuff.org](http://stupidstuff.org/)), and Wocka ([wocka.com](http://wocka.com/)). 
+    The joke text will be in three different files (`reddit_jokes.json`, `stupidstuff.json`,
+    and `wocka.json`). Please don't hold us responsible for the content of these jokes!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's create our vocabulary. First, create a folder named `data` in the
+    project code folder and copy the aforementioned files into it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s create a small program so that we can parse the JSON files and
+    put them in CSV format. Let''s call it `parse_jokes.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: I'm sure that the import section entries are obvious. The definitions of the
+    constants should be fairly obvious as well. The headers variable is simply a list
+    of the column names that will be used when we create the CSV file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We want all of the jokes that will be stored in our files to be in plain text.
+    To do this, get rid of all the non-letter symbols. This is done by cleaning the
+    text using `clean_str()`, which uses Python''s `str_translate` parameter, as shown
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Feel free to tweak the `filters` string so that you can add or remove any special
+    characters. The next function will read one of our three JSON files and return
+    it as a JSON object. I''ve made it rather generic, so that the only thing it needs
+    to know about is the filename to deal with:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we''ll create three functions that will handle converting the three JSON
+    objects into CSV files. It is important to remember that none of the three JSON
+    files have the same structure. Due to this, we''ll make all three handler functions
+    fairly similar and handle the differences between them at the same time. Each
+    of the functions will take the JSON object that was created by the `get_data`
+    function, as well as an integer value called `startcount`. This will provide a
+    row number for the CSV file.  This value will be incremented for each line in
+    the JSON object. Then, we will create a dictionary out of each piece of data and
+    write it to the CSV file.  Finally, we will return our counter so that the next
+    function knows what the row value should be. This is the function that will handle
+    the Reddit file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we have the other two functions: one for the `StupidStuff` file and the
+    other for the `Wocka` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second to last function will create the actual CSV file and write the header:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we have the main function and the entry point for the program. Here,
+    we will call the preceding functions in any order we like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, all we have to do is run the script:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: When we're finished, the joke text will be stored in the `jokes.csv` file. Now,
+    we need to use TorchText to build the vocabulary. TorchText ([https://github.com/pytorch/text](https://github.com/pytorch/text))
+    is a data loading tool for NLP that works directly with PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Note for Windows 10 users**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the time of writing this book, there appears to be an issue in `torchtext\utils.py`.
+    If you install the `torchtext` package directly from PyPi, you could run into
+    an error while trying to execute some of the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The best way around this is to head over to the GitHub source repository ([https://github.com/pytorch/text](https://github.com/pytorch/text))
+    and download the source code. Then, unpack the code into a safe folder. In Command
+    Prompt, navigate to the folder that contains the source code and enter the following
+    command to install the library:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`pip install -e .`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This will install torchtext directly from the source code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For other OS, you can install it with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Please make sure that you have installed the latest version of `torchtext` (0.4.0,
+    at the time of writing this book); otherwise, the code we will use later may not
+    work for you. If `pip` doesn't install the latest version for you, you can find
+    the `whl` file at [https://pypi.org/project/torchtext/#files](https://pypi.org/project/torchtext/#files)
+    and install it manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use the default vocab tool provided by `torchtext` for this. You can
+    also try using `spaCy` ([https://spacy.io](https://spacy.io)) if you want to build
+    vocab for more complex NLP tasks. Create a new file and call it `mymain.py`. Start
+    by adding the following code to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `datafields` structure describes the CSV file we just created. Each column
+    in the file is described and the only column we want the `torchtext` library to
+    be concerned with is the `'Joke'` column, so we mark that as `'src'` and all the
+    other columns as `'None'`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we will create the dataset object and start to build a vocabulary object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We''ll use the `torchtext` library''s `BucketIterator` to go through the data
+    in the dataset and create sequences of equal length:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we''ve built our vocabulary, we need to build a small data loader
+    that will feed the batch data into SeqGAN during training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also need a mapping from tokens back to words so that we can see the generated
+    text when the training process is complete:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, our vocabulary is stored in `src.vocab`. `src.vocab.stoi` is a Python
+    `defaultdict` that maps words to `int` values. The last line in the preceding
+    code snippet inverses the dictionary and stores the mappings from the `int` values
+    as words in `inv_vocab`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can test the vocabulary with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you''re curious, you can view the contents of `inv_vocab` by adding the
+    following code after the preceding code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'However, remember that around 5,000 lines will be printed, so it will be a
+    long list:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we need to work on the rest of the SeqGAN program. This includes the generator
+    and the discriminator. As we mentioned in the *Architecture of SeqGAN* section,
+    these modules can be found at [https://github.com/suragnair/seqGAN](https://github.com/suragnair/seqGAN).
+    Download the source code and unpack it into a folder in your working directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train SeqGAN, run the following script under the code folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The generator network is pretrained with **Maximum Likelihood Estimation** (**MLE**)
+    against the real data for 100 epochs so that it will be trained faster later.
+    Then, the discriminator network is pretrained against real data and some generated
+    data for 150 epochs, in which the generated data is kept the same for every three
+    epochs so that the discriminator becomes familiar with fake data. Finally, both
+    networks are trained together in an adversarial fashion for 50 epochs, in which
+    the discriminator network is trained 15 times more than the generator network.
+    On a single GTX 1080Ti graphics card, the pretraining process takes about **33
+    hours**, and 17 epochs of the final training can take long as **48 hours** to
+    complete. GPU memory consumption is about 4,143 MB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following are some of the jokes that were generated by SeqGAN. Unfortunately,
+    most of the sentences don't make sense due to mode collapse (which means that
+    the same random word will appear anywhere in the sentences in one batch).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Still, let''s take a look. Note that sentences shorter than `MAX_SEQ_LEN` are
+    filled with `<pad>` at the end and have been omitted here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '"have you ever make like a tomato of jokes ? . there d call out of vegetables
+    !"'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '"the patriots weren''t invited camping ! . because i can rather have been born
+    in tents ."'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '"trainees. it is a train for christmas pockets"'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '"what do you get when you cross a kangaroo and a rhino ? . spanish"'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following sentences were generated by the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '"i can''t stop a joke . . . . it''s all ."'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '"i can''t see a new joke ."'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our model also created some jokes that were too inappropriate to print, which
+    is an interesting demonstration of its attempt to emulate human humor!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Speech quality enhancement with SEGAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In [Chapter 7](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml), *Image Restoration
+    with GANs*, we explored how GANs can restore some of the pixels in images. Researchers
+    have found a similar application in NLP where GANs can be trained to get rid of
+    the noises in audio in order to enhance the quality of the recorded speeches.
+    In this section, we will learn how to use SEGAN to reduce background noise in
+    the audio and make the human voice in the noisy audio more audible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SEGAN architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Speech Enhancement GAN** (**SEGAN**) was proposed by Santiago Pascual, Antonio
+    Bonafonte, and Joan Serrà in their paper, *SEGAN: Speech Enhancement Generative
+    Adversarial Network*. It uses 1D convolutions to successfully remove noise from
+    speech audio. You can check out the noise removal results compared to other methods
+    here at [http://veu.talp.cat/segan](http://veu.talp.cat/segan). There''s also
+    an upgraded version, which can be found at [http://veu.talp.cat/seganp](http://veu.talp.cat/seganp).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Images are two-dimensional, while sounds are one-dimensional. Considering GANs
+    are so good at synthesizing 2D images, it is rather obvious to consider using
+    1D convolution layers instead of 2D convolutions in order to harness the power
+    of GANs when it comes to synthesizing audio data. This is exactly how SEGAN is
+    built.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The generator network in SEGAN employs an architecture of **Encoder-Decoder** with
+    skip connections, which you may be familiar with since we have already met other
+    GANs that use a similar architecture (such as `pix2pixHD`). The architecture of
+    the generator network is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/193453c0-4b63-4017-9e2a-53f9ef467039.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.3 Architecture of the generator network in SEGAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the audio samples are cropped to a fixed length of 16,384 and are passed
+    through five of the layers of the 1D convolution with a kernel size of 31 and
+    a stride size of 4\. The compressed 1,024 x 16 vector (ignoring the batch channel)
+    is concatenated with the latent vector (that's 1,024 x 16 in size) so that it
+    can be fed through another five transposed convolution layers. The feature maps
+    with the same shape in the mirrored convolution and transposed convolution layers
+    are connected with skip connections. This is because the basic structures of noisy
+    and clean audio are pretty much the same and skip connections help the generator
+    reconstruct the structure of enhanced audio a lot faster. Finally, a denoised
+    audio sample with a length of 16,384 is generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, the discriminator network of SEGAN is a single encoder network since
+    all we need from the discriminator is the fidelity score of the input audio. The
+    architecture of the discriminator network is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/6800dd57-6543-465b-ad22-4184f8b5544f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.4 Architecture of the discriminator network in SEGAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: The noisy audio and the clean (real data or synthesized data) audio are concatenated
+    together to form a 2 x 16,384 tensor, which is passed through five convolution
+    layers and three fully-connected layers to get the final output, which indicates
+    whether the clean audio is real or synthesized. In both networks, **Parametric
+    ReLU** (**PReLU**) is used as an activation function in hidden layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training SEGAN to enhance speech quality
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Training SEGAN isn''t much different from training a normal image-synthesizing
+    GAN. The training process of SEGAN is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b81b6510-8f7b-4cae-8bb6-8a469e0d2c59.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 10.5 The training process of SEGAN. Networks that are updated in each
+    stage are marked with red boundaries. Here, `c*` denotes real clean audio, `n`
+    denotes noisy audio, and `c` denotes synthesized clean audio.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the clean audio and the noisy audio from the training data are fed into
+    the discriminator network to calculate MSE loss. The synthesized audio that's
+    generated by the generator, as well as the noisy audio, are also fed into the
+    discriminator network. In this stage, the discriminator network is trained to
+    be better at knowing the difference between real and synthesized clean audio.
+    Then, the generated audio is used to fool the discriminator (by minimizing the
+    MSE loss against 1) so that our generator network will get better at synthesizing
+    realistic clean audio. Also, the L1 loss between the synthesized audio (`c*`)
+    and real audio is calculated (with a scale factor of 100) to force the two to
+    have similar basic structures. RMSprop is used as an optimization method in which
+    the learning rate is set to a very small value (for example, ![](img/6e06c8fc-847e-4e9f-ad07-156b2dd74463.png)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's get some audio data and see what SEGAN can do. A paired clean-noisy
+    audio dataset is available here: [https://datashare.is.ed.ac.uk/handle/10283/1942](https://datashare.is.ed.ac.uk/handle/10283/1942).
+    We need to download both the clean and noisy 48 kHz speech training sets. The
+    `clean` dataset is about 822 MB in size while the `noisy` dataset is about 913
+    MB in size. There are 11,572 pieces of speech inside both sets, most of which
+    are single lines of English spoken by humans. The `noisy` audio is contaminated
+    by several people speaking simultaneously.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The source code of SEGAN for PyTorch has been kindly provided by the authors
+    of the paper: [https://github.com/santi-pdp/segan_pytorch](https://github.com/santi-pdp/segan_pytorch).
+    Follow these steps to prepare your code and start training SEGAN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Run the following script to get the code and install the prerequisites:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'An additional tool called `ahoproc_tools` ([https://github.com/santi-pdp/ahoproc_tools](https://github.com/santi-pdp/ahoproc_tools))
+    is also required. We need to download the source code of `ahoproc_tools` and copy
+    the `ahoproc_tools` inside it into the root folder of `segan_pytorch`. Alternatively,
+    you can access the full source code inside the code repository for this chapter
+    directly. You need to run the following script to make sure that all the submodules
+    have been downloaded:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Extract the `.wav` files from the downloaded `.zip` dataset files and move them
+    into the `data/clean_trainset_wav` and `data/noisy_trainset_wav` folders, respectively.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Finally, run the following script to start the training process:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: First, the training script will create a cache folder (`data/cache`) where it
+    will temporarily store the slicing results of the audio files (because we want
+    the inputs of both networks to be 16,384 in length).
+  prefs: []
+  type: TYPE_NORMAL
+- en: With a batch size of 300, it takes about 10.7 hours to finish 100 epochs of
+    training on a single GTX 1080Ti graphics card and costs about 10,137 MB of GPU
+    memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the training process has finished, run the following script to test the
+    trained model and remove the background noises from any audio file that''s put
+    inside the `data/noisy_testset` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned how to generate plain text with SeqGAN and remove
+    background noises in speech audio with SEGAN. We also experimented with how to
+    build a custom vocabulary from a collection of sentences for NLP tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will learn how to train GANs so that we can directly
+    generate 3D models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Yu L, Zhang W, Wang J. (2017). *SeqGAN: Sequence Generative Adversarial Nets
+    with Policy Gradient*. AAAI.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Hochreiter S and Schmidhuber J. (1997). *Long Short-Term Memory. Neural computation*.
+    9\. 1735-80\. 10.1162/neco.1997.9.8.1735.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Olah C. (Aug 27, 2015). *Understanding LSTM Networks*. Retrieved from [https://colah.github.io/posts/2015-08-Understanding-LSTMs](https://colah.github.io/posts/2015-08-Understanding-LSTMs).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Nguyen M. (Sep 25, 2018). *Illustrated Guide to LSTMs and GRUs: A step by step
+    explanation*. Retrieved from [https://towardsdatascience.com/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21](https://towardsdatascience.com/illustrated-guide-to-lstms-and-gru-s-a-step-by-step-explanation-44e9eb85bf21).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Hui J. (Sep 12, 2018). *RL – Policy Gradient Explained*. Retrieved from [https://medium.com/@jonathan_hui/rl-policy-gradients-explained-9b13b688b146](https://medium.com/@jonathan_hui/rl-policy-gradients-explained-9b13b688b146).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Weng L. (Apr 8, 2018). *Policy Gradient Algorithms*. Retrieved from [https://lilianweng.github.io/lil-log/2018/04/08/policy-gradient-algorithms.html](https://lilianweng.github.io/lil-log/2018/04/08/policy-gradient-algorithms.html).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Pascual S, Bonafonte A and Serrà J. (2017). *SEGAN: Speech Enhancement Generative
+    Adversarial Network*. INTERSPEECH.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

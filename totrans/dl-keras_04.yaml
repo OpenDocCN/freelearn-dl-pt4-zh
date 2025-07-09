@@ -1,0 +1,661 @@
+- en: Generative Adversarial Networks and WaveNet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will discuss **generative adversarial networks** (**GANs**)
+    and WaveNets. GANs have been defined as *the most interesting idea in the last
+    10 years in ML* ([https://www.quora.com/What-are-some-recent-and-potentially-upcoming-breakthroughs-in-deep-learning](https://www.quora.com/What-are-some-recent-and-potentially-upcoming-breakthroughs-in-deep-learning))
+    by Yann LeCun, one of the fathers of deep learning. GANs are able to learn how
+    to reproduce synthetic data that looks real. For instance, computers can learn
+    how to paint and create realistic images. The idea was originally proposed by
+    Ian Goodfellow (for more information refer to: *NIPS 2016 Tutorial: Generative
+    Adversarial Networks*, by I. Goodfellow, 2016); he was worked with the University
+    of Montreal, Google Brain, and recently OpenAI ([https://openai.com/](https://openai.com/)).
+    WaveNet is a deep generative network proposed by Google DeepMind to teach computers
+    how to reproduce human voices and musical instruments, both with impressive quality.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is GAN?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep convolutional GAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applications of GAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is a GAN?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The key intuition of GAN can be easily considered as analogous to *art forgery*, which
+    is the process of creating works of art ([https://en.wikipedia.org/wiki/Art](https://en.wikipedia.org/wiki/Art))
+    that are falsely credited to other, usually more famous, artists. GANs train two
+    neural nets simultaneously, as shown in the next diagram. The generator *G(Z) *makes
+    the forgery, and the discriminator *D(Y)* can judge how realistic the reproductions
+    based on its observations of authentic pieces of arts and copies are. *D(Y)* takes
+    an input, *Y, *(for instance, an image) and expresses a vote to judge how real
+    the input is--in general, a value close to zero denotes *real* and a value close
+    to one denotes *forgery*. *G(Z)* takes an input from a random noise, *Z*, and
+    trains itself to fool *D* into thinking that whatever *G(Z)* produces is real.
+    So, the goal of training the discriminator *D(Y)* is to maximize *D(Y)* for every
+    image from the true data distribution, and to minimize *D(Y*) for every image
+    not from the true data distribution. So, *G* and *D* play an opposite game; hence
+    the name *adversarial training*. Note that we train *G* and *D* in an alternating
+    manner, where each of their objectives is expressed as a loss function optimized
+    via a gradient descent. The generative model learns how to forge more successfully,
+    and the discriminative model learns how to recognize forgery more successfully.
+    The discriminator network (usually a standard convolutional neural network) tries
+    to classify whether an input image is real or generated. The important new idea
+    is to backpropagate through both the discriminator and the generator to adjust
+    the generator''s parameters in such a way that the generator can learn how to
+    fool the the discriminator for an increasing number of situations. At the end,
+    the generator will learn how to produce forged images that are indistinguishable
+    from real ones:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Of course, GANs require finding the equilibrium in a game with two players.
+    For effective learning it is required that if a player successfully moves downhill
+    in a round of updates, the same update must move the other player downhill too.
+    Think about it! If the forger learns how to fool the judge on every occasion,
+    then the forger himself has nothing more to learn. Sometimes the two players eventually
+    reach an equilibrium, but this is not always guaranteed and the two players can
+    continue playing for a long time. An example of learning from both sides has been
+    provided in the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_001.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Some GAN applications
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We have seen that the generator learns how to forge data. This means that it
+    learns how to create new synthetic data, which is created by the network, that
+    looks real and like it was created by humans. Before going into details of some
+    GAN code, I''d like to share the results of a recent paper: *StackGAN: Text to
+    Photo-Realistic Image Synthesis with Stacked Generative Adversarial Networks*,
+    by Han Zhang, Tao Xu, Hongsheng Li, Shaoting Zhang, Xiaolei Huang, Xiaogang Wang,
+    and Dimitris Metaxas (the code is available online at: [https://github.com/hanzhanggit/StackGAN](https://github.com/hanzhanggit/StackGAN)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, a GAN has been used to synthesize forged images starting from a text
+    description. The results are impressive. The first column is the real image in
+    the test set, and the rest of the columns contain images generated from the same
+    text description by Stage-I and Stage-II of StackGAN. More examples are available
+    on YouTube ([https://www.youtube.com/watch?v=SuRyL5vhCIM&feature=youtu.be](https://www.youtube.com/watch?v=SuRyL5vhCIM&feature=youtu.be)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/B06258_04a_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now let us see how a GAN can learn to *forge* the MNIST dataset. In this case,
+    there is a combination of GAN and ConvNets (for more information refer to: *Unsupervised
+    Representation Learning with Deep Convolutional Generative Adversarial Networks*,
+    by A. Radford, L. Metz, and S. Chintala, arXiv: 1511.06434, 2015) used for the
+    generator and the discriminator networks. At the beginning, the generator creates
+    nothing understandable, but after a few iterations, synthetic forged numbers are
+    progressively clearer and clearer. In the following image, the panels are ordered
+    by increasing training epochs, and you can see the quality improving among panels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_004.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The following image represents the forged handwritten numbers as the number
+    of iterations increases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_005.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The following image represents the forged handwritten numbers at the hand of
+    computation. The results are virtually indistinguishable from the original:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_006.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'One of the coolest uses of GAN is arithmetic on faces in the generator''s vector
+    *Z*. In other words, if we stay in the space of synthetic forged images, it is
+    possible to see things like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*[smiling woman] - [neutral woman] + [neutral man] = [smiling man]*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Or like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*[man with glasses] - [man without glasses] + [woman without glasses] = [woman
+    with glasses]*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next image is taken from the article, *Unsupervised Representation Learning
+    with Deep Convolutional Generative Adversarial Networks*, by A. Radford, L. Metz,
+    and S. Chintala, arXiv: 1511.06434, November, 2015:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_007.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Deep convolutional generative adversarial networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The **deep convolutional generative adversarial networks** (**DCGAN**) are introduced
+    in the paper: *Unsupervised Representation Learning with Deep Convolutional Generative
+    Adversarial Networks*, by A. Radford, L. Metz, and S. Chintala, arXiv: 1511.06434,
+    2015\. The generator uses a 100-dimensional, uniform distribution space, *Z,*
+    which is then projected into a smaller space by a series of vis-a-vis convolution
+    operations. An example is shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_008.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'A DCGAN generator can be described by the following Keras code; it is also
+    described by one implementation, available at: [https://github.com/jacobgil/keras-dcgan](https://github.com/jacobgil/keras-dcgan):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the code runs with Keras 1.x syntax. However, it is possible to run
+    it with Keras 2.0 thanks to the Keras legacy interfaces. In this case a few warnings
+    are reported as shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dcgan-compatibility.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now let’s see the code. The first dense layer takes a vector of 100 dimensions
+    as input and it produces 1,024 dimensions with the activation function `tanh`
+    as the output*.* We assume that the input is sampled from a uniform distribution
+    in *[-1, 1]*. The next dense layer produces data of 128 x 7 x 7 in the output
+    using batch normalization (for more information refer to *Batch Normalization:
+    Accelerating Deep Network Training by Reducing Internal Covariate Shift*, by S.
+    Ioffe and C. Szegedy, arXiv: 1502.03167, 2014), a technique that can help stabilize
+    learning by normalizing the input to each unit to zero mean and unit variance*. *Batch
+    normalization has been empirically proven to accelerate the training in many situations,
+    reduce the problems of poor initialization, and more generally produce more accurate
+    results. There is also a `Reshape()` module that produces data of 127 x 7 x 7
+    (127 channels, 7 width, and 7 height), `dim_ordering` to `tf`, and a `UpSampling()`
+    module that produces a repetition of each one into a 2 x 2 square. After that,
+    we have a convolutional layer producing 64 filters on 5 x 5 convolutional kernels
+    with the activation `tanh`*,* followed by a new `UpSampling()` and a final convolution
+    with one filter, and on 5 x 5 convolutional kernels with the activation `tanh`*.*
+    Notice that this ConvNet has no pooling operations. The discriminator can be described
+    with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The code takes a standard MNIST image with the shape `(1, 28, 28)` and applies
+    a convolution with 64 filters of size 5 x 5 with `tanh` as the activation function.
+    This is followed by a max-pooling operation of size 2 x 2 and by a further convolution
+    max-pooling operation. The last two stages are dense, with the final one being
+    the prediction for forgery, which consists of only one neuron with a `sigmoid`
+    activation function. For a chosen number of epochs, the generator and discriminator
+    are in turn trained by using `binary_crossentropy` as loss function. At each epoch,
+    the generator makes a number of predictions (for example, it creates forged MNIST
+    images) and the discriminator tries to learn after mixing the prediction with
+    real MNIST images. After 32 epochs, the generator learns to forge this set of
+    handwritten numbers. No one has programmed the machine to write but it has learned
+    how to write numbers that are indistinguishable from the ones written by humans.
+    Note that training GANs could be very difficult because it is necessary to find
+    the equilibrium between two players. If you are interested in this topic, I''d
+    advise you to have a look at a series of tricks collected by practitioners ([https://github.com/soumith/ganhacks](https://github.com/soumith/ganhacks)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Capture.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Keras adversarial GANs for forging MNIST
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Keras adversarial ([https://github.com/bstriner/keras-adversarial](https://github.com/bstriner/keras-adversarial))
+    is an open source Python package for building GANs developed by Ben Striner ([https://github.com/bstriner](https://github.com/bstriner) and [https://github.com/bstriner/keras-adversarial/blob/master/LICENSE.txt](https://github.com/bstriner/keras-adversarial/blob/master/LICENSE.txt)).
+    Since Keras just recently moved to 2.0, I suggest downloading latest Keras adversarial
+    package:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And install `setup.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that compatibility with Keras 2.0 is tracked in this issue[ https://github.com/bstriner/keras-adversarial/issues/11](https://github.com/bstriner/keras-adversarial/issues/11).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If the generator *G* and the discriminator *D* are based on the same model, *M,* then
+    they can be combined into an adversarial model; it uses the same input, *M*, but
+    separates targets and metrics for *G* and *D*. The library has the following API
+    call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If the generator *G* and the discriminator *D* are based on the two different
+    models, then it is possible to use this API call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s see an example of a computation with MNIST:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let us see the open source code ([https://github.com/bstriner/keras-adversarial/blob/master/examples/example_gan_convolutional.py](https://github.com/bstriner/keras-adversarial/blob/master/examples/example_gan_convolutional.py)).
+    Note that the code uses the syntax of Keras 1.x, but it also runs on the top of
+    Keras 2.x thanks to a convenient set of utility functions contained in `legacy.py`.
+    The code for `legacy.py` is reported in [Appendix](c0a1905f-57cc-401c-b485-6bf0854e43e9.xhtml),
+    *Conclusion*, and is available at [https://github.com/bstriner/keras-adversarial/blob/master/keras_adversarial/legacy.py](https://github.com/bstriner/keras-adversarial/blob/master/keras_adversarial/legacy.py).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, the open source example imports a number of modules. We have seen all
+    of them previously, with the exception of LeakyReLU, a special version of ReLU
+    that allows a small gradient when the unit is not active. Experimentally, it has
+    been shown that LeakyReLU can improve the performance of GANs (for more information
+    refer to: *Empirical Evaluation of Rectified Activations in Convolutional Network*,
+    by B. Xu, N. Wang, T. Chen, and M. Li, arXiv:1505.00853, 2014) in a number of
+    situations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, specific modules for GANs are imported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Adversarial models train for multiplayer games. Given a base model with *n*
+    targets and *k* players, create a model with *n*k* targets, where each player
+    optimizes loss on that player''s targets. In addition, `simple_gan` generates
+    a GAN with the given `gan_targets`. Note that in the library, the labels for generator
+    and discriminator are opposite; intuitively, this is a standard practice for GANs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The example defines the generator in a similar way to what we have seen previously.
+    However, in this case, we use the functional syntax—each module in our pipeline
+    is simply passed as input to the following module. So, the first module is dense,
+    initialized by using `glorot_normal`. This initialization uses Gaussian noise
+    scaled by the sum of the inputs plus outputs from the node. The same kind of initialization
+    is used for all of the other modules. The `mode=2` parameter in `BatchNormlization` function
+    produces feature-wise normalization based on per-batch statistics. Experimentally,
+    this produces better results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The discriminator is very similar to the one defined previously in this chapter.
+    The only major difference is the adoption of `LeakyReLU`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, two simple functions for loading and normalizing MNIST data are defined:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a next step, the GAN is defined as a combination of generator and discriminator
+    in a joint GAN model. Note that the weights are initialized with `normal_latent_sampling`,
+    which samples from a normal Gaussian distribution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After this, the example creates our GAN and it compiles the model trained using
+    the `Adam` optimizer, with `binary_crossentropy` used as a loss function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The generator for creating new images that look like real ones is defined.
+    Each epoch will generate a new forged image during training that looks like the
+    original:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that `dim_ordering_unfix` is utility function for supporting different
+    image ordering defined in `image_utils.py`, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now let''s run the code and see the loss for the generator and discriminator.
+    In the following screenshot, we see a dump of the networks for the discriminator
+    and the generator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/keras_adversarial_MNIST.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The following screenshot, shows the number of sample used for training and
+    for validation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_010.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'After 5-6 iterations, we already have acceptable artificial images generated
+    and the computer has learned how to reproduce handwritten characters, as shown
+    in the following image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_011.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Keras adversarial GANs for forging CIFAR
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now we can use a GAN approach to learn how to forge CIFAR-10 and create synthetic
+    images that look real. Let''s see the open source code ([https://github.com/bstriner/keras-adversarial/blob/master/examples/example_gan_cifar10.py](https://github.com/bstriner/keras-adversarial/blob/master/examples/example_gan_cifar10.py)).
+     Again, note that it uses the syntax of Keras 1.x, but it also runs on the top
+    of Keras 2.x thanks to a convenient set of utility functions contained in `legacy.py`
+    ([https://github.com/bstriner/keras-adversarial/blob/master/keras_adversarial/legacy.py](https://github.com/bstriner/keras-adversarial/blob/master/keras_adversarial/legacy.py)).
+    First, the open source example imports a number of packages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, it defines a generator that uses a combination of convolutions with `l1`
+    and `l2` regularization, batch normalization, and upsampling. Note that `axis=1`
+    says to normalize the dimension of the tensor first and `mode=0` says to adopt
+    a feature-wise normalization. This particular net is the result of many fine-tuning
+    experiments, but it is still essentially a sequence of convolution 2D and upsampling
+    operations, which uses a `Dense` module at the beginning and a `sigmoid` at the
+    end. In addition, each convolution uses a `LeakyReLU` activation function and
+    `BatchNormalization`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, a discriminator is defined. Again, we have a sequence of convolution
+    2D operations, and in this case we adopt `SpatialDropout2D`, which drops entire
+    2D feature maps instead of individual elements. We also use `MaxPooling2D` and
+    `AveragePooling2D` for similar reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is now possible to generate proper GANs. The following function takes multiple
+    inputs, including a generator, a discriminator, the number of latent dimensions,
+    and the GAN targets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then two GANs are created, one with dropout and the other without dropout for
+    the discriminator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The two GANs are now combined into an adversarial model with separate weights,
+    and the model is then compiled:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, there is a simple callback to sample images and a print on the file where
+    the method `ImageGridCallback` is defined:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, the CIFAR-10 data is loaded and the model is fit. If the backend is TensorFlow,
+    then the loss information is saved into a TensorBoard to check how the loss decreases
+    over time. The history is also conveniently saved into a CVS format, and the models''
+    weights are also stored in an `h5` format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the whole GANs can be run. The generator samples from a space with
+    100 latent dimensions, and we''ve used `Adam` as optimizer for both GANs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In order to have a complete view on the open source code, we need to include
+    a few simple utility functions for storing the grid of images:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In addition, we need some utility methods for dealing with different image
+    ordering (for example, Theano or TensorFlow):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following screenshot, shows a dump of the defined networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/keras_adversarial_CIFAR.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'If we run the open source code, the very first iteration will generate unrealistic
+    images. However, after 99 iterations, the network will learn to forge images that look
+    like real CIFAR-10 images, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_012.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the following images, we see the real CIFAR-10 image on the right and the
+    forged one on the left:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Forged images | Real CIFAR-10 images |'
+  prefs: []
+  type: TYPE_TB
+- en: '| ![](img/B06258_04a_013.png) | ![](img/B06258_04a_014.png) |'
+  prefs: []
+  type: TYPE_TB
+- en: WaveNet — a generative model for learning how to produce audio
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'WaveNet is a deep generative model for producing raw audio waveforms. This
+    breakthrough technology was introduced ([https://deepmind.com/blog/wavenet-generative-model-raw-audio/](https://deepmind.com/blog/wavenet-generative-model-raw-audio/))
+    by Google DeepMind ([https://deepmind.com/](https://deepmind.com/)) for teaching
+    users how to speak to computers. The results are truly impressive, and you can
+    find online examples of synthetic voices where the computer learns how to talk
+    with the voices of celebrities such as Matt Damon. So, you might wonder why learning
+    to synthesize audio is so difficult. Well, each digital sound we hear is based
+    on 16,000 samples per second (sometimes, 48,000 or more), and building a predictive
+    model where we learn to reproduce a sample based on all the previous ones is a
+    very difficult challenge. Nevertheless, there are experiments showing that WaveNet
+    has improved current state-of-the-art **text-to-speech** (**TTS**) systems, reducing
+    the difference with human voices by 50% for both US English and Mandarin Chinese.
+    What is even cooler is that DeepMind proved that WaveNet can also be used to teach
+    computers how to generate the sound of musical instruments such as piano music.
+    Now it''s time for some definitions. TTS systems are typically divided into two
+    different classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Concatenative TTS**: This is where single speech voice fragments are first
+    memorized and then recombined when the voice has to be reproduced. However, this
+    approach does not scale because it is only possible to reproduce the memorized
+    voice fragments, and it is not possible to reproduce new speakers or different
+    types of audio without memorizing the fragments from the beginning.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Parametric TTS**: This is where a model is created for storing all the characteristic
+    features of the audio to be synthesized. Before WaveNet, the audio generated with
+    parametric TTS was less natural than concatenative TTS. WaveNet improved the state-of-the-art
+    by modeling directly the production of audio sounds, instead of using intermediate
+    signal processing algorithms that have been used in the past.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In principle, WaveNet can be seen as a stack of 1D convolutional layers (we
+    have seen 2D convolution for images in [Chapter 3](4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml),
+    *Deep Learning with ConvNets*), with a constant stride of one and with no pooling
+    layers. Note that the input and the output have by construction the same dimension,
+    so ConvNet is well-suited to model sequential data such as audio. However, it
+    has been shown that in order to reach a large size for the receptive field (remember
+    that the receptive field of a neuron in a layer is the cross section of the previous
+    layer from which neurons provide inputs) in the output neuron it is necessary
+    to either use a massive number of large filters or prohibitively increase the
+    the depth of the network. For this reason, pure ConvNets are not so effective
+    in learning how to synthesize audio. The key intuition beyond WaveNet is the dilated
+    causal convolutions (for more information refer to the article: *Multi-Scale Context
+    Aggregation by Dilated Convolutions*, by Fisher Yu, Vladlen Koltun, 2016, available
+    at: [https://www.semanticscholar.org/paper/Multi-Scale-Context-Aggregation-by-Dilated-Yu-Koltun/420c46d7cafcb841309f02ad04cf51cb1f190a48](https://www.semanticscholar.org/paper/Multi-Scale-Context-Aggregation-by-Dilated-Yu-Koltun/420c46d7cafcb841309f02ad04cf51cb1f190a48))
+    or sometime atrous convolution (*atrous* is the *bastardization* of the French
+    expression *à trous*, meaning *with holes*, so an atrous convolution is a convolution
+    with holes), which simply means that some input values are skipped when the filter
+    of a convolutional layer is applied. As an example, in one dimension, a filter, *w*,
+    of size *3* with dilatation *1* would compute the following sum:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/B06258_04a_015.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Thanks to this simple idea of introducing *holes*, it is possible to stack
+    multiple dilated convolutional layers with exponentially increasing filters, and
+    learn long range input dependencies without having an excessively deep network.
+    A WaveNet is therefore a ConvNet where the convolutional layers have various dilation
+    factors, allowing the receptive field to grow exponentially with depth and therefore
+    efficiently cover thousands of audio time-steps. When we train, the input are
+    sounds recorded from human speakers. The waveforms are quantized to a fixed integer
+    range. A WaveNet defines an initial convolutional layer accessing only the current
+    and previous input. Then, there is a stack of dilated ConvNet layers, still accessing
+    only current and previous inputs. At the end, there is a series of dense layers
+    that combine previous results, followed by a softmax activation function for categorical
+    outputs. At each step, a value is predicted from the network and fed back into
+    the input. At the same time, a new prediction for the next step is computed. The
+    loss function is the cross-entropy between the output for the current step and
+    the input at the next step .One Keras implementation developed by Bas Veeling
+    is available at: [https://github.com/basveeling/wavenet](https://github.com/basveeling/wavenet) and
+    can be easily installed via `git`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that this code is compatible with Keras 1.x and please check the issue
+    at [https://github.com/basveeling/wavenet/issues/29](https://github.com/basveeling/wavenet/issues/29),
+    to understand what is the progress for porting it on the top of Keras 2.x. Training
+    is very simple but requires a significant amount of computational power (so make
+    sure that you have good GPU support):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sampling the network after training is equally very easy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can find a large number of hyperparameters online, which can be used for
+    fine-tuning our training process. The network is really deep, as explained by
+    this dump of internal layers. Note that the input waveform are divided into (`fragment_length
+    = 1152` and `nb_output_bins = 256`), which is the tensor propagating into WaveNet.
+    WaveNet is organized in repeated blocks called residuals, each consisting of a
+    multiplied merge of two dilated convolutional modules (one with `sigmoid` and
+    the other with `tanh` activation), followed by a sum merged convolutional. Note
+    that each dilated convolution has holes of growing exponential size (`2 ** i`)
+    from 1 to 512, as defined in this piece of text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After the residual dilated block, there is a sequence of merged convolutional
+    modules, followed by two convolutional modules, followed by a `softmax` activation
+    function in `nb_output_bins` categories. The full network structure is here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: DeepMind tried to train with data sets including multiple speakers, and this
+    significantly improved the capacity to learn a shared representation of languages
+    and tones and thus receive results close to natural speech. You'll find an amazing
+    collection of examples of synthesized voice online ([https://deepmind.com/blog/wavenet-generative-model-raw-audio/](https://deepmind.com/blog/wavenet-generative-model-raw-audio/)),
+    and it is interesting to note that the quality of audio improves when WaveNet
+    is conditioned on additional text that is transformed into a sequence of linguistic
+    and phonetic features in addition to audio waveforms. My favorite examples are
+    the ones where the same sentence is pronounced by the net with different tones
+    of voice. Of course, it is also fascinating to hear WaveNet create piano music
+    by itself. Check it out online!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we discussed GANs. A GAN typically consists of two networks;
+    one is trained to forge synthetic data that looks authentic, and the second is
+    trained to discriminate authentic data against forged data. The two networks continuously
+    compete, and in doing so, they keep improving each other. We reviewed an open
+    source code, learning to forge MNIST and CIFAR-10 images that look authentic.
+    In addition, we discussed WaveNet, a deep generative network proposed by Google
+    DeepMind for teaching computers how to reproduce human voices and musical instruments
+    with impressive quality. WaveNet directly generates raw audio with a parametric
+    text-to-speech approach based on dilated convolutional networks. Dilated convolutional
+    networks are a special kind of ConvNets where convolution filters have holes,
+    allowing the receptive field to grow exponentially in depth and therefore efficiently
+    cover thousands of audio time-steps. DeepMind showed how it is possible to use
+    WaveNet to synthesize human voice and musical instruments, and improved previous
+    state-of-the-art. In the next chapter, we will discuss word embeddings—a set of
+    deep learning methodologies for detecting relations among words and grouping together
+    similar words.
+  prefs: []
+  type: TYPE_NORMAL

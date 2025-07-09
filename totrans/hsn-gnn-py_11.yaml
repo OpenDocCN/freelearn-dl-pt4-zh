@@ -1,0 +1,755 @@
+- en: '11'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Generating Graphs Using Graph Neural Networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Graph generation consists of finding methods to create new graphs. As a field
+    of study, it provides insights into understanding how graphs work and evolve.
+    It also has direct applications in data augmentation, anomaly detection, drug
+    discovery, and so on. We can distinguish two types of generation: **realistic
+    graph generation**, which imitates a given graph (for example, in data augmentation),
+    and **goal-directed graph generation**, which creates graphs that optimize a specific
+    metric (for instance, in molecule generation).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will explore traditional techniques to understand how graph
+    generation works. We will focus on two popular algorithms: the **Erdős–Rényi**
+    and the **small-world** models. They present interesting properties but also issues
+    that motivate the need for GNN-based graph generation. In the second section,
+    we will describe three families of solutions: **variational autoencoder** (**VAE**)-based,
+    autoregressive, and **GAN**-based models. Finally, we will implement a GAN-based
+    framework with **Reinforcement Learning** (**RL**) to generate new chemical compounds.
+    Instead of PyTorch Geometric, we will use the **DeepChem** library with TensorFlow.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will be able to generate graphs using traditional
+    and GNN-based techniques. You will have a good overview of this field and the
+    different applications you can build with it. You will know how to implement a
+    hybrid architecture to guide the generation into generating valid molecules with
+    your desired properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating graphs with traditional techniques
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generating graphs with graph neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generating molecules with MolGAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter11](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter11).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating graphs with traditional techniques
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Traditional graph generation techniques have been studied for decades. This
+    is why they are well understood and can be used as baselines in various applications.
+    However, they are often limited in the type of graphs they can generate. Most
+    of them are specialized to output certain topologies, which is why they cannot
+    simply imitate a given network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this section, we will introduce two classical techniques: the Erdős–Rényi
+    and the small-world models.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Erdős–Rényi model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The Erdős–Rényi model is the simplest and most popular random graph model.
+    It was introduced by Hungarian mathematicians Paul Erdős and Alfréd Rényi in 1959
+    [1] and was independently proposed by Edgar Gilbert the same year [2]. This model
+    has two variants: ![](img/Formula_B19153_11_001.png) and ![](img/Formula_B19153_11_002.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The ![](img/Formula_B19153_11_003.png) model is straightforward: we are given
+    ![](img/Formula_B19153_11_004.png) nodes and a probability ![](img/Formula_B19153_11_005.png)
+    of connecting a pair of nodes. We try to randomly connect every node to each other
+    to create the final graph. It means that there are ![](img/Formula_B19153_11_006.png)
+    possible links. Another way of understanding the probability ![](img/Formula_B19153_11_007.png)
+    is to consider it as a parameter to change the density of the network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `networkx` library has a direct implementation of the ![](img/Formula_B19153_11_008.png)
+    model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the `networkx` library:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We generate a `G` graph using the `nx.erdos_renyi_graph()` function with `10`
+    nodes (![](img/Formula_B19153_11_009.png)) and a probability for edge creation
+    of `0.5` (![](img/Formula_B19153_11_010.png)):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We position the resulting nodes using the `nx.circular_layout()` function.
+    Other layouts can be used, but this one is handy for comparing different values
+    of ![](img/Formula_B19153_11_011.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We draw the `G` graph with the `pos` layout using `nx.draw()`. Global heuristics
+    are usually more accurate but require knowing the entirety of the graph. However,
+    it is not the only way to predict links with this knowledge:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.1 – An Erdős–Rényi graph with 10 nodes and p=0.5](img/B19153_11_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.1 – An Erdős–Rényi graph with 10 nodes and p=0.5
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can repeat this process with a probability of **0.1** and **0.9** to obtain
+    the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.2 – Erdős–Rényi graphs with different probabilities for edge creation](img/B19153_11_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.2 – Erdős–Rényi graphs with different probabilities for edge creation
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that many nodes are isolated when ![](img/Formula_B19153_11_012.png)
+    is low, while the graph is highly interconnected when ![](img/Formula_B19153_11_013.png)
+    is high.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the ![](img/Formula_B19153_11_014.png) model, we randomly choose a graph
+    from all graphs with ![](img/Formula_B19153_11_015.png) nodes and ![](img/Formula_B19153_11_016.png)
+    links. For instance, if ![](img/Formula_B19153_11_017.png) and ![](img/Formula_B19153_11_018.png),
+    there are three possible graphs (see *Figure 11**.3*). The ![](img/Formula_B19153_11_019.png)
+    model will just randomly select one of these graphs. This is a different approach
+    to the same problem, but it is not as popular as the ![](img/Formula_B19153_11_020.png)
+    model because it is more challenging to analyze in general:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.3 – A set of graphs with three nodes and two links](img/B19153_11_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.3 – A set of graphs with three nodes and two links
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can also implement the ![](img/Formula_B19153_11_021.png) model in Python
+    using the `nx.gnm_random_graph()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![Figure 11.4 – A graph randomly sampled from the set of graphs with three
+    nodes and two links](img/B19153_11_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.4 – A graph randomly sampled from the set of graphs with three nodes
+    and two links
+  prefs: []
+  type: TYPE_NORMAL
+- en: The strongest and most interesting assumption made by the ![](img/Formula_B19153_11_022.png)
+    model is that links are independent (meaning that they do not interfere with each
+    other). Unfortunately, it is not true for most real-world graphs, where we observe
+    clusters and communities that contradict this rule.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The small-world model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Introduced in 1998 by Duncan Watts and Steven Strogatz [3], the small-world
+    model tries to imitate the behavior of biological, technological, and social networks.
+    The main concept is that real-world networks are not completely random (as in
+    the Erdős–Rényi model) but not totally regular either (as in a grid). This kind
+    of topology is somewhere in between, which is why we can interpolate it using
+    a coefficient. The small-world model produces graphs that have both:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Short paths**: The average distance between any two nodes in the network
+    is relatively small, which makes it easy for information to spread quickly throughout
+    the network'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**High clustering coefficients**: Nodes in the network tend to be closely connected
+    to one another, creating dense clusters of nodes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Many algorithms display small-world properties. In the following, we will describe
+    the original **Watts–Strogatz** model proposed in [3]. It can be implemented using
+    the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We initialize a graph with ![](img/Formula_B19153_11_023.png) nodes.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Each node is connected to its ![](img/Formula_B19153_11_024.png) nearest neighbors
+    (or ![](img/Formula_B19153_11_025.png) neighbors if ![](img/Formula_B19153_11_026.png)
+    is odd).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Each link between nodes ![](img/Formula_B19153_11_027.png) and ![](img/Formula_B19153_11_028.png)
+    has a probability ![](img/Formula_B19153_11_029.png) of being rewired between
+    ![](img/Formula_B19153_11_030.png) and ![](img/Formula_B19153_11_031.png), where
+    ![](img/Formula_B19153_11_032.png) is another random node.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'In Python, we can implement it by calling the `nx.watts_strogatz_graph()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This produces the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.5 – A small-world network obtained with the Watts–Strogatz model](img/B19153_11_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.5 – A small-world network obtained with the Watts–Strogatz model
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As with the Erdős–Rényi model, we can repeat the same process with different
+    probabilities ![](img/Formula_B19153_11_033.png) to obtain *Figure 11**.6*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.6 – A small-world model with different probabilities for rewiring](img/B19153_11_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.6 – A small-world model with different probabilities for rewiring
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that when ![](img/Formula_B19153_11_034.png), the graph is completely
+    regular. On the opposite end, when ![](img/Formula_B19153_11_035.png), the graph
+    is completely random as every link has been rewired. We obtain a balanced graph
+    between these two extremes with hubs and local clustering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nonetheless, the Watts–Strogatz model does not produce a realistic degree distribution.
+    It also requires a fixed number of nodes, which means it cannot be used for network
+    growth. In general, classical methods fail to capture real-world graphs’ full
+    diversity and complexity. This motivated the creation of a new family of techniques,
+    often referred to as deep graph generation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating graphs with graph neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Deep graph generative models are GNN-based architectures that are more expressive
+    than traditional techniques. However, it comes at a cost: they are often too complex
+    to be analyzed and understood, like classical methods. We list three main families
+    of architecture for deep graph generation: VAEs, GANs, and autoregressive models.
+    Other techniques exist, such as normalizing flows or diffusion models, but they
+    are less popular and mature than these three.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section will describe how to use VAEs, GANs, and autoregressive models
+    to generate graphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Graph variational autoencoders
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As seen in the last chapter, VAEs can be used to approximate an adjacency matrix.
+    The **Graph Variational Autoencoder** (**GVAE**) model we saw has two components:
+    an encoder and a decoder. The encoder uses two GCNs that share their first layer
+    to learn the mean and the variance of each latent normal distribution. The decoder
+    then samples the learned distributions to perform the inner product between latent
+    variables ![](img/Formula_B19153_11_036.png). In the end, we obtained the approximated
+    adjacency matrix ![](img/Formula_B19153_11_037.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, we used ![](img/Formula_B19153_11_038.png) to predict
+    links. However, it is not its only application: it directly gives us the adjacency
+    matrix of a network that imitates graphs seen during training. Instead of predicting
+    links, we can use this output to generate new graphs. Here is an example of the
+    adjacency matrix created by the VGAE model from [*Chapter 10*](B19153_10.xhtml#_idTextAnchor116):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since 2016, this technique has been expanded beyond the GVAE model to also
+    output node and edge features. A good example is one of the most popular VAE-based
+    graph generative models: **GraphVAE** [4]. Introduced in 2018 by Simonovsky and
+    Komodakis, it is designed to generate realistic molecules. This requires the ability
+    to differentiate nodes (atoms) and edges (chemical bonds).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GraphVAE considers graphs ![](img/Formula_B19153_11_039.png), where ![](img/Formula_B19153_11_040.png)
+    is the adjacency matrix, ![](img/Formula_B19153_11_041.png) is the edge attribute
+    tensor, and ![](img/Formula_B19153_11_042.png) is the node attribute matrix. It
+    learns a probabilistic version of the graph ![](img/Formula_B19153_11_043.png)
+    with a predefined number of nodes. In this probabilistic version, ![](img/Formula_B19153_11_038.png)
+    contains node (![](img/Formula_B19153_11_045.png)) and edge (![](img/Formula_B19153_11_046.png))
+    probabilities, ![](img/Formula_B19153_11_047.png) indicates class probabilities
+    for edges, and ![](img/Formula_B19153_11_048.png) contains class probabilities
+    for nodes. Compared to GVAE, GraphVAE’s encoder is a feed forward network with
+    **edge-conditional graph convolutions** (**ECC**), and its decoder is a **multilayer
+    perceptron** (**MLP**) with three outputs. The entire architecture is summarized
+    in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.7 – GraphVAE’s inference process](img/B19153_11_007.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.7 – GraphVAE’s inference process
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many other VAE-based graph generative architectures. However, their
+    role is not limited to imitating graphs: they can also embed constraints to guide
+    the type of graphs they produce.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A popular way of adding these constraints is to check them during the decoding
+    phase, such as the **Constrained Graph Variational Autoencoder** (**CGVAE**) [5].
+    In this architecture, the encoder is a **Gated Graph Convolutional Network** (**GGCN**),
+    and the decoder is an autoregressive model. Autoregressive decoders are particularly
+    suited for this task, as they can verify every constraint for each step of the
+    process. Finally, another technique to add constraints consists of using Lagrangian-based
+    regularizers that are faster to compute but less strict in terms of generation
+    [6].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Autoregressive models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Autoregressive models can also be used on their own. The difference with other
+    models is that past outputs become part of the current input. In this framework,
+    graph generation becomes a sequential decision-making process that considers both
+    data and past decisions. For instance, at each step, the autoregressive model
+    can create a new node or a new link. Then, the resulting graph is fed to the model
+    for the next generation step until we stop it. The following diagram illustrates
+    this process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.8 – The autoregressive process for graph generation](img/B19153_11_008.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.8 – The autoregressive process for graph generation
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, we use **Recurrent Neural Networks** (**RNNs**) to implement this
+    autoregressive ability. In this architecture, previous outputs are used as inputs
+    to compute the current hidden state. In addition, they can process inputs of arbitrary
+    length, which is crucial for generating graphs iteratively. However, this computation
+    is slower than feedforward networks, as the entire sequence must be processed
+    to obtain the final output. The two most popular types of RNNs are the **Gated
+    Recurrent Unit** (**GRU**) and **Long Short-Term Memory** (**LSTM**) networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Introduced in 2018 by You et al., **GraphRNN** [7] is a direct implementation
+    of these techniques for deep graph generation. This architecture uses two RNNs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A *graph-level RNN* to generate a sequence of nodes (including the initial state)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An *edge-level RNN* to predict connections for each newly added node
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The edge-level RNN takes the hidden state of the graph-level RNN as input and
+    then feeds it with its own output. This mechanism is illustrated in the following
+    diagram at inference time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.9 – GraphRNN’s architecture at inference time](img/B19153_11_009.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.9 – GraphRNN’s architecture at inference time
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both RNNs are actually completing an adjacency matrix: each new node created
+    by the graph-level RNN adds a row and a column, which are filled with zeros and
+    ones by the edge-level RNN. In summary, GraphRNN performs the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Add new node*: The graph-level RNN initializes the graph and its output if
+    fed to the edge-level RNN.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*Add new connections*: The edge-level RNN predicts if the new node is connected
+    to each of the previous nodes.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*Stop graph generation*: The two first steps are repeated until the edge-level
+    RNN outputs an EOS token, marking the end of the process.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The GraphRNN can learn different types of graphs (grids, social networks, proteins,
+    and so on) and completely outperform traditional techniques. It is an architecture
+    of choice to imitate given graphs that should be preferred to GraphVAE.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative adversarial networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Like VAEs, GANs are a well-known generative model in **ML**. In this framework,
+    two neural networks compete in a zero-sum game with two different goals. The first
+    neural network is a generator that creates new data, and the second one is a discriminator
+    that classifies each sample as real (from the training set) or fake (made by the
+    generator).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Over the years, two main improvements to the original architecture have been
+    proposed. The first one is called the **Wasserstein GAN** (**WGAN**). It improves
+    learning stability by minimizing the Wasserstein distance (or Earth Mover’s distance)
+    between two probability distributions. This variant is further refined by introducing
+    a gradient penalty instead of the original gradient clipping scheme.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multiple works applied this framework to deep graph generation. Like previous
+    techniques, GANs can imitate graphs or generate networks that optimize certain
+    constraints. The latter option is handy in applications such as finding new chemical
+    compounds with specific properties. This problem is exceptionally vast (over ![](img/Formula_B19153_11_049.png)
+    possible combinations) and complex due to its discrete nature.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Proposed by De Cao and Kipf in 2018 [8], the **molecular GAN** (**MolGAN**)
+    is a popular solution to this problem. It combines a WGAN with a gradient penalty
+    that directly processes graph-structured data and an RL objective to generate
+    molecules with desired chemical properties. This RL objective is based on the
+    **Deep Deterministic Policy Gradient** (**DDPG**) algorithm, an off-policy actor-critic
+    model that uses deterministic policy gradients. MolGAN’s architecture is summarized
+    in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 11.10 – MolGAN’s architecture at inference time](img/B19153_11_010.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.10 – MolGAN’s architecture at inference time
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This framework is divided into three main components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The **generator** is an MLP that outputs a node matrix ![](img/Formula_B19153_11_050.png)
+    containing the atom types and an adjacency matrix ![](img/Formula_B19153_11_051.png),
+    which is actually a tensor containing both the edges and bond types. The generator
+    is trained using a linear combination of the WGAN and RL loss. We translate these
+    dense representations into sparse objects (![](img/Formula_B19153_11_052.png)
+    and ![](img/Formula_B19153_11_053.png)) via categorical sampling.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **discriminator** receives graphs from the generator and the dataset and
+    learns to distinguish them. It is solely trained using the WGAN loss.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **reward network** scores each graph. It is trained using the MSE loss based
+    on the real score provided by an external system (RDKit in this case).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The discriminator and the reward network use the GNN mode: the Relational-GCN,
+    a GCN variant that supports multiple edge types. After several layers of graph
+    convolutions, node embeddings are aggregated into a graph-level vector output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_11_054.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_11_055.png) denotes the logistic sigmoid function,
+    ![](img/Formula_B19153_11_056.png) and ![](img/Formula_B19153_11_057.png) are
+    two MLPs with linear output, and ![](img/Formula_B19153_11_058.png) is the element-wise
+    multiplication. A third MLP further processes this graph embedding to produce
+    a value between 0 and 1 for the reward network and between ![](img/Formula_B19153_11_059.png)
+    and ![](img/Formula_B19153_11_060.png) for the discriminator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: MolGAN produces valid chemical compounds that optimize properties such as drug
+    likeliness, synthesizability, and solubility. We will implement this architecture
+    in the next section to generate new molecules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating molecules with MolGAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Deep graph generation is not well covered by PyTorch Geometric. Drug discovery
+    is the main application of this subfield, which is why generative models can be
+    found in specialized libraries. More specifically, there are two popular Python
+    libraries for ML-based drug discovery: `DeepChem` and `torchdrug`. In this section,
+    we will use DeepChem as it is more mature and directly implements MolGAN.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s see how we can use it with `DeepChem` and `tensorflow`. The following
+    procedure is based on DeepChem’s example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We install `DeepChem` ([https://deepchem.io](https://deepchem.io)), which requires
+    the following libraries: `tensorflow`, `joblib`, `NumPy`, `pandas`, `scikit-learn`,
+    `SciPy`, and `rdkit`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we import the required packages:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We download the `tox21` (*Toxicology in the 21st Century*) dataset, which comprises
+    over 6,000 chemical compounds, to analyze their toxicity. We only need their **simplified
+    molecular-input line-entry system** (**SMILES**) representations in this example:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here is an output of these `smiles` strings:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We only consider molecules with a maximum number of 15 atoms. We filter our
+    dataset and create a `featurizer` to convert the `smiles` strings into input features:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We manually loop through our dataset to convert the `smiles` strings:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We remove invalid molecules from the dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we create the `MolGAN` model. It will be trained with a learning rate
+    that has an exponential delay schedule:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create the dataset to feed to `MolGAN` in DeepChem’s format:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`MolGAN` uses batch training, which is why we need to define an iterable as
+    follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We train the model for `25` epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We generate `1000` molecules:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we check whether these molecules are valid or not:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We compare them to see how many molecules are unique:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We print the generated molecules in a grid:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '![Figure 11.11 – Molecules generated with MolGAN](img/B19153_11_011.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 11.11 – Molecules generated with MolGAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Despite the GAN’s improvements, this training process is quite unstable and
+    can fail to produce any meaningful result. The code we presented is sensitive
+    to hyperparameter changes and does not generalize well to other datasets, including
+    the `QM9` dataset used in the original paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Nonetheless, MolGAN’s concept of mixing RL and GANs can be employed beyond drug
+    discovery to optimize any type of graph, such as computer networks, recommender
+    systems, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we saw different techniques to generate graphs. First, we
+    explored traditional methods based on probabilities with interesting mathematical
+    properties. However, due to their lack of expressiveness, we switched to GNN-based
+    techniques that are much more flexible. We covered three families of deep generative
+    models: VAE-based, autoregressive, and GAN-based methods. We introduced a model
+    from each family to understand how they work in real life.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we implemented a GAN-based model that combines a generator, a discriminator,
+    and a reward network from RL. Instead of simply imitating graphs seen during training,
+    this architecture can also optimize desired properties such as solubility. We
+    used DeepChem and TensorFlow to create 24 unique and valid molecules. Nowadays,
+    this pipeline is common in the drug discovery industry, where ML can drastically
+    speed up drug development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 12*](B19153_12.xhtml#_idTextAnchor144), *Handling Heterogeneous
+    Graphs*, we will explore a new kind of graph that we previously encountered in
+    recommender systems and molecules. These heterogeneous graphs contain multiple
+    types of nodes and/or links, which requires specific processing. They are more
+    general than the regular graphs we talked about and particularly useful in applications
+    such as knowledge graphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] P. Erdös and A. Rényi. *On random graphs I*, Publicationes Mathematicae
+    Debrecen, vol. 6, p. 290, 1959\. Available at [https://snap.stanford.edu/class/cs224w-readings/erdos59random.pdf](https://snap.stanford.edu/class/cs224w-readings/erdos59random.pdf).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] E. N. Gilbert, *Random Graphs*, The Annals of Mathematical Statistics,
+    vol. 30, no. 4, pp. 1141–1144, 1959, DOI: 10.1214/aoms/1177706098\. Available
+    at: [https://projecteuclid.org/journals/annals-of-mathematical-statistics/volume-30/issue-4/Random-Graphs/10.1214/aoms/1177706098.full](https://projecteuclid.org/journals/annals-of-mathematical-statistics/volume-30/issue-4/Random-Graphs/10.1214/aoms/1177706098.full).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] Duncan J. Watts and Steven H. Strogatz. *Collective dynamics of small-world
+    networks*, Nature, 393, pp. 440–442, 1998\. Available at [http://snap.stanford.edu/class/cs224w-readings/watts98smallworld.pdf](http://snap.stanford.edu/class/cs224w-readings/watts98smallworld.pdf).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] M. Simonovsky and N. Komodakis. *GraphVAE: Towards Generation of Small
+    Graphs Using Variational Autoencoders* CoRR, vol. abs/1802.03480, 2018, [Online].
+    Available at [http://arxiv.org/abs/1802.03480](http://arxiv.org/abs/1802.03480).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[5] Q. Liu, M. Allamanis, M. Brockschmidt, and A. L. Gaunt. *Constrained Graph
+    Variational Autoencoders for Molecule Design*. arXiv, 2018\. DOI: 10.48550/ARXIV.1805.09076\.
+    Available at [https://arxiv.org/abs/1805.09076](https://arxiv.org/abs/1805.09076).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[6] T. Ma, J. Chen, and C. Xiao, Constrained Generation of Semantically Valid
+    Graphs via Regularizing Variational Autoencoders. arXiv, 2018\. DOI: 10.48550/ARXIV.1809.02630\.
+    Available at [https://arxiv.org/abs/1809.02630](https://arxiv.org/abs/1809.02630).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[7] J. You, R. Ying, X. Ren, W. L. Hamilton, and J. Leskovec. *GraphRNN: Generating
+    Realistic Graphs with Deep Auto-regressive Models*. arXiv, 2018\. DOI: 10.48550/ARXIV.1802.08773\.
+    Available at [https://arxiv.org/abs/1802.08773](https://arxiv.org/abs/1802.08773).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[8] N. De Cao and T. Kipf. *MolGAN: An implicit generative model for small
+    molecular graphs*. arXiv, 2018\. DOI: 10.48550/ARXIV.1805.11973\. Available at
+    [https://arxiv.org/abs/1805.11973](https://arxiv.org/abs/1805.11973).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

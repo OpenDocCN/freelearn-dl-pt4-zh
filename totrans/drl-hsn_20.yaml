@@ -1,0 +1,1607 @@
+- en: '20'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: AlphaGo Zero and MuZero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Model-based methods allow us to decrease the amount of communication with the
+    environment by building a model of the environment and using it during training.
+    In this chapter, we take a look at model-based methods by exploring cases where
+    we have a model of the environment, but this environment is being used by two
+    competing parties. This situation is very common in board games, where the rules
+    of the game are fixed and the full position is observable, but we have an opponent
+    who has the primary goal of preventing us from winning the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A few years ago, DeepMind proposed a very elegant approach to solving such problems.
+    No prior domain knowledge is required, but the agent improves its policy only
+    via self-play. This method is called AlphaGo Zero and was introduced in 2017\.
+    Later, in 2020, they extended this method by removing the requirement for an environment
+    model, which allowed it to apply to a much wider range of RL problems (including
+    Atari games). The method is called MuZero and we will also look at this in detail.
+    As you’ll see in this chapter, MuZero is more general than AlphaGo Zero, which
+    comes with the price of more networks to be trained and might lead to longer training
+    times and worse results. From that perspective, we’ll discuss both methods in
+    detail, as AlphaGo Zero may be more applicable in some situations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Discuss the structure of the AlphaGo Zero method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement the method for playing Connect 4
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement MuZero and compare it to AlphaGo Zero
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Comparing model-based and model-free methods
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In Chapter [4](ch008.xhtml#x1-740004), we saw several different ways in which
+    we can classify RL methods. We distinguished three main categories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Value-based and policy-based
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On-policy and off-policy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Model-free and model-based
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: So far, we have covered enough examples of methods of both types in the first
+    and second categories, but all the methods that we have covered so far have been
+    100% model-free. However, this doesn’t mean that model-free methods are more important
+    or better than their model-based counterparts. Historically, due to their sample
+    efficiency, model-based methods have been used in the robotics field and for other
+    industrial controls. This has also happened because of the cost of the hardware
+    and the physical limitations of samples that can be obtained from a real robot.
+    Robots with a large degree of freedom are not widely accessible, so RL researchers
+    are more focused on computer games and other environments where samples are relatively
+    cheap. However, ideas from robotics are infiltrating RL, so, who knows, maybe
+    the model-based methods will become more of a focus quite soon. To begin, let’s
+    discuss the difference between the model-free approach that we have used in the
+    book and model-based methods, including their strong and weak points and where
+    they might be applicable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the names of both classes, “model” means the model of the environment, which
+    could have various forms, for example, providing us with a new state and reward
+    from the current state and action. All the methods covered so far put zero effort
+    into predicting, understanding, or simulating the environment. What we were interested
+    in was proper behavior (in terms of the final reward), specified directly (a policy)
+    or indirectly (a value) given the observation. The source of the observations
+    and reward was the environment itself, which in some cases could be very slow
+    and inefficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a model-based approach, we’re trying to learn the model of the environment
+    to reduce this “real environment” dependency. At a high level, the model is some
+    kind of black box that approximates the real environment that we talked about
+    in Chapter [1](ch005.xhtml#x1-190001). If we have an accurate environment model,
+    our agent can produce any number of trajectories that it needs simply by using
+    this model instead of executing the actions in the real world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To some degree, the common playground of RL research is also just models of
+    the real world; for example, MuJoCo and PyBullet are simulators of physics used
+    so we don’t need to build real robots with real actuators, sensors, and cameras
+    to train our agents. The story is the same with Atari games or TORCS (The Open
+    Racing Car Simulator): we use computer programs that model some processes, and
+    these models can be executed quickly and cheaply. Even our CartPole example is
+    a simplified approximation of a real cart with a stick attached. (By the way,
+    in PyBullet and MuJoCo, there are more realistic CartPole versions with 3D actions
+    and more accurate simulation.)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two motivations for using the model-based approach as opposed to
+    model-free:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first and the most important one is sample efficiency caused by less dependency
+    on the real environment. Ideally, by having an accurate model, we can avoid touching
+    the real world and use only the trained model. In real applications, it is almost
+    never possible to have a precise model of the environment, but even an imperfect
+    model can significantly reduce the number of samples needed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For example, in real life, you don’t need an absolutely precise mental picture
+    of some action (such as tying shoelaces or crossing the road), but this picture
+    helps you plan and predict the outcome.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: The second reason for a model-based approach is the transferability of the environment
+    model across goals. If you have a good model for a robot manipulator, you can
+    use it for a wide variety of goals without retraining everything from scratch.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are a lot of details in this class of methods, but the aim of this chapter
+    is to give you an overview and take a closer look at the model-based approach
+    applied to board games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model-based methods for board games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Most board games provide a setup that is different from an arcade scenario.
+    The Atari game suite assumes that one player is making decisions in some environment
+    with complex dynamics. By generalizing and learning from the outcome of their
+    actions, the player improves their skills, increasing their final score. In a
+    board game setup, however, the rules of the game are usually quite simple and
+    compact. What makes the game complicated is the number of different positions
+    on the board and the presence of an opponent with an unknown strategy who tries
+    to win the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With board games, the ability to observe the game state and the presence of
+    explicit rules opens up the possibility of analyzing the current position, which
+    isn’t the case for Atari. This analysis means taking the current state of the
+    game, evaluating all the possible moves that we can make, and then choosing the
+    best move as our action. To be able to evaluate all the moves, we need some kind
+    of model of the game, capturing the game rules.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The simplest approach to evaluation is to iterate over the possible actions
+    and recursively evaluate the position after the action has been taken. Eventually,
+    this process will lead us to the final position, when no more moves are possible.
+    By propagating the game result back, we can estimate the expected value of any
+    action in any position. One possible variation of this method is called minimax,
+    which is when we are trying to make the strongest move, but our opponent is trying
+    to make the worst move for us, so we are iteratively minimizing and maximizing
+    the final game objective of walking down the tree of game states (which will be
+    described in detail later).
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the number of different positions is small enough to be analyzed entirely,
+    like in the tic-tac-toe game (which has only 138 terminal states), it’s not a
+    problem to walk down this game tree from any state that we have and figure out
+    the best move to make. Unfortunately, this brute-force approach doesn’t work even
+    for medium-complexity games, as the number of configurations grows exponentially.
+    For example, in the game of draughts (also known as checkers), the total game
+    tree has 5 ⋅ 10^(20) nodes, which is quite a challenge even for modern hardware.
+    In the case of more complex games, like Chess or Go, this number is much larger,
+    so it’s just not possible to analyze all the positions reachable from every state.
+    To handle this, usually some kind of approximation is used, where we analyze the
+    tree up to some depth. With a combination of careful search and stop criteria,
+    called tree pruning, and the smart predefined evaluation of positions, we can
+    make a computer program that plays complex games at a fairly good level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The AlphaGo Zero method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In late 2017, DeepMind published an article titled Mastering the game of Go
+    without human knowledge in the journal Nature by Silver et al. [[SSa17](#)] presenting
+    a novel approach called AlphaGo Zero, which was able to achieve a superhuman level
+    of playing complex games, like Go and chess, without any prior knowledge except
+    the rules. The agent was able to improve its policy by constantly playing against
+    itself and reflecting on the outcomes. No large game databases, handmade features,
+    or pretrained models were needed. Another nice property of the method is its simplicity
+    and elegance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the example of this chapter, we will try to understand and implement this
+    approach for the game Connect 4 (also known as “four in a row” or “four in a line”)
+    to evaluate it ourselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we will discuss the structure of the method. The whole system contains
+    several parts that need to be understood before we can implement them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overview
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'At a high level, the method consists of three components, all of which will
+    be explained in detail later, so don’t worry if something is not completely clear
+    from this section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We constantly traverse the game tree using the Monte Carlo tree search (MCTS)
+    algorithm, the core idea of which is to semi-randomly walk down the game states,
+    expanding them and gathering statistics about the frequency of moves and underlying
+    game outcomes. As the game tree is huge, both in terms of the depth and width,
+    we don’t try to build the full tree; we just randomly sample its most promising
+    paths (that’s the source of the method’s name).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At every moment, we have the current best player, which is the model used to
+    generate the data via self-play (this concept will be discussed in detail later,
+    but for now it is enough for you to know that it refers to the usage of the same
+    model against itself). Initially, this model has random weights, so it makes moves
+    randomly, like a four-year-old learning how chess pieces move. However, over time,
+    we replace this best player with better variations of it, which generate more
+    and more meaningful and sophisticated game scenarios. Self-play means that the
+    same current best model is used on both sides of the board. This might not look
+    very useful, as having the same model play against itself has an approximately
+    50% chance outcome, but that’s actually what we need: samples of the games where
+    our best model can demonstrate its best skills. The analogy is simple: it’s usually
+    not very interesting to watch a match between the outsider and the leader; the
+    leader will win easily. What is much more fun and intriguing to see is when players
+    of roughly equal skill compete. That’s why the final in any championship attracts
+    much more attention than the preceding matches: both teams or players in the final
+    usually excel in the game, so they will need to play their best game to win.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The third component in the method is the training process of the apprentice
+    model, which is trained on the data gathered by the best model during self-play.
+    This model can be likened to a kid sitting and constantly analyzing the chess
+    games played by two adults. Periodically, we play several matches between this
+    trained model and our current best model. When the trainee is able to beat the
+    best model in the majority of games, we announce the trained model as the new
+    best model and the process continues.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Despite the simplicity and even naïvety of this, AlphaGo Zero was able to beat
+    all the previous AlphaGo versions and became the best Go player in the world,
+    without any prior knowledge except the rules. After the paper by Silver et al.
+    [[SSa17](#)] was published, DeepMind adapted the method for chess and published
+    the paper called Mastering chess and shogi by self-play with a general reinforcement
+    learning algorithm [[Sil+17](#)], where the model trained from scratch beat Stockfish,
+    which was the best chess program at the time and took more than a decade for human
+    experts to develop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s take a look at all three components of the method in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: MCTS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To understand what MCTS does, let’s consider a simple subtree of the tic-tac-toe
+    game, as shown in Figure [20.1](#x1-369002r1). At the beginning, the game field
+    is empty and the cross player (X) needs to choose where to move. There are nine
+    different options for the first move, so our root state has nine different branches
+    leading to the corresponding states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![u×p-left ×up-mid ⋅⋅⋅ ×down-mid d×own -right ](img/B22150_20_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.1: The game tree of tic-tac-toe'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of possible actions at any game state is called the branching factor,
+    and it shows the bushiness of the game tree. In general, this is not constant
+    and may vary, as some moves are not always doable. In the case of tic-tac-toe,
+    the number of available actions could vary from nine at the beginning of the game
+    to zero at the leaf nodes. The branching factor allows us to estimate how quickly
+    the game tree grows, as every available action leads to another set of actions
+    that could be taken.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For our example, after the cross player has made their move, the nought (0)
+    has eight alternatives at every nine positions, which makes 9 × 8 total positions
+    at the second level of the tree. The total number of nodes in the tree can be
+    up to 9! = 362880, but the actual number is less, as not all the games could be
+    played to the maximum depth.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tic-tac-toe is tiny, but if we consider larger games and, for example, think
+    about the number of first moves that white could make at the beginning of a chess
+    game (which is 20) or the number of spots that the white stone could be placed
+    at in Go (361 in total for a 19 × 19 game field), the number of game positions
+    in the complete tree quickly becomes enormous. With every new level, the number
+    of states is multiplied by the average number of actions that we can perform on
+    the previous level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To deal with this combinatorial explosion, random sampling comes into play.
+    In a general MCTS, we perform many iterations of depth-first search, starting
+    at the current game state and either selecting the actions randomly or with some
+    strategy, which should include enough randomness in its decisions. Every search
+    is continued until the end state of the game, and then it is followed by updating
+    the weights of the visited tree branches according to the game’s outcome. This
+    process is similar to the value iteration method, when we played the episodes
+    and the final step of the episode influenced the value estimation of all the previous
+    steps. This is a general MCTS, and there are many variants of this method related
+    to expansion strategy, branch selection policy, and other details. In AlphaGo
+    Zero, a variant of MCTS is used. For every edge (representing the move from some
+    position), this set of statistics is stored:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A prior probability, P(s,a), of the edge
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A visit count, N(s,a)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An action value, Q(s,a)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each search starts from the root state following the most promising actions,
+    selected using the utility value, U(s,a), proportional to
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq73.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Randomness is added to the selection process to ensure enough exploration of
+    the game tree. Every search could end up with two outcomes: the end state of the
+    game is reached, or we face a state that hasn’t been explored yet (in other words,
+    has no known values). In the latter case, the policy neural network (NN) is used
+    to obtain the prior probabilities and the value of the state estimation, and the
+    new tree node with N(s,a) ← 0, P(s,a) ←p[net] (which is a probability of the move
+    returned by the network) and Q(s,a) ← 0 is created. Besides the prior probability
+    of the actions, the network returns the estimation of the game’s outcome (or the
+    value of the state) as seen from the current player.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once we have obtained the value (by reaching the final game state or by expanding
+    the node using the NN), a process called the backup of value is performed. During
+    the process, we traverse the game path and update statistics for every visited
+    intermediate node; in particular, the visit count, N(s,a), is incremented by one
+    and Q(s,a) is updated to include the game’s outcome from the perspective of the
+    current state. As two players are exchanging moves, the final game outcome changes
+    the sign in every backup step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This search process is performed several times (in AlphaGo Zero’s case, 1,000-2,000
+    searches are performed), gathering enough statistics about the action to use the
+    N(s,a) counter as an action probability to be taken in the root node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Self-play
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In AlphaGo Zero, the NN is used to approximate the prior probabilities of the
+    actions and evaluate the position, which is very similar to the advantage actor-critic
+    (A2C) two-headed setup. In the input of the network, we pass the current game
+    position (augmented with several previous positions) and return two values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The policy head returns the probability distribution over the actions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The value head estimates the game outcome as seen from the player’s perspective.
+    This value is undiscounted, as moves in Go are deterministic. Of course, if you
+    have stochasticity in a game, like in backgammon, some discounting should be used.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As has already been described, we’re maintaining the current best network, which
+    constantly self-plays to gather the training data for our apprentice network.
+    Every step in each self-play game starts with several MCTSs from the current position
+    to gather enough statistics about the game subtree to select the best action.
+    The selection depends on the move and our settings. For self-play games, which
+    are supposed to produce enough variance in the training data, the first moves
+    are selected in a stochastic way. However, after some number of steps (which is
+    a hyperparameter in the method), action selection becomes deterministic, and we
+    select the action with the largest visit counter, N(s,a). In evaluation games
+    (when we check the network being trained versus the current best model), all the
+    steps are deterministic and selected solely on the largest visit counter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the self-play game has been finished and the final outcome has become known,
+    every step of the game is added to the training dataset, which is a list of tuples
+    (s[t],π[t],r[t]), where s[t] is the game state, π[t] is the action probabilities
+    calculated from MCTS sampling, and r[t] is the game’s outcome from the perspective
+    of the player at step t.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training and evaluation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The self-play process between two clones of the current best network provides
+    us with a stream of training data consisting of states, action probabilities,
+    and position values obtained from the self-play games. With this at hand, for
+    training we sample mini-batches from the replay buffer of training examples and
+    minimize the mean squared error (MSE) between the value head prediction and the
+    actual position value, as well as the cross-entropy loss between predicted probabilities
+    and sampled probabilities, π.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As mentioned earlier, once in several training steps the trained network is
+    evaluated, which consists of playing several games between the current best and
+    trained networks. Once the trained network becomes significantly better than the
+    current best network, we copy the trained network into the best network and continue
+    the process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connect 4 with AlphaGo Zero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To see the method in action, let’s implement AlphaGo Zero for a relatively simple
+    game, Connect 4\. The game is for two players with a field size of 6 × 7\. Each
+    player has disks of a certain color, which they drop in turn into any of the seven
+    columns. The disks fall to the bottom, stacking vertically. The game objective
+    is to be the first to form a horizontal, vertical, or diagonal line of four disks
+    of the same color. To illustrate the game, two positions are shown in Figure [20.2](#x1-372003r2).
+    In the first situation, the first player has just won, while in the second, the
+    second player is going to form a group.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file305.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.2: Two game positions in Connect 4'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Despite its simplicity, this game has ≈ 4.5 ⋅ 10^(12) different game states,
+    which is challenging for computers to solve with brute force. This example consists
+    of several tools and library modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Chapter20/lib/game.py: A low-level game representation that contains functions
+    for making moves, encoding and decoding the game state, and other game-related
+    utilities.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter20/lib/mcts.py: The MCTS implementation that allows GPU-accelerated
+    expansion of leaves and node backup. The central class here is also responsible
+    for keeping the game node statistics, which are reused between the searches.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter20/lib/model.py: The NN and other model-related functions, such as the
+    conversion between game states and the model’s input and the playing of a single
+    game.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter20/train.py: The main training utility that glues everything together
+    and produces the model checkpoints of the new best networks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter20/play.py: The tool that organizes the automated tournament between
+    the model checkpoints. This accepts several model files and plays the given number
+    of games against each other to form a leaderboard.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Chapter20/telegram-bot.py: The bot for the Telegram chat platform that allows
+    the user to play against any model file and keep a record of the statistics. This
+    bot was used for human verification of the example’s results.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now let’s discuss the core of our game – the game model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The game model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The whole approach is based on our ability to predict the outcome of our actions;
+    in other words, we need to be able to get the resulting game state after we execute
+    a move. This is a much stronger requirement than we had in the Atari environments
+    and Gym in general, where you can’t specify a state that you want to act from.
+    So, we need a model of the game that encapsulates the game’s rules and dynamics.
+    Luckily, most board games have a simple and compact set of rules, which makes
+    the model implementation a straightforward task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our case, the full game state of Connect 4 is represented by the state of
+    the 6 × 7 game field cells and the indicator of who is going to move. What is
+    important for our example is to make the game state representation occupy as little
+    memory as possible, but still allow it to work efficiently. The memory requirement
+    is dictated by the necessity of storing large numbers of game states during the
+    MCTS. As our game tree is huge, the more nodes we’re able to keep during the MCTS,
+    the better our final approximation of move probabilities will be. So, potentially,
+    we’d like to be able to keep millions, or maybe even billions, of game states
+    in memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this in mind, the compactness of the game state representation could have
+    a huge impact on memory requirements and the performance of our training process.
+    However, the game state representation has to be convenient to work with, for
+    example, when checking the board for a winning position, making a move, or finding
+    all the valid moves from some state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To keep this balance, two representations of the game field were implemented
+    in Chapter20/lib/game.py:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first encoded form is very memory-efficient and takes only 63 bits to encode
+    the full field, which makes it extremely fast and lightweight, as it fits in a
+    machine world on 64-bit architectures.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another decoded game field representation has the form of a list with a length
+    of 7, where each entry is a list of integers representing the disks in a particular
+    column. This form takes much more memory, but it is convenient to work with.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'I’m not going to show the full code of Chapter20/lib/game.py, but if you need
+    it, it’s available in the repository. Here, let’s just take a look at the list
+    of the constants and functions that it provides:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two constants in the preceding code define the dimensionality of the
+    game field and are used everywhere in the code, so you can try to change them
+    and experiment with larger or smaller game variants. The BITS_IN_LEN value is
+    used in state encoding functions and specifies how many bits are used to encode
+    the height of the column (the number of disks present). In the 6 × 7 game, we
+    could have up to six disks in every column, so three bits is enough to keep values
+    from zero to seven. If you change the number of rows, you will need to adjust
+    BITS_IN_LEN accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The PLAYER_BLACK and PLAYER_WHITE values define the values used in the decoded
+    game representation and, finally, COUNT_TO_WIN sets the length of the group that
+    needs to be formed to win the game. So, in theory, you can try to experiment with
+    the code and train the agent for, say, five in a row on a 20 × 40 field by just
+    changing four numbers in game.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The INITIAL_STATE value contains the encoded representation for an initial game
+    state, which has GAME_COLS empty lists.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the code is made up of functions. Some of them are used internally,
+    but some make an interface of the game used everywhere in the example. Let’s list
+    them quickly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'encode_lists(state_lists): This converts from a decoded to an encoded representation
+    of the game state. The argument has to be a list of GAME_COLS lists, with the
+    contents of the column specified in bottom-to-top order. In other words, to drop
+    a new disk at the top of the stack, we just need to append it to the corresponding
+    list. The result of the function is an integer with 63 bits representing the game
+    state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'decode_binary(state_int): This converts the integer representation of the field
+    back into the list form.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'possible_moves(state_int): This returns a list with indices of columns that
+    can be used for moving from the given encoded game state. The columns are numbered
+    from zero to six, left to right.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'move(state_int, col, player): The central function of the file, which provides
+    game dynamics combined with a win/lose check. In arguments, it accepts the game
+    state in the encoded form, the column to place the disk in, and the index of the
+    player that moves. The column index has to be valid (that is, be present in the
+    result of possible_moves(state_int)), otherwise an exception will be raised. The
+    function returns a tuple with two elements: a new game state in the encoded form
+    after the move has been performed and a Boolean indicating the move leading to
+    the win of the player. As a player can win only after their move, a single Boolean
+    is enough. Of course, there is a chance of getting a draw state (when nobody has
+    won, but there are no possible moves remaining). Such situations have to be checked
+    by calling the possible]_moves() function after the move() function.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'render(state_int): This returns a list of strings representing the field’s
+    state. This function is used in the Telegram bot to send the field state to the
+    user.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing MCTS
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: MCTS is implemented in Chapter20/lib/mcts.py and represented by a single class,
+    MCTS, which is responsible for performing a batch of MCTSs and keeping the statistics
+    gathered during it. The code is not very large, but it still has several tricky
+    pieces, so let’s check it in detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The constructor has no arguments except the c_puct constant, which is used
+    in the node selection process. Silver et al. [[SSa17](#)] mentioned that it could
+    be tweaked to increase exploration, but I’m not redefining it anywhere and haven’t
+    experimented with it. The body of the constructor creates an empty container to
+    keep statistics about the states:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The key in all the dicts is the encoded game state (an integer), and values
+    are lists, keeping the various parameters of actions that we have. The comments
+    above every container have the same notations of values as in the AlphaGo Zero
+    paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The clear() method clears the state without destroying the MCTS object, which
+    happens when we switch the current best model to the new one and the gathered
+    statistics become obsolete:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The find_leaf() method is used during the search to perform a single traversal
+    of the game tree, starting from the root node given by the state_int argument
+    and continuing to walk down until one of the following two situations has been
+    faced: we reach the final game state or an as yet unexplored leaf has been found.
+    During the search, we keep track of the visited states and the executed actions
+    so we can update the nodes’ statistics later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Every iteration of the loop processes the game state that we’re currently at.
+    For this state, we extract the statistics that we need to make the decision about
+    the action:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The decision about the action is based on the action utility, which is a sum
+    of Q(s,a) and the prior probabilities scaled to the visit count. The root node
+    of the search process has extra noise added to the probabilities to improve the
+    exploration of the search process. As we perform the MCTS from different game
+    states along the self-play trajectories, this extra Dirichlet noise (according
+    to the parameters used in the paper) ensures that we have tried different actions
+    along the path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we have calculated the score for the actions, we need to mask invalid actions
+    for the state. (For example, when the column is full, we can’t place another disk
+    on the top.) After that, the action with the maximum score is selected and recorded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To finish the loop, we ask our game engine to make the move, returning the
+    new state and the indication of whether the player won the game. The final game
+    states (win, lose, or draw) are never added to the MCTS statistics, so they will
+    always be leaf nodes. The function returns the game’s value for the leaf player
+    (or None if the final state hasn’t been reached), the current player at the leaf
+    state, the list of states we have visited during the search, and the list of the
+    actions taken:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The main entry point to the MCTS class is the search_batch() function, which
+    performs several batches of searches. Every search consists of finding the leaf
+    of the tree, optionally expanding the leaf, and doing backup. The main bottleneck
+    here is the expand operation, which requires the NN to be used to get the prior
+    probabilities of the actions and the estimated game value. To make this expansion
+    more efficient, we use mini-batches when we search for several leaves, but then
+    perform expansion in a single NN execution. This approach has one disadvantage:
+    as several MCTSs are performed in one batch, we don’t get the same outcome as
+    when they are executed serially.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Indeed, initially, when we have no nodes stored in the MCTS class, our first
+    search will expand the root node, the second will expand some of its child nodes,
+    and so on. However, one single batch of searches can expand only one root node
+    at first. Of course, later, individual searches in the batch could follow the
+    different game paths and expand more, but at first, mini-batch expansion is much
+    less efficient in terms of exploration than a sequential MCTS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To compensate for this, I still use mini-batches, but perform several of them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the mini-batch search, we first perform the leaf search, starting from the
+    same state. If the search has found a final game state (in that case, the returned
+    value will not be equal to None), no expansion is required and we save the result
+    for a backup operation. Otherwise, we store the leaf for later expansion:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To expand, we convert the states into the form required by the model (there
+    is a special function in the model.py library) and ask our network to return the
+    prior probabilities and values for the batch of states. We will use those probabilities
+    to create nodes, and the values will be backed up in a final statistics update:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Node creation is just storing zeros for every action in the visit count and
+    action values (total and average). In prior probabilities, we store values obtained
+    from the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The backup operation is the core process in MCTS, and it updates the statistics
+    for a state visited during the search. The visit count of the taken actions is
+    incremented, the total values are summed, and the average values are normalized
+    using visit counts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s very important to properly track the value of the game during the backup
+    because we have two opponents, and in every turn, the value changes the sign (because
+    a winning position for the current player is a losing game state for the opponent):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The final function in the class returns the probability of actions and the
+    action values for the game state, using the statistics gathered during the MCTS:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, there are two modes of probability calculation, specified by the τ parameter.
+    If it equals zero, the selection becomes deterministic, as we select the most
+    frequently visited action. In other cases, the distribution given by
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq74.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: is used, which, again, improves exploration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The NN used is a residual convolutional network with six layers, which is a
+    simplified version of the network used in the original AlphaGo Zero method. For
+    the input, we pass the encoded game state, which consists of two 6 × 7 channels.
+    The first channel contains the places with the current player’s disks, and the
+    second channel has a value of 1.0 where the opponent has their disks. This representation
+    allows us to make the network player invariant and analyze the position from the
+    perspective of the current player.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The network consists of the common body with residual convolution filters. The
+    features produced by them are passed to the policy and the value heads, which
+    are a combination of a convolution layer and a fully connected layer. The policy
+    head returns the logits for every possible action (the column in which a disk
+    is dropped) and a single-value float. The details are available in the lib/model.py
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Besides the model, this file contains two functions. The first, with the name
+    state_lists_to_batch(), converts the batch of game states represented in lists
+    into the model’s input form. This function uses a utility function, _encode_list_state,
+    which converts the states into a NumPy array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second method is called play_game and is very important for both the training
+    and testing processes. Its purpose is to simulate the game between two NNs, perform
+    the MCTS, and optionally store the taken moves in a replay buffer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see in the preceding code, the function accepts a lot of parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The MCTS class instance, which could be a single instance, a list of two instances,
+    or None. We need to be flexible there to cover different usages of this function.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: An optional replay buffer.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: NNs to be used during the game.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of game steps that need to be taken before the parameter used for
+    the action probability calculation will be changed from 1 to 0.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of MCTSs to perform.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The MCTS batch size.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Which player acts first.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Before the game loop, we initialize the game state and select the first player.
+    If there is no information given about who will make the first move, this is chosen
+    randomly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In every turn, we perform the MCTS to populate the statistics and then obtain
+    the probability of actions, which will be sampled to get the action:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, the game state is updated using the function in the game engine module,
+    and the handling of different end-of-game situations (such as a win or a draw)
+    is performed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the function, we populate the replay buffer with probabilities
+    for the action and the game result from the perspective of the current player.
+    This data will be used to train the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With all those functions in hand, the training process is a simple combination
+    of them in the correct order. The training program is available in train.py, and
+    it has logic that has already been described: in the loop, our current best model
+    constantly plays against itself, saving the steps in the replay buffer. Another
+    network is trained on this data, minimizing the cross-entropy between the probabilities
+    of actions sampled from MCTS and the result of the policy head. MSE between the
+    value head predictions, about the game and the actual game result, is also added
+    to the total loss.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Periodically, the network being trained and the current best network play 100
+    matches, and if the current network is able to win in more than 60% of them, the
+    network’s weights are synced. This process continues infinitely, hopefully, finding
+    models that are more and more proficient at the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing and comparison
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: During the training process, the model’s weights are saved every time the current
+    best model is replaced with the trained model. As a result, we get multiple agents
+    of various strengths. In theory, the later models should be better than the preceding
+    ones, but we would like to check this ourselves. To do this, there is a tool,
+    play.py, that takes several model files and plays a tournament in which every
+    model plays a specified number of rounds with all the others. The results table,
+    with the number of wins achieved by every model, will represent the relative model’s
+    strength.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To make the training fast, I intentionally set the hyperparameters of the training
+    process to small values. For example, at every step of the self-play process,
+    only 10 MCTSs were performed, each with a mini-batch size of eight. This, in combination
+    with efficient mini-batch MCTS and the fast game engine, made training very fast.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basically, after just one hour of training and 2,500 games played in self-play
+    mode, the produced model was sophisticated enough to be enjoyable to play against.
+    Of course, the level of its play was well below even a child’s level, but it showed
+    some rudimentary strategies and made mistakes in only every other move, which
+    was good progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'I’ve done two rounds of training, the first with a learning rate of 0.1 and
+    the second with a learning rate of 0.001\. Every experiment was trained for 10
+    hours and 40K game rounds. In Figure [20.3](#x1-378002r3), you can see charts
+    with the win ratio (win/loss for the current evaluated policy versus the current
+    best policy). As you can see, both learning rate values are oscillating around
+    0.5, sometimes spiking to 0.8-0.9:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_20_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.3: The win ratio for training with two learning rates; learning rate=0.1
+    (left) and learning rate=0.001 (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure [20.4](#x1-378004r4) shows the total loss for both experiments, and there
+    is no clear trend. This is due to constant switches of the current best policy,
+    which leads to constant retraining of the trained model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_20_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.4: The total loss for training with two learning rates; learning
+    rate=0.1 (left) and learning rate=0.001 (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The tournament verification was complicated by the number of different models,
+    as several games needed to be played by each pair to estimate their strength.
+    At the beginning, I ran 10 rounds for each model stored during every experiment
+    (separately). To do this, you can run the play.py utility like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: But for 100 models, it will take a while, as every model plays 10 rounds with
+    all the other models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After all the testing, the utility prints on the console the result of all
+    the games and the leaderboard of models. The following is the top 10 for experiment
+    1 (learning rate=0.1):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s the top 10 for experiment 2 (learning rate=0.001):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: To check that our training generates better models, I have plotted the win ratio
+    of the models versus their index in Figure [20.5](#x1-378027r5). The Y axis is
+    the relative win ratio and the X axis is the index (which is increased during
+    training). As you can see, the quality of models in each experiment is increased,
+    but experiments with smaller learning rates have more consistent behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_20_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.5: Win ratio for best models during the training, learning rate=0.1
+    (left) and learning rate=0.001 (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: I haven’t done much hyperparameter tuning of the training, so they definitely
+    could be improved. You can try experimenting with this yourself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It was also interesting to compare the results with different learning rates.
+    To do that, I’ve taken 10 best models for each experiment and run 10 rounds of
+    games. Here is the top 10 leaderboard for this tournament:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, models trained with a learning rate of 0.001 are winning in
+    the joint tournament by a significant margin.
+  prefs: []
+  type: TYPE_NORMAL
+- en: MuZero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The successor of AlphaGo Zero (published in 2017) was a method called MuZero,
+    described by Schrittwieser et al. from DeepMind in the paper Mastering Atari,
+    Go, chess and shogi by planning with a learned model [[Sch+20](#)] published in
+    2020\. In this method, the authors made an attempt to generalize the method by
+    removing the requirement of the precise game model, but still keeping the method
+    in the model-based family. As we saw in the description of Alpha Go Zero, the
+    game model is heavily used during the training process: in the MCTS phase, we
+    use the game model to obtain the available actions in the current state and the
+    new state of the game after applying the action. In addition, the game model provides
+    the final game outcome: whether we have won or lost the game.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At first glance, it looks almost impossible to get rid of the model from the
+    training process, but MuZero not only demonstrated how it could be done, but has
+    also beaten the previous AlphaGo Zero records in Go, chess, and shogi, and established
+    state-of-the-art results in 57 Atari games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this part of the chapter, we’ll discuss the method in detail, implement it,
+    and compare it to AlphaGo Zero using Connect 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: High-level model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: First, let’s take a look at MuZero from a high level. As in AlphaGo Zero, the
+    core is MCTS, which is performed many times to calculate statistics about possible
+    future outcomes of the game state we currently have at the root of the tree. After
+    this search, we calculate visit counters, indicating how frequently the actions
+    have been executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But instead of using the game model to answer the question “what state do I
+    get if I execute this action from this state?”, MuZero introduces two extra neural
+    networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'representation h[𝜃](o) →s: To compute the hidden state of the game observation'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'dynamics g[𝜃](s,a) →r,s′: To apply the action a to the hidden state s, transforming
+    it into the next state s′ (and obtaining the immediate reward r)'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: As you may remember, in AlphaGo Zero, only one network f[𝜃](s) →π,v was used,
+    which predicted the policy π and the value v of the current state s. MuZero uses
+    three networks for its operation, which are trained simultaneously. I’ll explain
+    how the training is done a bit later, but for now let’s focus on MCTS.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In Figure [20.6](#x1-380006r6), the MCTS process is shown schematically, indicating
+    the values we compute using our neural networks. As the first step, we compute
+    the hidden state s⁰ for the current game observation o using our representation
+    network h[𝜃].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having the hidden state, we can use the network f[𝜃] to compute the policy π⁰
+    and values v⁰ of this state – quantities that indicate what action we should take
+    (π⁰) and the expected outcome of those actions (v⁰).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We use the policy and the value (with visit count statistics for the actions)
+    to compute the utility value for the action U(s,a) in a similar way to in AlphaGo
+    Zero. Then, the action with the maximum utility value is selected for the tree
+    descent. If it is the first time we select this action from this state node (in
+    other words, the node has not been expanded yet), we use the neural network g[𝜃](s⁰,a)
+    →r¹,s¹ to obtain immediate reward r¹ and the next hidden state s¹.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![×oshπfsgπfb0𝜃0𝜃1𝜃1𝜃s(,(s(,(seo)v0sv1r0)01)v,aat1io)n → or1,s1 ](img/B22150_20_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.6: Monte-Carlo Tree Search in MuZero'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This process is repeated over and over again hundreds of times, accumulating
+    visit counters for actions, expanding more and more nodes in the tree. In every
+    node expansion, the value of the node, obtained from f[𝜃], is added to all the
+    nodes along the search path until the tree’s root. In the AlphaGo Zero paper,
+    this process was called “backup,” while in the MuZero paper, the term “backpropagation”
+    was used. But essentially, the meaning is the same – adding value from the expanded
+    node to the root of the tree, altering the sign.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After some time (800 searches in the original MuZero method), the actions’ visit
+    counts are accurate enough (or we believe they are accurate enough) to be used
+    as an approximation of the policy for the action selection and for the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training process
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: MCTS, as described above, is used for the single game state (at the root of
+    the tree). After all the search rounds, we select the action from this root state
+    based on the frequency of actions performed during the search. Then, the selected
+    action is executed in the environment and the next state and the reward are obtained.
+    After that, another MCTS is performed using the next state as the root of the
+    search tree.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This process allows us to generate episodes. We’re storing them in the replay
+    buffer and using them for the training. To prepare the training batch, we sample
+    an episode from the replay buffer and randomly select an offset in the episode.
+    Then, starting from this position in the episode, we unroll the episode to the
+    fixed number of steps (in the MuZero paper, a five-step unroll was used). On every
+    step of unroll, the following data is accumulated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Action frequencies from MCTS are used as policy targets (trained using cross-entropy
+    loss).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A discounted sum of rewards until the end of the episode is used as a value
+    target (trained with MSE loss).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Immediate rewards are used as targets for the reward value predicted by the
+    dynamics network (also trained with MSE loss).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Besides that, we remember the action taken in every unroll step, which will
+    be used as input for the dynamics network, g[𝜃](s,a) →r,s′.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the batch is generated, we apply the representation network h[𝜃](o) to
+    the game observations (the first step of the unrolled episode’s segments). Then,
+    we repeat the unrolling by computing the policy π and the value v from the current
+    hidden state, compute their loss, and perform the dynamics network step to obtain
+    the next hidden state. This process is repeated for five steps (the length of
+    the unroll). Schrittwieser et al. used gradient scaling by a factor of 0.5 for
+    unrolled steps, but in my implementation, I just multiplied the loss with this
+    constant to get the same effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Connect 4 with MuZero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have discussed the method, let’s check its implementation and the
+    results in Connect 4\. The implementaton consists of several modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'lib/muzero.py: Contains MCTS data structures and functions, neural networks,
+    and batch generation logic'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'train-mu.py: The training loop, implementing self-play for episode generation,
+    training, and periodic validation of the currently trained model versus the best
+    model (the same as the AlphaGo Zero method)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'play-mu.py: Performs a series of games between the list of models to get their
+    rankings'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hyperparameters and MCTS tree nodes
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Most MuZero hyperparameters are put in a separate dataclass to simplify passing
+    them around the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: I’m not going to explain these parameters here. I will do that when we discuss
+    the relevant pieces of the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: MCTS for MuZero is implemented differently than the AlphaGo Zero implementation.
+    In our AlphaGo Zero implementation, every MCTS node had a unique identifier of
+    the game state, which was an integer. As a result, we kept the whole tree in several
+    dictionaries, mapping the game state to the node’s attributes, such as visit counters,
+    the states of the child nodes, and so on. Every time we saw the game state, we
+    simply updated those dictionaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, in MuZero, every MCTS node is now identified by a hidden state, which
+    is a list of floats (since the hidden state is produced by the neural network).
+    As a result, we cannot compare two hidden states to check whether they are the
+    same or not. To get around this, we’re now storing the tree “properly” – as nodes
+    referencing child nodes, which is less efficient from a memory point of view.
+    The following is the core MCTS data structure: an object representing a tree node.
+    For the constructor, we just create an empty unexpanded node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The expansion of the node is implemented in the expand_node method, which will
+    be shown later, after introducing the models. For now, the node is expanded if
+    it has child nodes (actions) and has a hidden state, policy, and value calculated
+    using NNs. The value of the node is computed as the sum of all the values from
+    the children divided by the number of visits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The select_child method performs the action selection during the MCTS search.
+    This is done by selecting the child with the largest value returned by the ucb_value
+    function, which will be shown shortly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The ucb_value method implements the Upper Confidence Bound (UCB) calculation
+    for the node, and it is very similar to the formula we discussed for AlphaGo Zero.
+    The UCB is calculated from the node’s value and the prior multiplied by a coefficient:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Another method of the MCTSNode class is get_act_probs(), which returns approximated
+    probabilities from visit counters. Those probabilities are used as targets for
+    the policy network training. This method has a special “temperature coefficient”
+    that allows us to vary the entropy in different stages of training: if the temperature
+    is close to zero, we assign a higher probability to the action with the highest
+    number of visits. If the temperature is high, the distribution becomes more uniform:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The last method of MCTSNode is select_action(), which uses the get_act_probs()
+    method to select the action, handling several corner cases as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we have no children in the node, the action is done randomly
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: If the temperature coefficient is too small, we take the action with the largest
+    visit count
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Otherwise, we use get_act_probs() to get the probabilities for every action
+    based on the temperature coefficient and select the action based on those probabilities
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code might look tricky and non-relevant, but it will fit together
+    when we discuss the MuZero models and the MCTS search procedure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Models
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we have mentioned, MuZero uses three NNs for various purposes. Let’s take
+    a look at them. You’ll find all the code in the GitHub repository in the lib/muzero.py
+    module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first model is the representation model, h[𝜃](o) →s, which maps game observations
+    into the hidden state. The observations are exactly the same as in the AlphaGo
+    Zero code – we have a tensor of size 2 × 6 × 7, where 6 × 7 is the board size
+    and two planes are the one-hot encoded position of the current player’s and the
+    opponent’s disks. The dimension of the hidden state is given by the HIDDEN_STATE_SIZE=64
+    hyperparameter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The structure of the network is almost the same as in the AlphaGo Zero example,
+    with the difference that it returns a hidden state vector instead of the policy
+    and values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the network blocks are residual, special handling of every layer is required:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The second model is the prediction model, f[𝜃](s) →π,v, which takes the hidden
+    state and returns the policy and the value. In my example, I used two-layer heads
+    for the policy and the value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The third model we have is the dynamics model, g[𝜃](s,a) →r,s′, which takes
+    the hidden state and one-hot encoded actions and returns the immediate reward
+    and the next state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For convenience, all three networks are kept in the MuZeroModels class, which
+    provides the required functionality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class provides methods for syncing networks from the other instance. We
+    will use it to store the best model after validation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, there are two methods for storing and loading the networks’ weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now that we’ve seen the models, we’re ready to get to the functions that implement
+    the MCTS logic and the gameplay loop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: MCTS search
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'First, we have two functions doing similar tasks, but in different situations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: make_expanded_root() creates the MCTS tree root from the given game state. For
+    the root, we have no parent node, so we don’t need to apply the dynamic NN; instead,
+    we obtain the node hidden state from the encoded game observation with the representation
+    network.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: expand_node() expands the non-root MCTS node. In this case, we perform the dynamics
+    step using the NN to take the parent’s hidden state and generate the hidden state
+    for the child node.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At the beginning of the first function, we create a new MCTSNode, decode the
+    game state into a list representation, and convert it into a tensor. Then, the
+    representation network is used to obtain the node’s hidden state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the hidden state, we get the policy and the value of the node and convert
+    the policy logits into probabilities, after which some random noise is added to
+    increase exploration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we’ve got probabilities, we create child nodes and backpropagate the value
+    of the node. The backpropagate() method will be discussed a bit later; it adds
+    the node value along the search path. For the root node, our search path has only
+    the root, so it will be just one step (in the next method, expand_node(), the
+    path could be much longer):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The expand_node() method is similar, but is used for non-root nodes, so it
+    performs the dynamics step using the parent’s hidden state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The rest of the logic is the same, with the exception that noise is not added
+    to the non-root nodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The backpropagate() function is used to add discounted values to the nodes
+    along the search path. The signs of the values are changed at every level to indicate
+    that player’s turn is changing. So, a positive value for us means a negative value
+    for the opponent and vice versa:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: The instance of the MinMaxStats class is used to keep the minimal and maximal
+    value for the tree during the search. Then, those extremes are used to normalize
+    the resulting values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With all those functions, let’s now look at the logic of actual MCTS search.
+    At first, we create a root node, then perform several search rounds. In every
+    round, we traverse the tree by following the UCB value function. When we find
+    a node that is not expanded, we expand it and backpropagate the value to the root
+    of the tree:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, this implementation uses NNs without processing nodes in batches.
+    The problem with the MuZero MCTS process is that the search process is deterministic
+    and driven by nodes’ values (which are updated when a node is expanded) and visit
+    counters. As a result, batching has no effect because repeating the search without
+    expanding the node will lead to the same path in the tree, so expansions have
+    to be done one by one. This is a very inefficient way of using NNs, which negatively
+    impacts the overall performance. Here, my intention was not to implement the most
+    efficient possible version of MuZero, but rather to demonstrate a working prototype
+    for you, so I did no optimization. As an exercise, you can change the implementation
+    to perform MCTS searches in parallel from several processes. As an alternative
+    (or in addition), you could add noise during the MCTS search and use batching
+    similarly to when we discussed AlphaGo Zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training data and gameplay
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To store the data for training, we have the Episode class, which keeps the
+    sequence of EpisodeStep objects with additional information:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let’s take a look at the play_game() function, which uses MCTS search
+    several times to play the full episode. At the beginning of the function, we create
+    the game state and the required objects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the beginning of the game loop, we check if the game is a draw and then
+    run the MCTS search to accumulate statistics. After that, we select an action
+    using random sampling from the actions’ frequencies (not UCB values):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the action has been selected, we perform a move in our game environment
+    and check for win/lose situations. Then, the process is repeated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, we have the method that samples the batch of training data from the
+    replay buffer (which is a list of Episode objects). If you remember, the training
+    data is created by unrolling from a random position in a random episode. This
+    is needed to apply the dynamics network and optimize it with actual data. So,
+    our batch is not a tensor, but a list of tensors, where every tensor is a step
+    in the unroll process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In preparation for the batch sampling, we create empty lists of the required
+    size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we sample a random episode and select an offset in this episode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After that, the unroll for a specific number of steps (five, as in the paper)
+    is performed. At every step, we remember the action, the immediate reward, and
+    the actions’ probabilities. After that, we compute the value target by summing
+    the discounted rewards until the end of the episode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this preparation data aggregated, we convert it into tensors. Actions
+    are one-hot encoded using the eye() NumPy function with indexing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I’m not going to show the full training loop here; we perform the self-play
+    with the current best model to populate the replay buffer. The full training code
+    is in the train-mu.py module. The following code optimizes the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: MuZero results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'I ran the training for 15 hours and it played 3,400 episodes (you see, the
+    training is not very fast). The policy and value losses are shown in Figure [20.7](#x1-387002r7)
+    . As often happens with self-play training, the charts have no obvious trend:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_20_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.7: Policy (left) and value (right) losses for the MuZero training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During the training, almost 200 current best models were stored, which I checked
+    in tournament mode using the play-mu.py script. Here are the top 10 models:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the best models are models stored at the beginning of the training,
+    which might be an indication of bad convergence (as I haven’t tuned the hyperparameters
+    much).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure [20.8](#x1-387013r8) shows the plot with the model’s winning ratio versus
+    the model index, and this plot correlates a lot with policy loss, which is understandable
+    because lower policy loss should lead to better gameplay:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_20_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 20.8: Winning ratio of the best models stored during the training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MuZero and Atari
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In our example, we used Connect 4, which is a two-player board game, but we
+    shouldn’t miss the fact that MuZero’s generalization (usage of hidden state) makes
+    it possible to apply it to more classical RL scenarios. In the paper by Schrittwieser
+    et al. [[Sch+20](#)], the authors successfully applied the method to 57 Atari
+    games. Of course, the method requires tuning and adaptation to such scenarios,
+    but the core is the same. This has been left as an exercise for you to try by
+    yourself.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we implemented the AlphaGo Zero and MuZero model-based methods,
+    which were created by DeepMind to solve board games. The primary point of this
+    method is to allow agents to improve their strength via self-play, without any
+    prior knowledge from human games or other data sources. This family of methods
+    has real-world applications in several domains, such as healthcare (protein folding),
+    finance, and energy management. In the next chapter, we will discuss another direction
+    of practical RL: discrete optimization problems, which play an important role
+    in various real-life problems, from schedule optimization to protein folding.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Join our community on Discord
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Read this book alongside other users, Deep Learning experts, and the author
+    himself. Ask questions, provide solutions to other readers, chat with the author
+    via Ask Me Anything sessions, and much more. Scan the QR code or visit the link
+    to join the community. [https://packt.link/rl](https://packt.link/rl)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file1.png)'
+  prefs: []
+  type: TYPE_IMG

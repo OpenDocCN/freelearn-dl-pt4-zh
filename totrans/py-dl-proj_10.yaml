@@ -1,0 +1,557 @@
+- en: Building Face Recognition Using FaceNet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, we learned how to detect objects in an image. In this
+    chapter, we will look into a specific use case of object detection—face recognition.
+    Face recognition is a combination of two major operations: face detection, followed
+    by face classification.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The (hypothetical) client that provides our business use case for us in this
+    project is a high-performance computing data center Tier III, certified for sustainability.
+    They have designed the facility to meet the very highest standards for protection
+    against natural disasters, with many redundant systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The facility currently has ultra-high security protocols in place to prevent
+    malicious, man-made disasters, and they are looking to augment their security
+    profile with facial recognition for access to secure areas throughout the facility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The stakes are high, as the servers they house and maintain process some of
+    the most sensitive, valuable, and influential data in the world:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/502f99fb-81dc-4e6b-be61-e3723e779922.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This facial recognition system would need to be able to accurately identify
+    not only their own employees, but employees of their clients, who occasionally
+    tour the data center for inspection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: They have asked us to provide a POC for this intelligence-based capability,
+    for review and later inclusion throughout their data center.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, in this chapter, we will learn how to build a world-class face recognition
+    system. We will define the pipeline as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Face detection**: First, look at an image and find all the possible faces
+    in it'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Face extraction**: Second, focus on each face image and understand it, for
+    example if it is turned sideways or badly lit'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Feature extraction**: Third, extract unique features from the faces using
+    convolutional neural networks (CNNs)'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Classifier training**: Finally, compare the unique features of that face
+    to all the people already known, to determine the person''s name'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'You will learn the main ideas behind each step, and how to build your own facial
+    recognition system in Python using the following deep-learning technologies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**dlib** (**[http://dlib.net/](http://dlib.net/)**): Provides a library that
+    can be used for facial detection and alignment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**OpenFace** (**[https://cmusatyalab.github.io/openface/](https://cmusatyalab.github.io/openface/)**): A
+    deep-learning facial recognition model, developed by Brandon Amos *et al* ([http://bamos.github.io/](http://bamos.github.io/)).
+    It is able to run on real-time mobile devices as well.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**FaceNet **(**[https://arxiv.org/abs/1503.03832](https://arxiv.org/abs/1503.03832)**):
+    A CNN architecture that is used for feature extraction. For a loss function, FaceNet
+    uses triplet loss. Triplet loss relies on minimizing the distance from positive examples, while
+    maximizing the distance from negative examples.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setup environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Since setup can get very complicated and take a long time, which is not on the
+    agenda for this chapter, we will be building a Docker image that contains all
+    the dependencies, including dlib, OpenFace, and FaceNet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting the code
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Fetch the code that we will use to build face recognition from the repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Building the Docker image
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Docker is a container platform that simplifies deployment. It solves the problem
+    of installing software dependencies onto different server environments. If you
+    are new to Docker, you can read more at [https://www.docker.com/](https://www.docker.com/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To install Docker on Linux machines, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: For other systems such as macOS and Windows, visit [https://docs.docker.com/install/](https://docs.docker.com/install/). You
+    can skip this step if you already have Docker installed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once Docker is installed, you should be able to use the `docker` command in
+    the Terminal, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b83035db-a849-4191-b03a-ac2606bb586d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now we will create a `docker` file that will install all the dependencies,
+    including OpenCV, dlib, and TensorFlow. This file is available in the repository
+    at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter10/Dockerfile](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter10/Dockerfile):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now execute the following command to build the image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It will take approximately 20-30 mins to install all the dependencies and build
+    the Docker image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/72357caa-7331-4479-aca1-1b83aa503441.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Downloading pre-trained models
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will download a few more artifacts, which we will use and discuss in detail
+    later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Download dlib''s face landmark predictor, using the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Download the pre-trained Inception model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we have all the components ready, the folder structure should look roughly
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/43e24df1-b3c1-427d-bec4-5f4588a01464.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The folder structure of the code
+  prefs: []
+  type: TYPE_NORMAL
+- en: Make sure that you keep the images of the person you want to train the model
+    with in the `/data` folder, and name the folder as `/data/<class_name>/<class_name>_000<count>.jpg`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `/output` folder will contain the trained SVM classifier and all preprocessed
+    images inside a subfolder `/intermediate`, using the same folder nomenclature
+    as in the `/data` folder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Pro tip**: For better performance in terms of accuracy, always keep more
+    than five samples of images for each class. This will help the model to converge
+    faster and generalize better.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building the pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Facial recognition is a biometric solution that measures the unique characteristics
+    of faces. To perform facial recognition, you'll need a way to uniquely represent
+    a face.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The main idea behind any face recognition system is to break the face down into
+    unique features, and then use those features to represent identity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building a robust pipeline for feature extraction is very important, as it will
+    directly affect the performance and accuracy of our system. In 1960, Woodrow Bledsoe
+    used a technique involving marking the coordinates of prominent features of a
+    face. Among these features were the location of hairline, eyes, and nose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Later, in 2005, a much robust technique was invented, **Histogram of Oriented
+    Gradients** (**HOG**). This captured the orientation of the dense pixels in the
+    provided image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most advanced technique yet, outperforming all others at the time of writing,
+    uses CNNs. In 2015, researchers from Google released a paper describing their
+    system, FaceNet ([https://arxiv.org/abs/1503.03832](https://arxiv.org/abs/1503.03832)),
+    which uses a CNN relying on image pixels to identify features, rather than extracting
+    them manually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To build the face recognition pipeline, we will devise the following flow (represented
+    by orange blocks in the diagram):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Preprocessing**: Finding all the faces, fixing the orientation of the faces'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Feature extraction**: Extracting unique features from the processed faces'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Classifier training**: Training the SVM classifier with 128 dimensional features'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The diagram is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2ac0f9bc-860a-4d3e-bb7e-03fe36b45693.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This image illustrates the end to end flow for face recognition pipeline
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will look into each of the steps, and build our world-class face recognition
+    system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preprocessing of images
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The first step in our pipeline is face detection. We will then align the faces,
+    extract features, and then finalize our preprocessing on Docker.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Face detection
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Obviously, it's very important to first locate the faces in the given photograph so
+    that they can be fed into the later part of the pipeline. There are lots of ways
+    to detect faces, such as detecting skin textures, oval/round shape detection,
+    and other statistical methods. We're going to use a method called HOG.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**HOG** is a feature descriptor that representsthe distribution (histograms)
+    of directions of gradients (oriented gradients), which are used as features. Gradients
+    (*x* and *y* derivatives) of an image are useful, because the magnitude of gradients
+    is large around edges and corners (regions of abrupt intensity changes), which
+    are excellent features in a given image.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To find faces in an image, we'll convert the image into greyscale. Then we'll
+    look at every single pixel in our image, one at a time, and try to extract the
+    orientation of the pixels using the HOG detector. We'll be using `dlib.get_frontal_face_detector()`
+    to create our face detector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following small snippet demonstrates the HOG-based face detector being
+    used in the implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Aligning faces
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Once we know the region in which the face is located, we can perform various
+    kinds of isolation techniques to extract the face from the overall image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One challenge to deal with is that faces in images may be turned in different
+    directions, making them look different to the machine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve this issue, we will warp each image so that the eyes and lips are always
+    in the sample place in the provided images. This will make it a lot easier for
+    us to compare faces in the next steps. To do so, we are going to use an algorithm
+    called **face landmark estimation**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The basic idea is we will come up with 68 specific points (called *landmarks*)
+    that exist on every face—the top of the chin, the outside edge of each eye, the
+    inner edge of each eyebrow, and so on. Then we will train a machine learning algorithm
+    to be able to find these 68 specific points on any face.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The 68 landmarks we will locate on every face are shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9bef96ab-549f-4ff0-827b-a61f8b83857f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This image was created by Brandon Amos ([http://bamos.github.io/](http://bamos.github.io/)), who
+    works on OpenFace ([https://github.com/cmusatyalab/openface](https://github.com/cmusatyalab/openface)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a small snippet demonstrating how to use face landmarks, which we downloaded
+    in the *Setup environment* section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Using this, we can perform various basic image transformations such as rotation
+    and scaling while preserving parallel lines. These are also known as affine transformations
+    ([https://en.wikipedia.org/wiki/Affine_transformation](https://en.wikipedia.org/wiki/Affine_transformation)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/5904612e-0818-43da-84a5-495b38a742f2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: With segmentation, we solved finding the largest face in an image, and with alignment,
+    we standardized the input image to be in the center based on the location of eyes
+    and bottom lip.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a sample from our dataset, showing the raw image and processed image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e94c82b8-af23-45bf-b3c4-b75e74487302.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Feature extraction
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we've segmented and aligned the data, we'll generate vector embeddings
+    of each identity. These embeddings can then be used as input to a classification,
+    regression, or clustering task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This process of training a CNN to output face embeddings requires a lot of data
+    and computer power. However, once the network has been trained, it can generate
+    measurements for any face, even ones it has never seen before! So this step only
+    needs to be done once.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For convenience, we have provided a model that has been pre-trained on Inception-Resnet-v1,
+    which you can run over any face image to get the 128 dimension feature vectors.
+    We downloaded this file in the *Setup environment* section, and it's located in
+    the `/pre-model/Resnet-185253.pb` directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you want to try this step yourself, OpenFace provides a Lua script ([https://github.com/cmusatyalab/openface/blob/master/batch-represent/batch-represent.lua](https://github.com/cmusatyalab/openface/blob/master/batch-represent/batch-represent.lua)) that
+    will generate embeddings for all images in a folder and write them to a CSV file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code to create the embeddings for the input images can be found further
+    after the paragraph. The code is available in the repository at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter10/facenet/train_classifier.py](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter10/facenet/train_classifier.py).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the process, we are loading trained components from the Resnet model such
+    as `embedding_layer`, `images_placeholder`, and `phase_train_placeholder`, along
+    with the images and the labels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here is a quick view of the embedding creating process. We fed the image and
+    the label data along with few components from the pre-trained model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d76fb9cd-290b-4b07-b66d-9abfa52b0cde.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The output of the process will be a vector of 128 dimensions, representing the
+    facial image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Execution on Docker
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will implement preprocessing on our Docker image. We'll mount the `project`
+    directory as a volume inside the Docker container (using a `-v` flag), and run
+    the preprocessing script on the input data. The results will be written to a directory
+    specified with command-line arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `align_dlib.py` file is sourced from CMU. It provides methods for detecting
+    a face in an image, finding facial landmarks, and aligning these landmarks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding command we are setting the input data path using a `--input-dir` flag.
+    This directory should contain the images that we want to process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are also setting the output path using a `--output-dir` flag, which will
+    store the segmented aligned images. We will be using these output images as input
+    for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `--crop-dim` flag is to define the output dimensions of the image. In this
+    case, all images will be stored at 180 × 180.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The outcome of this process will be an `/intermediate` folder being created
+    inside the `/output` folder, containing all the preprocessed images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the classifier
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: First, we'll load the segmented and aligned images from the `input` directory
+    `--input-dir` flag. While training, we'll apply preprocessing to the image. This
+    preprocessing will add random transformations to the image, creating more images
+    to train on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These images will be fed in a batch size of 128 into the pre-trained model.
+    This model will return a 128-dimensional embedding for each image, returning a
+    128 x 128 matrix for each batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After these embeddings are created, we'll use them as feature inputs into a
+    scikit-learn SVM classifier to train on each identity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following command will start the process, and train the classifier. The
+    classifier will be dumped as a `pickle` file in the path defined in the `--classifier-path`
+    argument:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A few custom arguments are tunable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`--num-threads`: Modify according to the CPU/GPU config'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`--num-epochs`: Change according to your dataset'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`--min-num-images-per-class`: Change according to your dataset'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`--is-train`: Set the `True` flag for training'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This process will take a while, depending on the number of images you are training
+    on. Once the process is completed, you will find a `classifier.pkl` file inside
+    the `/output` folder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now you can use the `classifier.pkl` file to make predictions, and deploy it
+    on production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evaluation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will evaluate the performance of the trained model. To do that, we will
+    execute the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the execution is completed, you will see predictions with a confidence
+    score, as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7e955ea4-dd86-46cd-a2ad-ba86ed8d6d9d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: We can see that the model is able to predict with 99.5% accuracy. It is also
+    relatively fast.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have successfully completed a world-class facial recognition POC for our
+    hypothetical high-performance data center, utilizing the deep-learning technologies
+    of OpenFace, dlib, and FaceNet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We built a pipeline that included:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Face detection**: To examine an image and find all the faces it contains'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Face extraction**: To focus on each face and understand its general qualities'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Feature extraction**: To pull out unique features from the faces using CNNs'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Classifier training**: To compare those unique features to all the people
+    already known, and determine the person''s name'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The added security level of a robust facial recognition system for access control
+    is in keeping with the high standards demanded by this Tier III facility. This
+    project is a great example of the power of deep learning to produce solutions
+    that make a meaningful impact on the business operations of our clients.
+  prefs: []
+  type: TYPE_NORMAL

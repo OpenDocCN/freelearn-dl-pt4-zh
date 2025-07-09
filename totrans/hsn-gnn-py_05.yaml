@@ -1,0 +1,766 @@
+- en: '5'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Including Node Features with Vanilla Neural Networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'So far, the only type of information we’ve considered is the graph topology.
+    However, graph datasets tend to be richer than a mere set of connections: nodes
+    and edges can also have features to represent scores, colors, words, and so on.
+    Including this additional information in our input data is essential to produce
+    the best embeddings possible. In fact, this is something natural in machine learning:
+    node and edge features have the same structure as a tabular (non-graph) dataset.
+    This means that traditional techniques can be applied to this data, such as neural
+    networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will introduce two new graph datasets: `Cora` and `Facebook
+    Page-Page`. We will see how **Vanilla Neural Networks** perform on node features
+    only by considering them as tabular datasets. We will then experiment to include
+    topological information in our neural networks. This will give us our first GNN
+    architecture: a simple model that considers both node features and edges. Finally,
+    we’ll compare the performance of the two architectures and obtain one of the most
+    important results of this book.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will master the implementation of vanilla neural
+    networks and vanilla GNNs in PyTorch. You will be able to embed topological features
+    into the node representations, which is the basis of every GNN architecture. This
+    will allow you to greatly improve the performance of your models by transforming
+    tabular datasets into graph problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’ll cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing graph datasets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classifying nodes with vanilla neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Classifying nodes with vanilla graph neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter05](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter05).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing graph datasets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The graph datasets we’re going to use in this chapter are richer than Zachary’s
+    Karate Club: they have more nodes, more edges, and include node features. In this
+    section, we will introduce them to give us a good understanding of these graphs
+    and how to process them with PyTorch Geometric. Here are the two datasets we will
+    use:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Cora` dataset
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `Facebook` `Page-Page` dataset
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s start with the smaller one: the popular `Cora` dataset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Cora dataset
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Introduced by Sen et al. in 2008 [1], `Cora` (no license) is the most popular
+    dataset for node classification in the scientific literature. It represents a
+    network of 2,708 publications, where each connection is a reference. Each publication
+    is described as a binary vector of 1,433 unique words, where `0` and `1` indicate
+    the absence or presence of the corresponding word, respectively. This representation
+    is also called a binary **bag of words** in natural language processing. Our goal
+    is to classify each node into one of seven categories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Regardless of the type of data, visualization is always an important step to
+    getting a good grasp of the problem we face. However, graphs can quickly become
+    too big to visualize using Python libraries such as `networkx`. This is why dedicated
+    tools have been developed specifically for graph data visualization. In this book,
+    we utilize two of the most popular ones: **yEd Live** ([https://www.yworks.com/yed-live/](https://www.yworks.com/yed-live/))
+    and **Gephi** ([https://gephi.org/](https://gephi.org/)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following figure is a plot of the `Cora` dataset made with yEd Live. You
+    can see nodes corresponding to papers in orange and connections between them in
+    green. Some papers are so interconnected that they form clusters. These clusters
+    should be easier to classify than poorly connected nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.1 – The Cora dataset visualized with yEd Live](img/B19153_05_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.1 – The Cora dataset visualized with yEd Live
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s import it and analyze its main characteristics with PyTorch Geometric.
+    This library has a dedicated class to download the dataset and return a relevant
+    data structure. We assume here that PyTorch Geometric has already been installed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the `Planetoid` class from PyTorch Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We download it using this class:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`Cora` only has one graph we can store in a dedicated `data` variable:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s print information about the dataset in general:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can also get detailed information thanks to dedicated functions from PyTorch
+    Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This is the result of the previous block:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The first output confirms the information about the number of nodes, features,
+    and classes. The second one gives more insights into the graph itself: edges are
+    undirected, every node has neighbors, and the graph doesn’t have any self-loop.
+    We could test other properties using PyTorch Geometric’s utils functions, but
+    we wouldn’t learn anything new in this example.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we know more about `Cora`, let’s see one that is more representative
+    of the size of real-world social networks: the `Facebook` `Page-Page` dataset.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Facebook Page-Page dataset
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'This dataset was introduced by Rozemberczki et al. in 2019 [2]. It was created
+    using the Facebook Graph API in November 2017\. In this dataset, each of the 22,470
+    nodes represents an official Facebook page. Pages are connected when there are
+    mutual likes between them. Node features (128-dim vectors) are created from textual
+    descriptions written by the owners of these pages. Our goal is to classify each
+    node into one of four categories: politicians, companies, television shows, and
+    governmental organizations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `Facebook Page-Page` dataset is similar to the previous one: it’s a social
+    network with a node classification task. However, there are three major differences
+    with `Cora`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The number of nodes is much higher (2,708 versus 22,470)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The dimensionality of the node features decreased dramatically (from 1,433 to
+    128)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The goal is to classify each node into four categories instead of seven (which
+    is easier since there are fewer options)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following figure is a visualization of the dataset using Gephi. First,
+    nodes with few connections have been filtered out to improve performance. The
+    size of the remaining nodes depends on their number of connections, and their
+    color indicates the category they belong to. Finally, two layouts have been applied:
+    Fruchterman-Reingold and ForceAtlas2.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 5.2 – The Facebook Page-Page dataset visualized with Gephi](img/B19153_05_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 5.2 – The Facebook Page-Page dataset visualized with Gephi
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can import the `Facebook Page-Page` dataset the same way we did it for `Cora`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the `FacebookPagePage` class from PyTorch Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We download it using this class:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We store the graph in a dedicated `data` variable:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s print information about the dataset in general:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The same dedicated functions can be applied here:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This is the result of the previous block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unlike `Cora`, `Facebook Page-Page` doesn’t have training, evaluation, and
+    test masks by default. We can arbitrarily create masks with the `range()` function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Alternatively, PyTorch Geometric offers a transform function to calculate random
+    masks when the dataset is loaded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first output confirms the number of nodes and classes we saw in the description
+    of the dataset. The second output tells us that this graph has `self` loops: some
+    pages are connected to themselves. This is surprising but, in practice, it will
+    not matter, as we’re going to see soon.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: These are the two graph datasets we will use in the next section, to compare
+    the performance of a Vanilla Neural Network to the performance of our first GNN.
+    Let’s implement them step by step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classifying nodes with vanilla neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Compared to Zachary’s Karate Club, these two datasets include a new type of
+    information: node features. They provide additional information about the nodes
+    in a graph, such as a user’s age, gender, or interests in a social network. In
+    a vanilla neural network (also called **multilayer perceptron**), these embeddings
+    are directly used in the model to perform downstream tasks such as node classification.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will consider node features as a regular tabular dataset.
+    We will train a simple neural network on this dataset to classify our nodes. Note
+    that this architecture does not take into account the topology of the network.
+    We will try to fix this issue in the next section and compare our results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The tabular dataset of node features can be easily accessed through the `data`
+    object we created. First, I would like to convert this object into a regular pandas
+    DataFrame by merging `data.x` (containing the node features) and `data.y` (containing
+    the class label of each node among seven classes). In the following, we will use
+    the `Cora` dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This gives us the following dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  | **0** | **1** | **…** | **1432** | **label** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **0** | 0 | 0 | … | 0 | 3 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **1** | 0 | 0 | … | 0 | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **…** | … | … | … | … | … |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **2707** | 0 | 0 | … | 0 | 3 |'
+  prefs: []
+  type: TYPE_TB
+- en: Figure 5.3 – Tabular representation of the Cora dataset (without topological
+    information)
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you’re familiar with machine learning, you probably recognize a typical dataset
+    with data and labels. We can develop a simple `data.x` with the labels provided
+    by `data.y`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s create our own MLP class with four methods:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`__init__()` to initialize an instance'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`forward()` to perform the forward pass'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`fit()` to train the model'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`test()` to evaluate it'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Before we can train our model, we must define the main metric. There are several
+    metrics for multiclass classification problems: accuracy, F1 score, **Area Under
+    the Receiver Operating Characteristic Curve** (**ROC AUC**) score, and so on.
+    For this work, let’s implement a simple accuracy, which is defined as the fraction
+    of correct predictions. It is not the best metric for multiclass classification,
+    but it is simpler to understand. Feel free to replace it with your metric of choice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can start the actual implementation. We don’t need PyTorch Geometric
+    to implement the MLP in this section. Everything can be done in regular PyTorch
+    with the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the required classes from PyTorch:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a new class called `MLP`, which will inherit all the methods and
+    properties from `torch.nn.Module`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `__init__()` method has three arguments (`dim_in`, `dim_h`, and `dim_out`)
+    for the number of neurons in the input, hidden, and output layers, respectively.
+    We also define two linear layers:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `forward()` method performs the forward pass. The input is fed to the first
+    linear layer with a **Rectified Linear Unit** (**ReLU**) activation function,
+    and the result is passed to the second linear layer. We return the log softmax
+    of this final result for classification:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `fit()` method is in charge of the training loop. First, we initialize
+    a loss function and an optimizer that will be used during the training process:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'A regular PyTorch training loop is then implemented. We use our `accuracy()`
+    function on top of the loss function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'In the same loop, we plot the loss and accuracy for training and evaluation
+    data every 20 epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `test()` method evaluates the model on the test set and returns the accuracy
+    score:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Now that our class is complete, we can create, train, and test an instance of
+    MLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have two datasets, so we need a model dedicated to `Cora` and another one
+    for `Facebook Page-Page`. First, let’s train an MLP on `Cora`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create an MLP model and print it to check that our layers are correct:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Good, we get the right number of features. Let’s train this model for 100 epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here are the metrics that are printed in the training loop:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, we can evaluate its performance in terms of accuracy with the following
+    lines:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following accuracy score on test data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We repeat the same process for the `Facebook Page-Page` dataset, and here is
+    the output we obtain:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Even though these datasets are similar in some aspects, we can see that the
+    accuracy scores we obtain are vastly different. This will make an interesting
+    comparison when we combine node features and network topology in the same model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Classifying nodes with vanilla graph neural networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Instead of directly introducing well-known GNN architectures, let’s try to build
+    our own model to understand the thought process behind GNNs. First, we need to
+    go back to the definition of a simple linear layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A basic neural network layer corresponds to a linear transformation ![](img/Formula_B19153_05_001.png),
+    where ![](img/Formula_B19153_05_002.png) is the input vector of node ![](img/Formula_B19153_05_005.png)
+    and ![](img/Formula_B19153_05_003.png) is the weight matrix. In PyTorch, this
+    equation can be implemented with the `torch.mm()` function, or with the `nn.Linear`
+    class that adds other parameters such as biases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With our graph datasets, the input vectors are node features. It means that
+    nodes are completely separate from each other. This is not enough to capture a
+    good understanding of the graph: like a pixel in an image, the context of a node
+    is essential to understand it. If you look at a group of pixels instead of a single
+    one, you can recognize edges, patterns, and so on. Likewise, to understand a node,
+    you need to look at its neighborhood.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s call ![](img/Formula_B19153_05_004.png) the set of neighbors of node
+    ![](img/Formula_B19153_05_0051.png). Our **graph linear layer** can be written
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_05_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: You can imagine several variants of this equation. For instance, we could have
+    a weight matrix ![](img/Formula_B19153_05_007.png) dedicated to the central node,
+    and another one ![](img/Formula_B19153_05_008.png) for the neighbors. Note that
+    we cannot have a weight matrix per neighbor, as this number can change from node
+    to node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’re talking about neural networks, so we can’t apply the previous equation
+    to each node. Instead, we perform matrix multiplications that are much more efficient.
+    For instance, the equation of the linear layer can be rewritten as ![](img/Formula_B19153_05_009.png),
+    where ![](img/Formula_B19153_05_010.png) is the input matrix.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In our case, the adjacency matrix ![](img/Formula_B19153_05_011.png) contains
+    the connections between every node in the graph. Multiplying the input matrix
+    by this adjacency matrix will directly sum up the neighboring node features. We
+    can add `self` loops to the adjacency matrix so that the central node is also
+    considered in this operation. We call this updated adjacency matrix ![](img/Formula_B19153_05_012.png).
+    Our graph linear layer can be rewritten as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_05_013.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let’s test this layer by implementing it in PyTorch Geometric. We’ll then be
+    able to use it as a regular layer to build a GNN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we create a new class, which is a subclass of `torch.nn.Module`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This class takes two parameters, `dim_in` and `dim_out`, for the number of
+    features of the input and the output, respectively. We add a basic linear transformation
+    without bias:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We perform two operations – the linear transformation, and then the multiplication
+    with the adjacency matrix ![](img/Formula_B19153_05_014.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Before we can create our vanilla GNN, we need to convert the edge index from
+    our dataset (`data.edge_index`) in coordinate format to a dense adjacency matrix.
+    We also need to include `self` loops; otherwise, the central nodes won’t be taken
+    into account in their own embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is easily implemented with the `to_den_adj()` and `torch.eye()` functions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here is what the adjacency matrix looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Unfortunately, we only see zeros in this tensor because it’s a sparse matrix.
+    A more detailed print would show a few connections between nodes (represented
+    by ones). Now that we have our dedicated layer and the adjacency matrix, the implementation
+    of the vanilla GNN is very similar to that of the MLP.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create a new class with two vanilla graph linear layers:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We perform the same operations with our new layers, which take the adjacency
+    matrix we previously calculated as an additional input:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `fit()` and `test()` methods work in the exact same way:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can create, train, and evaluate our model with the following lines:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We replicate the same training process with the `Facebook Page-Page` dataset.
+    In order to obtain comparable results, the same experiment is repeated 100 times
+    for each model on each dataset. The following table summarizes the results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '|  | **MLP** | **GNN** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **Cora** | 53.47%(±1.81%) | 74.98%(±1.50%) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **Facebook** | 75.21%(±0.40%) | 84.85%(±1.68%) |'
+  prefs: []
+  type: TYPE_TB
+- en: Figure 5.4 – Summary of accuracy scores with a standard deviation
+  prefs: []
+  type: TYPE_NORMAL
+- en: As we can see, the MLP has poor accuracy on `Cora`. It performs better on the
+    `Facebook Page-Page` dataset but is still surpassed by our vanilla GNN in both
+    cases. These results show the importance of including topological information
+    in node features. Instead of a tabular dataset, our GNN considers the entire neighborhood
+    of each node, which leads to a 10-20% boost in terms of accuracy in these examples.
+    This architecture is still crude, but it gives us a guideline to refine it and
+    build even better models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we learned about the missing link between vanilla neural networks
+    and GNNs. We built our own GNN architecture using our intuition and a bit of linear
+    algebra. We explored two popular graph datasets from the scientific literature
+    to compare our two architectures. Finally, we implemented them in PyTorch and
+    evaluated their performance. The result is clear: even our intuitive version of
+    a GNN completely outperforms the MLP on both datasets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In [*Chapter 6*](B19153_06.xhtml#_idTextAnchor074), *Normalizing Embeddings
+    with Graph Convolutional Networks*, we refine our vanilla GNN architecture to
+    correctly normalize its inputs. This graph convolutional network model is an incredibly
+    efficient baseline we’ll keep using in the rest of the book. We will compare its
+    results on our two previous datasets and introduce a new interesting task: node
+    regression.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] P. Sen, G. Namata, M. Bilgic, L. Getoor, B. Galligher, and T. Eliassi-Rad,
+    “Collective Classification in Network Data”, AIMag, vol. 29, no. 3, p. 93, Sep.
+    2008\. Available: [https://ojs.aaai.org//index.php/aimagazine/article/view/2157](https://ojs.aaai.org//index.php/aimagazine/article/view/2157)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] B. Rozemberczki, C. Allen, and R. Sarkar, Multi-Scale Attributed Node Embedding.
+    arXiv, 2019\. doi: 10.48550/ARXIV.1909.13021\. Available: [https://arxiv.org/abs/1909.13021](https://arxiv.org/abs/1909.13021)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

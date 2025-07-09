@@ -1,0 +1,919 @@
+- en: Image Translation Using GANs for Style Transfer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Welcome to the chapter on **Generative Adversarial Networks** (**GANs**). In
+    this chapter, we will be building a neural network that fills in the missing part
+    of a handwritten digit. Previously, we have built a digit classifier for the restaurant
+    chain. But they have also noticed that sometimes, when customers write in their
+    phone number, small sections/regions of the digits are missing. This may be a
+    combination of the customer not having a smooth flow when writing on the iPad application,
+    as well as issues with the iPad application not processing the complete user gesture
+    on the screen. This makes it hard for the handwritten digit classifier to predict
+    the correct digit corresponding to the handwritten number. Now, they want us to
+    reconstruct (generate back) the missing parts of the handwritten numbers so that
+    the classifier receives clear handwritten numbers for conversion into digits. With
+    this, the classifier will be able to do a much more accurate job of classifying
+    handwritten digits and the notice gets sent to the right hungry customer!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will mostly focus on the generation/reconstruction of the missing sections
+    of a digit and we will do this with the help of neural inpainting with GANs; see
+    the following flowchart:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ad2ddbe3-8372-4f2f-a581-4fa73724f769.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.1: GAN flowchart'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What we''ll learn in this chapter is the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is a GAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What is a generator and a discriminator
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Coding the model and defining hyperparameters
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building and understanding the training loop
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Testing the model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending the model to new datasets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In this chapter, you will implement the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Build an MNIST digit classifier
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Simulate a dataset of handwritten digits with sections of the handwritten numbers
+    missing
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the MNIST classifier to predict on noised/masked MNIST digits dataset (simulated
+    dataset)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement GAN to generate back the missing regions of the digit
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the MNIST classifier to predict on the generated digits from GAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Compare performance between masked data and generated data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It would be better if you implement the code snippets as you go along in this
+    chapter, either in a Jupyter Notebook or any source code editor. This will make
+    it easier for you to follow along, as well as understand what each part of the
+    code does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of the Python files and Jupyter Notebook files for this chapter can be found
+    here: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter13](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter13).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's code the implementation!
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this exercise, we will be using the Keras deep learning library, which is
+    a high-level neural network API, capable of running on top of Tensorflow, Theano,
+    or Cognitive Toolkit (CNTK).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Know the code! We will not spend time on understanding how Keras works but,
+    if you are interested, refer to this easy-to-understand Keras official documentation
+    at [https://keras.io/](https://keras.io/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Importing all of the dependencies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will be using `numpy`, `matplotlib`, `keras`, `tensorflow`, and the `tqdm`
+    package in this exercise. Here, TensorFlow is used as the backend for Keras. You
+    can install these packages with `pip`. For the MNIST data, we will be using the dataset
+    available in the `keras` module with a simple import:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is important that you set `seed` for reproducibility:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Exploring the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will load the MNIST data into our session from the `keras` module with `mnist.load_data()`.
+    After doing so, we will print the shape and the size of the dataset, as well as
+    the number of classes and unique labels in the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have a dataset with 10 different classes and 60,000 images, with each image
+    having a shape of 28*28 and each class having 6,000 images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s plot and see what the handwritten images look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c7df75a3-b0ef-4719-a96d-765558f6fb40.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.2: Plot of nine MNIST digits from the training set'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s plot a handwritten digit from each class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a4f2888b-eb6b-4838-992f-2c0a702f5534.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.3: Plot of an MNIST digit from each class'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Look at the maximum and the minimum pixel value in the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e7b3ce82-d1f9-42a7-a8b7-7753ab9b3e8e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.5: Plot of nine noised/masked MNIST digits'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that the maximum pixel value in the dataset is 255 and the minimum is
+    0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Type conversion, centering, scaling, and reshaping are some of the pre-processing
+    we will implement in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Type conversion, centering, and scaling
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Set the type to `np.float32`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Important**: One of the main reasons for doing this is that the weights will
+    all be of the `float` type, and multiplication between floating numbers is much
+    faster than between an integer and a float. So it''s better to convert the input
+    into the `float` type.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For centering, we subtract the dataset by 127.5\. The values in the dataset
+    will now range between -127.5 to 127.5.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For scaling, we divide the centered dataset by half of the maximum pixel value
+    in the dataset, that is, *255/2*. This will result in a dataset with values ranging
+    between -1 and 1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s define a function to rescale the pixel values of the scaled image to
+    range between 0 and 255:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Matplotlib tip**: Rescaling needs to be done so that you avoid errors with Matplotlib
+    if you were to use the scaled image as is without upscaling.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A plot of `9` centered and scaled images after upscaling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/aa5cf429-bf29-4d84-87c3-ad1ecc57ebf8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.4: Plot of nine centered and scaled MNIST digits after upscaling'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Masking/inserting noise
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: For the needs of this project, we need to simulate a dataset of incomplete digits.
+    So, let's write a function to mask small regions in the original image to form
+    the noised dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The idea is to mask an 8*8 region of the image with the top-left corner of
+    the mask falling between the 9^(th) and 13^(th) pixel (between index 8 and 12)
+    along both the *x* and *y* axis of the image. This is to make sure that we are
+    always masking around the center part of the image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The bigger the size of the mask, the harder it will be for the MNIST classifier
+    to predict the right digit.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feel free to experiment with the size of the masked region, that is, try smaller/bigger,
+    as well as the location of the mask on the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A plot of `9` scaled noised images after upscaling:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b4707253-1495-46c1-81b4-701aeb5e733d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.5: Plot of nine noised/masked MNIST digits'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reshaping
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Reshape the original dataset and the noised dataset to a shape of 60000*28*28*1\.
+    This is important since the 2D convolutions expect to receive images of a shape
+    of 28*28*1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you are doing multiple training runs on the GPU, it is always a good idea
+    to clear space on the GPU after each run so that your next run executes efficiently
+    without errors related to **resource exhaustion***,* which is pretty common with
+    GPUs. This can be done with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`from keras import backend as k`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`k.clear_session()`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MNIST classifier
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To start off with modeling, let's build a simple **convolutional neural network** (**CNN**)
+  prefs: []
+  type: TYPE_NORMAL
+- en: digit classifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first layer is a convolution layer that has `32` filters of a shape of
+    3*3, with `relu` activation and `Dropout` as the regularizer. The second layer
+    is a convolution layer that has `64` filters of a shape of 3*3, with `relu` activation
+    and `Dropout` as the regularizer. The third layer is a convolution layer that
+    has `128` filters of a shape of 3*3, with `relu` activation and `Dropout` as the
+    regularizer, which is finally flattened. The fourth layer is a `Dense` layer of
+    `1024` neurons with `relu` activation. The final layer is a `Dense` layer with
+    `10` neurons corresponding to the 10 classes in the MNIST dataset, and the activation
+    used here is `softmax`, `batch_size` is set to `128`, the `optimizer` used is
+    `adam`, and `validation_split` is set to `0.2`. This means that 20% of the training
+    set will be used as the validation set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/65564be8-ebeb-46d3-8d82-ec7489f86a7c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.6: MNIST CNN classifier training for three epochs'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Use the built CNN digit classifier on the masked images to get a measure of
+    its performance on digits that are missing small sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: On the masked images, the CNN digit classifier is 74.9% accurate. It might be
+    slightly different when you run it, but it will still be very close.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have not used maxpooling in the preceding classifier. Try building the same
+    classifier with maxpooling or other pooling options.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining hyperparameters for GAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following are some of the hyperparameters defined that we will be using
+    throughout the code and are totally configurable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Experiment with different learning rates, optimizers, batch sizes, and smoothing
+    values to see how these factors affect the quality of your model and, if you get
+    better results, show it to the deep learning community.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building the GAN model components
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: With the idea that the final GAN model will be able to fill in the part of the
+    image that is missing (masked), let's define the generator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the generator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The generator that we are using here is a simple convolution autoencoder that
+    is a combination of two parts—an encoder and a decoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the encoder, we have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first layer is a convolution 2D layer with `32` filters of a size of 3*3,
+    followed by batch normalization, with activation as `relu`, followed by downsampling
+    done with `AveragePooling2D` of size 2*2
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second layer is a convolution 2D layer with `64` filters of a size of 3*3,
+    followed by batch normalization, with activation as `relu`, followed by downsampling
+    with `AveragePooling2D` of a size of 2*2
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The third layer or the final layer in this encoder part is again a convolution
+    2D layer with `128` filters of a size of 3*3, batch normalization, with activation
+    as `relu`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the decoder, we have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first layer is a convolution 2D layer with `128` filters of a size of 3*3
+    with activation as `relu`, followed by upsampling done with `UpSampling2D`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second layer is a convolution 2D layer with `64` filters of a size of 3*3
+    with activation as `relu`, followed by upsampling with `UpSampling2D`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The third layer or the final layer in this decoder part is again a convolution
+    2D layer with `1` filters of a size of 3*3 with activation as `tanh`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Remember, in the encoder, if you have `32`, `64`, `128` filters, it should
+    be followed by `128`, `64`, `image_channels` filters in the decoder. `image_channels`
+    is the number of channels in the input image, which is one in the MNIST dataset.
+    If you have `64`, `128`, `256`, `512` filters in the first, second, third, and
+    fourth layers of the encoder, the following filters in the decoder should be `256`,
+    `128`, `64`, `image_channels`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Two important things to remember here about the final convolution layer in the
+    generator. One is to use `tanh` as the activation function since the dataset range
+    is between -1 and 1, and the other is, to use the same number of filter(s) as
+    the number of channels in the input image. This is to make sure that the image
+    being generated has the same number of channels as the input image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you decide to center and scale your data like we have done in this exercise,
+    you need to use batch normalization in the generator during downsampling, otherwise,
+    the loss will not converge. You can witness the effects of not using the batch
+    normalization by training the generator without the batch normalization layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following `summary` of the generator, if you refer to the output shape,
+    you see the downscaling or compression of the image in the first half of the network
+    and the upscaling of the images in the second half of the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f094db57-93b0-4f6e-8c45-8e36752266ac.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.7: Summary of the generator (autoencoder)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Consider the following when you are not obtaining good results with the autoencoder.
+    Use `AveragePooling2D` first and then check out `MaxPooling2D` for downsampling.
+    Use `LeakyReLU` first and then `relu` next. For all of the convolution layers
+    except the final one, use either `LeakyReLU` or `relu` activation. Try using a
+    deeper autoencoder. Feel free to use more filters in the convolution layers, play
+    with the filter sizes and the pooling sizes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the discriminator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The discriminator is a simple CNN binary classifier that takes in the image
+    generated by the generator and tries to classify the image as original or fake.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first layer is a convolution 2D layer with `64` filters of a size of 3*3 
+    with the activation as `LeakyReLU` and `Dropout` as the regularizer. The secondand
+    third layers are the same as the first layer except the second layer has `128`
+    filters and the third layer has `256` filters. The final layer is a `Dense` layer
+    with `sigmoid` activation since we are doing a binary classification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/fb119d52-9834-457c-a53d-e9c313a387f4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.8: Summary of the discriminator'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Play around with the parameters of the discriminator to suit the needs of the
+    problem you are trying to solve. Include a `MaxPooling` layer in the model if
+    needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the DCGAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following function pipes the input followed by the generator, which is
+    then followed by the discriminator to form the DCGAN architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you have not seen how to use the `Model` function API before, please visit
+    the detailed documentation by Keras on using the `Model` function API and compiling
+    it at [https://keras.io/models/model/](https://keras.io/models/model/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training GAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We've built the components of the GAN.  Let's train the model in the next steps!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plotting the training – part 1
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'During each epoch, the following function plots `9` generated images. For comparison,
+    it will also plot the corresponding `9` original target images and `9` noised
+    input images. We need to use the `upscale` function we''ve defined when plotting
+    to make sure the images are scaled to range between 0 and 255, so that you do
+    not encounter issues when plotting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of this function is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/1a05ba02-d646-4d6b-87cd-a43022388eef.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.9: Sample/expected output of the generated_images_plot function'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plotting the training – part 2
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's define another function that plots the images generated during each epoch.
+    To reflect the difference, we will also include the original and the masked/noised
+    images in the plot.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The top row contains the original images, the middle row contains the masked
+    images, and the bottom row contains the generated images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The plot has `12` rows with the sequence, row 1 - original, row 2 - masked,
+    row3 - generated, row 4 - original, row5 - masked,..., row 12 - generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at the code for the same:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/1b9b9b1b-321a-41d2-8a75-0c0494f4baae.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.10: Sample/expected output from the plot_generated_images_combined
+    function'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training loop
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now we are at the most important part of the code; the part where all of the
+    functions we previously defined will be used. The following are the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Load the generator by calling the `img_generator()` function.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Load the discriminator by calling the `img_discriminator()` function and compile
+    it with the binary cross-entropy loss and optimizer as `optimizer_d`, which we
+    have defined under the hyperparameters section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Feed the generator and the discriminator to the `dcgan()` function and compile
+    it with the binary cross-entropy loss and optimizer as `optimizer_g`, which we
+    have defined under the hyperparameters section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Create a new batch of original images and masked images. Generate new fake images
+    by feeding the batch of masked images to the generator.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Concatenate the original and generated images so that the first 128 images are
+    all original and the next 128 images are all fake. It is important that you do
+    not shuffle the data here, otherwise it will be hard to train. Label the generated
+    images as `0` and original images as `0.9` instead of 1\. This is one-sided label
+    smoothing on the original images. The reason for using label smoothing is to make
+    the network resilient to adversarial examples. It's called one-sided because we
+    are smoothing labels only for the real images.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Set `discriminator.trainable` to `True` to enable training of the discriminator
+    and feed this set of 256 images and their corresponding labels to the discriminator
+    for classification.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Now, set `discriminator.trainable` to `False` and feed a new batch of 128 masked
+    images labeled as 1 to the GAN (DCGAN) for classification. It is important to
+    set `discriminator.trainable` to `False` to make sure the discriminator is not
+    getting trained while training the generator.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat steps 4 through 7 for the desired number of epochs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Batch size used here is 128.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have placed the `plot_generated_images_combined()` function and the `generated_images_plot()`
+    function so that we get a plot generated by both functions after the first iteration
+    in the first epoch and after the end of each epoch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Feel free to place these plot functions according to the frequency of plots
+    you need displayed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9aeddfc1-d406-4376-98e2-ce070c29ce8b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/13b3e1eb-d6ea-457b-a00e-cbefbeb24557.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.11.1: Generated images plotted with training plots at the end of
+    the first iteration of epoch 1'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/06d5ad24-8d9e-4841-b8c9-5d5d721ff8e1.png)![](img/596bcf52-a662-4628-a6b4-c812009afc2e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.11.2: Generated images plotted with training plots at the end of epoch
+    2
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/514a895e-8ad0-441c-9a93-00c040784658.png)![](img/ea8432b1-3134-44eb-a3a5-a90d4f6fc350.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.11.3: Generated images plotted with training plots at the end of epoch
+    5
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0a3a9e71-8a94-4698-b26d-a249f113c972.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.12: Plot of discriminator and adversarial loss during training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Play around with the learning rate for both the generator and the discriminator
+    to find the optimal values for your use case. In general, when training GANs,
+    you train it for a large number of epochs and then use the preceding loss versus
+    iteration plot to identify the minimum spot you would like for the training to
+    stop.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predictions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This is what we''ve been building to: making predictions!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CNN classifier predictions on the noised and generated images
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now, we will call the generator on the masked MNIST test data to generate images,
+    that is, fill in the missing part of the digits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we will pass the generated MNIST digits to the digit classifier we have
+    modeled already:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The MNIST CNN classifier is 87.82% accurate on the generated data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is a plot showing 10 generated images by the generator, the actual
+    label of the generated image, and the label predicted by the digit classifier
+    after processing the generated image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ff167a28-9428-405b-a0cd-6ec9973e1064.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.13:  Plot of MNIST classifier predictions on the generated images
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scripts in modular form
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The entire script can be split into four modules named `train_mnist.py`, `training_plots.py`,
+    `GAN.py`, and `train_gan.py`. Store these in a folder of your choice, for example, `gan`.
+    Set `gan` as the project folder in your favorite source code editor and just run
+    the `train_gan.py` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `train_gan.py` Python file will import functions from all of the other modules
+    in places where they're needed for execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's walk through the contents of each file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module 1 – train_mnist.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This Python file contains the `train_mnist()` function that we have used previously
+    to train a CNN classifier on MNIST digits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Module 2 – training_plots.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This Python file contains the four functions, `upscale()`, `generated_images_plot()`,
+    `plot_generated_images_combined()`, and `plot_training_loss()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code, please visit: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/training_plots.py](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/training_plots.py)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module 3 – GAN.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This module contains the DCGAN components, namely `img_generator()`, `img_discriminator()`,
+    and `dcgan()`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code, please visit: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/GAN.py](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/GAN.py)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module 4 – train_gan.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this module, we will include the hyperparameters, pre-process the data,
+    generate synthetic data, train the GAN, train the CNN classifier, and import all
+    of the necessary functions from other modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this module, please visit: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/train_gan.py](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter13/train_gan.py)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can use the same modules you have created to train on fashion MNIST data.
+    All you have to do is replace line 11 in the `train_gan.py` file with (`from keras.datasets
+    import fashion_mnist`) and replace line 28 with (`(X_train, y_train), (X_test,
+    y_test) =  fashion_mnist.load_data()`). The results will be good but not excellent
+    since the parameters set here work best on the MNIST digit data. This will be
+    a good exercise for you to get incredible results without much effort.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a resource on tips to train GANs that you must check out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/soumith/ganhacks.](https://github.com/soumith/ganhacks)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Jupyter Notebook code files for the preceding DCGAN MNIST inpainting can
+    be found at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2014/DCGAN_MNIST.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2014/DCGAN_MNIST.ipynb).
+    The Jupyter Notebook code files for the DCGAN Fashion MNIST inpainting can be
+    found at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2014/DCGAN_Fashion_MNIST.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2014/DCGAN_Fashion_MNIST.ipynb).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The conclusion to the project
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The goal of this project was to build a GAN to solve the problem of regenerating
+    missing parts/regions of handwritten digits. In the initial chapters, we applied
+    deep learning to enable customers of a restaurant chain to write their phone numbers
+    in a simple iPad application to get a text notification that their party could
+    be seated. The use case of this chapter was to apply deep learning to generate
+    missing parts of the digits of the phone number so that a text notification can
+    be sent to the right person.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CNN digit classifier model accuracy hit 98.84% on the MNIST validation data.
+    With the data we generated to simulate missing parts of a digit when fed to the
+    CNN digit classifier, the model was only 74.90% accurate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same dataset with missing sections of the digit was passed to the generator
+    to recover the missing parts. The resulting digits were then passed to the CNN
+    classifier and the model was 87.82% accurate. See if you can tweak both the CNN
+    classifier and the GAN to generate clearer digits, as well as much higher accuracy
+    on these generated images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's follow the same technique we have been following in the previous chapters
+    for evaluating the performance of the models from the restaurant chain point of
+    view.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What are the implications of this accuracy? Let's calculate the incidence of
+    an error occurring that would result in a customer service issue (that is, the
+    customer not getting the text that their table is ready and getting upset for
+    an excessively long wait time at the restaurant).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each customer's phone number is ten digits long. Let's assume our hypothetical
+    restaurant has an average of 30 tables at each location and those tables turn
+    over two times per night during the rush hour when the system is likely to be
+    used, and finally, the restaurant chain has 35 locations. This means that each
+    day of operation there are approximately 21,000 handwritten numbers captured (30 tables x
+    2 turns/day x 35 locations x 10 digit phone number).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Obviously, all digits must be correctly classified for the text to get to the
+    proper waiting restaurant patron. So any single digit misclassification causes
+    a failure. With the simulated data, the model accuracy was 74.90%, which means
+    a total of 5,271 digits are misclassified. With the recovered data (on the simulated
+    data) from the generator of the trained GAN, the model accuracy was 87.82%, which
+    would improperly classify 2,558 digits per day in our example. The worst case
+    for the hypothetical scenario would be if there occurred only one improperly classified
+    digit in each phone number. Since there are only 2,100 patrons and corresponding
+    phone numbers, this would mean that every phone number had an error in classification
+    (100% failure) and not a single customer would get their text notification that
+    their party could be seated! The best case scenario would be if all 10 digits
+    were misclassified in each phone number and that would result in 263 wrong phone
+    numbers out of 2,100 (12.5% failure rate). Still not a level of performance the
+    restaurant chain would be likely to be happy with, so you can see why we'd need
+    to continue fine-tuning the models to get the maximum performance possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the project in this chapter, we have successfully built a deep convolution
+    GAN in Keras on handwritten MNIST digits. We understood the function of the generator
+    and the discriminator component of the GAN. We have defined some key hyperparameters,
+    as well as, in some places, reasoned with why we used what we did. Finally, we
+    tested the GAN's performance on unseen data and determined that we succeeded in
+    achieving our goals.
+  prefs: []
+  type: TYPE_NORMAL

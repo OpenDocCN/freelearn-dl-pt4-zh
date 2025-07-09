@@ -1,0 +1,1186 @@
+- en: '4'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Forecasting with PyTorch Lightning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we’ll build forecasting models using PyTorch Lightning. We’ll
+    touch on several aspects of this framework, such as creating a data module to
+    handle data preprocessing or creating a `LightningModel` structure that encapsulates
+    the training process of neural networks. We’ll also explore **TensorBoard** to
+    monitor the training process of neural networks. Then, we’ll describe a few metrics
+    for evaluating deep neural networks for forecasting, such as **Mean Absolute Scaled
+    Error** (**MASE**) and **Symmetric Mean Absolute Percentage Error** (**SMAPE**).
+    In this chapter, we’ll focus on multivariate time series, which contain more than
+    one variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter will guide you through the following recipes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing a multivariate time series for supervised learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training a linear regression model for forecasting with a multivariate time
+    series
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Feedforward neural networks for multivariate time series forecasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: LSTM neural networks for multivariate time series forecasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Evaluating deep neural networks for forecasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Monitoring the training process using Tensorboard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using callbacks – `EarlyStopping`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’ll leverage the following Python libraries, all of which
+    you can install using `pip`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PyTorch Lightning (2.1.4)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch Forecasting (1.0.0)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`torch` (2.2.0)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`ray` (2.9.2)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`numpy` (1.26.3)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pandas` (2.1.4)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`scikit-learn` (1.4.0)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`sktime` (0.26.0)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The code for this chapter can be found in this book’s GitHub repository: [https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook](https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing a multivariate time series for supervised learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The first recipe of this chapter addresses the problem of preparing a multivariate
+    time series for supervised learning. We’ll show how the sliding window method
+    we used in the previous chapter can be extended to solve this task. Then, we’ll
+    demonstrate how to prepare a time series using `TimeSeriesDataSet`, a PyTorch
+    Forecasting class that handles the preprocessing steps of time series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ll use the same time series we analyzed in [*Chapter 1*](B21145_01.xhtml#_idTextAnchor019).
+    We’ll need to load the dataset with `pandas` using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following figure shows a sample of the time series. Please note that the
+    axes have been transposed for visualization purposes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.1: Sample of a multivariate time series. The variables of the series
+    are shown on the x axis for visualization purposes](img/B21145_04_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.1: Sample of a multivariate time series. The variables of the series
+    are shown on the x axis for visualization purposes'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding dataset contains nine variables related to meteorological conditions.
+    As we did in [*Chapter 3*](B21145_03.xhtml#_idTextAnchor178), the goal is to forecast
+    the next solar radiation values. We’ll use the lags of the extra available variables
+    as input explanatory variables. In the next chapter, you will learn how to prepare
+    a multivariate time series for cases where you want to forecast several variables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’ll transform a multivariate time series for supervised learning. First, we’ll
+    describe how to do this using the sliding window approach that we used in [*Chapter
+    3*](B21145_03.xhtml#_idTextAnchor178). Then, we’ll show how this process can be
+    simplified with the `TimeSeriesDataSet` data structure, which is based on PyTorch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a sliding window
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, we used a sliding window approach to transform a univariate
+    time series from a sequence into a matrix format. Preparing a multivariate time
+    series for supervised learning requires a similar process: we apply the sliding
+    window technique to each variable and then combine the results. This process can
+    be carried out as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code follows these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we define the number of lags and forecasting horizon. We set the number
+    of lags to `7` (`N_LAGS=7`), the forecasting horizon to `1` (`HORIZON=1`), and
+    the target variable to `Incoming Solar.`
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Then, we iterate over each time step in the multivariate time series. At each
+    point, we retrieve the previous `N_LAGS`, add these to the `input_data`, and add
+    the next value of solar radiation to the output data. This means we’ll use the
+    past `7` values of each variable to forecast the next value of solar radiation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, we transform the input and output data from a `Python` list into a
+    `NumPy` `array` structure.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`output_data` is a one-dimensional vector that represents the future value
+    of solar radiation. `input_data` has 3 dimensions: the first dimension refers
+    to the number of samples, the second is the number of lags, and the third is the
+    number of variables in the series.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the TimeSeriesDataSet class
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: So far, we’ve been using a sliding window method to preprocess time series for
+    supervised learning. This function and other preprocessing tasks that are required
+    for training a neural network are automated by the `TimeSeriesDataSet` class,
+    which is available in the PyTorch Forecasting library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`TimeSeriesDataSet` provides a simple and useful way of preparing and passing
+    data to models. Let’s see how this structure can be used to handle multivariate
+    time series. First, we need to shape the time series in a pandas DataFrame structure
+    with three main pieces of information:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`group_id`: A column that identifies the name of a time series. If the dataset
+    contains a single time series, this column will show a constant value. Some datasets
+    involve multiple time series that can be distinguished by this variable.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`time_index`: This stores the time at which a value is captured by a given
+    series.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Other variables**: Extra variables that store the value of the time series.
+    A multivariate time series contains several variables.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Our time series already contains several variables. Now, we need to add information
+    about `time_index` and `group_id`, which can be done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The value of `group_id` is constantly `0` since we’re working with a single
+    time series. We use `0` arbitrarily. You can use any name that suits you. We use
+    the `np.arange``()` function to create this time series’ `time_index`. This creates
+    a variable that gives `0` for the first observation, `1` for the second observation,
+    and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we must create an instance of the `TimeSeriesDataSet` class, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can transform a `TimeSeriesDataSet` dataset into a `DataLoader` class as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`DataLoader` is used to pass observations to a model. Here’s an example of
+    what an observation looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: We use the `next``()` and `iter``()` methods to get an observation from the
+    data loader. This observation is stored as `x` and `y`, which represent the input
+    and output data, respectively. The main input is the `encoder_cont` item, which
+    denotes the `7` lags of each variable. This data is a PyTorch tensor with the
+    shape (`1`, `7`, `9`) representing (batch size, number of lags, number of variables).
+    The batch size is a parameter that represents the number of samples used in each
+    training iteration of a neural network. The output data is a float that represents
+    the next value of the solar radiation variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The `TimeSeriesDataSet` constructor requires a few parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`data`: A time series dataset with the three elements described earlier'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`group_ids`: The column in `data` that identifies each time series in the dataset'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`target`: The column in `data` that we want to forecast (target variable)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`time_idx`: The column in `data` that contains the time information of each
+    observation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`max_encoder_length`: The number of lags used to build the auto-regressive
+    model'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`max_prediction_length`: The forecasting horizon – that is, how many future
+    time steps should be predicted'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`time_varying_unknown_reals`: A list of columns in `data` that describes which
+    numeric variables vary over time'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There are other parameters related to `time_varying_unknown_reals`. This particular
+    input details all numeric observations whose future is unknown to the user, such
+    as the variables we want to forecast. Yet, in some cases, we know the future value
+    of an observation, such as the price of a product. This type of variable should
+    be included in the `time_varying_known_reals` input. There are also the `time_varying_known_categoricals`
+    and `time_varying_unknown_categoricals` inputs, which can be used for categorical
+    variables instead of numeric ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding the forecasting task, the transformation we carried out in this recipe
+    is the basis of a type of modeling called **Auto-Regressive Distributed Lags**
+    (**ARDL**). ARDL is an extension of auto-regression that also includes the lags
+    of exogenous variables as input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a linear regression model for forecasting with a multivariate time
+    series
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll use PyTorch to train a linear regression model as our
+    first forecasting model fit on a multivariate time series. We’ll show you how
+    to use `TimeSeriesDataSet` to handle the preprocessing steps for training the
+    model and passing data to it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ll start this recipe with the `mvtseries` dataset that we used in the previous
+    recipe:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see how we can use this dataset to train a PyTorch model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In the following code, we’ll describe the necessary steps to prepare the time
+    series and build a linear regression model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start by preprocessing the time series. This includes creating the group
+    identifier and time index columns:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we must split the data into different partitions. For this recipe, we’ll
+    only keep the training indices:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we must standardize the time series using the `StandardScaler` operator:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The preprocessed time series is passed onto a `TimeSeriesDataSet` instance:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `TimeSeriesDataSet` object is transformed into a data loader that can be
+    used to pass batches of samples to a model. This is done using the `to_dataloader()`
+    method. We encapsulate all these data preparation steps into a single function
+    called `create_training_set`. You can check out the function’s source in this
+    book’s GitHub repository.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Next, we call the `create_training_set``()` function to create the training
+    dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we must define the linear regression model using PyTorch, as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Here, we define a class called `LinearRegressionModel` that implements the multiple
+    linear regression model. It contains a single linear transformation layer (`nn.Linear`).
+    This class takes the input and output sizes as input, which are the second dimension
+    of the `train_input` and `train_output` objects, respectively. We created the
+    model by calling the class with these parameters.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Now, we will create an instance of this model, as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '`num_vars` contains the number of variables in the time series. Then, we define
+    the input of the model to `num_vars` times `N_LAGS` and the output to the forecasting
+    horizon.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'We can perform the training process using the following code:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Here, we set the learning rate to `0.001` and the optimizer to Adam. Adam is
+    a popular alternative to approaches such as SGD that has better converge characteristics.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: At each training epoch, we get the lags of each batch from the data loader and
+    process them with the model. Note that each batch is reshaped into a two-dimensional
+    format that is required by a linear model. This is done in the `forward()` method
+    of the `LinearRegressionModel` class.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We used the `TimeSeriesDataSet` class to handle the data preparation process
+    for us. Then, we converted the dataset into a `DataLoader` class using the `to_dataloader()`
+    method. This data loader provides batches of data to the model. Although we did
+    not define it explicitly, each batch follows an autoregressive way of modeling.
+    The input is based on the past few observations of the time series, and the output
+    represents the future observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We implement the linear regression model as a class so that it follows the same
+    structure as in the previous chapter. We could create the model with `model =
+    nn.Linear(input_size, output_size)` for simplicity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feedforward neural networks for multivariate time series forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll return our attention to deep neural networks. We’ll show
+    you how to build a forecasting model for multivariate time series using a deep
+    feedforward neural network. We’ll describe how to couple the `DataModule` class
+    with `TimeSeriesDataSet` to encapsulate the data preprocessing steps. We’ll also
+    place the `PyTorch` models within a `LightningModule` structure, which standardizes
+    the training process of neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ll continue to use the multivariate time series related to solar radiation
+    forecasting:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this recipe, we’ll use a data module from `pytorch_lightning` to handle
+    data preprocessing. Data modules are classes that contain all the steps for preprocessing
+    data and sharing it with models. Here is the basic structure of a data module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All data modules inherit from the `LightningDataModule` class. There are a
+    few key methods that we need to implement:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`setup()`: This method includes all the main data preprocessing steps'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train_dataloader()`, `val_dataloader()`, `test_dataloader()`, and `predict_dataloader()`:
+    These are a set of methods that get the data loader for the respective dataset
+    (training, validation, testing, and prediction)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Besides a `DataModule` class, we’ll also leverage the `LightningModule` class
+    to encapsulate all the model processes. These modules have the following structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s take a closer look at `ExampleModel`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We define any necessary neural network elements in the attributes of the class
+    (such as `self.network`)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `forward()` method defines how the elements of the network interact and
+    model the time series
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`training_step`, `validation_step`, and `testing_step` describe the training,
+    validation, and testing processes of the network, respectively'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`predict_step` details the process of getting the latest observations and making
+    a forecast, mimicking a deployment scenario'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the `configure_optimizers``()` method details the optimization setup
+    for the network
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s see how we can create a data module to preprocess a multivariate time
+    series, and how it couples with `TimeSeriesDataSet`. Then, we’ll implement a `LightningModule`
+    structure to handle the training and testing process of a feedforward neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The following code shows how to define the data module to handle the preprocessing
+    steps. First, let’s look at the class constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the constructor, we define all the necessary elements for data preparation,
+    such as the number of lags, forecasting horizon, and datasets. This includes the
+    initialization of the `target_scaler` attribute, which is used to standardize
+    the value of the time series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we create the `setup()` method, which includes the data preprocessing
+    logic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Some of the methods, such as `self.preprocess_data()`, have been omitted for
+    conciseness. You can find their source in this book’s GitHub repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we must build the data loaders that are responsible for passing data
+    to models:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s take a closer look at this data module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data preprocessing steps are carried out in the `setup()` method. This includes
+    transforming the time series by including the `time_index` and `group_id` variables,
+    as well as training, validation, and testing splits. The datasets are structured
+    with a `TimeSeriesDataSet` class. Note that we only need to define a `TimeSeriesDataSet`
+    instance for one of the datasets. We can use the `from_dataset``()` method to
+    set up an existing `TimeSeriesDataSet` instance for another dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The information for the preprocessing steps can be passed in the constructor
+    of the `DataModule` class, such as the number of lags (`n_lags`) or forecasting
+    `horizon`.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The data loaders can be obtained by using the `to_dataloader()` method on the
+    respective dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Then, we can design the neural network architecture. We will create a class
+    named `FeedForwardNet` that implements a feedforward neural network with three
+    layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The network architecture is defined in the `self.net` attribute. The layers
+    of the network are stacked on top of each other with the `nn.Sequential` container:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first layer receives the input data with a size of `input_size`. It is a
+    linear transformation (`nn.Linear`) that contains `16` units with a `ReLU()` activation
+    function (`nn.ReLU`).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The results are passed into the second layer of the same linear type and activation
+    function. This layer contains `8` units.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The final layer is also a linear transformation of the inputs coming from the
+    previous one. Its size is the same as `output_size`, which in the case of a time
+    series refers to the forecasting horizon.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Then, we insert this neural network within a `LightningModule` model class.
+    First, let’s look at the class constructor and the `forward``()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The constructor stores the network elements, while the `forward()` method details
+    how these elements interact in the forward pass of the network. The `forward()`
+    method also transforms the output in the original data scale using the `to_network_output()`
+    method. The training step and network optimizer are defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `configure_optimizers()` method is where we set up the optimization process.
+    In the training step, we get a batch of samples, pass the input onto the neural
+    network, and then compute the mean squared error using the actual data. Then,
+    we store the error information in different attributes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The validation and testing steps work similarly to how they do in the training
+    phase:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the prediction step, we simply pass the input data on to the neural network
+    and get its output in response:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s take a look at the preceding `FeedForwardModel` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The neural network based on `PyTorch` is defined in the `self.network` attribute
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `forward()` method describes how the neural network processes an instance
+    that it gets from a data loader
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The optimizer is set to `Adam` with a learning rate equal to `0.01`
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Finally, we use the `Trainer` class to train the model:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The training process runs for `30` epochs. To test the model, we can use the
+    `test()` method from the `Trainer` instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Future observations are forecasted by the `predict``()` method. In both cases,
+    we pass both the model and the data module to the `Trainer` instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The data module encapsulates all the preparation steps. Any specific transformation
+    that you need to perform on the dataset can be included in the `setup()` method.
+    The logic related to the model is handled in the `LightningModule` instance. Using
+    a `DataModule` and `LightningModule` approach provides a modular and tidier way
+    of developing deep learning models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `scalers` argument in the `TimeSeriesDataSet` class is used to pass the
+    scaler that should be used to preprocess the explanatory variables of the time
+    series. In this case, we used the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we used `StandardScaler` to transform all explanatory variables into a
+    common value range. We standardized the target variable of the time series using
+    the `self.target_scaler` attribute, which includes a `StandardScaler` operator.
+    We normalized the target variable outside of `TimeSeriesDataSet` to give us more
+    control over the target variable. This can serve as an example of how to carry
+    out transformations that may not be readily available in software packages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We defined the feedforward neural network using the `nn.Sequential` container.
+    Another possible approach is to define each element as its own class attribute
+    and call them in the `forward` method explicitly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Both approaches are equivalent. While the first one is tidier, the second one
+    is more versatile.
+  prefs: []
+  type: TYPE_NORMAL
+- en: LSTM neural networks for multivariate time series forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll continue the process of building a model to predict the
+    next value of solar radiation using multivariate time series. This time, we’ll
+    train an LSTM recurrent neural network to solve this task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The data setup is similar to what we did in the previous recipe. So, we’ll use
+    the same data module we defined there. Now, let’s learn how to build an LSTM neural
+    network with a `LightningModule` class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The workflow for training an LSTM neural network with PyTorch Lightning is
+    similar, with one small but important detail. For LSTM models, we keep the input
+    data in a three-dimensional structure with a shape of (number of samples, number
+    of lags, number of features). Here’s what the module looks like, starting with
+    the constructor and the `forward``()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This time, we don’t have to squeeze the inputs for the network into a two-dimensional
+    vector since the LSTM takes a three-dimensional input. The logic behind the LSTM
+    is implemented in the `forward()` method. The rest of the methods are identical
+    to what we did in the previous recipe. Here’s `training_step` as an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: You can find the remaining methods in this book’s GitHub repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After defining the model, we can use it as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: As detailed in the preceding code, PyTorch Lightning makes the testing and predicting
+    processes identical across models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The LSTM is a recurrent neural network architecture that’s designed to model
+    sequential data such as time series. This type of network contains a few extra
+    elements relative to feedforward neural networks, such as an extra input dimension
+    or hidden cell states. In this recipe, we stacked two fully connected layers on
+    top of the LSTM layer. LSTM layers are usually passed on to a fully connected
+    layer because the output of the former is an internal state. So, the fully connected
+    layer processes this output in the particular dimension we need.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The class constructor of the LSTM takes four parameters as input – the number
+    of variables in the time series (`input_size`), the forecasting horizon (`output_size`),
+    the number of `LSTM` layers (`num_layers`), and the number of hidden units in
+    each `LSTM` layer (`hidden_size`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We defined three layers in the `__init__` constructor method. Besides the `LSTM`,
+    we created two fully connected layers, one of which represents the output layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The forward pass of the network works like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize the hidden state (`h0`) and cell state (`c0`) with zeros. This is
+    done by calling the `init_hidden_state``()` method.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Pass the input data to the LSTM stack. The LSTM returns its output and the hidden
+    and cell states of each LSTM layer.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Next, we get the hidden state of the last LSTM layer, which is passed onto a
+    `ReLU``()` activation function.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The results from `ReLU` are passed to the first fully connected layer, whose
+    output is, once again, transformed with a `ReLU``()` activation function. Finally,
+    the output is passed to a linear, fully connected output layer, which provides
+    the forecasts.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This logic is coded in the `forward``()` method of the `LightningModule` instance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We created a deep neural network with a single LSTM layer (`num_layers=1`).
+    However, we could increase this value according to our needs. A model with more
+    than one LSTM layer is referred to as a **stacked** **LSTM** model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monitoring the training process using Tensorboard
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Training deep learning models often involves tuning numerous hyperparameters,
+    assessing different architectures, and more. To facilitate these tasks, visualization
+    and monitoring tools are essential. `tensorboard` is a powerful tool for tracking
+    and visualizing various metrics during the training process. In this section,
+    we will guide you through integrating `tensorboard` with PyTorch Lightning for
+    monitoring the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before using `tensorboard` with PyTorch Lightning, you’ll need to have `tensorboard`
+    installed. You can install it using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once installed, make sure that you are utilizing PyTorch Lightning’s built-in
+    `tensorboard` logging capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here’s how to use `tensorboard` to monitor the training process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, ensure that `tensorboard` is imported into your script.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Next, you’ll need to create a `tensorboard` logger and pass it to PyTorch Lightning’s
+    `Trainer`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'You can then start `tensorboard` by running the following command in your terminal:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Open `tensorboard` in your web browser by navigating to the URL displayed in
+    your terminal; usually, this is `http://localhost:6006`. You’ll see real-time
+    updates on various metrics, such as the number of epochs, the train, validation,
+    and test loss, and more.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The following figure shows some plots of the LSTM’s performance from the previous
+    recipe. In this case, we can see how the number of epochs, as well as training
+    and validation losses, are evolving:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 4.2: Comparison of epochs, training loss, and validation loss](img/B21145_04_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4.2: Comparison of epochs, training loss, and validation loss'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`tensorboard` provides visualizations for various training metrics, hyperparameter
+    tuning, model graphs, and more. When integrated with PyTorch Lightning, the following
+    occurs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The logger sends the specified metrics to `tensorboard` during training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tensorboard` reads the logs and provides interactive visualizations'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Users can monitor various aspects of training in real time
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Here are some additional details to keep in mind:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can log additional information such as images, text, histograms, and more
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By exploring different visualizations, you can gain insights into how your model
+    is performing and make necessary adjustments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tensorboard’s integration with PyTorch Lightning streamlines the monitoring
+    process, enabling more efficient model development
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using `tensorboard` with PyTorch Lightning offers a robust solution for monitoring
+    and visualizing the training process, allowing for more informed decision-making
+    in model development.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evaluating deep neural networks for forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Evaluating the performance of forecasting models is essential to understand
+    how well they generalize to unseen data. Popular metrics include the **Root Mean
+    Squared Error** (**RMSE**), **Mean Absolute Percentage Error** (**MAPE**), **Mean
+    Absolute Scaled Error** (**MASE**), and **Symmetric Mean Absolute Percentage Error**
+    (**SMAPE**), among others. We will implement these metrics in Python and show
+    you how they can be applied to evaluate our model’s performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We need predictions from our trained model and the corresponding ground truth
+    values to calculate these metrics. Therefore, we must run our model on the test
+    set first to obtain the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To simplify the implementation, we will use the `scikit-learn` and `sktime`
+    libraries since they have useful classes and methods to help us with this task.
+    Since we have not installed `sktime` yet, let’s run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, it is time to import the classes and methods for the different evaluation
+    metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To evaluate the performance of our model, we must calculate the `scikit-learn`
+    library. For `sktime` library, which offers readily available functions for these
+    metrics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the code detailing how to calculate these metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'These metrics each evaluate different aspects of the model’s performance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**RMSE**: This metric calculates the square root of the average squared differences
+    between the predicted and actual values. It gives a higher penalty for large errors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`1` indicating performance equal to the naive forecast and a MASE value less
+    than `1` indicating better performance than the naive forecast.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**MAPE**: This metric computes the mean of the absolute percentage difference
+    between the actual and predicted values. It expresses the average absolute error
+    in terms of percentage, which can be useful when you want to understand the relative
+    prediction error.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**SMAPE**: This metric computes the average absolute percentage error, treating
+    under and over-forecasts equally. It expresses the error as a percentage of the
+    actual values, which can be useful for comparing models and predicting different
+    scales.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Remember, the choice of evaluation metric depends on the specific problem and
+    business requirements. For example, if it is more costly to have a model that
+    under-predicts than over-predicts, a metric that treats these two types of errors
+    differently may be more appropriate. Other metrics, such as MAE, can also be used,
+    depending on the problem. Evaluating a model using multiple metrics is always
+    a good idea to gain a more comprehensive understanding of its performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using callbacks – EarlyStopping
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Callbacks in PyTorch Lightning are reusable components that allow you to inject
+    custom behavior into various stages of the training, validation, and testing loops.
+    They offer a way to encapsulate functionalities separate from the main training
+    logic, providing a modular and extensible approach to manage auxiliary tasks such
+    as logging metrics, saving checkpoints, early stopping, and more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By defining a custom class that inherits from PyTorch Lightning’s base `Callback`
+    class, you can override specific methods corresponding to different points in
+    the training process, such as `on_epoch_start` or `on_batch_end`. When a trainer
+    is initialized with one or more of these callback objects, the defined behavior
+    is automatically executed at the corresponding stage of the training process.
+    This makes callbacks powerful tools for organizing the training pipeline, adding
+    flexibility without cluttering the main training code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: After defining and training the LSTM model, as described in the previous section,
+    we can further enhance the training process by incorporating a technique called
+    early stopping. This is used to avoid overfitting by halting the training process
+    when a specified metric stops improving. For this purpose, PyTorch Lightning provides
+    an early stopping callback, which we’ll be integrating into our existing training
+    code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To apply early stopping, we’ll need to modify our existing PyTorch Lightning
+    `Trainer` by adding the `EarlyStopping` callback. Here’s the code to do so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code snippet, `monitor` is set to the validation loss (`val_loss`),
+    and the training process will stop if this value does not decrease by at least
+    `min_delta` for `patience` consecutive validation epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Early stopping is a regularization technique that prevents overfitting in neural
+    networks. It monitors a specified metric (in this case, the validation loss) and
+    halts the training process when this metric stops improving.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s how it works in our LSTM model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`val_loss`) during the validation phase.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`min_delta` for `patience` consecutive epochs, the training process is halted.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mode` parameter can be set to `min` or `max`, indicating whether the monitored
+    metric should be minimized or maximized. In our case, we want to minimize the
+    validation loss.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By stopping the training process early, we can save time and resources, and
+    also potentially obtain a model that generalizes better to unseen data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s look at some further details:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The early stopping callback is highly configurable, allowing you to tailor its
+    behavior to specific requirements – for example, you can change the `patience`
+    parameter to make the stopping criterion more or less strict
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Early stopping can be combined with other callbacks and techniques, such as
+    model checkpointing, to create a robust and efficient training pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Utilizing early stopping appropriately can lead to models that perform better
+    on unseen data as it prevents them from fitting too closely to the training data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This `EarlyStopping` callback integrates seamlessly with PyTorch Lightning and
+    our existing LSTM model, demonstrating the extensibility and ease of use of PyTorch
+    Lightning’s callback system.
+  prefs: []
+  type: TYPE_NORMAL

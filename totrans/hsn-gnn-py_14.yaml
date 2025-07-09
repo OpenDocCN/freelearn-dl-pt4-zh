@@ -1,0 +1,712 @@
+- en: '14'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Explaining Graph Neural Networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'One of the most common criticisms of NNs is that their outputs are difficult
+    to understand. Unfortunately, GNNs are not immune to this limitation: in addition
+    to explaining which features are important, it is necessary to consider neighboring
+    nodes and connections. In response to this issue, the area of **explainability**
+    (in the form of **explainable AI** or **XAI**) has developed many techniques to
+    better understand the reasons behind a prediction or the general behavior of a
+    model. Some of these techniques have been translated to GNNs, while others take
+    advantage of the graph structure to offer more precise explanations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will explore some explanation techniques to understand
+    why a given prediction has been made. We will see different families of techniques
+    and focus on two of the most popular: `MUTAG` dataset. Then, we will introduce
+    `Captum`, a Python library that offers many explanation techniques. Finally, using
+    the Twitch social network, we will implement integrated gradients to explain the
+    model’s outputs on a node classification task.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will be able to understand and implement several
+    XAI techniques on GNNs. More specifically, you will learn how to use GNNExplainer
+    and the `Captum` library (with integrated gradients) for graph and node classification
+    tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing explanation techniques
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explaining GNNs with GNNExplainer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explaining GNNs with Captum
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter14](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter14).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing explanation techniques
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GNN explanation is a recent field that is heavily inspired by other XAI techniques
+    [1]. We divide it into local explanations on a per-prediction basis and global
+    explanations for entire models. While understanding the behavior of a GNN model
+    is desirable, we will focus on local explanations that are more popular and essential
+    to get insight into a prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we distinguish between “interpretable” and “explainable” models.
+    A model is called “interpretable” if it is human-understandable by design, such
+    as a decision tree. On the other hand, it is “explainable” when it acts as a black
+    box whose predictions can only be retroactively understood using explanation techniques.
+    This is typically the case with NNs: their weights and biases do not provide clear
+    rules like a decision tree, but their results can be explained indirectly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are four main categories of local explanation techniques:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Gradient-based methods** analyze gradients of the output to estimate attribution
+    scores (for example, **integrated gradients**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Perturbation-based methods** mask or modify input features to measure changes
+    in the output (for example, **GNNExplainer**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Decomposition methods** decompose the model’s predictions into several terms
+    to gauge their importance (for example, graph neural network **layer-wise relevance**
+    **propagation** (**GNN-LRP**))'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Surrogate methods** use a simple and interpretable model to approximate the
+    original model’s prediction around an area (for example, **GraphLIME**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'These techniques are complementary: they sometimes disagree on the contribution
+    of edges and features, which can be used to refine the explanation of a prediction
+    further. Explanation techniques are traditionally evaluated using metrics such
+    as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Fidelity**, which compares the prediction probabilities of ![](img/Formula_B19153_14_001.png)
+    between the original graph ![](img/Formula_B19153_14_002.png) and a modified graph
+    ![](img/Formula_B19153_14_003.png). The modified graph only keeps the most important
+    features (nodes, edges, node features) of ![](img/Formula_B19153_14_003.png),
+    based on an explanation of ![](img/Formula_B19153_14_005.png). In other words,
+    fidelity measures the extent to which the features identified as important are
+    sufficient to obtain the correct prediction. It is formally defined as follows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_14_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Sparsity**, which measures the fraction of features (nodes, edges, node features)
+    that are considered important. Explanations that are too lengthy are more challenging
+    to understand, which is why sparsity is encouraged. It is computed as follows:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_14_007.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_14_008.png) is the number of important input features
+    and ![](img/Formula_B19153_14_009.png) is the total number of features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to the traditional graphs we saw in previous chapters, explanation
+    techniques are often evaluated on synthetic datasets, such as `BA-Shapes`, `BA-Community`,
+    `Tree-Cycles`, and `Tree-Grid` [2]. These datasets were generated using graph
+    generation algorithms to create specific patterns. We will not use them in this
+    chapter, but they are an interesting alternative that is easy to implement and
+    understand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, we will describe a gradient-based method (integrated
+    gradients) and a perturbation-based technique (GNNExplainer).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Explaining GNNs with GNNExplainer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will introduce our first XAI technique with GNNExplainer.
+    We will use it to understand the predictions produced by a GIN model on the `MUTAG`
+    dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing GNNExplainer
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Introduced in 2019 by Ying et al. [2], GNNExplainer is a GNN architecture designed
+    to explain predictions from another GNN model. With tabular data, we want to know
+    which features are the most important to a prediction. However, this is not enough
+    with graph data: we also need to know which nodes are the most influential. GNNExplainer
+    generates explanations with these two components by providing a subgraph ![](img/Formula_B19153_14_010.png)
+    and a subset of node features ![](img/Formula_B19153_14_011.png). The following
+    figure illustrates an explanation provided by GNNExplainer for a given node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.1 – Explanation for node ￼’s label with ￼ in green and non-excluded
+    node features ￼](img/B19153_14_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.1 – Explanation for node ![](img/Formula_B19153_14_012.png)’s label
+    with ![](img/Formula_B19153_14_013.png) in green and non-excluded node features
+    ![](img/Formula_B19153_14_014.png)
+  prefs: []
+  type: TYPE_NORMAL
+- en: To predict ![](img/Formula_B19153_14_015.png) and ![](img/Formula_B19153_14_016.png),
+    GNNExplainer implements an edge mask (to hide connections) and a feature mask
+    (to hide node features). If a connection or a feature is important, removing it
+    should drastically change the prediction. On the other hand, if the prediction
+    does not change, it means that this information was redundant or simply irrelevant.
+    This principle is at the core of perturbation-based techniques such as GNNExplainer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, we must carefully craft a loss function to find the best masks
+    possible. GNNExplainer measures the mutual dependence between the predicted label
+    distribution ![](img/Formula_B19153_14_017.png) and ![](img/Formula_B19153_14_018.png),
+    also called **mutual information** (**MI**). Our goal is to maximize the MI, which
+    is equivalent to minimizing the conditional cross-entropy. GNNExplainer is trained
+    to find the variables ![](img/Formula_B19153_14_019.png) and ![](img/Formula_B19153_14_020.png)
+    that maximize the probability of a prediction ![](img/Formula_B19153_14_021.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to this optimization framework, GNNExplainer learns a binary feature
+    mask and implements several regularization techniques. The most important technique
+    is a term used to minimize the size of the explanation (sparsity). It is computed
+    as the sum of all elements of the mask parameters and added to the loss function.
+    It creates more user-friendly and concise explanations that are easier to understand
+    and interpret.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GNNExplainer can be applied to most GNN architectures and different tasks such
+    as node classification, link prediction, or graph classification. It can also
+    generate explanations of a class label or an entire graph. When classifying a
+    graph, the model considers the union of adjacency matrices for all nodes in the
+    graph instead of a single one. In the next section, we will apply it to explain
+    graph classifications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing GNNExplainer
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this example, we will explore the `MUTAG` dataset [3]. Each of the 188 graphs
+    in this dataset represents a chemical compound, where nodes are atoms (seven possible
+    atoms), and edges are chemical bonds (four possible bonds). Node and edge features
+    represent one-hot encodings of the atom and edge types, respectively. The goal
+    is to classify each compound into two classes according to their mutagenic effect
+    on the bacteria *Salmonella typhimurium*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will reuse the GIN model introduced in [*Chapter 9*](B19153_09.xhtml#_idTextAnchor106)
+    for protein classification. In [*Chapter 9*](B19153_09.xhtml#_idTextAnchor106),
+    we visualized correct and incorrect classifications made by the model. However,
+    we could not explain the predictions made by the GNN. This time, we’ll use GNNExplainer
+    to understand the most important subgraph and node features to explain a classification.
+    In this example, we will ignore the edge features for ease of use. Here are the
+    steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the required classes from PyTorch and PyTorch Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the `MUTAG` dataset and shuffle it:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create training, validation, and test sets:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create data loaders to implement mini-batching:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a GIN model with 32 hidden dimensions using code from [*Chapter 9*](B19153_09.xhtml#_idTextAnchor106):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We train this model for 100 epochs and test it using code from [*Chapter 9*](B19153_09.xhtml#_idTextAnchor106):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Our GIN model is trained and achieved a high accuracy score (`84.21%`). Now,
+    let’s create a GNNExplainer model using the `GNNExplainer` class from PyTorch
+    Geometric. We will train it for 100 epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'GNNExplainer can be used to explain the prediction made for a node (`.explain_node()`)
+    or an entire graph (`.explain_graph()`). In this case, we will use it on the last
+    graph of the test set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The last step returned the feature and edge masks. Let’s print the feature
+    mask to see the most important values:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The values are normalized between 0 (less important) and 1 (more important).
+    These seven values correspond to the seven atoms we find in the dataset in the
+    following order: carbon (C), nitrogen (N), oxygen (O), fluorine (F), iodine (I),
+    chlorine (Cl), and bromine (Br). Features have similar importance: the most useful
+    is the last one, representing bromine (Br), and the least important is the fifth
+    one, representing iodine (I).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Instead of printing the edge mask, we can plot it on the graph using the `.visualize_graph()`
+    method. The arrows’ opacity represents the importance of each connection:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This gives us *Figure 14**.2*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.2 – Graph representation of a chemical compound: the edge opacity
+    represents the importance of each connection](img/B19153_14_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 14.2 – Graph representation of a chemical compound: the edge opacity
+    represents the importance of each connection'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The last plot shows the connections that contributed the most to the prediction.
+    In this case, the GIN model correctly classified the graph. We can see that the
+    links between nodes `data.edge_attr` to obtain the label associated with their
+    chemical bonds (aromatic, single, double, or triple). In this example, it corresponds
+    to edges **16** to **19**, which all are either single or double bonds.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By printing `data.x`, we can also look at nodes **6**, **7**, and **8** to gain
+    more information. Node **6** represents an atom of nitrogen, while nodes **7**
+    and **8** are two atoms of oxygen. These results should be reported to people
+    with the right domain knowledge to get feedback on our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GNNExplainer does not provide precise rules about the decision-making process
+    but gives insights into what the GNN model focused on to make its prediction.
+    Human expertise is still needed to ensure that these ideas are coherent and correspond
+    to traditional domain knowledge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will use Captum to explain node classifications on a
+    new social network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Explaining GNNs with Captum
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will first introduce Captum and the integrated gradients
+    technique applied to graph data. Then, we will implement it using a PyTorch Geometric
+    model on the Twitch social network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing Captum and integrated gradients
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`Captum` ([captum.ai](http://captum.ai)) is a Python library that implements
+    many state-of-the-art explanation algorithms for PyTorch models. This library
+    is not dedicated to GNNs: it can also be applied to text, images, tabular data,
+    and so on. It is particularly useful because it allows users to quickly test various
+    techniques and compare different explanations for the same prediction. In addition,
+    `Captum` implements popular algorithms such as LIME and Gradient SHAP for primary,
+    layer, and neuron attributions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will use it to apply a graph version of integrated gradients
+    [4]. This technique aims to assign an attribution score to every input feature.
+    To this end, it uses gradients with respect to the model’s inputs. Specifically,
+    it uses an input ![](img/Formula_B19153_14_022.png) and a baseline input ![](img/Formula_B19153_14_023.png)
+    (all edges have zero weight in our case). It computes the gradients at all points
+    along the path between ![](img/Formula_B19153_14_024.png) and ![](img/Formula_B19153_14_025.png)
+    and accumulates them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Formally, the integrated gradient along the ![](img/Formula_B19153_14_026.png)
+    dimension for an input ![](img/Formula_B19153_14_027.png) is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_14_028.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In practice, instead of directly calculating this integral, we approximate it
+    with a discrete sum.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Integrated gradients is model-agnostic and based on two axioms:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Sensitivity**: Every input contributing to the prediction must receive a
+    nonzero attribution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Implementation invariance**: Two NNs whose outputs are equal for all inputs
+    (these networks are called functionally equivalent) must have identical attributions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The graph version we will employ is slightly different: it considers nodes
+    and edges *instead of* features. As a result, you can see that the output differs
+    from GNNExplainer, which considers node features *and* edges. This is why these
+    two approaches can be complementary.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now implement this technique and visualize the results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing integrated gradients
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We will implement integrated gradients on a new dataset: the Twitch social
+    networks dataset (English version) [5]. It represents a user-user graph, where
+    nodes correspond to Twitch streamers and connections to mutual friendships. The
+    128 node features represent information such as streaming habits, location, games
+    liked, and so on. The goal is to determine whether a streamer uses explicit language
+    (binary classification).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will implement a simple two-layer GCN with PyTorch Geometric for this task.
+    We will then convert our model to Captum to use the integrated gradients algorithm
+    and explain our results. Here are the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We install the `captum` library:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We import the required libraries:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s fix the random seeds to make computations deterministic:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the Twitch gamer network dataset (English version):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This time, we will use a simple two-layer GCN with `dropout`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We try to train the model on a GPU—if one is available—using the `Adam` optimizer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We train the model for 200 epochs using the negative log-likelihood loss function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We test the trained model. Note that we did not specify any test, so we will
+    evaluate the GCN’s accuracy on the training set in this case:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The model achieved an accuracy score of `79.75%`, which is relatively low considering
+    that it was evaluated on the training set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now start implementing the explanation method we chose: the integrated
+    gradients. First, we must specify the node we want to explain (node `0` in this
+    example) and convert the PyTorch Geometric model to `Captum`. Here, we also specify
+    we want to use a feature and an edge mask with `mask_type=node_and_feature`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s create the integrated gradients object using `Captum`. We give it the
+    result of the previous step as input:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We already have the node mask we need to pass to `Captum` (`data.x`), but we
+    need to create a tensor for the edge mask. In this example, we want to consider
+    every edge in the graph, so initialize a tensor of ones with size `data.num_edges`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `.attribute()` method takes a specific format of inputs for the node and
+    edge masks (hence the use of `.unsqueeze(0)` to reformat these tensors). The target
+    corresponds to the class of our target node. Finally, we pass the adjacency matrix
+    (`data.edge_index`) as an additional forward argument:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We scale the attribution scores between `0` and `1`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Using PyTorch Geometric’s `Explainer` class, we visualize a graph representation
+    of these attributions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.3 – Explanation for node 0’s classification with edge and node
+    attribution scores represented with different opacity values](img/B19153_14_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.3 – Explanation for node 0’s classification with edge and node attribution
+    scores represented with different opacity values
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Node **0**’s subgraph comprises blue nodes, which share the same class. We
+    can see that node **82** is the most important node (other than 0) and the connection
+    between these two nodes is the most critical edge. This is a straightforward explanation:
+    we have a group of four streamers using the same language. The mutual friendship
+    between nodes **0** and **82** is a good argument for this prediction.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s now look at another graph illustrated in *Figure 14**.4*, the explanation
+    for node **101**’s classification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 14.4 – Explanation for node 101’s classification with edge and node
+    attribution scores represented with different opacity values](img/B19153_14_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 14.4 – Explanation for node 101’s classification with edge and node attribution
+    scores represented with different opacity values
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this case, our target node is connected to neighbors with different classes
+    (nodes **5398** and **2849**). Integrated gradients give greater importance to
+    the node that shares the same class as node **101**. We also see that their connection
+    is the one that contributed the most to this classification. This subgraph is
+    richer; you can see that even two-hop neighbors contribute a little.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, these explanations should not be considered a silver bullet. Explainability
+    in AI is a rich topic that often involves people with different backgrounds. Thus,
+    communicating the results and getting regular feedback is particularly important.
+    Knowing the importance of edges, nodes, and features is essential, but it should
+    only be the start of a discussion. Experts from other fields can exploit or refine
+    these explanations, and even find issues that can lead to architectural changes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we explored the field of XAI applied to GNNs. Explainability
+    is a key component in many areas and can help us to build better models. We saw
+    different techniques to provide local explanations and focused on GNNExplainer
+    (a perturbation-based method) and integrated gradients (a gradient-based method).
+    We implemented them on two different datasets using PyTorch Geometric and Captum
+    to obtain explanations for graph and node classification. Finally, we visualized
+    and discussed the results of these techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 15*](B19153_15.xhtml#_idTextAnchor179), *Forecasting Traffic Using
+    A3T-GCN*, we will revisit temporal GNNs to predict future traffic on a road network.
+    In this practical application, we will see how to translate roads into graphs
+    and apply a recent GNN architecture to forecast short-term traffic accurately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] H. Yuan, H. Yu, S. Gui, and S. Ji. *Explainability in Graph Neural Networks:
+    A Taxonomic Survey*. arXiv, 2020\. DOI: 10.48550/ARXIV.2012.15445\. Available
+    at [https://arxiv.org/abs/2012.15445](https://arxiv.org/abs/2012.15445).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] R. Ying, D. Bourgeois, J. You, M. Zitnik, and J. Leskovec. *GNNExplainer:
+    Generating Explanations for Graph Neural Networks*. arXiv, 2019\. DOI: 10.48550/ARXIV.1903.03894\.
+    Available at [https://arxiv.org/abs/1903.03894](https://arxiv.org/abs/1903.03894).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] Debnath, A. K., Lopez de Compadre, R. L., Debnath, G., Shusterman, A. J.,
+    and Hansch, C. (1991). *Structure-activity relationship of mutagenic aromatic
+    and heteroaromatic nitro compounds. Correlation with molecular orbital energies
+    and hydrophobicity*. DOI: 10.1021/jm00106a046\. *Journal of Medicinal Chemistry*,
+    34(2), 786–797\. Available at [https://doi.org/10.1021/jm00106a046](https://doi.org/10.1021/jm00106a046).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] M. Sundararajan, A. Taly, and Q. Yan. *Axiomatic Attribution for Deep Networks*.
+    arXiv, 2017\. DOI: 10.48550/ARXIV.1703.01365\. Available at [https://arxiv.org/abs/1703.01365](https://arxiv.org/abs/1703.01365).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[5] B. Rozemberczki, C. Allen, and R. Sarkar. *Multi-Scale Attributed Node
+    Embedding*. *arXiv*, *2019*. DOI: 10.48550/ARXIV.1909.13021\. Available at [https://arxiv.org/pdf/1909.13021.pdf](https://arxiv.org/pdf/1909.13021.pdf).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Part 4: Applications'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this fourth and final part of the book, we delve into the development of
+    comprehensive applications that utilize real-world data. Our focus will be on
+    encompassing aspects previously omitted in previous chapters, such as exploratory
+    data analysis and data processing. We aim to provide an exhaustive overview of
+    the machine learning pipeline, from raw data to model output analysis. We will
+    also highlight the strengths and limitations of the techniques discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The projects in this section have been designed to be adaptable and customizable,
+    enabling readers to apply them to other datasets and tasks with ease. This makes
+    it an ideal resource for readers who wish to build a portfolio of applications
+    and showcase their work on GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this part, you will know how to implement GNNs for traffic forecasting,
+    anomaly detection, and recommender systems. These projects have been selected
+    to demonstrate the versatility and potential of GNNs in solving real-world problems.
+    The knowledge and skills gained from these projects will prepare readers for developing
+    their own applications and contributing to the field of graph learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part comprises the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 15*](B19153_15.xhtml#_idTextAnchor179)*, Forecasting Traffic Using
+    A3T-GCN*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 16*](B19153_16.xhtml#_idTextAnchor187)*, Detecting Anomalies Using
+    Heterogeneous Graph Neural Networks*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 17*](B19153_17.xhtml#_idTextAnchor195)*, Recommending Books Using
+    LightGCN*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 18*](B19153_18.xhtml#_idTextAnchor203)*, Unlocking the Potential
+    of Graph Neural Networks for Real-Word Applications*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

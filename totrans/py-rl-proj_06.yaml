@@ -1,0 +1,1329 @@
+- en: Learning to Play Go
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'When considering the capabilities of AI, we often compare its performance for
+    a particular task with what humans can achieve. AI agents are now able to surpass
+    human-level competency in more complex tasks. In this chapter, we will build an
+    agent that learns how to play what is considered the most complex board game of
+    all time: Go. We will become familiar with the latest deep reinforcement learning
+    algorithms that achieve superhuman performances, namely AlphaGo, and AlphaGo Zero,
+    both of which were developed by Google''s DeepMind. We will also learn about Monte
+    Carlo tree search, a popular tree-searching algorithm that is an integral component
+    of turn-based game agents.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Go and relevant research in AI
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Overview of AlphaGo and AlphaGo Zero
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Monte Carlo tree search algorithm
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation of AlphaGo Zero
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A brief introduction to Go
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Go is a board game that was first recorded in China two millennia ago. Similar
+    to other common board games, such as chess, shogi, and Othello, Go involves two
+    players alternately placing black and white stones on a 19x19 board with the objective
+    of capturing as much territory as possible by surrounding a larger total area
+    of the board. One can capture their opponent's pieces by surrounding the opponent's
+    pieces with their own pieces. Captured stones are removed from the board, thereby
+    creating a void in which the opponent can no longer place stones unless the territory
+    is captured back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A game ends when both players refuse to place a stone or either player resigns.
+    Upon the termination of a game, the winner is decided by counting each player's
+    territory and the number of captured stones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go and other board games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Researchers have already created AI programs that outperform the best human
+    players in board games such as chess and backgammon. In 1992, researchers from
+    IBM developed TD-Gammon, which used classic reinforcement learning algorithms
+    and an artificial neural network to play backgammon at the level of a top player.
+    In 1997, Deep Blue, a chess-playing program developed by IBM and Carnegie Mellon
+    University, defeated then world champion Garry Kasparov in a six-game face off.
+    This was the first time that a computer program defeated the world champion in
+    chess.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Developing Go playing agents is not a new topic, and hence one may wonder what
+    took so long for researchers to replicate such successes in Go. The answer is
+    simple—Go, despite its simple rules, is a far more complex game than chess. Imagine
+    representing a board game as a tree, where each node is a snapshot of the board
+    (which we also refer to as the **board state**) and its child nodes are possible
+    moves the opponent can make. The height of the tree is essentially the number
+    of moves a game lasts. A typical chess game lasts 80 moves, whereas a game in
+    Go lasts 150; almost twice as long. Moreover, while the average number of possible
+    moves in a chess turn is 35, a Go player has 250 possible plays per move. Based
+    on these numbers, Go has 10^(761) total possible games, compared to 10^(120) games
+    in chess. It is impossible to enumerate every possible state in Go in a computer,
+    and the sheer complexity of the game has made it difficult for researchers to
+    develop an agent that can play the game at a world-class level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Go and AI research
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In 2015, researchers from Google's DeepMind published a paper in Nature that
+    detailed a novel reinforcement learning agent for Go called **AlphaGo**. In October
+    of that year, AlphaGo beat Fan Hui, the European champion, 5-0\. In 2016, AlphaGo
+    challenged Lee Sedol, who, with 18 world championship titles, is considered one
+    of the greatest players in modern history. AlphaGo won 4-1, marking a watershed
+    moment in deep learning research and the game's history. In the following year,
+    DeepMind published an updated version of AlphaGo, AlphaGo Zero, which defeated
+    its predecessor 100 times in 100 games. In just a matter of days of training,
+    AlphaGo and AlphaGo Zero were able to learn and surpass the wisdom that mankind
+    has accumulated over the thousands of years of the game's existence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following sections will discuss how AlphaGo and AlphaGo Zero work, including
+    the algorithms and techniques that they use to learn and play the game. This will
+    be followed by an implementation of AlphaGo Zero. Our exploration begins with
+    Monte Carlo tree search, an algorithm that is integral to both AlphaGo and AlphaGo
+    Zero for making decisions on where to place stones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monte Carlo tree search
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In games such as Go and chess, players have perfect information, meaning they
+    have access to the full game state (the board and the positions of the pieces).
+    Moreover, there lacks an element of chance that can affect the game state; only
+    the players' decisions can affect the board. Such games are also referred to as perfect-information
+    games. In perfect-information games, it is theoretically possible to enumerate
+    all possible game states. As discussed earlier, this would look such as a tree,
+    where each child node (a game state) is a possible outcome of the parent. In two-player
+    games, alternating levels of this tree represent moves produced by the two competitors.
+    Finding the best possible move for a given state is simply a matter of traversing
+    the tree and finding which sequence of moves leads to a win. We can also store
+    the value, or the expected outcome or reward (a win or a loss) of a given state,
+    at each node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, constructing a perfect tree is impractical in practice for games such
+    as Go. So how can an agent learn how to play the game without such knowledge?
+    The **Monte Carlo tree-search** (**MCTS**) algorithm provides an efficient approximation
+    of this complete tree. In a nutshell, MCTS involves playing a game iteratively,
+    keeping statistics on states that were visited, and learning which moves are more
+    favorable/likely to lead to a win. The goal of MCTS is to build a tree that approximates
+    the aforementioned perfect tree as much as possible. Each move in a game corresponds
+    to an iteration of the MCTS algorithm. There are four main steps in the algorithm:
+    Selection, Expansion, Simulation, and Update (also known as **backpropagation**).
+    We will briefly detail each procedure.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Selection
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The first step of MCTS involves playing the game intelligently. That means
+    the algorithm has enough experience to determine the next move given a state.
+    One method for determining the next move is called **Upper Confidence Bound 1
+    Applied to Trees** (**UCT**). In short, this formula rates moves based on the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The mean reward of games where a given move was made
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How often the move was selected
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Each node''s rating can be expressed as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cecb71cb-1964-4f40-8585-975998119ce6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d7a90243-d2e5-4856-a8bc-7be435a50380.png): Is the mean reward for choosing
+    move ![](img/1159d5da-b57a-4100-bc50-0ced1d628aa7.png) (for example, the win-rate)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/f01de5bf-f163-448a-9240-44f4d726173e.png): Is the number of times the
+    algorithm selected move ![](img/4e52a294-85a6-468c-b216-55895ca828fc.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/924f7580-5cb7-4e68-9357-81c4368bbe22.png): Is the total number of moves
+    made after the current state (including move ![](img/071de01b-39e6-43cb-aa23-fb2e9a87c9fe.png))'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/993dec34-0edf-4931-9cdd-c418896d1933.png): Is an exploration parameter'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The following diagram shows an example of selecting the next node. In each
+    node, the left number represents the node''s rating, and the right number represents
+    the number of times the node was visited. The color of the node indicates which
+    player''s turn it is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/722ce601-b57d-4f8d-bb83-180e5deeff89.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 1: Selection in MCTS'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In selection, the algorithm chooses the move that has the highest value for
+    the preceding expression. The keen reader may notice that, while moves with a
+    high mean reward, ![](img/d7a90243-d2e5-4856-a8bc-7be435a50380.png), are rated
+    highly, so too are moves with fewer numbers of visits, ![](img/f01de5bf-f163-448a-9240-44f4d726173e.png). Why
+    is this so? In MCTS, we not only want the algorithm to choose moves that most
+    likely result in wins but also to try less-often-selected moves. This is commonly
+    referred to as the balance between exploitation and exploration. If the algorithm
+    solely resorted to exploitation, the resulting tree would be very narrow and ill-experienced.
+    Encouraging exploration allows the algorithm to learn from a broader set of experiences
+    and simulations. In the preceding example, we simply select the node with a rating
+    of 7 and subsequently the node with a rating of 4.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Expansion
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We apply selection to decide moves until the algorithm can no longer apply
+    UCT to rate the next set of moves. In particular, we can no longer apply UCT when
+    not all of the child nodes of a given state have records (number of visits, mean
+    reward). This is when the second phase of MCTS, expansion, occurs. Here, we simply
+    look at all possible new moves (unvisited child nodes) of a given state and randomly
+    choose one. We then update the tree to record this new child node. The following
+    diagram illustrates this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2956a245-b179-4673-918e-8d25522514a3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 2: Expansion'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may be wondering from the preceding diagram why we initialize the visit
+    count as zero rather than one. The visit count of this new node as well as the
+    statistics of the nodes we have traversed so far will be incremented during the
+    update step, which is the final step of an MCTS iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Simulation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'After expansion, the rest of the game is played by randomly choosing subsequent
+    moves. This is also commonly referred to as the **playout** or **rollout**. Depending
+    on the game, some heuristics may be applied to choose the next move. For example,
+    in DeepBlue, simulations rely on handcrafted heuristics to select the next move
+    intelligently rather than randomly. This is also called **heavy rollouts**. While
+    such rollouts provide more realistic games, they are often computationally expensive,
+    which can slow down the learning of the MCTS tree:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/632c53ab-457e-4ac8-aaed-59ffba21fb7e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3: Simulation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our preceding toy example, we expand a node and play until the very end of
+    the game (represented by the dotted line), which results in either a win or loss.
+    Simulation yields a reward, which in this case is either 1 or 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Update
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Finally, the update step happens when the algorithm reaches a terminal state,
+    or when either player wins or the game culminates in a draw. For each node/state
+    of the board that was visited during this iteration, the algorithm updates the
+    mean reward and increments the visit count of that state. This is also called **backpropagation**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0dfe452d-2e94-4838-8ac8-8998c1683ae9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 4: Update'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding diagram, since we reached a terminal state that returned 1
+    (a win), we increment the visit count and reward accordingly for each node along
+    the path from the root node accordingly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That concludes the four steps that occur in one MCTS iteration. As the name
+    Monte Carlo suggests, we conduct this search multiple times before we decide the
+    next move to take. The number of iterations is configurable, and often depends
+    on time/resources available. Over time, the tree learns a structure that approximates
+    a perfect tree and can be used to guide agents to make decisions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AlphaGo and AlphaGo Zero, DeepMind's revolutionary Go playing agents, rely on
+    MCTS to select moves. In the next section, we will explore the two algorithms
+    to understand how they combine neural networks and MCTS to play Go at a superhuman
+    level of proficiency.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AlphaGo
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'AlphaGo''s main innovation is how it combines deep learning and Monte Carlo
+    tree search to play Go. The AlphaGo architecture consists of four neural networks:
+    a small supervised learning policy network, a large supervised-learning policy
+    network, a reinforcement learning policy network, and a value network. We train
+    all four of these networks plus the MCTS tree. The following sections will cover
+    each training step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Supervised learning policy networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The first step in training AlphaGo involves training policy networks on games
+    played by two professionals (in board games such as chess and Go, it is common
+    to keep records of historical games, the board state, and the moves made by each
+    player at every turn). The main idea is to make AlphaGo learn and understand how
+    human experts play Go. More formally, given a board state, ![](img/55d32f25-c70f-44f0-9035-4a54c2afda6c.png), and
+    set of actions, ![](img/65c7bea2-8bc3-4a04-93cd-ffc0fafed904.png), we would like
+    a policy network, ![](img/b2ac07b7-e049-481e-b9b8-8b7e30fbd8ab.png), to predict
+    the next move the human makes. The data consists of pairs of ![](img/5dc1ab94-90ee-4e0b-85ad-3c3e9ab3ca19.png) sampled
+    from over 30,000,000 historical games from the KGS Go server. The input to the
+    network consists of the board state as well as metadata. AlphaGo has two supervised
+    learning policy networks of varying sizes. The large network is a 13-layer convolutional
+    neural network with ReLU activation functions in the hidden layers, while the
+    smaller one is a single-layer softmax network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why do we train two similar networks? The larger policy network initializes
+    the weights of the reinforcement learning policy network, which gets further refined
+    through an RL approach called **policy gradients**. The smaller network is used
+    during the simulation step of MCTS. Remember, while most simulations in MCTS rely
+    on the randomized selection of moves, one can also utilize light or heavy heuristics
+    to have more intelligent simulations. The smaller network, which lacks the accuracy
+    of the larger supervised network yet yields much faster inference, provides light
+    heuristics for rollout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reinforcement learning policy networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Once the larger supervised learning policy network is trained, we further improve
+    the model by having the RL policy network play against a previous version of itself.
+    The weights of the network are updated using a method called **policy gradients**,
+    which is a variant of gradient descent for vanilla neural networks. Formally speaking,
+    the gradient update rule for the weights of our RL policy network can be expressed
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0dfc1d79-0fe2-45ac-9778-c5dcc3c7aeff.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/6e728664-0539-498d-bc13-7174e4fa7568.png) are the weights of the
+    RL policy network, ![](img/b804e251-7fe6-4692-ade3-371872ad9257.png), and ![](img/5597f3a0-4409-453c-a487-aac612537815.png) is
+    the expected reward at timestep ![](img/1b2a4aa3-d94d-45d7-a7c5-9d8ab755638c.png).
+    The reward is simply the outcome of the game, where a win results in +1 and a
+    loss results in -1\. Herein lies the main difference between the supervised learning
+    policy network and the reinforcement learning policy network. For the former network,
+    the objective is to maximize the likelihood of choosing a particular action given
+    a state, or, in other words, to simply mimic the moves of the historical games.
+    Since there is no reward function involved, it does not care about the eventual
+    outcome of the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, the reinforcement learning policy network incorporates the
+    final outcome when updating the weights. More specifically, it is trying to maximize
+    the log likelihood of the moves that contribute to higher rewards (that is, winning
+    moves). This is because we are multiplying the gradient of the log-likelihood
+    with the reward (either +1 or -1), which essentially determines the direction
+    in which to move the weights. The weights of a poor move will be moved in the
+    opposite direction, for we will likely be multiplying the gradients with -1\.
+    To summarize, the network not only tries to figure out the most likely move, but
+    also one that helps it win. According to DeepMind's paper, the reinforcement learning
+    policy network won the vast majority (80%~85%) of its games against its supervised
+    counterpart and other Go playing programs, such as Pachi.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Value network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The last step of the pipeline involves training a value network to evaluate
+    the board state, or in other words, to determine how favorable a particular board
+    state is for winning the game. Formally speaking, given a particular policy, ![](img/58974947-3e71-4976-8efc-db7dd55a5c42.png), and
+    state, ![](img/73b29631-b660-499b-a22f-8f143b56c3b0.png), we would like to predict
+    the expected reward, ![](img/82c5ab93-2ac7-4f69-952b-8a47b220d1d8.png). The network
+    is trained by minimizing the **mean-squared error** (**MSE**) between the predicted
+    value, ![](img/07eab5f4-2e49-46e9-bea2-6d0a8e36c28e.png), and the final outcome:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/072044d5-075f-42ad-83e2-098429dae709.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where ![](img/a231bccc-4eeb-4129-9a6a-96928ad23a2a.png) are the parameters of
+    the network. In practice, the network is trained on 30,000,000 state-reward pairs,
+    each coming from a distinct game. The dataset is constructed in this way because
+    the board states from the same game can be highly correlated, potentially leading
+    to overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining neural networks and MCTS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In AlphaGo, the policy and value networks are combined with MCTS to provide
+    a look-ahead search when selecting actions in a game. Previously, we discussed
+    how MCTS keeps track of the mean reward and number of visits made to each node.
+    In AlphaGo, we have a few more values to keep track of:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/41233493-8215-4815-97a8-376962fd52f7.png): Which is the mean action
+    value of choosing a particular action'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/52b25710-26ed-4cdb-bdea-c51bb2815c41.png): The probability of taking
+    an action for a given board state given by the larger supervised learning policy
+    network'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/1245e894-e2e0-404d-b1fc-d123dde71296.png): The value evaluation of
+    a state that is not explored yet (a leaf node)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/656ba1c3-6860-4c72-a5e6-49fe02f998f5.png): The number of times a particular
+    action was chosen given a state'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'During a single simulation of our tree search, the algorithm selects an action, ![](img/91a9e2e5-c0c5-4a2e-9762-b5287ffd8c8a.png),
+    for a given state, ![](img/32013526-a1b9-4f4e-9af7-1d02f257b604.png), at a particular
+    timestep, ![](img/d0e8dd3c-9f2d-4d7c-932a-d837b365612f.png), according to the
+    following formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/be45ffe6-9f2f-4c75-b709-fd02fb21f9a2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/095003e3-4162-4d5d-9e10-2dc9b2f02489.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Hence ![](img/2baa0841-0bac-4d33-a16c-205f1bf23094.png) is a value that favors
+    moves determined to be more likely by the larger policy network, but also supports
+    exploration by penalizing those that have been visited more frequently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During expansion, when we don''t have the preceding statistics for a given
+    board state and move, we use the value network and the simulation to evaluate
+    the leaf node. In particular, we take a weighted sum of the expected value given
+    by the value network and outcome of the rollout:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/13475d29-0672-4385-9fbf-0d0d84fbcafc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where ![](img/3920ccc3-88bf-431a-ba9d-4e0254796706.png) is the evaluation of
+    the value network, ![](img/63d5932c-a701-4f61-a14d-d3fc26ecbe4d.png) is the eventual
+    reward of the search, and ![](img/17a3ae17-897c-41d6-bbae-bc37fe27647d.png) is
+    the weighting term that is often referred to as the mixing parameter. ![](img/92e980c9-584c-42e2-aeea-58255101c7af.png) is
+    obtained after rollout, where the simulations are conducted using the smaller
+    and faster supervised learning policy network. Having fast rollouts is important,
+    especially in situations where decisions are time-boxed, hence the need for the
+    smaller policy network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, during the update step of MCTS, visit counts for each node are updated.
+    Moreover, the action values are recalculated by taking the mean reward of all
+    simulations that included a given node:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/61660467-4290-470b-90f8-844776c2edc1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where ![](img/7987e8fa-4eba-4e2c-a3fa-614c174658d8.png) is the total reward
+    across the ![](img/3e5634d9-6a12-41bd-963e-585d0ed1d738.png) times MCTS took action ![](img/7f52dd4f-a2be-40a4-857d-53c7c1db0517.png) at
+    node ![](img/58c868cd-4e72-47fb-b2bc-a4edee1333dc.png). After the MCTS search,
+    the model chooses the most frequently-visited move when actually playing the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And that concludes a rudimentary overview of AlphaGo. While an in-depth exposition
+    of the architecture and methodology is beyond the scope of this book, this hopefully
+    serves as an introductory guide to what makes AlphaGo work.
+  prefs: []
+  type: TYPE_NORMAL
+- en: AlphaGo Zero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will cover AlphaGo Zero, the upgraded version of its predecessor before we
+    finally get into some coding. The main features of AlphaGo Zero address some of
+    the drawbacks of AlphaGo, including its dependency on a large corpus of games
+    played by human experts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main differences between AlphaGo Zero and AlphaGo are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: AlphaGo Zero is trained solely with self-play reinforcement learning, meaning
+    it does not rely on any human-generated data or supervision that is used to train
+    AlphaGo
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Policy and value networks are represented as one network with two heads rather
+    than two separate ones
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The input to the network is the board itself as an image, such as a 2D grid;
+    the network does not rely on heuristics and instead uses the raw board state itself
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In addition to finding the best move, Monte Carlo tree search is also used for
+    policy iteration and evaluation; moreover, AlphaGo Zero does not conduct rollouts
+    during a search
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training AlphaGo Zero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Since we don't use human-generated data for training or supervision, how does
+    AlphaGo Zero learn at all? The novel reinforcement learning algorithm developed
+    by DeepMind involves using MCTS as a teacher for the neural network, which represents
+    both policy and value functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In particular, the outputs of MCTS are 1) probabilities, ![](img/e48da246-32de-4d29-b9d0-3a65e7588e9d.png),
+    for each selecting move during the simulation, and 2) the final outcome of the
+    game, ![](img/897a684f-b5a8-4dbe-9014-1863ce47bf8c.png). The neural network, ![](img/79b7bae6-1046-4d6a-b961-ea90110b351d.png), takes
+    in a board state, ![](img/4d6629c8-5c12-4d6d-8e30-0e1b28b860af.png), and also
+    outputs a tuple of ![](img/f9317109-5594-4918-b190-83b7c3b2ee4d.png), where ![](img/878389a6-6a3f-4251-becf-9b44229edc92.png) is
+    a vector of move probabilities and ![](img/a39cf6dc-f0bb-494e-9c41-3fd3fc62dd18.png) is
+    the value of ![](img/c08e5d8e-5979-4d19-9180-d0a7f38267b2.png). Given these outputs,
+    we want to train our network such that the network''s policy, ![](img/decbf228-08ff-4b95-bc2c-f3bab09d6567.png), moves
+    closer to the policy, ![](img/68757487-064a-4362-91d5-d7a3929882b3.png), that
+    is produced by MCTS, and the network''s value, ![](img/a9fcbc11-93db-43da-a80e-5e190e5f2409.png), moves
+    closer to the eventual outcome, ![](img/ccdb6cfe-0bc7-4695-bb97-2767238495d6.png), of
+    the search. Note that in MCTS, the algorithm does not conduct rollouts, but instead
+    relies on ![](img/380539fe-4b9d-4287-8c85-a27b1c37538b.png) for expansion and
+    simulating the whole game until termination. Hence by the end of MCTS, the algorithm
+    improves the policy from ![](img/f482b125-f84b-4abd-9d79-f8cad3b93f82.png) to ![](img/3ceede97-6c8b-42af-a1db-a7ebe7a45499.png) and
+    is able to act as a teacher for ![](img/f7031eb4-7f9a-4d2f-bd44-a3ad3715ffae.png).
+    The loss function for the network consists of two parts: one is the cross-entropy
+    between ![](img/27c7bb97-71b9-45a5-a51f-5b7771099f6f.png) and ![](img/eb6e827b-6d49-4227-af78-ee15d7694596.png),
+    and the other is the mean-squared error between ![](img/d87448fc-eecf-4a64-b380-457b29317672.png) and ![](img/3e5d6fd5-c669-48f9-9e1d-0b427543cad5.png).
+    This joint loss function looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/75b49656-2540-45e0-8980-c91de70527a4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where ![](img/79027252-9b97-46a5-8e84-c198ebc1c929.png) is network parameters
+    and ![](img/bb1f525f-491c-420e-85cd-3e9577cc9a9d.png) is a parameter for L2-regularization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparison with AlphaGo
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: According to DeepMind's paper, AlphaGo Zero was able to outperform AlphaGo in
+    36 hours, whereas the latter took months to train. In a head-to-head competition
+    with the version of AlphaGo that defeated Lee Sedol, AlphaGo Zero won 100 games
+    out of 100\. What's significant about these results is that, even without initial
+    human supervision, a Go playing program can reach superhuman-level proficiency
+    more efficiently and is able to discover much of the knowledge and wisdom that
+    humanity spent thousands of years and millions of games cultivating.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, we will finally implement this powerful algorithm.
+    Additional technical details of AlphaGo Zero will be covered as we go through
+    the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing AlphaGo Zero
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: At last, we will implement AlphaGo Zero in this section. In addition to achieving
+    better performance than AlphaGo, it is in fact relatively easier to implement.
+    This is because, as discussed, AlphaGo Zero only relies on `selfplay` data for
+    learning, and thus relieves us from the burden of searching for large amounts
+    of historical data. Moreover, we only need to implement one neural network that
+    serves as both the policy and value function. The following implementation makes
+    some further simplifications—for example, we assume that the Go board size is
+    9 instead of 19\. This is to allow for faster training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The directory structure of our implementation looks such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will especially pay attention to `network.py` and `mcts.py`, which contain
+    the implementations for the dual network and the MCTS algorithm. Moreover, `alphagozero_agent.py`
+    contains the implementation for combining the dual network and MCTS to create
+    a Go playing agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Policy and value networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's get started with implementing the dual network, which we will call `PolicyValueNetwork`.
+    First, we will create a few modules that contain configurations and constants
+    that our `PolicyValueNetwork` will use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: preprocessing.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The `preprocessing.py` module mainly deals with reading from and writing to `TFRecords`
+    files, which is TensorFlow's native data-representation file format. When training
+    AlphaGo Zero, we store MCTS self-play results and moves. As discussed, these then
+    become the ground truths from which `PolicyValueNetwork` learns. `TFRecords` provides
+    a convenient way to save historical moves and results from MCTS. When reading
+    these from disk, `preprocessing.py` turns `TFRecords` into `tf.train.Example`,
+    an in-memory representation of data that can be directly fed into `tf.estimator.Estimator`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tf_records` usually have filenames that end with `*.tfrecord.zz`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following function reads from a `TFRecords` file. We first turn a given
+    list of `TFRecords` into `tf.data.TFRecordDataset`, an intermediate representation
+    before we turn them into `tf.train.Example`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step involves parsing this dataset so that we can feed the values
+    into `PolicyValueNetwork`. There are three values we care about: the input, which
+    we call either `x` or `board_state` throughout the implementation, the policy, `pi`,
+    and the outcome, `z`, both of which are outputted by the MCTS algorithm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding two functions are combined in the following function to construct
+    the input tensors to be fed into the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the following functions are used to write self-play results to disk:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Some of these functions will be used later when we generate training data from
+    self-play results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: features.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This module contains helper code for turning Go board representations into
+    proper TensorFlow tensors, which can be provided to `PolicyValueNetwork`. The
+    main function, `extract_features`, takes `board_state`, which is our representation
+    of a Go board, and turns it into a tensor of the `[batch_size, N, N, 17]` shape,
+    where `N` is the shape of the board (which is by default `9`), and `17` is the
+    number of feature channels, representing the past moves as well as the color to
+    play:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `extract_features` function will be used by both the `preprocessing.py`
+    and `network.py` modules to construct the feature tensors to be either written
+    to a `TFRecord` file or fed into a neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: network.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This file contains our implementation of `PolicyValueNetwork`. In short, we
+    construct a `tf.estimator.Estimator` that is trained using board states, policies,
+    and self-play outcomes produced by MCTS self-play. The network has two heads:
+    one acting as a value function, and the other acting as a policy network.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we define some layers that will be used by `PolicyValueNetwork`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we have a function that is used to create `tf.estimator.Estimator`. While
+    TensorFlow provides several prebuilt estimators, such as `tf.estimator.DNNClassifier`,
+    our architecture is rather unique, which is why we need to build our own `Estimator`.
+    This can be done by creating `tf.estimator.EstimatorSpec`, a skeleton class where
+    we can define things such as the output tensors, network architecture, the loss
+    functions, and the evaluation metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our `generate_network_specifications` function takes several input:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`features`: The tensor representation of the Go board (with the `[batch_size,
+    9, 9, 17]` shape)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`labels`: Our `pi` and `z` tensors'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`mode`: Here, we can specify whether our network is being instantiated in train
+    or test mode'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`params`: Additional parameters to specify the network structure (for example,
+    convolutional filter size)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We then implement the shared portion of the network, the policy output head,
+    the value output head, and then the loss functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then specify the optimization algorithm. Here, we use `tf.train.MomentumOptimizer`.
+    We also adjust the learning rate during training; because we can''t directly alter
+    the learning rate once we create `Estimator`, we turn the learning rate update
+    into a TensorFlow operation as well. We also log several metrics to TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we create a `tf.estmator.EstimatorSpec` object and return it. There
+    are several parameters we need to specify when creating one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`mode`: Train or test, as specified earlier.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`predictions`: A dictionary that maps a string (name) to the output operation
+    of the network. Note that we can specify multiple output operations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`loss`: The loss function operation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train_op`: The optimization operation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`eval_metrics_op`: Operations that are run to store several metrics, such as
+    loss, accuracy, and variable weight values.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For the `predictions` argument, we provide outputs of both the policy and value
+    networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the very first step of training AlphaGo Zero, we must initialize a model
+    with random weights. The following function implements this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We use the following function to create the `tf.estimator.Estimator` object
+    based on a given set of parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`tf.estimator.Estimator` expects a function that provides `tf.estimator.EstimatorSpec`,
+    which is our `generate_network_specifications` function. Here, `estimator_dir`
+    refers to a directory in which our network stores checkpoints. By providing this
+    parameter, our `tf.estimator.Estimator` object can load weights from a previous
+    iteration of training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also implement functions for training and validating a model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `tf.estimator.Estimator.train` function expects a function that provides
+    the training data in batches (`input_fn`). `input_data` uses our `get_input_tensors`
+    function from the `preprocessing.py` module to parse `TFRecords` data and turn
+    them into input tensors. The `tf.estimator.Estimator.evaluate` function expects
+    the same input function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We finally encapsulate our estimator into our `PolicyValueNetwork`. This class uses
+    the path to a network (`model_path`) and loads its weights. It uses the network
+    to predict the value and most probable next moves of a given board state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `model_path` argument passed to the constructor is the directory of a particular
+    version of the model. When this is `None`, we initialize random weights. The following
+    functions are used to predict the probabilities of the next action and the value
+    of a given board state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Do check the GitHub repository for the full implementation of the module.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Monte Carlo tree search
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The second component of our AlphaGo Zero agent is the MCTS algorithm. In our `mcts.py`
+    module, we implement an `MCTreeSearchNode` class, which represents each node in
+    an MCTS tree during a search. This is then used by the agent implemented in `alphagozero_agent.py`
+    to perform MCTS using `PolicyValueNetwork`, which we implemented just now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: mcts.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '`mcts.py` contains our implementation of Monte Carlo tree search. Our first
+    class is `RootNode`, which is meant to represent the root node of the MCTS tree
+    at the start of a simulation. By definition, the root node does not have a parent.
+    Having a separate class for the root node is not absolutely necessary, but it
+    does keep the code cleaner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we implement the `MCTreeSearchNode` class. This class has several attributes,
+    the most important ones being the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`parent_node`: The parent node'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`previous_move`: The previous move that led to this node''s board state'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`board_state`: The current board state'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`is_visited`: Whether the leaves (child nodes) are expanded or not; this is
+    `False` when the node is initialized'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`child_visit_counts`: A `numpy.ndarray` representing the visit counts of each
+    child node'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`child_cumulative_rewards`: A `numpy.ndarray` representing the cumulative reward
+    of each child node'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`children_moves`: A dictionary of children moves'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We also have parameters such as `loss_counter`, `original_prior`, and `child_prior`.
+    These are related to advanced MCTS techniques that AlphaGo Zero implements, such
+    as paralleling the search process as well as adding noise to the search. For the
+    sake of brevity, we won't cover these techniques, so you can ignore them for now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here''s the `__init__` function of `MCTreeSearchNode`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Each node keeps track of the mean reward and action value of every child node.
+    We set these as properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And of course, we keep track of the action value, visit count, and cumulative
+    reward of the node itself. Remember, `child_mean_rewards` is the mean reward,
+    `child_visit_counts` is the number of times a child node was visited, and `child_cumulative_rewards` is
+    the total reward of a node. We implement getters and setters for each attribute
+    by adding the `@property` and `@*.setter` decorators:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'During the selection step of MCTS, the algorithm chooses the child node with
+    the greatest action value. This can be easily done by calling `np.argmax` on the
+    matrix of child action scores:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As discussed in our section about AlphaGo Zero, `PolicyValueNetwork` is used
+    to conduct simulations in an MCTS iteration. Again, the output of the network
+    are the probabilities and the predicted value of the node, which we then reflect
+    in the MCTS tree itself. In particular, the predicted value is propagated throughout
+    the tree via the `back_propagate_result` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Refer to the GitHub repository for a full implementation of our `MCTreeSearchNode`
+    class and its functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining PolicyValueNetwork and MCTS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We combine our `PolicyValueNetwork` and MCTS implementations in `alphagozero_agent.py`.
+    This module implements `AlphaGoZeroAgent`, which is the main AlphaGo Zero that
+    conducts MCTS search and inference using `PolicyValueNetwork` to play games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: alphagozero_agent.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Finally, we implement the agent that acts as the interface between the Go games
+    and the algorithms. The main class we will implement is called `AlphaGoZeroAgent`.
+    Again, this class combines `PolicyValueNetwork` with our MCTS module, as is done
+    in AlphaGo Zero, to select moves and simulate games. Note that any missing modules
+    (for example, `go.py`, which implements the game of Go itself) can be found in
+    the main GitHub repository:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We start a Go game by initializing our agent and the game itself. This is done
+    via the `initialize_game` method, which initializes `MCTreeSearchNode` and buffers
+    that keep track of move probabilities and action values outputted by the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: In each turn, our agent conducts MCTS and picks a move using the `select_move`
+    function. Notice that we allow for some exploration in the early stages of the
+    game by selecting a random node.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `play_move(coordinates)` method takes in a coordinate returned by `select_move`
+    and updates the MCTS tree and board states:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These functions are encapsulated in the `search_tree` method, which conducts
+    an iteration of MCTS using the network to select the next move:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Notice that once we have leaf nodes (where we can no longer select a node based
+    on visit count), we use the `PolicyValueNetwork.predict_on_multiple_board_states(board_states)`
+    function to output the next move probabilities and value of each leaf node. This `AlphaGoZeroAgent` is
+    then used for either playing against another network or against itself for self-play.
+    We implement separate functions for each. For `play_match`, we first start by
+    initializing an agent each for black and white pieces:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'During the game, we keep track of the number of moves made, which also informs
+    us which agent''s turn it is. During each agent''s turn, we use MCTS and the network
+    to choose the next move:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the tree search is done, we see whether the agent has resigned or the
+    game has ended by other means. If so, we write the results and end the game itself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `make_sgf` method writes the outcome of the game in a format that is commonly
+    used in other Go AIs and computer programs. In other words, the output of this
+    module are compatible with other Go software! Although we won't delve into the
+    technicalities, this would help you create a Go playing bot that can play other
+    agents and even human players.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**SGF** stands for **Smart Game Format**, and is a popular way of storing the
+    results of board games such as Go. You can find more information here: [https://senseis.xmp.net/?SmartGameFormat](https://senseis.xmp.net/?SmartGameFormat).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `play_against_self()` is used during the self-play simulations of training,
+    while `play_match()` is used to evaluate the latest model against an earlier version
+    of the model. Again, for a full implementation of the module, please refer to
+    the codebase.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Putting everything together
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have implemented the two main components of AlphaGo Zero—the `PolicyValueNetwork`
+    and the MCTS algorithm—we can build the controller that handles training. At the
+    very beginning of the training procedure, we initialize a model with random weights.
+    Next, we generate 100 self-play games. Five percent of those games and their results
+    are held out for validation. The rest are kept for training the network. After
+    the first initialization and self-play iteration, we essentially loop through
+    the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generate self-play data
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Collate self-play data to create `TFRecords`
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train network using collated self-play data
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Validate on `holdout` dataset
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: After every step 3, the resulting model is stored in a directory as the latest
+    version. The training procedure and logic are handled by `controller.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: controller.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'First, we start with some import statements and helper functions that help
+    us check directory paths and find the latest model version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first step of every training run is to initialize a random model. Note
+    that we store model definitions and weights in the `PATHS.MODELS_DIR` directory,
+    while checkpoint results outputted by the estimator object are stored in `PATHS.ESTIMATOR_WORKING_DIR`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We next implement the function for executing self-play simulations. As mentioned
+    earlier, the output of a self-play consist of each board state and the associated
+    moves and game outcomes produced by the MCTS algorithm. Most output are stored
+    in `PATHS.SELFPLAY_DIR`, while some are stored in `PATHS.HOLDOUT_DIR` for validation.
+    Self-play involves initializing one `AlphaGoZeroAgent` and having it play against
+    itself. This is where we use the `play_against_self` function that we implemented
+    in `alphagozero_agent.py`. In our implementation, we conduct self-play games according
+    to the `GLOBAL_PARAMETER_STORE.NUM_SELFPLAY_GAMES` parameter specified. More self-play
+    games allow our neural network to learn from more experience, but do bear in mind
+    that the training time increases accordingly:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'During self-play, we instantiate an agent with weights of a previously-generated
+    model and make it play against itself for a number of games defined by `GLOBAL_PARAMETER_STORE.NUM_SELFPLAY_GAMES`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After the agent plays against itself, we store the moves it has generated as
+    game data, which we use to train our policy and value networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we reserve a percentage of the games played as the validation set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After generating self-play data, we expect roughly five percent of the self-play
+    games to be in the `holdout` directory, to be used in validation. The majority
+    of self-play data is used to train the neural network. We add another step, called
+    **aggregate**, which takes the latest model version and its self-play data to
+    construct `TFRecords` with the format that our neural network specifies. This
+    is where we use the functions we implemented in `preprocessing.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After we generate the training data, we train a new version of the neural network.
+    We search for the latest version of the model, load an estimator using the weights
+    of the latest version, and execute another iteration of training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, after every training iteration, we would like to validate the model
+    with the `holdout` dataset. When enough data is available, we take the `holdout`
+    data from the last five versions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Lastly, we implement the `evaluate` function, which has one model play multiple
+    games against another:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `evaluate` method takes two parameters, `black_model` and `white_model`,
+    where each argument refers to the path of the agent used to play a game. We use `black_model`
+    and `white_model` to instantiate two `PolicyValueNetworks`. Typically, we want
+    to evaluate the latest model version, which would play as either black or white.
+  prefs: []
+  type: TYPE_NORMAL
+- en: train.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Finally, `train.py` is where all the functions we implemented in the controller
+    are called and coordinated. More specifically, we execute each step as `subprocess`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Assuming that no model has been trained yet, we initialize a model with random
+    weights and make it play against itself to generate some data for our policy and
+    value networks. After rewards, we repeat the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Aggregate data self-play data
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train networks
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Make the agent play against itself
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Validate on validation data
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, since this is the main module, we add the following at the end of
+    the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: And at long last, we're done!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To run the training of AlphaGo Zero, all you need to do is call this command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: If everything has been implemented correctly, you should start to see the model
+    train. However, the reader is to be warned that training will take a long, long
+    time. To put things into perspective, DeepMind used 64 GPU workers and 19 CPU
+    servers to train AlphaGo Zero for 40 days. If you wish to see your model attain
+    a high level of proficiency, expect to wait a long time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that training AlphaGo Zero takes a very long time. Do not expect the model
+    to reach professional-level proficiency any time soon!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You should be able to see output that looks such as the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You will also be able to see the board state as the agent plays against itself
+    or against other agents:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you want to play one model against another, you can run the following command
+    (assuming that the models are stored in `models/`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we studied reinforcement learning algorithms for one of the
+    most complex and difficult games in the world, Go. In particular, we explored
+    Monte Carlo tree search, a popular algorithm that learns the best moves over time.
+    In AlphaGo, we observed how MCTS can be combined with deep neural networks to
+    make learning more efficient and powerful. Then we investigated how AlphaGo Zero
+    revolutionized Go agents by learning solely and entirely from self-play experience
+    while outperforming all existing Go software and players. We then implemented
+    this algorithm from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also implemented AlphaGo Zero, which is the lighter version of AlphaGo since
+    it does not depend on human game data. However, as noted, AlphaGo Zero requires
+    enormous amounts of computational resources. Moreover, as you may have noticed,
+    AlphaGo Zero depends on a myriad of hyperparameters, all of which require fine-tuning.
+    In short, training AlphaGo Zero fully is a prohibitive task. We don't expect the
+    reader to implement a state-of-the-art Go agent; rather, we hope that through
+    this chapter, the reader has a better understanding of how Go playing deep reinforcement
+    learning algorithms work. A firmer comprehension of these techniques and algorithms
+    is already a valuable takeaway and outcome from this chapter. But of course, we
+    encourage the reader to continue their exploration on this topic and build an
+    even better version of AlphaGo Zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more in-depth information and resources on the topics we covered in this
+    chapter, please refer to the following links:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**AlphaGo home page**: [https://deepmind.com/research/alphago/](https://deepmind.com/research/alphago/%E2%80%8B)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AlphaGo paper**: [https://storage.googleapis.com/deepmind-media/alphago/AlphaGoNaturePaper.pdf](https://storage.googleapis.com/deepmind-media/alphago/AlphaGoNaturePaper.pdf)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AlphaGo Zero paper**: [https://www.nature.com/articles/nature24270](https://www.nature.com/articles/nature24270)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**AlphaGo Zero blog post by DeepMind**: [https://deepmind.com/blog/alphago-zero-learning-scratch/](https://deepmind.com/blog/alphago-zero-learning-scratch/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**A survey of MCTS methods**: [http://mcts.ai/pubs/mcts-survey-master.pdf](http://mcts.ai/pubs/mcts-survey-master.pdf)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now that computers have surpassed human performance in board games, one may
+    ask, What's next? What are the implications of these results? There remains much
+    to be done; Go, which has complete information and is played turn by turn, is
+    still considered simple compared to many real-life situations. One can imagine
+    that the problem of self-driving cars poses a more difficult challenge given the
+    lack of complete information and a larger number of variables. Nevertheless, AlphaGo
+    and AlphaGo Zero have provided a crucial step toward achieving these tasks, and
+    one can surely be excited about further developments in this field.
+  prefs: []
+  type: TYPE_NORMAL
+- en: References
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Silver, D., Huang, A., Maddison, C. J., Guez, A., Sifre, L., Van Den Driessche,
+    G., ... and Dieleman, S. (2016). M*astering the game of Go with deep neural networks
+    and tree search*. Nature, 529(7587), 484.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Silver, D., Schrittwieser, J., Simonyan, K., Antonoglou, I., Huang, A., Guez,
+    A., ... and Chen, Y. (2017). *Mastering the game of Go without human knowledge*. Nature, 550(7676),
+    354.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Browne, C. B., Powley, E., Whitehouse, D., Lucas, S. M., Cowling, P. I., Rohlfshagen,
+    P., ... and Colton, S. (2012). *A survey of Monte Carlo tree search methods*. IEEE
+    Transactions on Computational Intelligence and AI in games, 4(1), 1-43.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

@@ -1,0 +1,1038 @@
+- en: '19'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Reinforcement Learning with Human Feedback
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we’ll take a look at a relatively recent method that addresses
+    situations when the desired behavior is hard to define via the explicit reward
+    function – reinforcement learning with human feedback (RLHF) . This is also related
+    to exploration (as the method allows humans to push learning in a new direction),
+    the problem we discussed in Chapter [18](ch022.xhtml#x1-32800018). Surprisingly,
+    the method, initially developed for a very specific subproblem in the RL domain,
+    turned out to be enormously successful in the large language models (LLMs). Nowadays,
+    RLHF is at the core of modern LLM training pipelines, and without it, the recent
+    fascinating progress wouldn’t have been possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As this book is not about LLMs and modern chatbots, we will focus purely on
+    the original paper from OpenAI and Google by Christiano et al., Deep reinforcement
+    learning from human preferences [[Chr+17](#)], which describes the RLHF method
+    applied to RL problems and environments. But in the overview of the method, I
+    will explain a bit about how this method is used in LLM training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take a look at human feedback in RL to address problems with unclear reward
+    objectives and exploration.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement an RLHF pipeline from scratch and check it on the SeaQuest Atari game
+    to teach it new behavior.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reward functions in complex environments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Before we go into the details of the RLHF method, let’s start by discussing
+    the underlying motivation of the concept. As we discussed in Chapter [1](ch005.xhtml#x1-190001),
+    the reward is the core concept in RL. Without a reward, we’re blind — all the
+    methods we’ve already discussed are heavily dependent on the reward value provided
+    by the environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In value-based methods (Part 2 of the book), we used the reward to approximate
+    the Q-value to evaluate the actions and choose the most prominent one.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In policy-based methods (Part 3), the reward was used even more directly — as
+    a scale for the Policy Gradient. With all the math removed, we basically optimized
+    our policy to prefer actions that bring more accumulated future reward.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In black-box methods (Chapter [17](ch021.xhtml#x1-31100017)), we used the reward
+    to make a decision about agent variants: should they be kept for the future or
+    discarded?'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In almost all the RL environments we’ve experimented with, the reward function
+    was predefined for us — in Atari games, we had the score; in the FrozenLake environment,
+    it was an explicit target position; in simulated robots, it was the distance travelled,
+    etc. The only exception was in Chapter [10](ch014.xhtml#x1-16900010), where we
+    implemented the environment (stock trading system) ourselves and had to decide
+    how the reward was to be shaped. But even in that example, it was fairly obvious
+    what should be used as a reward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, in real-life situations, it is not always that easy to formulate
+    what should be used as a reward. Let’s look at a couple of examples. If we are
+    training the chatbot to solve a set of tasks, it’s important to not only ensure
+    the tasks are completed correctly but also consider the style in which they are
+    done. What if we ask the system “What’s the weather forecast for tomorrow?” and
+    it replies correctly but in a rude manner? Should it be punished for this with
+    a negative reward and to what extent? What should we do in the opposite situation
+    — a very polite answer but the information given is wrong? If we just optimize
+    one single criterion (like the correctness of information), we might get a system
+    that “works” but is not usable in real life – just because it is so awkward that
+    nobody wants to use it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Another example of a “single optimization factor” is the transportation of
+    goods from point A to point B. Transport companies don’t just try to maximize
+    their profits by all means. In addition, they have tons of restrictions and regulations,
+    like driving rules, working hours, labour legislation, etc. If we optimize only
+    one criterion in our system, we might eventually get “Drive through the neighbor’s
+    fence – this is the fastest way.” So, in real life, having a single value we want
+    to maximize is an exception rather than the norm. Most of the time, we have several
+    parameters that contribute to the final result and we need to find some sort of
+    balance between them. Even in the Atari games we’ve already seen, the score might
+    be calculated as the sum of different “subgoals.” A very good example of this
+    is the SeaQuest game we experimented with in the previous chapter. If you haven’t
+    played it before, you can do it in your browser to get a better understanding:
+    [https://www.retrogames.cz/play_221-Atari2600.php](https://www.retrogames.cz/play_221-Atari2600.php).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this game, you’re controlling the submarine and you are scored for the following
+    activities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Shooting evil fish and enemy submarines
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Saving divers and bringing them back to the surface
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Avoiding enemy fire and ships on the surface (they appear in later levels of
+    the game)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: As the level of oxygen is limited, your submarine has to go to the surface from
+    time to time to refill the reserves. Most of the modern RL methods have no problem
+    discovering the reward for shooting fish and submarines — starting with trial
+    and error, after just a couple of hours of training, the agent learns how to get
+    the reward from firing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But discovering scoring from saving divers is much trickier, as the reward for
+    them is given only after collecting six divers and getting to the surface. Oxygen
+    replenishment is also hard to discover by trial and error, as our neural network
+    has no prior idea about oxygen, submarines, and how the sudden death of your submarine
+    might be related to the gauge at the bottom of the screen. Our RL method with
+    𝜖-greedy exploration could be seen as a newborn baby randomly pushing buttons
+    and being rewarded for correct sequences of actions, which might take lots of
+    time before the correct lengthy sequence has been executed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a result, most of the training episodes in SeaQuest are limited by the average
+    score of 300 and 500 game steps. The submarine just dies from a lack of oxygen
+    and random surface visits are too rare to discover that the game might be played
+    for much longer. At the same time, people who haven’t seen the game before can
+    figure out how to refill the oxygen and save divers in just several minutes of
+    gameplay.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Potentially, we could help our agent and explain somehow why oxygen is important
+    by adding it to the reward function (as an extra reward for refilling the oxygen,
+    for example), but it might start the vicious circle of tweaking the environment
+    here and there – exactly those efforts we’ve tried to avoid by using RL methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: And, as you might already have guessed, RLHF is exactly the approach that allows
+    us to avoid this low-level reward function tweaking, allowing humans to give feedback
+    to the agent’s behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Theoretical background
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let’s take a look at the original RLHF method published in 2017 by OpenAI and
+    Google researchers [[Chr+17](#)]. Since the publication (and especially after
+    ChatGPT’s release), this method has been an area of active research. For recent
+    developments, you can the check papers at [https://github.com/opendilab/awesome-RLHF](https://github.com/opendilab/awesome-RLHF).
+    In addition, we’ll discuss the role of RLHF in the LLM training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Method overview
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The authors of the paper experimented with two classes of problems: several
+    environments from MuJoCo simulated robotics (similar to the continuous control
+    problems we discussed in Chapter [15](ch019.xhtml#x1-27200015) and Chapter [16](ch020.xhtml#x1-29000016))
+    and several Atari games.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The core idea is to keep the original RL model, but replace the reward from
+    the environment with a neural network called reward predictor, which is trained
+    on data gathered by humans. This network (represented as r̂ (o,a) in the paper
+    ) takes the observation and the action and returns the float value of immediate
+    reward for the action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training data for this reward predictor is not provided directly by humans,
+    but deducted from human preferences: people are shown two short video clips with
+    examples of the agent’s behavior and asked the question “Which one is better?”.
+    In other words, the training data for the reward predictor is two episode segments
+    σ¹ and σ² (fixed-length sequences of (o[t],a[t]) with observations and actions)
+    and label μ from the human indicating which of the two is preferred. The given
+    answer options are “first,” “second,” “both are good,” and “cannot judge.”'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The network r̂ (o,a) is trained from this data using cross-entropy loss between
+    labels and the function p̂[σ¹ ≻σ²], which is an estimation of the probability
+    of the human preferring segment σ¹ over σ²:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq71.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In other words, we sum the rewards predicted for every step in the segment,
+    exponentiate every reward, and normalize the sum. The cross-entropy loss is calculated
+    using the standard formula for the binary classification:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq72.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Values for μ[1] and μ[2] are assigned based on the human’s judgement. If the
+    first segment was preferred over the second, then μ[1] = 1 and μ[2] = 0\. If the
+    second segment was better, then μ[2] = 1 and μ[1] = 0\. If the human decided that
+    both segments are good, then both μ are set to 0.5\. Such a reward model has several
+    benefits in comparison to different approaches:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using a neural network for reward prediction, we can significantly reduce
+    the required number of labels. An extreme case would be to ask humans to label
+    every action of the policy, but this is prohibitively expensive in the case of
+    RL, where millions of interactions take place within the environment. In the case
+    of high-level goals, this might be an almost impossible thing to do.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We give the network feedback not only about good behavior but also about behavior
+    that we don’t like. If you remember, in Chapter [14](ch018.xhtml#x1-24700014),
+    we used the recorded human demonstrations to train the web automation agent. But
+    human demonstrations only show positive examples (“do this”) and have no way of
+    including negative examples (“don’t do that”). In addition, human demonstrations
+    are harder to collect and might contain more errors.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By asking for human preferences, we can handle problems where humans can recognize
+    the behavior we want, but not necessarily reproduce it. For example, controlling
+    the four-legged Ant robot from Chapter [16](ch020.xhtml#x1-29000016) might be
+    very challenging for humans. At the same time, we don’t have problems detecting
+    when the robot is behaving normally or the policy is wrong.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the RLHF paper, the authors experimented with different approaches to the
+    reward model training and its usage in the RL training process. In their setup,
+    three different processes were running in parallel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The RL training method (A2C) used the current r̂ (o,a) network for reward prediction.
+    Random trajectory segments σ = (o[i],a[i]) were stored in the labeling database.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Human labelers sampled pairs of segments (σ¹,σ²) and assigned their labels μ,
+    which were stored in the labeling database.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The reward model r̂ (o,a) was periodically trained on labeled pairs from the
+    database and sent to the RL training process.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This process is shown in Figure [19.1](#x1-352009r1).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ DB: TTserrgaaminiennts 11 22 rˆrσσσμRewla(Labo,,re,aσσdls),μ ](img/B22150_19_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.1: RLHF structure'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As discussed earlier, the paper addressed two classes of problems: Atari games
+    and continuous control. On both classes, the results were not especially spectacular
+    — sometimes traditional RL was better than RLHF, sometimes not. But where RLHF
+    really stood out was the LLM training pipeline. Let’s briefly discuss why it happened
+    before we start our RLHF experiments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: RLHF and LLMs
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'ChatGPT, released at the end of 2022, has quickly become a really big thing.
+    For the general audience, it was even more influential than AlexNet in 2012, as
+    AlexNet was “techy stuff”—it pushed the boundaries but it was much harder to explain
+    what was so special about it. ChatGPT was different: just a month after release,
+    it had surpassed a user base of 100M users and almost everybody was talking about
+    it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the heart of ChatGPT (and any modern LLM) training pipeline is RLHF. So,
+    very quickly, this method of fine-tuning large models has become popular and has
+    grown in terms of research interest. As this is not a book about LLMs, I will
+    just give a quick description of the pipeline and how RLHF is incorporated there,
+    as, from my perspective, this is an interesting use case.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From a high level, LLM training consists of three stages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pretraining: Here, we perform the initial training of the language model on
+    a huge corpus of texts. Basically, we take all the information we can possibly
+    get and do unsupervised training of the language model. The volume (and costs)
+    are enormous — the RedPajama dataset used for LLaMA training contains 1.2 trillion
+    tokens (which is approximately 15 million books).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: At this stage, our randomly-initialized model learns regularities and deep connections
+    of the language. But because the data volume is huge, we cannot just curate this
+    data — it could be fake news, hate speech posts, and other weird stuff you can
+    easily find on the internet.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Supervised fine-tuning: In this step, we fine-tune the model on predefined
+    curated example dialogues. The dataset used here is manually created and validated
+    for correctness and the volume is significantly lower — around 10K–100K example
+    dialogues.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This data is normally created by experts in the field and requires lots of effort
+    to make and double-check it.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'RLHF fine-tuning (also known as ”model alignment”): This step uses the same
+    process we’ve already described: pairs of generated dialogues are presented to
+    users for labeling, the reward model is trained on those labels, and this reward
+    model is used in the RL algorithm to fine-tune the LLM model to follow the human’s
+    preferences. The number of labeled samples is larger than on the supervised fine-tuning
+    step (around 1M pairs), but because comparing two dialogues is a much simpler
+    task than creating a proper dialogue from scratch, this is not a problem.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'As you might guess, the first step is the most expensive and lengthy: you have
+    to crunch terabytes of texts and feed them through transformers. But at the same
+    time, the importance of the steps is totally different. In the last step, the
+    system not only learns what the best solution to the presented problem is but
+    also has feedback about generating it in a socially acceptable way.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The RLHF method is very suitable for this task — with just pairs of dialogues,
+    it can learn the reward model that represents the labelers’ implicit “preference
+    model” for such a complicated thing as the chatbot. Doing this explicitly (via
+    the reward function, for example) might be a very challenging problem with lots
+    of uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RLHF experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To get a better understanding of the pipeline we’ve just discussed, let’s implement
+    it ourselves (as “doing is the best way to learn something”). In the previous
+    chapter, we tried the Atari SeaQuest environment, which is tricky from the exploration
+    point of view, so it is logical to take this environment and check what we can
+    achieve with human feedback.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To limit the scope of the chapter and make the example more reproducible, I
+    made the following modifications to the experiments described in the RLHF paper
+    [[Chr+17](#)]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: I focused on a single SeaQuest environment. The goal was to improve the agent’s
+    gameplay in comparison to the A2C results we got in Chapter [18](ch022.xhtml#x1-32800018)
+    — an average score of 400 and episodes of 500 steps (due to the lack of oxygen).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Instead of asynchronous labeling and reward model training, I split them into
+    separate steps:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A2C training was performed, storing trajectory segments in local files. This
+    training might optionally load and use a reward model network, which would allow
+    us to iterate on reward models, labeling more samples after the training.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The web UI allowed me to label random pairs of trajectory segments, storing
+    the labels in a JSON file.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The reward model was trained on those segments and labels. The result of the
+    training was stored on disk.
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'I avoided all the variations with the reward model training: no L2 regularization,
+    no ensemble, etc.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The number of labels was significantly smaller: in every experiment, I labeling
+    an extra 100 pairs of episode segments and retrained the models.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Actions were explicitly added to the reward model. For the details, check the
+    section Reward model.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The reward model was used in A2C training for the fine-tuning of the best mode
+    saved. For context, in the paper, the model was trained from scratch and improved
+    with parallel RLHF labeling and reward model retraining.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Initial training using A2C
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: To get the first model (let’s call it “version 0” or v0 for short), I used standard
+    A2C code with the same Atari wrappers we’ve already discussed several times in
+    this book so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start the training, you need to run the Chapter19/01_a2c.py module, and besides
+    basic A2C training, it contains a command-line option that enables the usage of
+    the reward model (which we covered in earlier chapters), but we don’t need it
+    in this step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For now, to start the training of the basic model, use the following command
+    line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here is the description of the command-line options:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '--dev: The name of the device used for computation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-n: The name of the run, used in TensorBoard.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--save: The directory name where the best models after the testing will be
+    stored. Every 100 batches, we perform 10 test episodes of the current model on
+    SeaQuest with disabled reward clipping (to get the original score range) and if
+    the best reward or the count of steps for any of those 10 rounds is better than
+    our previous record, we save the model into the file. Those files will be used
+    later for fine-tuning.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--db-path: The directory name where random episode segments will be stored
+    during the training. This data will be used for the labeling and training of the
+    reward model later.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s discuss the episode segments database (DB for short). Its structure is
+    very simple: every environment used for training (in total, we have 16 of them)
+    has an identifier from 0 to 15, which is used as a subdirectory under the directory
+    given in the --db-path command-line argument. So, every environment stores random
+    segments independently in its own directory. The storage logic is implemented
+    in a Gym API Wrapper subclass, which is called EpisodeRecorderWrapper and is in
+    the lib/rlhf.py module.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s take a look at the source code of the wrapper. Initially, we declare
+    two hyperparameters, EPISODE_STEPS, which defines the length of segments, and
+    START_PROB, which is the probability of starting the episode recording:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: We store the episode segment as a list of EpisodeStep objects, which is just
+    an observation and the action we’re taking at this step. The method that resets
+    the environment is very simple — it updates the wrapper’s _step_idx field(which
+    is a counter of the steps we’ve done in this environment) and stores the observation
+    in the _prev_obs field, depending on the _is_store field. This field is True if
+    we’re in the middle of segment recording.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our segments have a fixed number of environment steps (50 by default) and they
+    are recorded independent of episode boundaries (in other words, if we started
+    the segment recording shortly before the submarine’s death, we’ll record the beginning
+    of the next episode after the reset() method):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you want, you can experiment with this logic as, in principle, observations
+    after the end of the episode are independent from observations and actions before
+    the end of the episode. But it will make the handling of episode segment data
+    more complicated, as the length will become variable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main logic of the wrapper is in the step() method and it is also not very
+    complicated. On every action, we store the step if we’re in the middle of recording;
+    otherwise, we generate a random number to make the decision to start the recording:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default, the probability of starting the recording is small (START_PROB =
+    0.00005, which is a 0.005% chance), but because of the large number of steps we’re
+    doing during the training, we still have plenty of segments to label. For example,
+    after 12M environment steps (about 5 hours of training), the database contains
+    2,500 recorded segments, which occupy 12GB of disk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The method step() uses the function store_segment() to store the list of EpisodeStep
+    objects, and it is just the pickle.dumps() call for the list of steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Before we get to the training results, I need to mention one small but important
+    detail about the wrapper’s usage. To make the labeling easier, the observations
+    we store in the DB are taken before the standard Atari wrappers. This increases
+    the size of the data we have to store, but human labelers will see the original
+    colorful Atari screen in the original resolution (160 × 192) instead of a downscaled
+    picture in shades of gray.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To achieve that, the wrapper is applied right after the original Gymnasium
+    environment before the Atari wrappers. The following is the relevant piece of
+    code in the 01_a2c.py module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The training process hyperparameters were taken from the paper (LR decrease
+    schedule, network architecture, count of environments, etc). I let it train for
+    5 hours and 12M observations. The charts with testing results are shown in Figure [19.2](#x1-355105r2).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.2: The reward (left) and steps (right) during the A2C training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The best model was able to reach the reward level of 460 (without reward clipping
+    in the environment), which is good but is much worse than the results that could
+    be achieved if you refill the oxygen from time to time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The video of this model’s gameplay is available at [https://youtu.be/R_H3pXu-7cw](https://youtu.be/R_H3pXu-7cw).
+    As you can see from the video, our agent mastered shooting the fish almost perfectly,
+    but got stuck on the local optima of floating at the bottom (maybe because it
+    is safer, as enemy submarines are not present there) and has no idea about the
+    oxygen refilling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can record your own video from the model file using the tool 01_play.py,
+    which takes the model filename.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Labeling process
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: During the A2C training, we got 12GB of 2,500 random episode segments. Each
+    segment contains 50 steps with screen observations and actions the agent took
+    on every step. Now we are ready for the labeling process of the RLHF pipeline.
+  prefs: []
+  type: TYPE_NORMAL
+- en: During the labeling, we need to randomly sample pairs of episode segments and
+    show them to the human, asking the question “Which one is better?”. The answer
+    should be stored for reward model training. Exactly this logic is implemented
+    in 02_label_ui.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The UI of the labeling process is implemented as a web application that uses
+    the NiceGUI library ([https://nicegui.io/](https://nicegui.io/)). NiceGUI allows
+    a modern web application UI to be implemented in Python and provides a rich set
+    of interactive UI widgets, like buttons, lists, pop-up dialogs, etc. In principle,
+    you don’t need to know JavaScript and CSS (but it won’t harm if you’re familiar
+    with them). If you have never used NiceGUI before, that’s not a problem; you just
+    need to install it with the following command in your Python environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To start the labeling UI (after installing the NiceGUI package), you need to
+    specify the path to the DB with stored episode segments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The interface is available via HTTP (so, open it in your browser) and listens
+    on port 8080 on all machine interfaces, which is convenient if you start it on
+    a remote server (but you need to be aware of the possible risk of external access,
+    as the labeling UI has no authentification and authorization at all). If you want
+    to change the port or limit the scope to the specific network interface, just
+    tweak 02_label_ui.py. Let’s look at a screenshot of the labelling interface:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file290.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.3: The labeling UI section with DB information'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This interface is very basic: on the left, there are three links to different
+    sections of the UI functionality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overview shows the path to the database, the total count of segments it contains,
+    and the amount of labels already created.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Label new data samples random pairs of segments and allows you to label them.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Existing labels shows all the labels and allows you to modify the labels if
+    needed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If needed, the list with links could be hidden or shown by clicking on the
+    top-left button (with three horizontal lines). The most time has been spent on
+    the Label new data section, shown in Figure ??:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file291.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.4: The interface for adding new labels (for better visualization,
+    refer to https://packt.link/gbp/9781835882702 )'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we have a list of 20 randomly sampled pairs of episode segments we can
+    label. When the entry in the list is selected, the interface shows both segments
+    (as animated GIFs generated by the code on the fly). The user can click one of
+    three buttons to add the label:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '#1 IS BETTER (1): Marks the first segment as preferred. Such entries will have
+    μ[1] = 1.0 and μ[2] = 0.0 during the reward model training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'BOTH ARE GOOD (0): Marks both segments as equally good (or bad), assigning
+    μ[1] = 0.5 and μ[2] = 0.5.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '#2 IS BETTER (2): Marks the second segment as preferred (μ[1] = 0.0 and μ[2]
+    = 1.0).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Instead of clicking the UI buttons, you can use the keyboard keys 0 (“both are
+    good”), 1 (“the first is better”), or 2 (“the second is better”) to assign the
+    label. Once the label is assigned, the UI automatically selects the next unlabeled
+    entry in the list, so the labeling process could be done with the keyboard only.
+    When you’re done with all the labels in the list, you can click the RESAMPLE LIST
+    button to load 20 new samples for labeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After every label has been assigned (with UI button clicks or key presses),
+    the labels are stored in the JSON file labels.json in the root of the DB directory.
+    The file has a trivial JSON-line format where every line is an entry containing
+    paths to both segments (relative to the DB root) and assigned labels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: If needed, existing labels could be reviewed using the Existing labels link
+    (shown in Figure [19.5](#x1-356021r5)), which shows almost the same interface
+    as Label new data, but instead of sampling 20 fresh pairs, it shows already labeled
+    pairs. Those pairs could be changed by clicking the buttons or using the keyboard
+    shortcuts described earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file292.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.5: The interface for reviewing and editing old labels (for better
+    visualization, refer to https://packt.link/gbp/9781835882702 )'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'During my experiments, I did the first round of labeling 100 pairs paying most
+    attention to the rare cases when the submarine was on the surface (marking them
+    as good) and more frequent situations when oxygen was low (marking them as bad).
+    In other situations, I prefer the segments where fish were properly hit. With
+    some labels at hand, we’re ready to go on to the next step: reward model training.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reward model training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The reward model network has most of the structure taken from the paper, with
+    the only difference in handling actions. In the paper, the authors do not specify
+    how actions are taken into account besides stating “For the reward predictor,
+    we use 84 × 84 images as inputs (the same as the inputs to the policy), and stack
+    4 frames for a total 84 × 84 × 4 input tensor.” From that, I made an assumption
+    that the reward model deducts actions “implicitly” from the dynamics between the
+    frames. I haven’t tried this approach in my experiment and instead decided to
+    show the actions to the network explicitly by concatenating one-hot encoding to
+    the vectors obtained from the convolution layers. As an exercise, you can change
+    my code to use the approach from the paper and compare the results. The rest of
+    the architecture and training parameters are the same as in the paper. Let’s take
+    a look at the reward model network code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, convolution layers are combined with batch normalization, dropout,
+    and the leaky ReLU activation function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training of the reward model is implemented in 03_reward_train.py and has
+    nothing complicated. We load labeled data from JSON files (you can pass several
+    databases in the command line to use for the training), use 20% of the data for
+    the testing, and compute the binary cross entropy objective, which is implemented
+    in the calc_loss() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Initially, our observations and actions tensors had the following structure:
+    (batch,time,colors,height,width) for observations and (batch,time,actions) for
+    actions, where time is the sequence’s time dimension. More concretely, observation
+    tensors had the size 64 × 50 × 3 × 210 × 160 and actions had the size 64 × 50
+    × 18.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the first step in loss calculation, we flatten the first two dimensions,
+    getting rid of the time dimension and applying the model to compute the reward
+    value r̂(o,a). After that, we return the time dimension and sum along it according
+    to the paper’s formula we’ve already discussed. Then our computation of loss is
+    the application of the torch function to compute the binary cross entropy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On every epoch of the training, we compute the test loss (on 20% of the data)
+    and save the reward model if the new loss is lower than the previous minimum of
+    the test loss. If the train loss grows for four epochs in a row, we stop the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the number of labels set in the previous section (a couple of hundred),
+    the training is very quick — it takes about a dozen epochs and several minutes.
+    The following is the example training process. The command-line argument -o specifies
+    the directory name where the best model will be saved:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Combining A2C with the reward model
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Once the reward model is trained, we can finally try it for use in RL training.
+    To do that, we use the same tool 01_a2c.py but give it a couple of extra arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '-r or --reward: This gives the path to the reward model to be loaded and used.
+    With this option, we don’t use the environment reward but, instead, use the model
+    to get the reward from the observation and action we decided to take. This is
+    implemented as an additional environment wrapper; we’ll take a look shortly.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-m or --model: This is the path to the actor model (stored on the previous
+    A2C round of training) to be loaded. As I’m doing fine-tuning with RLHF instead
+    of training with the reward model from scratch, the actor model is needed. In
+    principle, you can try to use the reward model to train from scratch, but my experiments
+    were not very successful.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--finetune: This enables the fine-tuning mode: convolution layers are frozen
+    and LR is decreased 10 times. Without those modifications, the actor very quickly
+    unlearns all the prior knowledge and the reward drops to almost zero.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So, to use the reward model we’ve just trained, the command line will look
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: ./01_a2c.py --dev cuda -n v1 -r rw/reward-v0.dat --save save/v1 -m save/v0/model_rw=460-steps=580.dat
+    --finetune
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before checking the experiment results, let’s take a look at how the reward
+    model is used in the RL training process. To minimize the changes needed, I implemented
+    an environment wrapper, which is added between the original environment and Atari
+    wrappers, because the reward model needs an unscaled full-color game image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code of the wrapper is in lib/rlhf.py and is called RewardModelWrapper.
+    The constructor of the wrapper loads the model from the data file and assigns
+    a couple of fields. According to the paper, the reward predicted by the reward
+    model is normalized to have zero mean and unit variance, so to do the normalization,
+    the wrapper maintains the last 100 rewards in collections.deque. Besides normalization,
+    the wrapper can have a queue for metrics to be sent. The metrics contain information
+    about normalization values and the real sum from the underlying environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the reset() method, we just remember the observation and reset the reward
+    counter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The main logic of the wrapper is in the step() function, but it is not very
+    complicated: we apply the model to the observation and the action, normalize the
+    reward, and return it instead of the real one. The model application is not very
+    efficient from a performance perspective and could be optimized (as we have several
+    environments working in parallel), but I decided to implement the simple version
+    first, leaving optimizations as an excercise for you:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The rest of the training is the same. We just inject the new wrapper into the
+    environment-creating function if the reward model file is given in the command
+    line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: With this code, we can now combine the previous model with the labels we made
+    before.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fine-tuning with 100 labels
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'I ran the training with the best model from the basic A2C training, which,
+    on testing, achieved a reward of 460 in 580 steps. In addition, I enabled sampling
+    of episode segments into the new DB directory (v1 in this case), so the full command
+    line was the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: './01_a2c.py --dev cuda -n v1 -r rw/reward-v0.dat --save save/v1 -m save/v0/model_rw=460-steps=580.dat
+    --finetune --db-path v1 This model started to overfit quite quickly and after
+    2M steps (3 hours), I stopped the training. Figure [19.6](#x1-359003r6) shows
+    the test results (reward and count of steps):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.6: Test reward (left) and steps (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure [19.7](#x1-359004r7) shows the training reward (predicted by the model)
+    and the total loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.7: Training reward (left) and total loss (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The best model was stored at the 500K training step and it was able to get a
+    reward of 900 in 1,120 steps. In comparison to the original model, this is quite
+    an improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A video recording of this model is available here: [https://youtu.be/LnPwuyVrj9g](https://youtu.be/LnPwuyVrj9g).
+    From the gameplay, we see that the agent learned how to refill the oxygen and
+    is now spending some time in the middle of the screen. I also had the impression
+    that it picked divers more intentionally (but I haven’t done specific labeling
+    for this behavior). So, overall, the method works and it is quite impressive that
+    we can teach the agent something new with just 100 labels.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s try to improve the model further with more labeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second round of the experiment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'On the second round, I did more labeling: 50 pairs from the v0 DB and 50 pairs
+    from segments stored during the fine-tuning (v1 DB). The database generated during
+    the fine-tuning (v1) contains many more segments with the submarine floating on
+    the surface, which confirms that our pipeline is working as expected. During the
+    labeling, I also put more emphasis on oxygen refill segments.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After labeling, I retrained the reward model, which only took several minutes.
+    Then, fine-tuning of the best v1 model (with a reward of 900 and 1,120 steps)
+    was performed using the reward model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure [19.8](#x1-360002r8) and Figure [19.9](#x1-360003r9) contain charts
+    with test results, training the reward, and the loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.8: Test reward (left) and steps (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.9: Training reward (left) and total loss (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After 1.5M steps (2 hours), the training got stuck, but the best model wasn’t
+    better than the best model of v1: the best model got a reward of 860 in 1,084
+    steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third round of the experiment
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Here, I paid more attention during the labeling, trying to prioritize not just
+    oxygen refill, but also better fish shooting and diver pickup. Unfortunately,
+    100 pairs gave just a couple of examples of divers, so more labeling is needed
+    to teach the agent this behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regarding the divers, it might be that the agent doesn’t pick them up just because
+    they are very hard to distinguish from the background, so on a grayscale image,
+    they are invisible. To fix that, we can tweak the contrast in our Atari wrappers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the reward model retraining, A2C fine-tuning was started. I also ran it
+    for almost 2M steps for 3 hours and the results were interesting. At the end of
+    the training (check Figure [19.10](#x1-361003r10) and Figure [19.11](#x1-361004r11)),
+    the boat during the testing reached 5,000 steps (which is the limit I set in the
+    environment), but the score was fairly low. Most likely, the submarine just stayed
+    on the surface, which is very safe, but not what we want – this could be because
+    of labeled samples. Strangely, when I tried to record the video of those later
+    models, their behavior was different and the number of steps was much lower, which
+    could be an indication of some testing bug.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.10: Test reward (left) and steps (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_19_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 19.11: Training reward (left) and total loss (right) during the fine-tuning'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before the overfitting, the training generated several policies that were better
+    than the v2 models. For example, in this recording, the agent refilled the oxygen
+    twice and got a score of 1,820 during the 1,613 steps: [https://youtu.be/DVe_9b3gdxU](https://youtu.be/DVe_9b3gdxU).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the following table, I have summarized the information about the experiment
+    rounds and the results we got.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Step | Labels | Reward | Steps | Video |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Initial | None | 460 | 580 | [https://youtu.be/R_H3pXu-7cw](https://youtu.be/R_H3pXu-7cw)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| v1 | 100 | 900 | 1120 | [https://youtu.be/LnPwuyVrj9g](https://youtu.be/LnPwuyVrj9g)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| v2 | 200 | 860 | 1083 |  |'
+  prefs: []
+  type: TYPE_TB
+- en: '| v3 | 300 | 1820 | 1613 | [https://youtu.be/DVe_9b3gdxU](https://youtu.be/DVe_9b3gdxU)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Table 19.1: Summary of experiment rounds'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, with just 300 labels, we were able to increase the scoring by
+    almost 4 times. As an exercise, you can try to teach the agent to pick up divers,
+    which might result in a much better score if done properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another experiment that might be worth doing is to fine-tune the original v0
+    model, instead of the best models from the previous step. It might lead to better
+    results, as the training has more time before overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we’ve taken a look at the recent addition of RLHF to the RL
+    toolbox. This method, at the core of the LLM training pipeline, allows you to
+    increase the quality of models. In the chapter, we implemented RLHF and applied
+    it to the SeaQuest Atari game, which should have illustrated to you how this method
+    could be used in RL pipelines for model improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next chapter, we’ll discuss a different family of RL methods: AlphaGo,
+    AlphaZero, and MuZero.'
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,827 @@
+- en: Go Live and Go Big
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we are going to learn more about **Amazon Web Services** (**AWS**)
+    and how to create a deep neural network to solve a video action recognition problem.
+    We will show you how to use multiple GPUs for faster training. At the end of the
+    chapter, we will give you a quick overview of Amazon Mechanical Turk Service,
+    which allows us to collect labels and correct the model's results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Quick look at Amazon Web Services
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Amazon Web Services** (**AWS**) is one of the most popular cloud platforms,
+    and was made by Amazon.com. It provides many services, including cloud computing,
+    storage, database services, content delivery, and other functionalities. In this
+    section, we will only focus on virtual server services found on Amazon EC2\. Amazon
+    EC2 allows us to create multiple servers that can support the serving of our model
+    and even the training routine. When it comes to serving the model for end users,
+    you can read [Chapter 9](b38dd75a-b632-4e7b-b581-202500f4e001.xhtml), *Cruise
+    Control - Automation*, to learn about TensorFlow Serving. In training, Amazon
+    EC2 has many instance types that we can use. We can use their CPU servers to run
+    our web bot to collect data from the internet. There are several instance types
+    that have multiple NVIDIA GPUs.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Amazon EC2 provides a wide selection of instance types to fit different use
+    cases. The instance types are divided into five categories, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: General Purpose
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Compute Optimized
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Memory Optimized
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Storage Optimized
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Accelerated Computing Instances
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The first four categories are best suited to running backend servers. The accelerated
+    computing instances have multiple NVIDIA GPUs that can be used to serve models
+    and train new models with high-end GPUs. There are three types of instances—P2,
+    G2, and F1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: P2 instances
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'P2 instances contain high-performance NVIDIA K80 GPUs, each with 2,496 CUDA
+    cores and 12 GB of GPU memory. There are three models of P2, as described in the
+    following table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Model** | **GPUs** | **vCPU** | **Memory (GB)** | **GPU Memory (GB)** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| p2.xlarge | 1 | 4 | 61 | 12 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| p2.8xlarge | 8 | 32 | 488 | 96 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| p2.16xlarge | 16 | 64 | 732 | 192 |'
+  prefs: []
+  type: TYPE_TB
+- en: These models with large GPU memory are best suited for training models. With
+    more GPU memory, we can train the model with a larger batch size and a neural
+    network with lots of parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: G2 instances
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'G2 instances contain high-performance NVIDIA GPUs, each with 1,536 CUDA cores
+    and 4 GB of GPU memory. There are two models of G2, as described in the following
+    table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Model** | **GPUs** | **vCPU** | **Memory(GB)** | **SSD Storage (GB)** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| g2.2xlarge | 1 | 8 | 15 | 1 x 60 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| g2.8xlarge | 4 | 32 | 60 | 2 x 120 |'
+  prefs: []
+  type: TYPE_TB
+- en: These models have only 4 GB of GPU memory, so they are limited in training.
+    However, 4 GB of GPU memory is generally enough for serving the model to end users.
+    One of the most important factors is that G2 instances are much cheaper than P2
+    instances, which allows us to deploy multiple servers under a load balancer for
+    high scalability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: F1 instances
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'F1 instances support **field programmable gate arrays** (**FPGAs**). There
+    are two models of F1, as described in the following table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Model** | **GPUs** | **vCPU** | **Memory(GB)** | **SSD Storage (GB)** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| f1.2xlarge | 1 | 8 | 122 | 470 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| f1.16xlarge | 8 | 64 | 976 | 4 x 940 |'
+  prefs: []
+  type: TYPE_TB
+- en: FPGAs with high memory and computing power are very promising in the field of
+    deep learning. However, TensorFlow and other popular deep learning libraries don't
+    support FPGAs. Therefore, in the next section, we will only cover the prices of
+    P2 and G2 instances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pricing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's explore the pricing of these instances at [https://aws.amazon.com/emr/pricing/](https://aws.amazon.com/emr/pricing/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Amazon EC2 offers three pricing options for instances--On-Demand Instance,
+    Reserved Instance, and Spot Instance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On-Demand instance gives you the ability to run the server without disruption.
+    It is suitable if you only want to use the instance for a few days or weeks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reserved instance gives you the option to reserve the instance for a one- or
+    three-year term with a significant discount compared to the On-Demand Instance.
+    It is suitable if you want to run the server for production.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spot instance gives you the option to bid for the server. You can choose the
+    maximum price you are willing to pay per instance hour. This can save you a lot
+    of money. However, these instances can be terminated at any time if someone bids
+    higher than you. It is suitable if your system can handle interruption or if you
+    just want to explore services.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Amazon has provided a website to calculate the monthly bill. You can see it
+    at [http://calculator.s3.amazonaws.com/index.html](http://calculator.s3.amazonaws.com/index.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can click the Add New Row button and select an instance type.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following image, we have selected a p2.xlarge server. The price for
+    a month is $658.80 at the time of writing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c034555a-aa11-4d0c-839e-89085779adfd.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Now click on the Billing Option column. You will see the price of a reserved
+    instance for a p2.xlarge server:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2936c039-f527-4aa6-ae23-724bfbe68789.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: There are many other instance types. We suggest that you take a look at the
+    other types and select the server that is best suited to your requirements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will create a new model that can perform video action
+    recognition with TensorFlow. We will also leverage the training performance using
+    multiple GPUs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overview of the application
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Human action recognition is a very interesting problem in computer vision and
+    machine learning. There are two popular approaches to this problem,that is,**still
+    image action recognition** and **video action recognition**. In still image action
+    recognition, we can fine-tune a pre-trained model from ImageNet and perform a
+    classification of the actions based on the static image. You can review the previous
+    chapters for more information. In this chapter, we will create a model that can
+    recognize human action from videos. At the end of the chapter, we will show you
+    how to use multiple GPUs to speed up the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Datasets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are many available datasets that we can use in the training process,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: UCF101 ([http://crcv.ucf.edu/data/UCF101.php](http://crcv.ucf.edu/data/UCF101.php))
+    is an action recognition dataset of realistic action videos with 101 action categories.
+    There are 13,320 videos in total for the 101 action categories, which makes this
+    dataset a great choice for many research papers.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: ActivityNet ([http://activity-net.org/](http://activity-net.org/)) is a large-scale
+    dataset for human activity understanding. There are 200 categories with over 648
+    hours of video. Each category has about 100 videos.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sports-1M ([http://cs.stanford.edu/people/karpathy/deepvideo/](http://cs.stanford.edu/people/karpathy/deepvideo/))
+    is another large-scale dataset for sports recognition. There are 1,133,158 videos
+    in total, annotated with 487 sports labels.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this chapter, we will use UCF101 to perform the training process. We also
+    recommend that you try to apply the techniques discussed in this chapter to a
+    large-scale dataset to take full advantage of multiple-GPU training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the dataset and input pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The UCF101 dataset contains 101 action categories, such as Basketball shooting,
+    playing guitar, and Surfing. We can download the dataset from [http://crcv.ucf.edu/data/UCF101.php](http://crcv.ucf.edu/data/UCF101.php).
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the website, you need to download the UCF101 dataset in the file named `UCF101.rar`,
+    and the train/test splits for action recognition in the file named `UCF101TrainTestSplits-RecognitionTask.zip`.
+    You need to extract the dataset before moving to the next section, where we will
+    perform a pre-processing technique on videos before training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pre-processing the video for training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: UCF101 contains 13,320 video clips with a fixed frame rate and resolution of
+    25 FPS and 320 x 240 respectively. All video clips are stored in AVI format, so
+    it is not convenient to use them in TensorFlow. Therefore, in this section, we
+    will extract video frames from all the videos into JPEG files. We will only extract
+    video frames at the fixed frame rate of 4 FPS so that we can reduce the input
+    size of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we start implementing the code, we need to install the av library from
+    [https://mikeboers.github.io/PyAV/installation.html](https://mikeboers.github.io/PyAV/installation.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, create a Python package named `scripts` in the `root` folder. Then,
+    create a new Python file at `scripts/convert_ucf101.py`. In the newly created
+    file, add the first code to import and define some parameters, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, `dataset_dir` and `train_test_list_dir` are the locations
+    of the folders containing the extracted content of `UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask.zip`
+    respectively. `target_dir` is the folder that all the training images will be
+    stored in. `ensure_folder_exists` is a `utility` function that creates a folder
+    if it doesn't exist.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s define the `main` function of the Python code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the `main` function, we create the `target_dir` folder and call the `convert_data`
+    function which we will create shortly. The `convert_data` function takes a list
+    of train/test text files in the dataset and a Boolean called training that indicates
+    whether the text files are for the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some lines from one of the text files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each line of the text file contains the path to the `video` file and the correct
+    label. In this case, we have three video paths from the `ApplyEyeMakeup` category,
+    which is the first category in the dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main idea here is that we read each line of the text files, extract video
+    frames in a JPEG format, and save the location of the extracted files with the
+    corresponding label for further training. Here is the code for the `convert_data`
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding code is straightforward. We load the video path from the text
+    files and use the `av` library to open the AVI files. Then, we use `FLAGS.fps`
+    to control how many frames per second need to be extracted. You can run the `scripts/convert_ucf101.py`
+    file using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The total process needs about 30 minutes to convert all the video clips. At
+    the end, the `target_dir` folder will contain the following files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the `train.txt` file, the lines will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This format can be understood as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: There is one thing that you must remember, which is that the labels in `train.txt`
+    and `test.txt` go from 0 to 100\. However, the labels in the UCF101 go from 1
+    to 101\. This is because the `sparse_softmax_cross_entropy` function in TensorFlow
+    needs class labels to start from 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Input pipeline with RandomShuffleQueue
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If you have read [Chapter 9](b38dd75a-b632-4e7b-b581-202500f4e001.xhtml), *Cruise
+    Control - Automation*, you will know that we can use TextLineReader in TensorFlow
+    to simply read the text files line by line and use the line to read the image
+    directly in TensorFlow. However, things get more complex as the data only contains
+    the folder location and the label. Moreover, we only want a subset of frames in
+    one folder. For example, if the number of frames is 30 and we only want 10 frames
+    to train, we will randomize from 0 to 20 and select 10 frames from that point.
+    Therefore, in this chapter, we will use another mechanism to sample the video
+    frames in pure Python and put the selected frame paths into `RandomShuffleQueue`
+    for training. We also use `tf.train.batch_join` to leverage the training with
+    multiple pre-processing threads.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, create a new Python file named `utils.py` in the `root` folder and add
+    the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code, we create a `generator` function named `lines_from_file` to read
+    the text files line by line. We also add a `repeat` parameter so that the `generator`
+    function can read the text from the beginning when it reaches the end of the file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We have added a main section so you can try to run it to see how the `generator`
+    works:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, create a new Python file named `datasets.py` in the `root` folder and
+    add the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `sample_videos` function is easy to understand. It will receive the `generator`
+    object from `lines_from_file` function and use the `next` function to get the
+    required samples. You can see that we use a `random.randint` method to randomize
+    the starting frame position.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can run the main section to see how the `sample_videos` work with the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Up to this point, we have read the dataset text file into the `image_paths`
+    and `labels` variables, which are Python lists. In the later training routine,
+    we will use a built-in `RandomShuffleQueue` in TensorFlow to enqueue `image_paths`
+    and `labels` into that queue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we need to create a method that will be used in the training routine to
+    get data from `RandomShuffleQueue`, perform pre-processing in multiple threads,
+    and send the data to the `batch_join` function to create a mini-batch for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `dataset.py` file, add the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code, we prepare an array named `frames_and_labels` and use a for loop
+    with a `num_threads` iteration. This is a very convenient way of adding multi-threading
+    support to the pre-processing process. In each thread, we will call the method
+    `dequeue` from the `input_queue` to get a `frame_paths` and `label`. From the
+    `sample_video` function in the previous section, we know that `frame_paths` is
+    a list of selected video frames. Therefore, we use another for loop to loop through
+    each frame. In each frame, we read, resize, and perform image standardization.
+    This part is similar to the code in [Chapter 9](b38dd75a-b632-4e7b-b581-202500f4e001.xhtml),
+    *Cruise Control - Automation*. At the end of the input pipeline, we add `frames_and_labels`
+    with `batch_size` parameters. The returned `frames_batch` and `labels_batch` will
+    be used for a later training routine.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, you should add the following code, which contains the `_aspect_preserving_resize`
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code is the same as what you used in [Chapter 9](b38dd75a-b632-4e7b-b581-202500f4e001.xhtml),
+    *Cruise Control - Automation*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will create the deep neural network architecture that
+    we will use to perform video action recognitions with 101 categories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Neural network architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will create a neural network that will take an input of
+    10 video frames and output the probability over 101 action categories. We will
+    create a neural network based on the conv3d operation in TensorFlow. This network
+    is inspired on the work of D. Tran et al., Learning Spatiotemporal Features with
+    3D Convolutional Networks. However, we have simplified the model so it is easier
+    to explain in a chapter. We have also used some techniques that are not mentioned
+    by Tran et al., such as batch normalization and dropout.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, create a new Python file named `nets.py` and add the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the `inference` function, we `call _conv3d`, `_max_pool3d`, and `_fully_connected`
+    to create the network. It is not that different to the CNN network for images
+    in previous chapters. At the end of the function, we also create a dictionary
+    named `endpoints`, which will be used in the main section to visualize the network
+    architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, let''s add the code of the `_conv3d` and `_max_pool3d` functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code is similar to the previous chapters. However, we use the built-in
+    `tf.nn.conv3d` and `tf.nn.max_pool3d` functions instead of `tf.nn.conv2d` and
+    `tf.nn.max_pool3d` for images. Therefore, we need to add the `k_d` and `s_d` parameters
+    to give information about the depth of the filters. Moreover, we will need to
+    train this network from scratch without any pre-trained models. So, we need to
+    use the `batch_norm` function to add the batch normalization to each layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s add the code for the fully connected layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function is a bit different to what we used with images. First, we check
+    that the `input_shape.ndims` is equal to 5 instead of 4\. Secondly, we add the
+    batch normalization to the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let''s open the `utils.py` file and add the following `utility` functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can run `nets.py` to have a better understanding of the network''s architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the first part of the console result, you will see a table like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: These are the shapes of `variables` in the network. As you can see, three `variables`
+    that have the text `BatchNorm` are added to each layer. These `variables` increase
+    the total parameters that the network needs to learn. However, since we will train
+    from scratch, it will be much for harder to train the network without batch normalization.
+    Batch normalization also increases the ability of the network to regularize unseen
+    data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the second table of the console, you will see the following table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: These are the shapes of the input and output of the network. As you can see,
+    the input contains 10 video frames of size (112, 112, 3), and the output contains
+    a vector of 101 elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the last table, you will see how the shape of the output at each layer has
+    changed through the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding table, we can see that the output of the `conv1` layer has
+    the same size as the input, and the output of the `conv2` layer has changed due
+    to the effect of max pooling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s create a new Python file named `models.py` and add the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: These functions create the operation to calculate `loss`, `accuracy`, `learning
+    rate`, and perform the train process. This is the same as the previous chapter,
+    so we won't explain these functions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we have all the functions required to train the network to recognize video
+    actions. In the next section, we will start the training routine on a single GPU
+    and visualize the results on TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training routine with single GPU
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the scripts package, create a new Python file named `train.py`. We will
+    start by defining some parameters as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These parameters are self-explanatory. Now, we will define some operations
+    for training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this code, we get a `generator` object from the text file. Then, we create
+    two placeholders for `image_paths` and `labels`, which will be enqueued to `RandomShuffleQueue`.
+    The `input_pipeline` function that we created in `datasets.py` will receive `RandomShuffleQueue`
+    and return a batch of `frames` and labels. Finally, we create operations to compute
+    loss, accuracy, and the training operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also want to log the training process and visualize it in TensorBoard. So,
+    we will create some summaries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`saver` and `train_writer` will be responsible for saving checkpoints and summaries
+    respectively. Now, let''s finish the training process by creating the `session`
+    and performing the training loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: This code is very straightforward. We will use the `sample_videos` function
+    to get a list of image paths and labels. Then, we will call the `train_enqueue_op`
+    operation to add these image paths and labels to `RandomShuffleQueue`. After that,
+    the training process can be run by using `train_op` without the `feed_dict` mechanism.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we can run the training process by calling the following command in the
+    `root` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: You may see the `OUT_OF_MEMORY` error if your GPU memory isn't big enough for
+    a batch size of 32\. In the training process, we created a session with `gpu_options.allow_growth`
+    so you can try to change the `batch_size` to use your GPU memory effectively.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training process takes a few hours before it converges. We will take a look
+    at the training process on TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the directory that you have chosen to save the checkpoints, run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, open your web browser and navigate to `http://localhost:6006`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/8bef41ea-1d59-44ee-9e19-ff375d4e6768.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The regularization loss and total loss with one GPU are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2a9a5bdf-2a3d-4a94-b80f-5baf06586d7f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see in these images, the training accuracy took about 10,000 steps
+    to reach 100% accuracy on training data. These 10,000 steps took 6 hours on our
+    machine. It may be different on your configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training loss is decreasing, and it may reduce if we train longer. However,
+    the training accuracy is almost unchanged after 10,000 steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let's move on to the most interesting part of this chapter. We will use
+    multiple GPUs to train and see how that helps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training routine with multiple GPU
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In our experiment, we will use our custom machine instead of Amazon EC2\. However,
+    you can achieve the same result on any server with GPUs. In this section, we will
+    use two Titan X GPUs with a batch size of 32 on each GPU. That way, we can compute
+    up to 64 videos in one step, instead of 32 videos in a single GPU configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s create a new Python file named `train_multi.py` in the `scripts`
+    package. In this file, add the following code to define some parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: These parameters are the same as in the previous `train.py` file, except `batch_size`.
+    In this experiment, we will use the data parallelism strategy to train with multiple
+    GPUs. Therefore, instead of using 32 for the batch size, we will use a batch size
+    of 64\. Then, we will split the batch into two parts; each will be processed by
+    a GPU. After that, we will combine the gradients from the two GPUs to update the
+    weights and biases of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we will use the same operations as before, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, instead of creating a training operation with `models.train`,
+  prefs: []
+  type: TYPE_NORMAL
+- en: we will create a optimizer and compute gradients in each GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The gradients will be computed on each GPU and added to a list named `total_gradients`.
+    The final gradients will be computed on the CPU using `average_gradients`, which
+    we will create shortly. Then, the training operation will be created by calling
+    `apply_gradients` on the optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s add the following function to the `models.py` file in the `root`
+    folder to compute the `average_gradient`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, back in the `train_multi.py` file, we will create the `saver` and `summaries`
+    operation to save the `checkpoints` and `summaries`, like before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, let''s add the training loop to train the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: The training loop is similar to the previous, except that we have added the
+    `allow_soft_placement=True` option to the session configuration. This option will
+    allow TensorFlow to change the placement of `variables`, if necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we can run the training scripts like before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After a few hours of training, we can look at the TensorBoard to compare the
+    results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/be48229b-8546-428e-b38f-c7663b088447.png)![](img/fcb1ec27-d394-49db-b93b-c918b587d0dc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 04—Plot on Tensorboard of multiple GPUs training process
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, the training on multiple GPUs achieves 100% accuracy after about
+    6,000 steps in about four hours on our computer. This almost reduces the training
+    time by half.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s see how the two training strategies compare:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c7041563-2279-42b8-b48d-3c5aa41d3289.png)![](img/aa1e5d15-8f4f-4c60-9a87-7d4e003dbd43.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 05—Plot on TensorBoard with single and multiple GPUs compared side by
+    side
+  prefs: []
+  type: TYPE_NORMAL
+- en: The orange line is the multiple GPUs result and the blue line is the single
+    GPU result. We can see that the multiple GPUs setup can achieve better results
+    sooner than the single GPU. The different is not very large. However, we can achieve
+    faster training with more and more GPUs. On the P1 instance on Amazon EC2, there
+    are even eight and 16 GPUs. However, the benefit of training on multiple GPUs
+    will be better if we train on large-scale datasets such as ActivityNet or Sports
+    1M, as the single GPU will take a very long time to converge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will take a quick look at another Amazon Service, Mechanical
+    Turk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overview of Mechanical Turk
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Mechanical Turk is a service that allows us to create and manage online human
+    intelligence tasks that will be completed by human workers. There are lots of
+    tasks that humans can do better than computers. Therefore, we can take advantage
+    of this service to support our machine learning system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can view this system at [https://www.mturk.com](https://www.mturk.com).
+    Here is the website of the service:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/623738e4-e367-4e9e-92a0-333b8fe78185.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here are a couple of examples of tasks that you can use to support your machine
+    learning system:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Dataset labeling**: You usually have a lot of unlabeled data, and you can
+    use Mechanical Turk to help you build a consistent ground truth for your machine
+    learning workflow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Generate dataset**: You can ask the workers to build a large amount of training
+    data. For example, we can ask workers to create text translations or chat sentences
+    for a natural language system. You can ask them to annotate the sentiments of
+    the comments.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Beyond labeling, Mechanical Turk can also clean up your messy datasets ready
+    for training, data categorization, and metadata tagging. You can even use this
+    service to have them judge your system output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have taken a look at the Amazon EC2 services to see how many server types
+    we can use. Then, we created a neural network to perform human video action recognition
+    on a single GPU. After that, we applied the data parallelism strategy to speed
+    up the training process. Finally, we had a quick look at the Mechanical Turk service.
+    We hope that you can take advantage of these services to bring your machine learning
+    system to a higher level.
+  prefs: []
+  type: TYPE_NORMAL

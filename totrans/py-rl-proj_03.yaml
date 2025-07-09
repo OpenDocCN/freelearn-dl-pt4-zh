@@ -1,0 +1,1253 @@
+- en: Playing Atari Games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: an a machine learn how to play video games by itself and beat human players?
+    Solving this problem is the first step toward general **artificial intelligence**
+    (**AI**) in the field of gaming. The key technique to creating an AI player is
+    **deep reinforcement learning**. In 2015, Google's DeepMind, one of the foremost
+    AI/machine learning research teams (who are famous for building AlphaGo, the machine
+    that beat Go champion Lee Sedol) proposed the deep Q-learning algorithm to build
+    an AI player that can learn to play Atari 2600 games, and surpass a human expert
+    on several games. This work made a great impact on AI research, showing the possibility
+    of building general AI systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will introduce how to use gym to play Atari 2600 games,
+    and then explain why the deep Q-learning algorithm works and how to implement
+    it using TensorFlow. The goal is to be able to understand deep reinforcement learning
+    algorithms and how to apply them to solve real tasks. This chapter will be a solid
+    foundation to understanding later chapters, where we will be introducing more
+    complex methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The topics that we will cover in this chapter are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Atari games
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep Q-learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation of DQN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to Atari games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Atari, Inc. was an American video game developer and home computer company
+    founded in 1972 by Nolan Bushnell and Ted Dabney. In 1976, Bushnell developed
+    the Atari video computer system, or Atari VCS (later renamed Atari 2600). Atari
+    VCS was a flexible console that was capable of playing the existing Atari games,
+    which included a console, two joysticks, a pair of paddles, and the combat game
+    cartridge. The following screenshot depicts an Atari console:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c9a3ad57-527f-4974-8906-2430734aae5a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Atari 2600 has more than 500 games that were published by Atari, Sears, and
+    some third parties. Some famous games are Breakout, Pac-Man, Pitfall!, Atlantis,
+    Seaquest, and Space Invaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As a direct result of the North American video game crash of 1983, Atari, Inc.
+    was closed and its properties were split in 1984\. The home computing and game
+    console divisions of Atari were sold to Jack Tramiel under the name Atari corporation
+    in July 1984.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For readers who are interested in playing Atari games, here are several online
+    Atari 2600 emulator websites where you can find many popular Atari 2600 games:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[http://www.2600online.com/](http://www.2600online.com/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[http://www.free80sarcade.com/all2600games.php](http://www.free80sarcade.com/all2600games.php)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[http://www.retrogames.cz/index.php](http://www.retrogames.cz/index.php)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Because our goal is to develop an AI player for these games, it is better to
+    play with them first and understand their difficulties. The most important thing
+    is to: relax and have fun!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building an Atari emulator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'OpenAI gym provides an Atari 2600 game environment with a Python interface.
+    The games are simulated by the arcade learning environment, which uses the Stella
+    Atari emulator. For more details, read the following papers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'MG Bellemare, Y Naddaf, J Veness, and M Bowling, *The arcade learning environment:
+    An evaluation platform for general agents*, journal of Artificial Intelligence
+    Research (2012)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Stella: A Multi-Platform Atari 2600 VCS emulator, [http://stella.sourceforge.net/](http://stella.sourceforge.net/)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Getting started
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'If you don''t have a full install of OpenAI `gym`, you can install the Atari
+    environment dependencies via the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: This requires the `cmake` tools. This command will automatically compile the
+    arcade learning environment and its Python interface, `atari-py`. The compilation
+    will take a few minutes on a common laptop, so go have a cup of coffee.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After the Atari environment is installed, try the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If it runs successfully, a small window will pop up, showing the screen of
+    the game `Breakout`, as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cb33c342-7720-4f1e-b366-2e5335aad1bb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The meaning of the v0 suffix in the `Breakout` rom name will be explained later.
+    We will use `Breakout` to test our algorithm for training an AI game player. In
+    `Breakout`, several layers of bricks lie on the top of the screen. A ball travels
+    across the screen, bouncing off the top and side walls of the screen. When a brick
+    is hitted, the ball bounces away and the brick is destroyed, giving the player
+    several points according to the color of the brick. The player loses a turn when
+    the ball touches the bottom of the screen. In order to prevent this from happening,
+    the player has to move the paddle to bounce the ball back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Atari VCS uses a joystick as the input device for controlling Atari 2600 games.
+    The total number of inputs that a joystick and a paddle can make is 18\. In the
+    `gym` Atari environment, these actions are labeled as the integers ranged from
+    0 to 17\. The meaning of each action is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| 0 | 1 | 2 | 3 | 4 | 5 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| NO OPERATION | FIRE | UP | RIGHT | LEFT | DOWN |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | 7 | 8 | 9 | 10 | 11 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| UP+RIGHT | UP+LEFT | DOWN+RIGHT | DOWN+LEFT | UP+FIRE | RIGHT+FIRE |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 12 | 13 | 14 | 15 | 16 | 17 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| LEFT+FIRE | DOWN+FIRE | UP+RIGHT+FIRE | UP+LEFT+FIRE | DOWN+RIGHT+FIRE |
+    DOWN+LEFT+FIRE |'
+  prefs: []
+  type: TYPE_TB
+- en: 'One can use the following code to get the meanings of the valid actions for
+    a game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For `Breakout`, the actions include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To get the number of the actions, one can also use the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, the member variable, `action_space`, in `atari.env` stores all the information
+    about the valid actions for a game. Typically, we only need to know the total
+    number of valid actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now know how to access the action information in the Atari environment.
+    But, how do you control the game given these actions? To take an action, one can
+    call the `step` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The input argument, `a`, is the action you want to execute, which is the index
+    in the valid action list. For example, if one wants to take the `LEFT` action,
+    the input should be `3` not `4`, or if one takes no action, the input should be
+    `0`. The `step` function returns one of the following four values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`Observation`: An environment-specific object representing your observation
+    of the environment. For Atari, it is the screen image of the frame after the action
+    is executed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Reward`: The amount of reward achieved by the action.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Done`: Whether it''s time to reset the environment again. In Atari, if you
+    lost your last life, `done` will be true, otherwise it is false.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Info`: Diagnostic information useful for debugging. It is not allowed to use
+    this information in the learning algorithm, so usually we can ignore it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation of the Atari emulator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We are now ready to build a simple Atari emulator using gym. As with other
+    computer games, the keyboard input used to control Atari games is as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| *w* | *a* | *s* | *d* | *space* |'
+  prefs: []
+  type: TYPE_TB
+- en: '| UP | LEFT | DOWN | RIGHT | FIRE |'
+  prefs: []
+  type: TYPE_TB
+- en: 'To detect the keyboard inputs, we use the `pynput.keyboard` package, which
+    allows us to control and monitor the keyboard ([http://pythonhosted.org/pynput/](http://pythonhosted.org/pynput/)).
+    If the `pynput` package is not installed, run the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`pynput.keyboard` provides a keyboard listener used to capture keyboard events.
+    Before creating a keyboard listener, the `Listener` class should be imported:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Besides the `Listener` class, the other packages, such as `gym` and `threading`,
+    are also necessary in this program.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows how to use `Listener` to capture keyboard inputs,
+    that is, where one of the *w*, *a*, *s*, *d*, and *space* keys is pressed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Actually, a keyboard listener is a Python `threading.Thread` object, and all
+    callbacks will be invoked from the thread. In the `keyboard` function, the listener
+    registers two callbacks: `on_press` , which is invoked when a key is pressed and
+    `on_release` invoked when a key is released. This function uses a synchronized
+    queue to share data between different threads. When *w*, *a*, *s*, *d*, or *space*
+    is pressed, its ASCII value is sent to the queue, which can be accessed from another
+    thread. If *esc* is pressed, a termination signal, `*-*`, is sent to the queue.
+    Then, the listener thread stops when *esc* is released.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Starting a keyboard listener has some restrictions on macOS X; that is, one
+    of the following should be true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The process must run as root
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The application must be white-listed under enable access for assistive devices
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For more information, visit [https://pythonhosted.org/pynput/keyboard.html](https://pythonhosted.org/pynput/keyboard.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Atari simulator using gym
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The other part of the emulator is the `gym` Atari simulator:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first step is to create an `Atari` environment using `gym.make`. If you
+    are interested in playing other games such as Seaquest or Pitfall, just change
+    Breakout-v0 to Seaquest-v0 or `Pitfall-v0`. Then, `get_keys_to_action` is called
+    to get the `key to action` mapping, which maps the ASCII values of *w*, *a*, *s*,
+    *d,* and *space* to internal actions. Before the Atari simulator starts, the `reset`
+    function must be called to reset the game parameters and memory, returning the
+    first game screen image. In the main loop, `render` is called to render the Atari
+    game at each step. The input action is pulled from the queue without blocking.
+    If the action is the termination signal, -1, the game quits. Otherwise, this action
+    is taken at the current step by running `atari.step`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To start the emulator, run the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Press the fire button to start the game and enjoy it! This emulator provides
+    a basic framework for testing AI algorithms on the `gym` Atari environment. Later,
+    we will replace the `keyboard` function with our AI player.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data preparation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Careful readers may notice that a suffix, v0, follows each game name, and come
+    up with the following questions: *What is the meaning of v0?* *Is it allowable
+    to replace it with v1 or v2?* Actually, this suffix has a relationship with the
+    data preprocessing step for the screen images (observations) extracted from the
+    Atari environment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are three modes for each game, for example, Breakout, BreakoutDeterministic,
+    and BreakoutNoFrameskip, and each mode has two versions, for example, Breakout-v0
+    and Breakout-v4\. The main difference between the three modes is the value of
+    the frameskip parameter in the Atari environment. This parameter indicates the
+    number of frames (steps) the one action is repeated on. This is called the **frame-skipping**
+    technique, which allows us to play more games without significantly increasing
+    the runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Breakout, frameskip is randomly sampled from 2 to 5\. The following screenshots
+    show the frame images returned by the `step` function when the action `LEFT` is
+    submitted:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9434b162-7c3b-4322-8015-f484166ff2cc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'For BreakoutDeterministic, frameskip is set to 3 for the game Space Invaders,
+    and 4 for the other games. With the same `LEFT` action, the `step` function returns
+    the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a7d881b9-f685-45ea-ac9f-2dbd28a0cdb9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'For BreakoutNoFrameskip, frameskip is always 1 for all of the games, meaning
+    no frame-skipping. Similarly, the `LEFT` action is taken at each step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/162abb44-4fb4-471b-a75e-a70638960a01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: These screenshots demonstrate that although the step function is called four
+    times with the same action, `LEFT`, the final positions of the paddle are quite
+    different. Because frameskip is 4 for BreakoutDeterministic, its paddle is the
+    closest one to the left wall. For BreakoutNoFrameskip, frameskip is set to 1 so
+    that its paddle is farthest from the left wall. For Breakout, its paddle lies
+    in the middle because of frameskip being sampled from [2, 5] at each step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From this simple experiment, we can see the effect of the frameskip parameter.
+    Its value is usually set to 4 for fast learning. Recall that there are two versions,
+    v0 and v4, for each mode. Their main difference is the `repeat_action_probability`
+    parameter. This parameter indicates the probability that a **no operation** (**NOOP**)
+    action is taken, although another action is submitted. It is set to 0.25 for v0,
+    and 0.0 for v4\. Because we want a deterministic Atari environment, the v4 version
+    is selected in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have played some Atari games, you have probably noticed that the top
+    region of the screen in a game usually contains the scoreboard, showing the current
+    score you got and the number of lives you have. This information is not related
+    to game playing, so that the top region can be cropped. Besides, the frame images
+    returned by the step function are RGB images. Actually, in the Atari environment,
+    colorful images do not provide more information than grayscale images; namely,
+    one can play Atari games as usual with a gray screen. Therefore, it is necessary
+    to keep only useful information by cropping frame images and converting them to
+    grayscale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Converting an RGB image into a grayscale image is quite easy. The value of
+    each pixel in a grayscale image represents the light intensity, which can be calculated
+    by this formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/55c3aeec-c33c-49d0-ba30-6e35ed922f3f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, R, G, and B are the red, green, and blue channels of the RGB image, respectively.
+    Given a RGB image with shape (height, width, channel), the following Python code
+    can be used to convert it into grayscale:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following image gives an example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3ef54390-7f38-4876-b5b9-ac784d86c1ca.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: For cropping frame images, we use the `opencv-python` package or `cv2`, a Python
+    wrapper around the original C++ OpenCV implementation. For more information, please
+    visit the `opencv-python` website at [http://opencv-python-tutroals.readthedocs.io/en/latest/index.html](http://opencv-python-tutroals.readthedocs.io/en/latest/index.html).
+    The `opencv-python` package provides basic image transformation operations such
+    as image scaling, translation, and rotation. In this chapter, we only need the
+    image scaling function resize, which takes the input image, image size, and interpolation
+    method as the input arguments, and returns the resized image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows the image cropping operation, which involves two steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reshaping the input image such that the width of the resulting image equals
+    the resized width, `84`, indicated by the `resized_shape` parameter.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Cropping the top region of the reshaped image using `numpy` slicing:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For example, given a grayscale input image, the `cv2_resize_image` function
+    returns a cropped image with size ![](img/e6e3287e-f259-4902-a935-7c2ca2ce9e38.png),
+    as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9ac9969b-d898-4ba6-8020-60c06f247212.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: So far, we have finished the data preparation. The data is now ready to be used
+    to train our AI player.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Q-learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Here comes the fun part—the brain design of our AI Atari player. The core algorithm
+    is based on deep reinforcement learning or deep RL. In order to understand it
+    better, some basic mathematical formulations are required. Deep RL is a perfect
+    combination of deep learning and traditional reinforcement learning. Without understanding
+    the basic concepts about reinforcement learning, it is difficult to apply deep
+    RL correctly in real applications, for example, it is possible that someone may
+    try to use deep RL without defining state space, reward, and transition properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Well, don't be afraid of the difficulty of the formulations. We only need high
+    school-level mathematics, and will not go deep into the mathematical proofs of
+    why traditional reinforcement learning algorithms work. The goal of this chapter
+    is to learn the basic Q-learning algorithm, to know how to extend it into the
+    **deep Q-learning algorithm** (**DQN**), and to understand the intuition behind
+    these algorithms. Besides, you will also learn what the advantages and disadvantages
+    are of DQN, what exploration and exploitation are, why a replay memory is necessary,
+    why a target network is needed, and how to design a convolutional neural network
+    for state feature representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It looks quite interesting, doesn't it? We hope this chapter not only helps
+    you to understand how to apply deep reinforcement learning to solve practical
+    problems, but also opens a door for deep reinforcement learning research. For
+    the readers who are familiar with convolutional neural networks, the Markov decision
+    process, and Q-learning, skip the first section and go directly to the implementation
+    of DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Basic elements of reinforcement learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'First, let''s us recall some basic elements of reinforcement learning that
+    we discussed in the first chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**State**: The state space defines all the possible states of the environment.
+    In Atari games, a state is a screen image or a set of several consecutive screen
+    images observed by the player at a given time, indicating the game status of that
+    moment.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Reward function**: A reward function defines the goal of a reinforcement
+    learning problem. It maps a state or a state-action pair of the environment to
+    a real number, indicating the desirability of that state. The reward is the score
+    received after taking a certain action in Atari games.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Policy function**: A policy function defines the behavior of the player at
+    a given time, which maps the states of the environment to actions to be taken
+    in those states.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Value function**: A value function indicates which state or state-action
+    pair is good in the long run. The value of a state is the total (or discounted)
+    amount of reward a player can expect to accumulate over the future, starting from
+    that state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Demonstrating basic Q-learning algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To demonstrate the basic Q-learning algorithm, let''s consider a simple problem.
+    Imagine that our agent (player) lives in a grid world. One day, she was trapped
+    in a weird maze, as shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/6b46b3ad-be5c-4d13-abb5-f669a88e09b1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The maze contains six rooms. Our agent appears in Room 1, while she has no knowledge
+    about the maze, that is, she doesn't know Room 6 has the sweetheart that is able
+    to send her back home, or that Room 4 has a lightning bolt that strikes her. Therefore,
+    she has to explore the maze carefully to escape as soon as possible. So, how do
+    we  make our lovely agent learn from experience?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Fortunately, her good friend Q-learning can help her survive. This problem
+    can be represented as a state diagram, where each room is taken as a state and
+    her movement from one room to another is considered as an action. The state diagram
+    is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/509db329-0ece-43df-8691-d44997a5aa75.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, an action is represented by an arrow and the number associated with an
+    arrow is the reward of that state-action pair. For example, when our agent moves
+    from Room 5 to Room 6, she gets 100 points because of achieving the goal. When
+    she moves from Room 3 to Room 4, she get a negative reward because the lightning
+    strike hurts her. This state diagram can also be represented by a matrix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **state\action** | **1** | **2** | **3** | **4** | **5** | **6** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | - | 0 | - | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | 0 | - | 0 | - | 0 | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | - | 0 | - | -50 | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | - | - | 0 | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5 | - | 0 | - | - | - | 100 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | - | - | - | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: The dash line in the matrix indicates that the action is not available in that
+    state. For example, our agent cannot move from Room 1 to Room 6 directly because
+    there is no door connecting them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s ![](img/c8412c07-9c66-46b2-a692-158c6b140f63.png) be a state, ![](img/61f535eb-890a-4d2c-af5f-905d0ad05cfc.png)
+    be an action, ![](img/91112b13-bd5a-48aa-bcff-dd917bda7680.png) be the reward
+    function, and ![](img/1baa24f0-4939-44da-afbe-c8572b2f76b7.png) be the value function.
+    Recall that ![](img/57c05ff8-0396-4939-96b9-98ad751f6b59.png) is the desirability
+    of the state-action pair ![](img/550d9049-162a-41a8-a884-8310644d63db.png) in
+    the long run, meaning that our agent is able to make decisions about which room
+    she enters based on ![](img/39cbb45d-6168-4c09-b7de-c13c0ec7ddcc.png). The Q-learning
+    algorithm is very simple, which estimates ![](img/1f073dd4-441f-4c3a-b5a3-79025c0a1641.png)
+    for each state-action pair via the following update rule:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d6a07f4a-aab3-47ac-a2cd-37a192af0a27.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/46756389-7363-4b76-a9f9-dc9cd63afc31.png) is the current state, ![](img/7e3b8629-ecde-424d-bcab-aceae5e87687.png)
+    is the next state after taking action ![](img/21ea2c3c-7fd9-4214-92e9-02031ef4d5b9.png)
+    at ![](img/1f98e7be-c917-41e5-b561-0859edb01f46.png), ![](img/4fd06b2f-e807-4fc6-99dd-ddd4eb34b03c.png)
+    is the set of the available actions at ![](img/8cdc93c0-28ac-41b7-878e-2dae3b464e3e.png),
+    is the discount factor, and ![](img/0b053543-d0c4-485f-98eb-db30fd849896.png) is
+    the learning rate. The discount factor ![](img/2f3f8ed1-0f61-4f7d-8112-f7763323f680.png)
+    lies in [0,1]. A discount factor smaller than 1 means that our agent prefers the
+    current reward more than past rewards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning, our agent knows nothing about the value function, so ![](img/25114801-7fc6-40bd-b295-c57bc1ea4aa5.png)
+    is initialized to 0 for all state-action pairs. She will explore from state to
+    state until she reaches the goal. We call each exploration an episode, which consists
+    of moving from the initial state (for example, Room 1) to the final state (for
+    example, Room 6). The Q-learning algorithm is shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: A careful reader may ask a question about how to select action ![](img/4cb8f468-d816-409c-a988-c026494017a1.png)
+    in state ![](img/6472d012-4927-484b-abb1-fbae05294eea.png), for example, is action ![](img/69c74860-fd8d-4d7e-a71b-13eb0e694079.png)
+    randomly selected among all the possible actions or chosen using the policy derived
+    from the current estimated value function, ![](img/62e69dcf-841b-492e-a49d-2c200bda5be8.png)?
+    What is ![](img/996156af-478d-4a3e-b683-28051be43f3c.png)greedy? These questions
+    are related to two important concepts, namely, exploration and exploitation. Exploration
+    means trying something new to gather more information about the environment, while
+    exploitation means making the best decision based on all the information you have.
+    For example, trying a new restaurant is exploration and going to your favorite
+    restaurant is exploitation. In our maze problem, the exploration is that our agent
+    tries to enter a new room she hasn't visited before, while the exploitation is
+    that she chooses her favorite room based on the information she gathered from
+    the environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Both exploration and exploitation are necessary in reinforcement learning.
+    Without exploration, our agent is not able to get new knowledge about the environment,
+    so she will make bad decisions again and again. Without exploitation, the information
+    she got from exploration becomes meaningless since she doesn''t learn from it
+    to better make a decision. Therefore, a balance or a trade-off between exploration
+    and exploitation is indispensable. ![](img/a19c9030-f51d-47c0-b48f-d23865dad042.png)greedy
+    is the simplest way to make such a trade-off:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| With probability | Randomly select an action among all the possible actions
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| With probability ![](img/dbc78da5-ebe1-41d6-85ab-4b87ab72140c.png) | Select
+    the best action based on ![](img/172b2c80-720c-47f7-8788-ae4c1a1f2bc3.png),that
+    is, pick so that ![](img/d7ff4c51-1c70-4dee-9b4a-4db1f51f9b18.png) is the largest
+    among all the possible actions in state ![](img/1c87ec34-7ab7-4140-825a-f568094ad8e2.png)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: 'To further understand how Q-learning works, let''s go through several steps
+    by hand. For clarity, let''s set the learning rate ![](img/93d46ebc-a126-41e8-9278-35e55cc2b8d3.png)
+    and discount factor ![](img/9837b06c-85ec-4df6-b321-95c61facad22.png). The following
+    code shows the implementation of Q-learning in Python:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After running for 100 episodes, the value function, ![](img/61445d4b-2ad1-4162-ad47-dc6144988430.png),
+    converges to the following(for the readers who are curious about why this algorithm
+    converges, refer to *Reinforcement Learning: An Introduction* by Andrew Barto
+    and Richard S. Sutton):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **state\action** | **1** | **2** | **3** | **4** | **5** | **6** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | - | 64 | - | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | 51.2 | - | 51.2 | - | 80 | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | - | 64 | - | -9.04 | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | - | - | 51.2 | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5 | - | 64 | - | - | - | 100 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | - | - | - | - | - | - |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Therefore, the resulting state diagram becomes this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b7faa768-8c30-4890-9abf-eeca5a176ca0.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This indicates the following optimal paths to the goal state for all the other
+    states:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/8beda865-6339-4c70-b8a2-7fd7c8104adf.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Based on this knowledge, our agent is able to go back home no matter which room
+    she is in. More importantly, she becomes smarter and happier, achieving our goal
+    to train a smart AI agent or player.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This simplest Q-learning algorithm can only handle discrete states and actions.
+    For continuous states, it fails because the convergence is not guaranteed due
+    to the existence of infinite states. How can we apply Q-learning in an infinite
+    state space such as Atari games? The answer is replacing the tableau with neural
+    networks to approximate the action-value function ![](img/95e1fcb0-c839-457f-b9cd-f05c1bd9b255.png).
+    This is the intuition behind the *Playing Atari with deep reinforcement learning,*
+    by Google DeepMind paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To extend the basic Q-learning algorithm into the deep Q-learning algorithm,
+    there are two key questions that need to be answered:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: What kind of neural networks can be used to extract high-level features from
+    observed data such as screen images in the Atari environment?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: How can we update the action-value function, ![](img/38244a64-bc38-4734-8b1f-48b3af6f641f.png),
+    at each training step?
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For the first question, there are several possible ways of approximating the
+    action-value function, ![](img/ba2ff8d1-d8b1-42d2-a019-2eef187c1257.png). One
+    approach is that both the state and the action are used as the inputs to the neural
+    network, which outputs the scalar estimates of their Q-value, as shown in the
+    following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7d9f4c83-e398-4c2a-982a-d26f7b745e53.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The main disadvantage of this approach is that an additional forward pass is
+    required to compute ![](img/078a4917-00a8-4cbe-b266-891afc82f98a.png) as the action
+    is taken as one of the inputs to the network, resulting in a cost that scales
+    linearly with the number of all the possible actions. Another approach is that
+    the state is the only input to the neural network, while there is a separate output
+    for each possible action:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/aa2fd706-8f54-4775-b55f-acd13be9d66b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The main advantage of this approach is the ability to compute Q-values for all
+    possible actions in a given state with only a single forward pass through the
+    network, and the simplicity to access the Q-value for an action by picking the
+    corresponding output head.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the deep Q-network, the second architecture is applied. Recall that the
+    output in the data preprocessing step is an ![](img/99b1f14f-8ad5-49e5-aca9-58720f322382.png)
+    grayscale frame image. However, the current screen is not enough for playing Atari
+    games because it doesn''t contain the dynamic information about game status. Take
+    Breakout as an example; if we only see one frame, we can only know the locations
+    of the ball and the paddle, but we cannot know the direction or the velocity of
+    the ball. Actually, the direction and the velocity are quite important for making
+    decisions about how to move the paddle. Without them, the game is unplayable.
+    Therefore, instead of taking only one frame image as the input, the last four
+    frame images of a history are stacked together to produce the input to the neural
+    network. These four frames form an ![](img/47201bd5-f4f3-43b5-bded-eef0f697882e.png)
+    image. Besides the input layer, the Q-network contains three convolutional layers
+    and one fully connected layer, which is  shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b942fdc1-a948-431a-9cae-d435343282b0.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The first convolutional layer has 64 ![](img/ed5987c9-3441-4a2d-b1b4-0057f5970083.png)
+    filters with stride 4, followed by a **rectifier nonlinearity** (**RELU**). The
+    second convolutional layer has 64 ![](img/8594e75f-261f-4df0-9826-e7cf9ca7bdcb.png)
+    filters with stride 2, followed by RELU. The third convolutional layer has 64 ![](img/6d194e05-96a0-4f1f-a044-322cf4760b64.png)
+    filters with stride 2, followed by RELU. The fully connected hidden layer has
+    512 hidden units, again followed by RELU. The output layer is also a fully connected
+    layer with a single output for each action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Readers who are familiar with convolutional neural networks may ask why the
+    first convolutional layer uses a ![](img/bdc4b421-2e99-4d82-a67c-543baa012ebf.png)
+    filter, instead of a ![](img/f7b07854-81ff-47a0-8555-a3c3dc499e66.png) filter
+    or a ![](img/030bd2b9-7e5f-455c-9a76-72f3cb6c1c26.png) filter that is widely applied
+    in computer vision applications. The main reason of using a big filter is that
+    Atari games usually contain very small objects such as a ball, a bullet, or a
+    pellet. A convolutional layer with larger filters is able to zoom in on these
+    small objects, providing benefits for learning feature representations of states.
+    For the second and third convolutional layers, a relatively small filter is enough
+    to capture useful features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far, we have discussed the architecture of the Q-network. But, how do we
+    train this Q-network in the Atari environment with an infinite state space? Is
+    it possible to develop an algorithm based on the basic Q-learning to train it?
+    Fortunately, the answer is YES. Recall that the update rule for ![](img/f85e009b-d049-4650-ba9e-1263cc12b425.png)
+    in  basic Q-learning is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c1e957d0-cd19-47d2-b5f5-3191f8d8a01c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'When the learning rate ![](img/898498da-07ed-4c98-bfd1-6a7e3b3cbad2.png), this
+    update rule becomes as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/68f68524-574b-45f6-a65f-6e6192463730.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This is called the **Bellman equation**. Actually, the Bellman equation is
+    the backbone of many reinforcement learning algorithms. The algorithms using the
+    Bellman equation as an iterative update are called value iteration algorithms.
+    In this book, we will not go into  detail about value iteration or policy iteration.
+    If you are interested in them, refer to *Reinforcement Learning: An Introduction,*
+    by Andrew Barto and Richard S. Sutton.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The equation just shown is only suitable for a deterministic environment where
+    the next state ![](img/ebe2a0c8-a332-4a3f-9fe2-8e72203d3dd6.png) is fixed given
+    the current state ![](img/8fb40cc4-2a7a-4e08-8db1-8ee4b723133a.png) and the action
+    ![](img/f4ad75de-a4fe-42a7-95b4-78c0a40e42a6.png). In a nondeterministic environment,
+    the Bellman equation should be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c35d79b3-5e13-4c9f-940f-797b4f83d451.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, the right-hand side takes the expectation of ![](img/af3e312f-7d10-4d3f-a22a-3fe178d92f04.png)
+    with respect to the next state ![](img/3e11b272-3878-432a-ba38-a196a97e28e3.png)
+    (for example, the distribution of ![](img/4cea44a6-e9d9-460d-b93b-b7d30189f66b.png)
+    is determined by the Atari emulator). For an infinite state space, it is common
+    to use a function approximator such as the Q-network to estimate the action-value
+    function ![](img/42b48d0e-14b8-46e4-b9c4-be0abead3f0d.png). Then, instead of iteratively
+    updating ![](img/06dc14b7-65d8-45cb-a20f-dbbe702cb163.png), the Q-network can
+    be trained by minimizing the following loss function at the *i*^(th) iteration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/61ea8633-6814-45b2-aa03-2dc4d7421f53.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, *Q(s,a;)* represents the Q-network parameterized by, ![](img/6f25c491-93b4-47e4-b64e-ac207c62e209.png) is
+    the target for the i^(th) iteration, and ![](img/acba632a-dfff-4842-a8aa-32899fa0be04.png)
+    is a probability distribution over sequences and actions. The parameters from
+    the previous iteration *i-1* are fixed when optimizing the loss function ![](img/2fd194bc-effd-41fc-87aa-0aef0063524b.png)
+    over ![](img/c40e80b6-15d7-4440-85eb-c61a1d535023.png). In practice, it is impossible
+    to exactly calculate the expectations in ![](img/899b8f6b-bdc7-4c4a-bdbe-e6aa278babbd.png).
+    Instead of optimizing ![](img/1ae281d7-5523-445f-afaf-69e80f91703b.png) directly,
+    we minimize the empirical loss of ![](img/fdb4b635-9045-4ce5-a410-ceb03c5644da.png),
+    which replaces the expectations by samples ![](img/2cd96ade-1021-4337-af9b-8ab6e8f99a8d.png) from
+    the probability distribution ![](img/e4001b8d-2541-49a0-a2b9-1a4003a0d067.png)
+    and the Atari emulator. As with other deep learning algorithms, the empirical
+    loss function can be optimized by stochastic gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This algorithm doesn't need to construct an estimate of the emulator, for example,
+    it doesn't need to know the internal game mechanism about the Atari emulator,
+    because it only uses samples from the emulator to solve the reinforcement learning
+    problem. This property is called **model-free**, namely, it can treat the underlying
+    model as a black box. Another property of this algorithm is off-policy. It learns
+    about the greedy policy ![](img/9a9692db-dc07-4a3d-be2a-87472934c71d.png) while
+    following the probability distribution ![](img/127e4a41-2c25-4614-91bd-00e1c3d60cf4.png)
+    that balances exploration and exploitation of the state space. As discussed previously,
+    ![](img/84a647b9-5a68-495a-bf24-7993adaac0ad.png) can be selected as an ![](img/0a4f00c0-58d2-4cee-a24e-6fc913e2b9c7.png)greedy
+    strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The derivation of the deep Q-learning algorithm may be a little bit difficult
+    for readers who are not familiar with reinforcement learning or the Markov decision
+    process. In order to make it more understandable, let''s see the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3b7b51a9-94e8-402b-8f3c-381677f65707.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The brain of our AI player is the Q-network controller. At each time step t,
+    she observes the screen image ![](img/d3b118a9-7148-4a00-bf27-891876015028.png)
+    (recall that st is an ![](img/c1550c24-4a86-4411-bca9-7e8c4ed1ef98.png) image
+    that stacks the last four frames). Then, her brain analyzes this observation and
+    comes up with an action, ![](img/669306ba-08b7-442e-903a-164890128a34.png). The
+    Atari emulator receives this action and returns the next screen image, ![](img/9a8cf78c-56e3-457a-b1af-3c0f1920b3b2.png),
+    and the reward, ![](img/6395f46a-cf4f-488b-9ae2-4b9c536374e1.png). The quadruplet ![](img/e3b66ad7-170d-4ee5-8713-db4be648c25a.png)
+    is stored in the memory and is taken as a sample for training the Q-network by
+    minimizing the empirical loss function via stochastic gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'How do we draw samples from the quadruplets stored in the memory? One approach
+    is that these samples, ![](img/eb191497-6ef0-432c-89c5-e568b5e7056d.png), are
+    drawn from our AI player''s interactions with the environment, for example, samples ![](img/a58a78de-c408-499e-b397-c6031a560ffb.png)
+    are used to train the Q-network. The main drawback of this approach is that the
+    samples in one batch are strongly correlated. The strong correlation breaks the
+    assumption that the samples for constructing the empirical loss function are independent,
+    making the training procedure unstable and leading to bad performance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/720330a7-48d0-4f8c-933f-abb8ad89a26f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The deep Q-learning algorithm applies another approach, utilizing a technique
+    known as experience replay. The AI player''s experiences at each time step ![](img/4a7b4f5c-f375-4546-a0c1-dbed21263257.png)
+    are stored into the replay memory from which a batch of samples are randomly drawn
+    in order to train the Q-network. Mathematically, we cannot guarantee the independence
+    between the samples we drew. But practically, this approach can stabilize the
+    training procedure and generate reasonable results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/616efae0-11e3-47a2-81e5-2497eb2c9e5d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'So far, we have discussed all the components in the deep Q-learning algorithm.
+    The full algorithm is shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: This algorithm works well for some Atari games, for example, Breakout, Seaquest,
+    Pong, and Qbert, but it still cannot reach human-level control. One drawback is
+    that computing the targets ![](img/5759a82c-7bf5-41ea-b065-ec74d08e7bb2.png) uses
+    the current estimate of the action-value function ![](img/fcf4a15e-0ffc-40f4-955a-0b733c40555e.png),
+    which makes the training step unstable, that is, an update that increases ![](img/011ebf97-d241-4fd7-a1da-ba8490f2e1a9.png)
+    usually also increases ![](img/98fc7dbf-c711-494e-8187-55bd6369945c.png) for all
+    and hence also increases the target ![](img/60bb25a5-2d55-444e-bfaf-8678c9ffeb6b.png),
+    possibly leading to oscillations or divergence of the policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To address this problem, Google DeepMind introduced the target network in their
+    paper, *Human-level control through deep reinforcement learning*, which was published
+    in Nature. The idea behind the target network is quite simple: a separate network
+    is used for generating the targets ![](img/5759a82c-7bf5-41ea-b065-ec74d08e7bb2.png)
+    in the Q-learning update. More precisely, for every ![](img/6fd13b9a-c296-40cb-b309-cf0f3b6c762a.png)
+    Q-learning updates, the network Q is cloned to obtain a target network Q, which
+    is used for generating the targets ![](img/b49f9246-7588-483e-a7c6-6b5b6318f825.png)
+    in the following ![](img/1b664cc6-cc42-45fd-a8a3-4c671c2bb82b.png) updates to
+    Q. Therefore, the deep Q-learning algorithm becomes as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: With the target network, the AI player trained by the deep Q-learning algorithm
+    is able to surpass the performance of most previous reinforcement learning algorithms
+    and achieves a human-level performance across a set of 49 Atari 2600 games, for
+    example, Star Gunner, Atlantis, Assault, and Space Invaders.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The deep Q-learning algorithm has made an important step toward general artificial
+    intelligence. Although it performs well in the Atari 2600 games, it still has
+    a lot of unsolved issues:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Slow convergence**: It requires a long time (7 days on one GPU) to reach
+    human-level performance'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Failing with sparse rewards**: It doesn''t work for the game Montezuma''s
+    Revenge, which requires long-term planning'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Need for a large amount of data**: This is a common issue among most reinforcement
+    learning algorithms'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In order to solve these issues, different variants of the deep Q-learning algorithm
+    have been proposed recently, for example, double Q-learning, prioritized experience
+    replay, bootstrapped DQN, and dueling network architectures. We will not discuss
+    these algorithms in this book. For readers who want to learn more about DQN, please
+    refer to the related papers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation of DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will show you how to implement all the components, for example,
+    Q-network, replay memory, trainer, and Q-learning optimizer, of the deep Q-learning
+    algorithm with Python and TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will  implement the `QNetwork` class for the Q-network that we discussed
+    in the previous chapter, which is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The constructor requires four arguments, `input_shape`, `n_outputs`, `network_type`
+    and `scope`. `input_shape` is the size of the input image. After data preprocessing,
+    the input is an ![](img/11c9512b-c3c6-4a42-830f-8d17d1475355.png) image, so that
+    the default parameter is ![](img/90bd34c3-690d-4b8b-b708-caecfce0be56.png). `n_outputs`
+    is the number of all the possible actions, for example, `n_outputs` is four in
+    Breakout. `network_type` ,indicates the type of the Q-network we want to use.
+    Our implementation contains three different networks. Two of them are the convolutional
+    neural networks proposed by Google DeepMind. The other one is a feed-forward neural
+    network used for testing. `scope` is the name of the Q-network object, which can
+    be set to `q_network` or `target_network`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the constructor, three input tensors are created. The `x` variable represents
+    the input state (a batch of ![](img/033fb901-89a8-47df-abd0-13017738e6ce.png)
+    images). The `y` and `a` variables are the estimates of the action-value function
+    and the selected actions corresponding to the input state, which are used for
+    training the Q-network. After creating the input tensors, two functions, `build`
+    and `build_loss`, are called to build the Q-network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Constructing the Q-network using TensorFlow is quite easy, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: As discussed in the previous chapter, the Q-network for the Atari environment
+    contains three convolutional layers and one hidden layer, which can be constructed
+    when the `network_type` is `cnn`. The `cnn_nips` type is a simplified Q-network
+    for Atari games, which only contains two convolutional layers and one hidden layer
+    with less filters and hidden units. The `mlp` type is a feed-forward neural network
+    with two hidden layers, which is used for debugging. The `vars` variable is the
+    list of all the trainable variables in the Q-network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Recall that the loss function is ![](img/311d8928-3b5a-4ad1-b94c-f07867e654c2.png),
+    which can be implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `tf.gather_nd` function is used to get the action-value ![](img/a242dccc-2a1a-46cd-abbe-ab115852f00b.png)
+    given a batch of action,s ai. The variable loss represents the loss function,
+    and gradient is the gradient of the loss function with respect to the trainable
+    variables. `summary_op` is for TensorBoard visualization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The implementation of the replay memory doesn''t involve TensorFlow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `ReplayMemory` class takes four input parameters, that is, `history_len`,
+    `capacity`, `batch_size`, and `input_scale`. `history_len` is the number of frames
+    stacked together. Typically, `history_len` is set to 4 for Atari games, forming
+    an ![](img/1c32790d-8486-44c4-9e05-18ec2582983e.png) input image. `capacity` is
+    the capacity of the replay memory, namely, the maximum number of frames that can
+    be stored in it. `batch_size` is the size of one batch for training. `input_scale`
+    is the normalization factor for input images, for example, it is set to 255 for
+    RGB images. The variable frames record all the frame images and the variable others
+    record the corresponding actions, rewards, and termination signals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ReplayMemory` provides a function for adding a record (frame image, action,
+    reward, termination signal) into the memory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It also provides a function for constructing an ![](img/33f6663f-2d51-4cbb-87b4-fe3c25f809d6.png)
+    input image by concatenating the last four frame images of a history:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following function randomly draws a transition (state, action, reward,
+    next state, termination signal) from the replay memory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that only the termination signal corresponding to the last frame in a
+    state is allowed to be True. The `_phi(index)` function stacks the four frames
+    together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `Optimizer` class is used for training the Q-network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: It takes the Q-network, the target network, the replay memory, and the size
+    of input images as the input arguments. In the constructor, it creates an optimizer
+    (one of the popular optimizers such as ADAM, RMSPROP, or MOMENTUM) and then builds
+    an operator for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train the Q-network, it needs to construct a mini-batch of samples (states,
+    actions, targets) corresponding to ![](img/96f94be4-2663-4447-bdcb-0ad52ff91e8c.png), ![](img/5a68c450-24b6-453a-b227-b89c5279dd64.png),
+    and ![](img/e23a5362-570b-4f5b-9f34-451d4bde8460.png) in the loss function ![](img/84bead4d-efad-4314-b78c-7cee54ccdfd2.png):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Note that the targets ![](img/e23a5362-570b-4f5b-9f34-451d4bde8460.png) are
+    computed by the target network instead of the Q-network. Given a mini-batch of
+    states, actions, or targets, the Q-network can be easily trained by use of the
+    following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Besides the training procedure, for each `1000` steps, the summary is written
+    to the log file. This summary is for monitoring the training process, helping
+    to tune the parameters, and debugging.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Combining these modules together, we can implement the class DQN for the main
+    deep Q-learning algorithm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, `config` includes all the parameters of DQN, for example, batch size
+    and learning rate for training. `game` is an instance of the Atari environment.
+    In the constructor, the replay memory, Q-network, target network, and optimizer
+    are initialized. To begin the training process, the following function can be
+    called:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function is easy to understand. In each episode, it calls `replay_memory.phi`
+    to get the current state and calls the `choose_action` function to select an action
+    via the  ![](img/ced55201-ffc9-4a33-a0a0-71ec35883db7.png)greedy policy. This
+    action is submitted into the Atari emulator by calling the `play` function, which
+    returns the corresponding reward, next frame image, and termination signal. Then,
+    the transition (current frame image, action, reward, termination) is stored in
+    the replay memory. For every `update_interval` step (`update_interval = 1` by
+    default), the Q-network is trained with a batch of transitions randomly sampled
+    from the replay memory. For every `time_between_two_copies` step, the target network
+    copies the Q-network, and the weights of the Q-network are saved to the hard disk.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After the training step, the following function can be called for evaluating
+    the AI player''s performance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we are ready to train our first AI player for Atari games. The implementation
+    is not hard if you understand the intuition behind the algorithm, is it? Now is
+    the time to run the program and witness the magic!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The full implementation of the deep Q-learning algorithm can be downloaded
+    from GitHub (link xxx). To train our AI player for Breakout, run the following
+    command under the `src` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are two arguments in `train.py`. One is `-g` or `--game`, indicating the
+    name of the game one wants to test. The other one is `-d` or `--device`, which
+    specifies the device (CPU or GPU) one wants to use to train the Q-network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For Atari games, even with a high-end GPU, it will take 4-7 days to make our
+    AI player achieve human-level performance. In order to test the algorithm quickly,
+    a special game called **demo** is implemented as a lightweight benchmark. Run
+    the demo via the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The demo game is based on the GridWorld game on the website at [https://cs.stanford.edu/people/karpathy/convnetjs/demo/rldemo.html](https://cs.stanford.edu/people/karpathy/convnetjs/demo/rldemo.html):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3bd4e47a-d8d9-4fe3-98f9-b5d936dba390.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In this game, a robot in a 2D grid world has nine eyes pointing in different
+    angles, and each eye senses three values along its direction: distance to a wall,
+    distance to a green bean, or distance to a red bean. It navigates by using one
+    of five actions that turn it different angles. It gets a positive reward (+1)
+    for eating green beans while a negative reward (-1) for eating red beans. The
+    goal is to eat green beans as much as possible in one episode.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training will take several minutes. During the training, you can open a
+    new terminal and type the following command to visualize the architecture of the
+    Q-network and the training procedure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, `logdir` points to the folder where the log file of demo is stored. Once
+    TensorBoard is running, navigate your web browser to `localhost:6006` to view
+    the TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/aedc4c3e-6dd9-40e4-b072-f1a3b1a409fa.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The two graphs plot the loss and the score against the training step, respectively.
+    Clearly, after 100k training steps, the performance of the robot becomes stable,
+    for example, the score is around 40.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can also visualize the weights of the Q-network through TensorBoard. For
+    more details, visit the TensorBoard guide at [https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard](https://www.tensorflow.org/programmers_guide/summaries_and_tensorboard).
+    This tool is quite useful for debugging and optimizing the code, especially for
+    complicated algorithms such as DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Congratulations! You just learned four important things. The first one is how
+    to implement an Atari game emulator using gym, and how to play Atari games for
+    relaxation and having fun. The second one is that you learned how to preprocess
+    data in reinforcement learning tasks such as Atari games. For practical machine
+    learning applications, you will spend a great deal of time on understanding and
+    refining data, which affects the performance of an AI system a lot. The third
+    one is the deep Q-learning algorithm. You learned the intuition behind it, for
+    example, why the replay memory is necessary, why the target network is needed,
+    where the update rule comes from, and so on. The final one is that you learned
+    how to implement DQN using TensorFlow, and how to visualize the training process.
+    Now, you are ready for the more advanced topics that we will discuss in the following
+    chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you will learn how to simulate classic control tasks, and
+    how to implement the state-of-the-art actor-critic algorithms for control.
+  prefs: []
+  type: TYPE_NORMAL

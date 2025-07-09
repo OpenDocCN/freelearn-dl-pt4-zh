@@ -1,0 +1,1198 @@
+- en: '12'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Actor-Critic Method: A2C and A3C'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In Chapter [11](ch015.xhtml#x1-18200011), we started to investigate a policy-based
+    alternative to the familiar value-based methods family. In particular, we focused
+    on the method called REINFORCE and its modification, which uses discounted reward
+    to obtain the gradient of the policy (which gives us the direction in which to
+    improve the policy). Both methods worked well for a small CartPole problem, but
+    for a more complicated Pong environment, we got no convergence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Here, we will discuss another extension to the vanilla policy gradient method,
+    which magically improves the stability and convergence speed of that method. Despite
+    the modification being only minor, the new method has its own name, actor-critic,
+    and it’s one of the most powerful methods in deep reinforcement learning (RL).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Explore how the baseline impacts statistics and the convergence of gradients
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cover an extension of the baseline idea
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement the advantage actor-critic (A2C) method and check it on the Pong environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Add asynchronous execution to the A2C method using two different ways: data
+    parallelism and gradient parallelism'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Variance reduction
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, I briefly mentioned that one of the ways to improve
+    the stability of policy gradient methods is to reduce the variance of the gradient.
+    Now let’s try to understand why this is important and what it means to reduce
+    the variance. In statistics, variance is the expected square deviation of a random
+    variable from the expected value of that variable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq44.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Variance shows us how far values are dispersed from the mean. When variance
+    is high, the random variable can take values that deviate widely from the mean.
+    In the following plot, there is a normal (Gaussian) distribution with the same
+    value for the mean, μ = 10, but with different values for the variance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.1: The effect of variance on Gaussian distribution'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let’s return to policy gradients. It was stated in the previous chapter
+    that the idea is to increase the probability of good actions and decrease the
+    chance of bad ones. In math notation, our policy gradient was written as ∇J ≈𝔼[Q(s,a)∇log
+    π(a|s)]. The scaling factor Q(s,a) specifies how much we want to increase or decrease
+    the probability of the action taken in the particular state. In the REINFORCE
+    method, we used the discounted total reward as the scaling of the gradient. In
+    an attempt to increase REINFORCE stability, we subtracted the mean reward from
+    the gradient scale.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To understand why this helped, let’s consider the very simple scenario of an
+    optimization step on which we have three actions with different total discounted
+    rewards: Q[1], Q[2], and Q[3]. Now let’s check what will happen with policy gradients
+    with regard to the relative values of those Q[s].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the first example, let both Q[1] and Q[2] be equal to some small positive
+    number and Q[3] be a large negative number. So, actions at the first and second
+    steps led to some small reward, but the third step was not very successful. The
+    resulting combined gradient for all three steps will try to push our policy far
+    from the action at step three and slightly toward the actions taken at steps one
+    and two, which is a totally reasonable thing to do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s imagine that our reward is always positive and only the value is
+    different. This corresponds to adding some constant to each of the rewards from
+    the previous example: Q[1], Q[2], and Q[3]. In this case, Q[1] and Q[2] will become
+    large positive numbers and Q[3] will have a small positive value. However, our
+    policy update will become different! We will try hard to push our policy toward
+    actions at the first and second steps, and slightly push it toward an action at
+    step three. So, strictly speaking, we are no longer trying to avoid the action
+    taken for step three, despite the fact that the relative rewards are the same.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This dependency of our policy update on the constant added to the reward can
+    slow down our training significantly, as we may require many more samples to average
+    out the effect of such a shift in the policy gradient. Even worse, as our total
+    discounted reward changes over time, with the agent learning how to act better
+    and better, our policy gradient variance can also change. For example, in the
+    Atari Pong environment, the average reward in the beginning is −21… − 20, so all
+    the actions look almost equally bad.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To overcome this in the previous chapter, we subtracted the mean total reward
+    from the Q-value and called this mean the baseline. This trick normalized our
+    policy gradient: in the case of the average reward being −21, getting a reward
+    of −20 looks like a win for the agent and it pushes its policy toward the taken
+    actions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: CartPole variance
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To check this theoretical conclusion in practice, let’s plot our policy gradient
+    variance during the training for both the baseline version and the version without
+    the baseline. The complete example is in Chapter12/01_cartpole_pg.py, and most
+    of the code is the same as in Chapter [11](ch015.xhtml#x1-18200011). The differences
+    in this version are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It now accepts the command-line option --baseline, which enables the mean subtraction
+    from the reward. By default, no baseline is used.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: On every training loop, we gather the gradients from the policy loss and use
+    this data to calculate the variance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To gather only the gradients from the policy loss and exclude the gradients
+    from the entropy bonus added for exploration, we need to calculate the gradients
+    in two stages. Luckily, PyTorch allows this to be done easily. In the following
+    code, only the relevant part of the training loop is included to illustrate the
+    idea:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: We calculate the policy loss as before, by calculating the log from the probabilities
+    of taken actions and multiplying it by policy scales (which are the total discounted
+    reward if we are not using the baseline or the total reward minus the baseline).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next step, we ask PyTorch to backpropagate the policy loss, calculating
+    the gradients and keeping them in our model’s buffers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: As we have previously performed optimizer.zero_grad(), those buffers will contain
+    only the gradients from the policy loss. One tricky thing here is the retain_graph=True
+    option when we call backward(). It instructs PyTorch to keep the graph structure
+    of the variables. Normally, this is destroyed by the backward() call, but in our
+    case, this is not what we want. In general, retaining the graph could be useful
+    when we need to backpropagate the loss multiple times before the call to the optimizer,
+    although this is not a very common situation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we iterate all parameters from our model (every parameter of our model
+    is a tensor with gradients) and extract their grad field in a flattened NumPy
+    array:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: This gives us one long array with all gradients from our model’s variables.
+    However, our parameter update should take into account not only the policy gradient
+    but also the gradient provided by our entropy bonus. To achieve this, we calculate
+    the entropy loss and call backward() again. To be able to do this the second time,
+    we need to pass retain_graph=True.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On the second backward() call, PyTorch will backpropagate our entropy loss
+    and add the gradients to the internal gradients’ buffers. So, what we now need
+    to do is just ask our optimizer to perform the optimization step using those combined
+    gradients:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Later, the only thing we need to do is write statistics that we are interested
+    in into TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By running this example twice, once with the --baseline command-line option
+    and once without it, we get a plot of variance of our policy gradient. The following
+    charts show the smoothed reward (average for last 100 episodes) and variance (smoothed
+    with window 20):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.2: Smoothed reward (left) and variance (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These next two charts show the gradients’ magnitude (L2) and maximum value.
+    All values are smoothed with window 20:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.3: Gradients’ L2 norm (left) and maximum value (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, variance for the version with the baseline is two to three orders
+    of magnitude lower than the version without one, which helps the system to converge
+    faster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Advantage actor-critic (A2C)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The next step in reducing the variance is making our baseline state-dependent
+    (which is a good idea, as different states could have very different baselines).
+    Indeed, to decide on the suitability of a particular action in some state, we
+    use the discounted total reward of the action. However, the total reward itself
+    could be represented as a value of the state plus the advantage of the action:
+    Q(s,a) = V (s) + A(s,a). You saw this in Chapter [8](ch012.xhtml#x1-1240008),
+    when we discussed DQN modifications, particularly dueling DQN.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, why can’t we use V (s) as a baseline? In that case, the scale of our gradient
+    will be just advantage, A(s,a), showing how this taken action is better in respect
+    to the average state’s value. In fact, we can do this, and it is a very good idea
+    for improving the policy gradient method. The only problem here is that we don’t
+    know the value, V (s), of the state that we need to subtract from the discounted
+    total reward, Q(s,a). To solve this, let’s use another neural network, which will
+    approximate V (s) for every observation. To train it, we can exploit the same
+    training procedure we used in DQN methods: we will carry out the Bellman step
+    and then minimize the mean square error to improve V (s) approximation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we know the value for any state (or at least have some approximation of
+    it), we can use it to calculate the policy gradient and update our policy network
+    to increase probabilities for actions with good advantage values and decrease
+    the chance of actions with bad advantage values. The policy network (which returns
+    a probability distribution of actions) is called the actor, as it tells us what
+    to do. Another network is called critic, as it allows us to understand how good
+    our actions were by returning V (s). This improvement is known under a separate
+    name, the advantage actor-critic method, which is often abbreviated to A2C. Figure [12.4](#x1-206002r4)
+    is an illustration of its architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PVoalliuceynneett OπVbs((((eacrasrci|s)vtt)aoictr))ions ](img/B22150_12_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.4: The A2C architecture'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the policy and value networks partially overlap, mostly due to
+    efficiency and convergence considerations. In this case, the policy and value
+    are implemented as different heads of the network, taking the output from the
+    common body and transforming it into the probability distribution and a single
+    number representing the value of the state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This helps both networks to share low-level features (such as convolution filters
+    in the Atari agent), but combine them in a different way. The following figure
+    shows this architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![CPVooamllmiuocenynneetntet OπVbs((((e(acrasrbci|s)vott)adoictyr))io)ns ](img/B22150_12_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.5: The A2C architecture with a shared network body'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From a training point of view, we complete these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize network parameters, 𝜃, with random values.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Play N steps in the environment, using the current policy, π[𝜃], and saving
+    the state, s[t], action, a[t], and reward, r[t].
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Set R ← 0 if the end of the episode is reached or V [𝜃](s[t]).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For i = t − 1…t[start] (note that steps are processed backward):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: R ←r[i] + γR
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Accumulate the policy gradients:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq45.png)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: 'Accumulate the value gradients:'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq46.png)'
+  prefs:
+  - PREF_IND
+  - PREF_IND
+  type: TYPE_IMG
+- en: Update the network parameters using the accumulated gradients, moving in the
+    direction of the policy gradients, ∂𝜃[π], and in the opposite direction of the
+    value gradients, ∂𝜃[v].
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat from step 2 until convergence is reached.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This algorithm is just an outline and similar to those that are usually printed
+    in research papers. In practice, several extensions to improve the stability of
+    the method may be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An entropy bonus is usually added to improve exploration. It’s typically written
+    as an entropy value added to the loss function:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq47.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: This function has a minimum when the probability distribution is uniform, so
+    by adding it to the loss function, we push our agent away from being too certain
+    about its actions. The value of β is a hyperparameter scaling the entropy bonus
+    and prioritizing the exploration during the training. Normally, it is constant
+    or linearly decreased during the training.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Gradient accumulation is usually implemented as a loss function combining all
+    three components: policy loss, value loss, and entropy loss. You should be careful
+    with signs of these losses, as policy gradients show you the direction of policy
+    improvement, but both the value and entropy losses should be minimized.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To improve stability, it’s worth using several environments, providing you with
+    observations concurrently (when you have multiple environments, your training
+    batch will be created from their observations). We will look at several ways of
+    doing this later in this chapter when we discuss the A3C method.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The version of the preceding method that uses several environments running in
+    parallel is called advantage asynchronous actor-critic, which is also known as
+    A3C. The A3C method will be discussed later, but for now, let’s implement A2C.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A2C on Pong
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the previous chapter, you saw a (not very successful) attempt to solve our
+    favorite Pong environment with policy gradient methods. Let’s try it again with
+    the actor-critic method at hand. The full source code is available in Chapter12/02_pong_a2c.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start, as usual, by defining hyperparameters (imports are omitted):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These values are not tuned, which is left as an exercise for the reader. We
+    have one new value here: CLIP_GRAD. This hyperparameter specifies the threshold
+    for gradient clipping, which basically prevents our gradients from becoming too
+    large at the optimization stage and pushing our policy too far. Clipping is implemented
+    using the PyTorch functionality, but the idea is very simple: if the L2 norm of
+    the gradient is larger than this hyperparameter, then the gradient vector is clipped
+    to this value.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The REWARD_STEPS hyperparameter determines how many steps ahead we will take
+    to approximate the total discounted reward for every action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the policy gradient methods, we used about 10 steps, but in A2C, we will
+    use our value approximation to get a state value for further steps, so it will
+    be fine to decrease the number of steps. The following is our network architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It has a shared convolution body and two heads: the first returns the policy
+    with the probability distribution over our actions and the second head returns
+    one single number, which will approximate the state’s value. It might look similar
+    to our dueling DQN architecture from Chapter [8](ch012.xhtml#x1-1240008), but
+    our training procedure is different.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The forward pass through the network returns a tuple of two tensors – policy
+    and value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we have to discuss a large and important function, which takes the batch
+    of environment transitions and returns three tensors: the batch of states, batch
+    of actions taken, and batch of Q-values calculated using the formula Q(s,a) =
+    ∑ [i=0]^(N−1)γ^ir[i] + γ^NV (s[N]). This Q-value will be used in two places: to
+    calculate mean squared error (MSE) loss to improve the value approximation in
+    the same way as DQN, and to calculate the advantage of the action.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the beginning, we just walk through our batch of transitions and copy their
+    fields into the lists. Note that the reward value already contains the discounted
+    reward for REWARD_STEPS, as we use the ptan.ExperienceSourceFirstLast class. We
+    also need to handle episode-ending situations and remember indices of batch entries
+    for non-terminal episodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following code, we convert the gathered state and actions into a PyTorch
+    tensor and copy them into the graphics processing unit (GPU) if needed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, the extra call to np.asarray() might look redundant, but without it,
+    the performance of tensor creation degrades 5-10x. This is known as [issue #13918](https://github.com/pytorch/pytorch/issues/13918)
+    in PyTorch, and at the time of writing, it hasn’t been solved, so one solution
+    is to pass a single NumPy array instead of a list of arrays.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the function calculates Q-values, taking into account the terminal
+    episodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code prepares the variable with the last state in our transition
+    chain and queries our network for V (s) approximation. Then, this value is multiplied
+    by the discount factor and added to the immediate rewards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At the end of the function, we pack our Q-values into the tensor and return
+    it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the following code, you can notice a new way to create environments, the
+    class gym.vector.SyncVectorEnv, which is being passed a list of lambda functions
+    creating the underlying environments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The class gym.vector.SyncVectorEnv is provided by Gymnasium and allows wrapping
+    several environments into one single “vectorized” environment. Underlying environments
+    have to have identical action and observation spaces, which allows the vectorized
+    environment to accept a vector of actions and return batches of observations and
+    rewards. You can find more details in the Gymnasium documentation: [https://gymnasium.farama.org/api/vector/](https://gymnasium.farama.org/api/vector/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Synchronized vectorized environments (the SyncVectorEnv class) are almost identical
+    to the optimization we used in Chapter [9](ch013.xhtml#x1-1600009), in the section
+    Several environments, where we passed multiple gym environments into the experience
+    source to increase the performance of the DQN training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But in the case of vectorized environments, a different experience source class
+    has to be used: VectorExperienceSourceFirstLast, which takes into account vectorization
+    and optimizes the agent application to the observation. From the outside, the
+    interface of this experience source is exactly as before.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The command-line argument --use-async (which switches our wrapper class from
+    SyncVectorEnv to AsyncVectorEnv) is not relevant at the moment – we will use it
+    later, when discussing the A3C method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we create the network, agent, and experience source:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: One very important detail here is passing the eps parameter to the optimizer.
+    If you’re familiar with the Adam algorithm, you may know that epsilon is a small
+    number added to the denominator to prevent zero-division situations. Normally,
+    this value is set to some small number, such as 10^(−8) or 10^(−10), but in our
+    case, these values turned out to be too small. I have no mathematically strict
+    explanation for this, but with the default value of epsilon, the method does not
+    converge at all. Very likely, the division to a small value of 10^(−8) makes the
+    gradients too large, which turns out to be fatal for training stability.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another detail is to use VectorExperienceSourceFirstLast instead of ExperienceSourceFirstLast.
+    This is required because of the vectorized environment wrapping several normal
+    Atari environments. The vectorized environment also exposes the attributes single_observation_space
+    and single_action_space, which are the observation and action spaces of an individual
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the training loop, we use two wrappers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first wrapper in this code is already familiar to you: common.RewardTracker,
+    which computes the mean reward for the last 100 episodes and tells us when this
+    mean reward exceeds the desired threshold. Another wrapper, TBMeanTracker, is
+    from the PTAN library and is responsible for writing into TensorBoard the mean
+    of the measured parameters for the last 10 steps. This is helpful, as training
+    can take millions of steps and we don’t want to write millions of points into
+    TensorBoard, but rather write smoothed values every 10 steps.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next code chunk is responsible for our calculation of losses, which is
+    the core of the A2C method. First, we unpack our batch using the function we described
+    earlier and ask our network to return the policy and values for this batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: The policy is returned in an unnormalized form, so to convert it into the probability
+    distribution, we need to apply softmax to it. As the policy loss requires the
+    logarithm of the probability distribution, we will use the function log_softmax,
+    which is more numerically stable than calling softmax and then log.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the value loss part, we calculate the MSE between the value returned by
+    our network and the approximation we performed using the Bellman equation unrolled
+    four steps forward:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we calculate the policy loss to obtain the policy gradient:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first two steps obtain a log of our policy and calculate the advantage of
+    actions, which is A(s,a) = Q(s,a) −V (s). The call to value_t.detach() is important,
+    as we don’t want to propagate the policy gradient into our value approximation
+    head. Then, we take the log of probability for the actions taken and scale them
+    with the advantage. Our policy gradient loss value will be equal to the negated
+    mean of this scaled log of policy, as the policy gradient directs us toward policy
+    improvement, but loss value is supposed to be minimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last piece of our loss function is entropy loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Entropy loss is equal to the scaled entropy of our policy, taken with the opposite
+    sign (entropy is calculated as H(π) = −∑ π log π).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following code, we calculate and extract gradients of our policy, which
+    will be used to track the maximum gradient, its variance, and the L2 norm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As the final step of our training, we backpropagate the entropy loss and the
+    value loss, clip gradients, and ask our optimizer to update the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the training loop, we track all of the values that we are going
+    to monitor in TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are plenty of values that we need to monitor and we will discuss them
+    in the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To start the training, run 02_pong_a2c.py with the --dev (for GPU) and -n options
+    (which provides a name for the run for TensorBoard):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As a word of warning, the training process is lengthy. With the original hyperparameters,
+    it requires about 10 million frames to solve, which is about three hours on a
+    GPU.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Later in the chapter, we’ll check the asynchronous version of the A2C method,
+    which executes the environment in a separate process (which increases both training
+    stability and performance). But first, let’s focus on our plots in TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The reward dynamics look much better than in the example from the previous
+    chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.6: Smoothed reward (left) and mean batch values (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The left plot is the mean training episodes reward averaged over the 100 last
+    episodes. The right plot, “batch value,” shows Q-values approximated using the
+    Bellman equation and an overall positive dynamic in Q approximation. This shows
+    that our training process is improving more or less consistently over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next four charts are related to our loss and include the individual loss
+    components and the total loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.7: Entropy loss (left) and policy loss (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.8: Value loss (left) and total loss (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we must note the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, our value loss (Figure [12.8](#x1-208037r8), on the left) is decreasing
+    consistently, which shows that our V (s) approximation is improving during the
+    training.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second observation is that our entropy loss (Figure [12.7](#x1-208036r7),
+    on the left) is growing in the middle of the training, but it doesn’t dominate
+    in the total loss. This basically means that our agent becomes more confident
+    in its actions as the policy becomes less uniform.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The last thing to note here is that policy loss (Figure [12.7](#x1-208036r7),
+    on the right) is decreasing most of the time and is correlated to the total loss,
+    which is good, as we are interested in the gradients for our policy first of all.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The last set of plots displays the advantage value and policy gradient metrics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.9: Advantage (left) and L2 of gradients (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.10: Max of gradients (left) and gradients variance (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The advantage is a scale of our policy gradients, and it equals Q(s,a) −V (s).
+    We expect it to oscillate around 0 (because, on average, the effect of the single
+    action on the state’s value shouldn’t be large), and the chart meets our expectations.
+    The gradient charts demonstrate that our gradients are not too small and not too
+    large. Variance is very small at the beginning of the training (for 2 million
+    frames), but starts to grow later, which means that our policy is changing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Asynchronous Advantage Actor-Critic (A3C)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will extend the A2C method. This extension adds true asynchronous
+    environment interaction, and is called asynchronous advantage actor-critic (A3C).
+    This method is one of the most widely used by RL practitioners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will take a look at two approaches for adding asynchronous behavior to the
+    basic A2C method: data-level and gradient-level parallelism. They have different
+    resource requirements and characteristics, which makes them applicable to different
+    situations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Correlation and sample efficiency
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: One of the approaches to improving the stability of the policy gradient family
+    of methods is using multiple environments in parallel. The reason behind this
+    is the fundamental problem we discussed in Chapter [6](#), when we talked about
+    the correlation between samples, which breaks the independent and identically
+    distributed (iid) assumption, which is critical for stochastic gradient descent
+    (SGD) optimization. The negative consequence of such correlation is very high
+    variance in gradients, which means that our training batch contains very similar
+    examples, all of them pushing our network in the same direction. However, this
+    may be totally the wrong direction in the global sense, as all those examples
+    may be from one single lucky or unlucky episode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With our deep Q-network (DQN), we solved the issue by storing a large number
+    of previous states in the replay buffer and sampling our training batch from this
+    buffer. If the buffer is large enough, the random sample from it will be a much
+    better representation of the states’ distribution at large. Unfortunately, this
+    solution won’t work for policy gradient methods. This is because most of them
+    are on-policy, which means that we have to train on samples generated by our current
+    policy, so remembering old transitions will not be possible anymore. You can try
+    to do this, but the resulting policy gradient will be for the old policy used
+    to generate the samples and not for your current policy that you want to update.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Researchers have focused on this issue for many years. Several ways to address
+    it have been proposed, but the problem is still far from being solved. The most
+    commonly used solution is gathering transitions using several parallel environments,
+    all of them exploiting the current policy. This breaks the correlation within
+    one single episode, as we now train on several episodes obtained from different
+    environments. At the same time, we are still using our current policy. The one
+    very large disadvantage of this is sample inefficiency, as we basically throw
+    away all the experience that we have obtained after one single training round.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It’s very simple to compare DQN with policy gradient approaches. For example,
+    for DQN, if we use 1 million samples of a replay buffer and a training batch size
+    of 32 samples for every new frame, every single transition will be used approximately
+    32 times before it is pushed from the experience replay. For the priority replay
+    buffer, which was discussed in Chapter [8](ch012.xhtml#x1-1240008), this number
+    could be much higher, as the sample probability is not uniform. In the case of
+    policy gradient methods, each experience obtained from the environment can be
+    used only once, as our method requires fresh data, so the data efficiency of policy
+    gradient methods could be an order of magnitude lower than the value-based, off-policy
+    methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, our A2C agent converged on Pong in 8 million frames, which
+    is just eight times more than 1 million frames for basic DQN in Chapter [6](#)
+    and Chapter [8](ch012.xhtml#x1-1240008). So, this shows us that policy gradient
+    methods are not completely useless; they’re just different and have their own
+    specificities that you need to take into account on method selection. If your
+    environment is “cheap” in terms of the agent interaction (the environment is fast,
+    has a low memory footprint, allows parallelization, and so on), policy gradient
+    methods could be a better choice. On the other hand, if the environment is “expensive”
+    and obtaining a large amount of experience could slow down the training process,
+    the value-based methods could be a smarter way to go.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adding an extra “A” to A2C
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'From a practical point of view, communicating with several parallel environments
+    is simple. We already did this in Chapter [9](ch013.xhtml#x1-1600009) and earlier
+    in the current chapter, but it wasn’t explicitly stated. In the A2C agent, we
+    passed an array of Gym environments into the ExperienceSource class, which switched
+    it into round-robin data gathering mode. This means that every time we ask for
+    a transition from the experience source, the class uses the next environment from
+    our array (of course, keeping the state for every environment). This simple approach
+    is equivalent to parallel communication with environments, but with one single
+    difference: communication is not parallel in the strict sense but performed in
+    a serial way. However, samples from our experience source are shuffled. This idea
+    is shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.11: An agent training from multiple environments in parallel'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This method works fine and helped us to get convergence in the A2C method, but
+    it is still not perfect in terms of computing resource utilization, as all the
+    processing is done sequentially. Even a modest workstation nowadays has several
+    CPU cores, which can be used for computation, such as training and environment
+    interaction. On the other hand, parallel programming is harder than the traditional
+    paradigm, when you have a clear stream of execution. Luckily, Python is a very
+    expressive and flexible language with lots of third-party libraries, which allows
+    you to do parallel programming without much trouble. We have already seen the
+    example of the torch.multiprocessing library in Chapter [9](ch013.xhtml#x1-1600009),
+    where we parallelized agents’ execution during the DQN training. But there are
+    other higher-level libraries, like ray, which allow us to parallelize execution
+    of the code, hiding the low-level communication details.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With regard to actor-critic parallelization, two approaches exist:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Data parallelism: We can have several processes, each of them communicating
+    with one or more environments and providing us with transitions (s,r,a,s′). All
+    those samples are gathered together in one single training process, which calculates
+    losses and performs an SGD update. Then, the updated neural network (NN) parameters
+    need to be broadcast to all other processes to use in future environment communications.
+    This model is illustrated in Figure [12.12](#x1-211008r12).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Gradients parallelism: As the goal of the training process is the calculation
+    of gradients to update our NN, we can have several processes calculating gradients
+    on their own training samples. Then, these gradients can be summed together to
+    perform the SGD update in one process. Of course, updated NN weights also have
+    to be propagated back to all workers to keep data on-policy. This is illustrated
+    in Figure [12.13](#x1-211009r13).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.12: The first approach to actor-critic parallelism, based on distributed
+    training samples being gathered'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.13: The second approach to parallelism, gathering gradients for the
+    model'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference between the two methods might not look very significant from
+    the diagrams, but you need to be aware of the computation cost. The heaviest operation
+    in A2C optimization is the training process, which consists of loss calculation
+    from data samples (forward pass) and the calculation of gradients with respect
+    to this loss. The SGD optimization step is quite lightweight – basically, just
+    adding the scaled gradients to the NN’s weights. By moving the computation of
+    loss and gradients in the second approach (gradient parallelism) from the central
+    process, we eliminated the major potential bottleneck and made the whole process
+    significantly more scalable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the choice of the method mainly depends on your resources and your
+    goals. If you have one single optimization problem and lots of distributed computation
+    resources, such as a couple of dozen GPUs spread over several machines in the
+    networks, then gradients parallelism will be the best approach to speed up your
+    training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, in the case of one single GPU, both methods will provide a similar
+    performance, but the first approach is generally simpler to implement, as you
+    don’t need to deal with low-level gradient values. In this chapter, we will compare
+    both methods on our favorite Pong game to see the difference between the approaches
+    and look at PyTorch’s multiprocessing capabilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A3C with data parallelism
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first version of A3C parallelization that we will check (which was outlined
+    in Figure [12.12](#x1-211008r12)) has both one main process that carries out training
+    and several child processes communicating with environments and gathering experience
+    to train on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In fact, we already implemented this version in Chapter [9](ch013.xhtml#x1-1600009)
+    when we ran several agents in subprocesses when we trained the DQN model (then
+    we got a speed-up of 27% in terms of FPS). In this section, I’m not going to reimplement
+    the same approach with the A3C method, but rather want to illustrate the “power
+    of libraries.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We already briefly mentioned the class gym.vector.SyncVectorEnv from Gymnasium
+    (it exists only in the Farama fork, not in the original OpenAI Gym) and the PTAN
+    experience source, which supports “vectorized” environments: VectorExperienceSourceFirstLast.
+    The class SyncVectorEnv handles wrapped environments sequentially, but there is
+    a drop-in replacement class, AsyncVectorEnv, which uses mp.multiprocessing for
+    subenvironments. So, to get the data-parallel version of the A2C method, we just
+    need to replace SyncVectorEnv with AsyncVectorEnv and we’re done.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code in Chapter12/02_pong_a2c.py already supports this replacement, which
+    is done by passing the --use-async command-line option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: 'The asynchronous version with 50 environments shows a performance of 2000 FPS,
+    which is a 2x improvement over the sequential version. The following charts compare
+    the performance and reward dynamics of these two versions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.14: Comparison of A2C and A3C in terms of reward (left) and speed
+    (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A3C with gradient parallelism
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The next approach that we will consider to parallelize A2C implementation will
+    have several child processes, but instead of feeding training data to the central
+    training loop, they will calculate the gradients using their local training data,
+    and send those gradients to the central master process. This process is responsible
+    for combining those gradients (which is basically just summing them) and performing
+    an SGD update on the shared network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The difference might look minor, but this approach is much more scalable, especially
+    if you have several powerful nodes with multiple GPUs connected to the network.
+    In this case, the central process in the data-parallel model quickly becomes a
+    bottleneck, as the loss calculation and backpropagation are computationally demanding.
+    Gradient parallelization allows for the spreading of the load on several GPUs,
+    performing only a relatively simple operation of gradient combination in a central
+    place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: The complete example is in the Chapter12/03_a3c_grad.py file, and it uses the
+    same Chapter12/lib/common.py module that we’ve already seen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As usual, we first define the hyperparameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These are mostly the same as in the previous example, except BATCH_SIZE is
+    replaced by two parameters: GRAD_BATCH and TRAIN_BATCH. The value of GRAD_BATCH
+    defines the size of the batch used by every child process to compute the loss
+    and get the value of the gradients. The second parameter, TRAIN_BATCH, specifies
+    how many gradient batches from the child processes will be combined on every SGD
+    iteration. Every entry produced by the child process has the same shape as our
+    network parameters, and we sum up TRAIN_BATCH values of them together. So, for
+    every optimization step, we use the TRAIN_BATCH * GRAD_BATCH training samples.
+    As the loss calculation and backpropagation are quite heavy operations, we use
+    a large GRAD_BATCH to make them more efficient.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Due to this large batch, we should keep TRAIN_BATCH relatively low to keep our
+    network update on policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we have two functions – make_env(), which is used to create a wrapped Pong
+    environment, and grads_func(), which is much more complicated and implements most
+    of the training logic we normally do in the training loop. As a compensation,
+    the training loop in the main process becomes almost trivial:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'On the creation of the child process, we pass several arguments to the grads_func()
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the process, which is used to create the TensorBoard writer. In
+    this example, every child process writes its own TensorBoard dataset.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The shared NN.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A torch.device instance, specifying the computation device.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The queue used to deliver the calculated gradients to the central process.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Our child process function looks very similar to the main training loop in
+    the data-parallel version, which is not surprising, as the responsibilities of
+    our child process increased. However, instead of asking the optimizer to update
+    the network, we gather gradients and send them to the queue. The rest of the code
+    is almost the same:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Up to this point, we’ve gathered the batch with transitions and handled the
+    end-of-episode rewards.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next part of the function, we calculate the combined loss from the training
+    data and perform backpropagation of the loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the following code, we send our intermediate values that we’re going to
+    monitor during the training to TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At the end of the loop, we need to clip the gradients and extract them from
+    the network’s parameters into a separate buffer (to prevent them from being corrupted
+    by the next iteration of the loop). Here, we effectively store gradients in the
+    tensor.grad field for every network parameter. This could be done without bothering
+    with synchronization with other workers, as our network’s parameters are shared,
+    but the gradients are locally allocated by every process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last line in grads_func puts None into the queue, signaling that this child
+    process has reached the game solved state and training should be stopped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main process starts with the creation of the network and sharing of its
+    weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, as in the previous section, we need to set a start method for torch.multiprocessing
+    and limit the number of threads started by OpenMP. This is done by setting the
+    environment variable OMP_NUM_THREADS, which instructs the OpenMP library about
+    the number of threads it can start. OpenMP ([https://www.openmp.org/](https://www.openmp.org/))
+    is heavily used by the Gym and OpenCV libraries to provide a speed-up on multicore
+    systems, which is a good thing most of the time. By default, the process that
+    uses OpenMP starts a thread for every core in the system. But in our case, the
+    effect from OpenMP is the opposite: as we’re implementing our own parallelism,
+    by launching several processes, extra threads overload the cores with frequent
+    context switches, which negatively impacts performance. To avoid this, we explicitly
+    limit the amount of threads to one thread. If you want, you can experiment yourself
+    with this parameter. On my system, I experienced a 3-4x performance drop without
+    this environment variable assignment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we create the communication queue and spawn the required count of child
+    processes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can get to the training loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: The major difference from the data-parallel version of A3C lies in the training
+    loop, which is much simpler here, as child processes have done all the heavy calculations
+    for us. In the beginning of the loop, we handle the situation when one of the
+    processes has reached the required mean reward (when this happens, we have None
+    in the queue). In this case, we just exit the loop to stop the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We sum gradients together for all the parameters in our network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When we have accumulated enough gradient pieces, we convert the sum of the
+    gradients into the PyTorch FloatTensor and assign them to the grad field of the
+    network parameters. To average the gradients from different children, we call
+    the optimizer’s step() function for every TRAIN_BATCH gradient obtained. For intermediate
+    steps, we just sum the corresponding gradients together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: After that, all we need to do is call the optimizer’s step() method to update
+    the network parameters using the accumulated gradients.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'On the exit from the training loop, we stop all child processes to make sure
+    that we terminated them, even if Ctrl + C was pressed to stop the optimization:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: This step is needed to prevent zombie processes from occupying GPU resources.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H3
+  type: TYPE_NORMAL
+- en: This example can be started the same way as the previous example, and after
+    a while, it should start displaying the speed and mean reward. However, you need
+    to be aware that displayed information is local for every child process, which
+    means that speed, the count of games completed, and the number of frames need
+    to be multiplied by the number of processes. My benchmarks have shown speed to
+    be around 500-600 FPS for every child, which gives 2,000-2,400 FPS in total.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Convergence dynamics are also very similar to the previous version. The total
+    number of observations is about 8…10 million, which requires about 1.5 hours to
+    complete. The reward chart on the left shows individual processes, but the speed
+    chart on the right shows the sum of all processes. As you can see, gradient parallelism
+    gives slightly higher performance than data parallelism:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_12_15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.15: Comparison of A2C and A3C in terms of reward (left) and speed
+    (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, you learned about one of the most widely used methods in deep
+    RL: A2C, which wisely combines the policy gradient update with the value of the
+    state approximation. We analyzed the effect of the baseline on the statistics
+    and convergence of gradients. Then, we checked the extension of the baseline idea:
+    A2C, where a separate network head provides us with the baseline for the current
+    state. In addition, we discussed why it is important for policy gradient methods
+    to gather training data from multiple environments, due to their on-policy nature.
+    We also implemented two different approaches to A3C, in order to parallelize and
+    stabilize the training process. Parallelization will come up once again in this
+    book, when we discuss black-box methods (Chapter [17](ch021.xhtml#x1-31100017)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next two chapters, we will take a look at practical problems that can
+    be solved using policy gradient methods, which will wrap up the policy gradient
+    methods part of the book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Join our community on Discord
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Read this book alongside other users, Deep Learning experts, and the author
+    himself. Ask questions, provide solutions to other readers, chat with the author
+    via Ask Me Anything sessions, and much more. Scan the QR code or visit the link
+    to join the community. [https://packt.link/rl](https://packt.link/rl)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file1.png)'
+  prefs: []
+  type: TYPE_IMG

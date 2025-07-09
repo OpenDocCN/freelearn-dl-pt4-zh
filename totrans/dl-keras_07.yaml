@@ -1,0 +1,1266 @@
+- en: Additional Deep Learning Models
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, most of the discussion has been focused around different models that
+    do classification. These models are trained using object features and their labels
+    to predict labels for hitherto unseen objects. The models also had a fairly simple
+    architecture, all the ones we have seen so far have a linear pipeline modeled
+    by the Keras sequential API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will focus on more complex architectures where the pipelines
+    are not necessarily linear. Keras provides the functional API to deal with these
+    sorts of architectures. We will learn how to define our networks using the functional
+    API in this chapter. Note that the functional API can be used to build linear
+    architectures as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The simplest extension of classification networks are regression networks. The
+    two broad subcategories under supervised machine learning are classification and
+    regression. Instead of predicting a category, the network now predicts a continuous
+    value. You saw an example of a regression network when we discussed stateless
+    versus stateful RNNs. Many regression problems can be solved using classification
+    models with very little effort. We will see an example of such a network to predict
+    atmospheric benzene in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Yet another class of models deal with learning the structure of the data from
+    unlabeled data. These are called **unsupervised** (or more correctly, self-supervised)
+    models. They are similar to classification models, but the labels are available
+    implicitly within the data. We have already seen examples of this kind of model;
+    for example, the CBOW and skip-gram word2vec models are self-supervised models.
+    Autoencoders are another example of this type of model. We will learn about autoencoders
+    and describe an example that builds compact vector representations of sentences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will then look at how to compose the networks we have seen so far into larger
+    computation graphs. These graphs are often built to achieve some custom objective
+    that is not achievable by a sequential model alone, and may have multiple inputs
+    and outputs and connections to external components. We will see an example of
+    composing such a network for question answering.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then take a detour to look at the Keras backend API, and how we can use this
+    API to build custom components to extend Keras' functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Going back to models for unlabeled data, another class of models that don't
+    require labels are generative models. These models are trained using a set of
+    existing objects and attempt to learn the distribution these objects come from.
+    Once the distribution is learned, we can draw samples from this distribution that
+    look like the original training data. We have seen an example of this where we
+    trained a character RNN model to generate text similar to *Alice in Wonderland*
+    in the previous chapter. The idea is already covered, so we won't cover this particular
+    aspect of generative models here. However, we will look at how we can leverage
+    the idea of a trained network learning the data distribution to create interesting
+    visual effects using a VGG-16 network pre-trained on ImageNet data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To summarize, we will learn the following topics in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Keras functional API
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regression networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Autoencoders for unsupervised learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Composing complex networks with the functional API
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Customizing Keras
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generative networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's get started.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras functional API
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The Keras functional API defines each layer as a function and provides operators
+    to compose these functions into a larger computational graph. A function is some
+    sort of transformation with a single input and single output. For example, the
+    function *y = f(x)* defines a function *f* with input *x* and output *y*. Let
+    us consider the simple sequential model from Keras (for more information refer
+    to: [https://keras.io/getting-started/sequential-model-guide/](https://keras.io/getting-started/sequential-model-guide/)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, the sequential model represents the network as a linear pipeline,
+    or list, of layers. We can also represent the network as the composition of the
+    following nested functions. Here *x* is the input tensor of shape *(None, 784)*
+    and *y* is the output tensor of *(None, 10)*. Here *None* refers to the as-yet
+    undetermined batch size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/func-api-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Where:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/func-api-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The network can be redefined using the Keras functional API as follows. Notice
+    how the predictions variable is a composition of the same functions we defined
+    in equation form previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since a model is a composition of layers that are also functions, a model is
+    also a function. Therefore, you can treat a trained model as just another layer
+    by calling it on an appropriately shaped input tensor. Thus, if you have built
+    a model that does something useful like image classification, you can easily extend
+    it to work with a sequence of images using Keras''s `TimeDistributed` wrapper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The functional API can be used to define any network that can be defined using
+    the sequential API. In addition, the following types of network can only be defined using
+    the functional API:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Models with multiple inputs and outputs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Models composed of multiple submodels
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Models that used shared layers
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Models with multiple inputs and outputs are defined by composing the inputs
+    and outputs separately, as shown in the preceding example, and then passing in
+    an array of input functions and an array of output functions in the input and
+    output parameters of the `Model` constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Models with multiple inputs and outputs also generally consist of multiple subnetworks,
+    the results of whose computations are merged into the final result. The merge
+    function provides multiple ways to merge intermediate results such as vector addition,
+    dot product, and concatenation. We will see examples of merging in our question
+    answering example later in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another good use for the functional API are models that use shared layers. Shared
+    layers are defined once, and referenced in each pipeline where their weights need
+    to be shared.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will use the functional API almost exclusively in this chapter, so you will
+    see quite a few examples of its use. The Keras website has many more usage examples
+    for the functional API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Regression networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The two major techniques of supervised learning are classification and regression.
+    In both cases, the model is trained with data to predict known labels. In case
+    of classification, these labels are discrete values such as genres of text or
+    image categories. In case of regression, these labels are continuous values, such
+    as stock prices or human intelligence quotients (IQ).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Most of the examples we have seen show deep learning models being used to perform
+    classification. In this section, we will look at how to perform regression using
+    such a model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recall that classification models have a dense layer with a nonlinear activation
+    at the end, the output dimension of which corresponds to the number of classes
+    the model can predict. Thus, an ImageNet image classification model has a dense
+    (1,000) layer at the end, corresponding to 1,000 ImageNet classes it can predict.
+    Similarly, a sentiment analysis model has a dense layer at the end, corresponding
+    to positive or negative sentiment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Regression models also have a dense layer at the end, but with a single output,
+    that is, an output dimension of one, and no nonlinear activation. Thus the dense
+    layer just returns the sum of the activations from the previous layer. In addition,
+    the loss function used is typically **mean squared error** (**MSE**), but some
+    of the other objectives (listed on the Keras objectives page at: [https://keras.io/losses/](https://keras.io/losses/))
+    can be used as well.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras regression example — predicting benzene levels in the air
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this example, we will predict the concentration of benzene in the atmosphere
+    given some other variables such as concentrations of carbon monoxide, nitrous
+    oxide, and so on in the atmosphere as well as temperature and relative humidity.
+    The dataset we will use is the air quality dataset from the UCI Machine Learning
+    Repository ([https://archive.ics.uci.edu/ml/datasets/Air+Quality](https://archive.ics.uci.edu/ml/datasets/Air+Quality)).
+    The dataset contains 9,358 instances of hourly averaged readings from an array
+    of five metal oxide chemical sensors. The sensor array was located in a city in
+    Italy, and the recordings were made from March 2004 to February 2005.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As usual, first we import all our necessary libraries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The dataset is provided as a CSV file. We load the input data into a Pandas
+    (for more information refer to: [http://pandas.pydata.org/](http://pandas.pydata.org/))
+    data frame. Pandas is a popular data analysis library built around data frames,
+    a concept borrowed from the R language. We use Pandas here to read the dataset
+    for two reasons. First, the dataset contains empty fields where they could not
+    be recorded for some reason. Second, the dataset uses commas for decimal points,
+    a custom common in some European countries. Pandas has built-in support to handle
+    both situations, along with a few other conveniences, as we will see soon:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding example removes the first two columns, which contains the observation
+    date and time, and the last two columns which seem to be spurious. Next we replace
+    the empty fields with the average value for the column. Finally, we export the
+    data frame as a matrix for downstream use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One thing to note is that each column of the data has different scales since
+    they measure different quantities. For example, the concentration of tin oxide
+    is in the 1,000 range, while non-methanic hydrocarbons is in the 100 range. In
+    many situations our features are homogeneous so scaling is not an issue, but in
+    cases like this it is generally a good practice to scale the data. Scaling here
+    consists of subtracting from each column the mean of the column and dividing by
+    its standard deviation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/zscore.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'To do this, we use the `StandardScaler` class provided by the `scikit-learn`
+    library, shown as follows. We store the mean and standard deviations because we
+    will need this later when reporting results or predicting against new data. Our
+    target variable is the fourth column in our input dataset, so we split this scaled
+    data into input variables `X` and target variable `y`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then split the data into the first 70% for training and the last 30% for
+    testing. This gives us 6,549 records for training and 2,808 records for testing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next we define our network. This is a simple two layer dense network that takes
+    a vector of 12 features as input and outputs a scaled prediction. The hidden dense
+    layer has eight neurons. We initialize weight matrices for both dense layers with
+    a specific initialization scheme called *glorot uniform*. For a full list of initialization
+    schemes, please refer to the Keras initializations here: [https://keras.io/initializers/](https://keras.io/initializers/).
+    The loss function used is mean squared error (`mse`) and the optimizer is `adam`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We train this model for 20 epochs and batch size of 10:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This results in a model that has a mean squared error of 0.0003 (approximately
+    2% RMSE) on the training set and 0.0016 (approximately 4% RMSE) on the validation
+    set, as shown in the logs of the training step here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-7-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We also look at some values of benzene concentrations that were originally
+    recorded and compare them to those predicted by our model. Both actual and predicted
+    values are rescaled from their scaled *z*-values to actual values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The side-by-side comparison shows that the predictions are quite close to the
+    actual values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we graph the actual values against the predictions for our entire
+    test set. Once more, we see that the network predicts values that are very close
+    to the expected values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of the preceding example is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/regression-chart.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Unsupervised learning — autoencoders
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Autoencoders are a class of neural network that attempt to recreate the input
+    as its target using back-propagation. An autoencoder consists of two parts, an
+    encoder and a decoder. The encoder will read the input and compress it to a compact
+    representation, and the decoder will read the compact representation and recreate
+    the input from it. In other words, the autoencoder tries to learn the identity
+    function by minimizing the reconstruction error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Even though the identity function does not seem like a very interesting function
+    to learn, the way in which this is done makes it interesting. The number of hidden
+    units in the autoencoder is typically less than the number of input (and output)
+    units. This forces the encoder to learn a compressed representation of the input
+    which the decoder reconstructs. If there is structure in the input data in the
+    form of correlations between input features, then the autoencoder will discover
+    some of these correlations, and end up learning a low dimensional representation
+    of the data similar to that learned using **principal component analysis** (**PCA**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the autoencoder is trained, we would typically just discard the decoder
+    component and use the encoder component to generate compact representations of
+    the input. Alternatively, we could use the encoder as a feature detector that
+    generates a compact, semantically rich representation of our input and build a
+    classifier by attaching a softmax classifier to the hidden layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The encoder and decoder components of an autoencoder can be implemented using
+    either dense, convolutional, or recurrent networks, depending on the kind of data
+    that is being modeled. For example, dense networks might be a good choice for
+    autoencoders used to build **collaborative filtering** (**CF**) models (for more
+    information refer to the articles: *AutoRec: Autoencoders Meet Collaborative Filtering*,
+    by S. Sedhain, Proceedings of the 24th International Conference on World Wide
+    Web, ACM, 2015 and *Wide & Deep Learning for Recommender Systems*, by H. Cheng,
+    Proceedings of the 1st Workshop on Deep Learning for Recommender Systems, ACM,
+    2016), where we learn a compressed model of user preferences based on actual sparse
+    user ratings. Similarly, convolutional neural networks may be appropriate for
+    the use case covered in the article: *See: Using Deep Learning to Remove Eyeglasses
+    from Faces*, by M. Runfeldt. and recurrent networks a good choice for autoencoders
+    building on text data, such as deep patient (for more information refer to the
+    article: *Deep Patient: An Unsupervised Representation to Predict the Future of
+    Patients from the Electronic Health Records*, by R. Miotto, Scientific Reports
+    6, 2016) and skip-thought vectors ((for more information refer to the article: *Skip-Thought
+    Vectors*, by R. Kiros, Advances in Neural Information Processing Systems, 2015).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Autoencoders can also be stacked by successively stacking encoders that compress
+    their input to smaller and smaller representations, and stacking decoders in the
+    opposite sequence. Stacked autoencoders have greater expressive power and the
+    successive layers of representations capture a hierarchical grouping of the input,
+    similar to the convolution and pooling operations in convolutional neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Stacked autoencoders used to be trained layer by layer. For example, in the
+    network shown next, we would first train layer *X* to reconstruct layer *X''*
+    using the hidden layer *H1* (ignoring *H2*). We would then train the layer *H1*
+    to reconstruct layer *H1''* using the hidden layer *H2*. Finally, we would stack all
+    the layers together in the configuration shown and fine tune it to reconstruct
+    *X''* from *X*. With better activation and regularization functions nowadays,
+    however, it is quite common to train these networks in totality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/stacked-autoencoder.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The Keras blog post, *Building Autoencoders in Keras* ([https://blog.keras.io/building-autoencoders-in-keras.html](https://blog.keras.io/building-autoencoders-in-keras.html))
+    has great examples of building autoencoders that reconstructs MNIST digit images
+    using fully connected and convolutional neural networks. It also has a good discussion
+    on denoising and variational autoencoders, which we will not cover here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras autoencoder example — sentence vectors
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this example, we will build and train an LSTM-based autoencoder to generate
+    sentence vectors for documents in the Reuters-21578 corpus ([https://archive.ics.uci.edu/ml/datasets/Reuters-21578+Text+Categorization+Collection](https://archive.ics.uci.edu/ml/datasets/Reuters-21578+Text+Categorization+Collection)).
+    We have already seen in [Chapter 5](700e9954-f126-49b5-b4e4-fa7321296e85.xhtml),
+    *Word Embeddings*, how to represent a word using word embeddings to create vectors
+    that represent its meaning in the context of other words it appears with. Here,
+    we will see how to build similar vectors for sentences. Sentences are a sequence
+    of words, so a sentence vector represents the meaning of the sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The easiest way to build a sentence vector is to just add up the word vectors
+    and divide by the number of words. However, this treats the sentence as a bag
+    of words, and does not take the order of words into account. Thus the sentences
+    *The dog bit the man* and *The man bit the dog* would be treated as identical
+    under this scenario. LSTMs are designed to work with sequence input and do take
+    the order of words into consideration thus providing a better and more natural
+    representation for the sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First we import the necessary libraries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The data is provided as a set of SGML files. We have already parsed and consolidated
+    this data into a single text file in [Chapter 6](57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml),
+    *Recurrent Neural Network — RNN*, for our GRU-based POS tagging example. We will
+    reuse this data to first convert each block of text into a list of sentences,
+    one sentence per line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To build up our vocabulary, we read this list of sentences again, word by word.
+    Each word is normalized as it is added. The normalization is to replace any token
+    that looks like a number with the digit `9` and to lowercase them. The result
+    is the word frequency table, `word_freqs`. We also compute the sentence length
+    for each sentence and create a list of parsed sentences by rejoining the tokens
+    with space so it is easier to parse in a subsequent step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This gives us some information about the corpus that will help us figure out
+    good values for our constants for our LSTM network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This gives us the following information about the corpus:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Based on this information, we set the following constants for our LSTM model.
+    We choose our `VOCAB_SIZE` as `5000`, that is, our vocabulary covers the most
+    frequent 5,000 words that cover over 93% of the words used in the corpus. The
+    remaining words are treated as **out of vocabulary** (**OOV**) and replaced with
+    the token `UNK`. At prediction time, any word that the model hasn''t seen will
+    also be assigned the token `UNK`. `SEQUENCE_LEN` is set to approximately twice
+    the median length of sentences in the training set, and indeed, approximately
+    110 million of our 131 million sentences are shorter than this setting. Sentences
+    that are shorter than `SEQUENCE_LENGTH` will be padded by a special `PAD` character,
+    and those that are longer will be truncated to fit the limit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since the input to our LSTM will be numeric, we need to build lookup tables
+    that go back and forth between words and word IDs. Since we limit our vocabulary
+    size to 5,000 and we have to add the two pseudo-words `PAD` and `UNK`, our lookup
+    table contains entries for the most frequently occurring 4,998 words plus `PAD`
+    and `UNK`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The input to our network is a sequence of words, where each word is represented
+    by a vector. Simplistically, we could just use a one-hot encoding for each word,
+    but that makes the input data very large. So we encode each word using its 50-dimensional
+    GloVe embeddings. The embedding is generated into a matrix of shape `(VOCAB_SIZE,
+    EMBED_SIZE)` where each row represents the GloVe embedding for a word in our vocabulary.
+    The `PAD` and `UNK` rows (`0` and `1` respectively) are populated with zeros and
+    random uniform values respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our autoencoder model takes a sequence of GloVe word vectors and learns to
+    produce another sequence that is similar to the input sequence. The encoder LSTM
+    compresses the sequence into a fixed size context vector, which the decoder LSTM
+    uses to reconstruct the original sequence. A schematic of the network is shown
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/sent-thoughts.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Because the input is quite large, we will use a generator to produce each batch
+    of input. Our generator produces batches of tensors of shape `(BATCH_SIZE, SEQUENCE_LEN,
+    EMBED_SIZE)`. Here `BATCH_SIZE` is `64`, and since we are using 50-dimensional
+    GloVe vectors, `EMBED_SIZE` is `50`. We shuffle the sentences at the beginning
+    of each epoch, and return batches of 64 sentences. Each sentence is represented
+    as a vector of GloVe word vectors. If a word in the vocabulary does not have a
+    corresponding GloVe embedding, it is represented by a zero vector. We construct
+    two instances of the generator, one for training data and one for test data, consisting
+    of 70% and 30% of the original dataset respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we are ready to define the autoencoder. As we have shown in the diagram,
+    it is composed of an encoder LSTM and a decoder LSTM. The encoder LSTM reads a
+    tensor of shape `(BATCH_SIZE, SEQUENCE_LEN, EMBED_SIZE)` representing a batch
+    of sentences. Each sentence is represented as a padded fixed-length sequence of
+    words of size `SEQUENCE_LEN`. Each word is represented as a 300-dimensional GloVe
+    vector. The output dimension of the encoder LSTM is a hyperparameter `LATENT_SIZE`,
+    which is the size of the sentence vector that will get out of the encoder part
+    of the trained autoencoder later. The vector space of dimensionality `LATENT_SIZE`
+    represents the latent space that encodes the meaning of the sentence. The output
+    of the LSTM is a vector of size (`LATENT_SIZE`) for each sentence, so for the
+    batch the shape of the output tensor is `(BATCH_SIZE, LATENT_SIZE)`. This is now
+    fed to a RepeatVector layer, which replicates this across the entire sequence,
+    that is., the output tensor from this layer has the shape `(BATCH_SIZE, SEQUENCE_LEN,
+    LATENT_SIZE)`. This tensor is now fed into the decoder LSTM, whose output dimension
+    is the `EMBED_SIZE`, so the output tensor has shape `(BATCH_SIZE, SEQUENCE_LEN,
+    EMBED_SIZE)`, that is, the same shape as the input tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We compile this model with the `SGD` optimizer and the `mse` loss function.
+    The reason we use MSE is that we want to reconstruct a sentence that has a similar
+    meaning, that is, something that is close to the original sentence in the embedded
+    space of dimension `LATENT_SIZE`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We train the autoencoder for 10 epochs using the following code. 10 epochs
+    were chosen because the MSE loss converges within this time. We also save the
+    best model retrieved so far based on the MSE loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The results of the training are shown as follows. As you can see, the training
+    MSE reduces from 0.14 to 0.1 and the validation MSE reduces from 0.12 to 0.1:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-7-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Or, graphically it shows as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/autoencoder-lossfunc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Since we are feeding in a matrix of embeddings, the output will also be a matrix
+    of word embeddings. Since the embedding space is continuous and our vocabulary
+    is discrete, not every output embedding will correspond to a word. The best we
+    can do is to find a word that is closest to the output embedding in order to reconstruct
+    the original text. This is a bit cumbersome, so we will evaluate our autoencoder
+    in a different way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since the objective of the autoencoder is to produce a good latent representation,
+    we compare the latent vectors produced from the encoder using the original input
+    versus the output of the autoencoder. First, we extract the encoder component
+    into its own network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we run the autoencoder on the test set to return the predicted embeddings.
+    We then send both the input embedding and the predicted embedding through the
+    encoder to produce sentence vectors from each, and compare the two vectors using
+    *cosine* similarity. Cosine similarities close to one indicate high similarity
+    and those close to zero indicate low similarity. The following code runs against
+    a random subset of 500 test sentences and produces some sample values of cosine
+    similarities between the sentence vectors generated from the source embedding
+    and the corresponding target embedding produced by the autoencoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first 10 values of cosine similarities are shown as follows. As we can
+    see, the vectors seem to be quite similar:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'A histogram of the distribution of values of cosine similarities for the sentence
+    vectors from the first 500 sentences in the test set are shown as follows. As
+    previously, it confirms that the sentence vectors generated from the input and
+    output of the autoencoder are very similar, showing that the resulting sentence
+    vector is a good representation of the sentence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/autoencoder-cosims.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Composing deep networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have looked extensively at these three basic deep learning networks—the **fully
+    connected network** (**FCN**), the CNN and the RNN models. While each of these
+    have specific use cases for which they are most suited, you can also compose larger
+    and more useful models by combining these models as Lego-like building blocks
+    and using the Keras functional API to glue them together in new and interesting
+    ways.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Such models tend to be somewhat specialized to the task for which they were built,
+    so it is impossible to generalize about them. Usually, however, they involve learning
+    from multiple inputs or generating multiple outputs. One example could be a question
+    answering network, where the network learns to predict answers given a story and
+    a question. Another example could be a siamese network that calculates similarity
+    between a pair of images, where the network is trained to predict either a binary
+    (similar/not similar) or categorical (gradations of similarity) label using a
+    pair of images as input. Yet another example could be an object classification
+    and localization network where it learns to predict the image category as well
+    as where the image is located in the picture jointly from the image. The first
+    two examples are examples of composite networks with multiple inputs, and the
+    last is an example of a composite network with multiple outputs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras example — memory network for question answering
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this example, we will build a memory network for question answering. Memory
+    networks are a specialized architecture that consist of a memory unit in addition
+    to other learnable units, usually RNNs. Each input updates the memory state and
+    the final output is computed by using the memory along with the output from the
+    learnable unit. This architecture was suggested in 2014 via the paper (for more
+    information refer to: *Memory Networks*, by J. Weston, S. Chopra, and A. Bordes,
+    arXiv:1410.3916, 2014). A year later, another paper (for more information refer
+    to: *Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks*,
+    by J. Weston, arXiv:1502.05698, 2015) put forward the idea of a synthetic dataset
+    and a standard set of 20 question answering tasks, each with a higher degree of
+    difficulty than the previous one, and applied various deep learning networks to
+    solve these tasks. Of these, the memory network achieved the best results across
+    all the tasks. This dataset was later made available to the general public through
+    Facebook''s bAbI project ([https://research.fb.com/projects/babi/](https://research.fb.com/projects/babi/)).
+    The implementation of our memory network resembles most closely the one described
+    in this paper (for more information refer to: *End-To-End Memory Networks*, by S.
+    Sukhbaatar, J. Weston, and R. Fergus, Advances in Neural Information Processing
+    Systems, 2015), in that all the training happens jointly in a single network.
+    It uses the bAbI dataset to solve the first question answering task.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we will import the necessary libraries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The bAbI data for the first question answering task consists of 10,000 short
+    sentences each for the training and the test sets. A story consists of two to
+    three sentences, followed by a question. The last sentence in each story has the
+    question and the answer appended to it at the end. The following block of code
+    parses each of the training and test files into a list of triplets of story, question
+    and answer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our next step is to run through the texts in the generated lists and build
+    our vocabulary. This should be quite familiar to us by now, since we have used
+    a similar idiom a few times already. Unlike the previous time, our vocabulary
+    is quite small, only 22 unique words, so we will not have any out of vocabulary
+    words:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The memory network is based on RNNs, where each sentence in the story and question
+    is treated as a sequence of words, so we need to find out the maximum length of
+    the sequence for our story and question. The following block of code does this.
+    We find that the maximum length of a story is 14 words and the maximum length
+    of a question is just four words:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As previously, the input to our RNNs is a sequence of word IDs. So we need
+    to use our vocabulary dictionary to convert the (story, question, and answer)
+    triplet into a sequence of integer word IDs. The next block of code does this
+    and zero pads the resulting sequences of story and answer to the maximum sequence
+    lengths we computed previously. At this point, we have lists of padded word ID
+    sequences for each triplet in the training and test sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We want to define the model. The definition is longer than we have seen previously,
+    so it may be convenient to refer to the diagram as you look through the definition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/memnet.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: There are two inputs to our model, the sequence of word IDs for the question
+    and that for the sentence. Each of these is passed into an Embedding layer to
+    convert the word IDs to a vector in the 64-dimensional embedding space. Additionally
+    the story sequence is passed through an additional embedding that projects it
+    to an embedding of size `max_question_length`. All these embedding layers start
+    with random weights and are trained jointly with the rest of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first two embeddings (story and question) are merged using a dot product
+    to form the network's memory. These represent words in the story and question
+    that are identical or close to each other in the embedding space. The output of
+    the memory is merged with the second story embedding and summed to form the network
+    response, which is once again merged with the embedding for the question to form
+    the response sequence. This response sequence is sent through an LSTM, the context
+    vector of which is sent to a dense layer to predict the answer, which can be one
+    of the words in the vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The model is trained using the RMSprop optimizer and categorical cross-entropy
+    as the loss function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We train this network for 50 epochs with a batch size of 32 and achieve an
+    accuracy of over 81% on the validation set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here is the trace of the training logs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-7-3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The change in training and validation loss and accuracy for this training run
+    is shown graphically in this graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/memnn-lossfunc-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We ran the model against the first 10 stories from our test set to verify how
+    good the predictions were:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, the predictions were mostly correct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/memnn-preds-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Customizing Keras
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Just as composing our basic building blocks into larger architectures enables
+    us to build interesting deep learning models, sometimes we need to look at the
+    other end of the spectrum. Keras has a lot of functionality built in already,
+    so it is very likely that you can build all your models with the provided components
+    and not feel the need for customization at all. In case you do need customization,
+    Keras has you covered.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you will recall, Keras is a high level API that delegates to either a TensorFlow
+    or Theano backend for the computational heavy lifting. Any code you build for
+    your customization will call out to one of these backends. In order to keep your
+    code portable across the two backends, your custom code should use the Keras backend
+    API ([https://keras.io/backend/](https://keras.io/backend/)), which provides a
+    set of functions that act like a facade over your chosen backend. Depending on
+    the backend selected, the call to the backend facade will translate to the appropriate
+    TensorFlow or Theano call. The full list of functions available and their detailed
+    descriptions can be found on the Keras backend page.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition to portability, using the backend API also results in more maintainable
+    code, since Keras code is generally more high-level and compact compared to equivalent
+    TensorFlow or Theano code. In the unlikely case that you do need to switch to
+    using the backend directly, your Keras components can be used directly inside
+    TensorFlow (not Theano though) code as described in this Keras blog ([https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html](https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Customizing Keras typically means writing your own custom layer or custom distance
+    function. In this section, we will demonstrate how to build some simple Keras
+    layers. You will see more examples of using the backend functions to build other
+    custom Keras components, such as objectives (loss functions), in subsequent sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras example — using the lambda layer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Keras provides a lambda layer; it can wrap a function of your choosing. For
+    example, if you wanted to build a layer that squares its input tensor element-wise,
+    you can say simply:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also wrap functions within a lambda layer. For example, if you want
+    to build a custom layer that computes the element-wise euclidean distance between
+    two input tensors, you would define the function to compute the value itself,
+    as well as one that returns the output shape from this function, like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can then call these functions using the lambda layer shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Keras example — building a custom normalization layer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: While the lambda layer can be very useful, sometimes you need more control.
+    As an example, we will look at the code for a normalization layer that implements
+    a technique called **local response normalization**. This technique normalizes
+    the input over local input regions, but has since fallen out of favor because
+    it turned out not to be as effective as other regularization methods such as dropout
+    and batch normalization, as well as better initialization methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building custom layers typically involves working with the backend functions,
+    so it involves thinking about the code in terms of tensors. As you will recall,
+    working with tensors is a two step process. First, you define the tensors and
+    arrange them in a computation graph, and then you run the graph with actual data.
+    So working at this level is harder than working in the rest of Keras. The Keras
+    documentation has some guidelines for building custom layers ([https://keras.io/layers/writing-your-own-keras-layers/](https://keras.io/layers/writing-your-own-keras-layers/)),
+    which you should definitely read.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One of the ways to make it easier to develop code in the backend API is to
+    have a small test harness that you can run to verify that your code is doing what
+    you want it to do. Here is a small harness I adapted from the Keras source to
+    run your layer against some input and return a result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And here are some tests with `layer` objects provided by Keras to make sure
+    that the harness runs okay:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Before we begin building our local response normalization layer, we need to
+    take a moment to understand what it really does. This technique was originally
+    used with Caffe, and the Caffe documentation ([http://caffe.berkeleyvision.org/tutorial/layers/lrn.html](http://caffe.berkeleyvision.org/tutorial/layers/lrn.html))
+    describes it as a kind of *lateral inhibition* that works by normalizing over
+    local input regions. In `ACROSS_CHANNEL` mode, the local regions extend across
+    nearby channels but have no spatial extent. In `WITHIN_CHANNEL` mode, the local
+    regions extend spatially, but are in separate channels. We will implement the
+    `WITHIN_CHANNEL` model as follows. The formula for local response normalization
+    in the `WITHIN_CHANNEL` model is given by:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/lrn.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The code for the custom layer follows the standard structure. The `__init__`
+    method is used to set the application specific parameters, that is, the hyperparameters
+    associated with the layer. Since our layer only does a forward computation and
+    doesn't have any learnable weights, all we do in the build method is to set the
+    input shape and delegate to the superclass's build method, which takes care of
+    any necessary book-keeping. In layers where learnable weights are involved, this
+    method is where you would set the initial values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The call method does the actual computation. Notice that we need to account
+    for dimension ordering. Another thing to note is that the batch size is usually
+    unknown at design times, so you need to write your operations so that the batch
+    size is not explicitly invoked. The computation itself is fairly straightforward
+    and follows the formula closely. The sum in the denominator can also be thought
+    of as average pooling over the row and column dimension with a padding size of
+    *(n, n)* and a stride of *(1, 1)*. Because the pooled data is averaged already,
+    we no longer need to divide the sum by *n*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last part of the class is the `get_output_shape_for` method. Since the
+    layer normalizes each element of the input tensor, the output size is identical
+    to the input size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can test this layer during development using the test harness we described
+    here. It is easier to run this instead of trying to build a whole network to put
+    this into, or worse, waiting till you have fully specified the layer before running
+    it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: While building custom Keras layers seems to be fairly commonplace among experienced
+    Keras developers, there are not too many examples available on the Internet. This
+    is probably because custom layers are usually built to serve a specific narrow
+    purpose and may not be widely useful. The variability also means that one single
+    example cannot demonstrate all the possibilities of what you can do with the API.
+    Now that you have a good idea of how to build a custom Keras layer, you might
+    find it instructive to look at Keunwoo Choi's `melspectogram` ([https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/](https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/))
+    and Shashank Gupta's `NodeEmbeddingLayer` ([http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html](http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative models
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Generative models are models that learn to create data similar to data it is
+    trained on. We saw one example of a generative model that learns to write prose
+    similar to *Alice in Wonderland* in [Chapter 6](57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml),
+    *Recurrent Neural Network — RNN*. In that example, we trained a model to predict
+    the 11th character of text given the first 10 characters. Yet another type of
+    generative model is **generative adversarial models** (**GAN**) that have recently
+    emerged as a very powerful class of models—you saw examples of GANs in [Chapter
+    4](a67ea944-b1a6-48a3-b8aa-4e698166c0eb.xhtml), *Generative Adversarial Networks
+    and WaveNet*. The intuition for generative models is that it learns a good internal
+    representation of its training data, and is therefore able to generate similar
+    data during the *prediction* phase.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another perspective on generative models is the probabilistic one. A typical
+    classification or regression network, also called a discriminative model, learns
+    a function that maps the input data *X* to some label or output *y*, that is,
+    these models learn the conditional probability *P(y|X)*. On the other hand, a
+    generative model learns the joint probability and labels simultaneously, that
+    is, *P(x, y)*. This knowledge can then be used to create probable new *(X, y)*
+    samples. This gives generative models the ability to explain the underlying structure
+    of input data even when there are no labels. This is a very important advantage
+    in the real world, since unlabeled data is more abundant than labeled data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Simple generative models such as the example mentioned above can be extended
+    to audio as well, for example, models that learn to generate and play music. One
+    interesting one is described in the WaveNet paper (for more information refer
+    to: *WaveNet: A Generative Model for Raw Audio*, by A. van den Oord, 2016.) which
+    describes a network built using atrous convolutional layers and provides a Keras
+    implementation on GithHub ([https://github.com/basveeling/wavenet](https://github.com/basveeling/wavenet)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras example — deep dreaming
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this example, we will look at a slightly different generative network. We
+    will see how to take a pre-trained convolutional network and use it to generate
+    new objects in an image. Networks trained to discriminate between images learn
+    enough about the images to generate them as well. This was first demonstrated
+    by Alexander Mordvintsev of Google and described in this Google Research blog
+    post ([https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html](https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html)).
+    It was originally called *inceptionalism* but the term *deep dreaming* became
+    more popular to describe the technique.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep dreaming takes the backpropagated gradient activations and adds it back
+    to the image, running the same process over and over in a loop. The network optimizes
+    the loss function in the process, but we get to see how it does so in the input
+    image (three channels) rather than in a high dimensional hidden layer that cannot
+    easily be visualized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are many variations to this basic strategy, each of which leads to new
+    and interesting effects. Some variations are blurring, adding constraints on the
+    total activations, decaying the gradient, infinitely zooming into the image by
+    cropping and scaling, adding jitter by randomly moving the image around, and so
+    on. In our example, we will show the simplest approach—we will optimize the gradient
+    of the mean of the selected layer's activation for each of the pooling layers
+    of a pre-trained VGG-16 and observe the effect on our input image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, as usual, we will declare our imports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next we will load up our input image. This image may be familiar to you from
+    blog posts about deep learning. The original image is from here ([https://www.flickr.com/photos/billgarrett-newagecrap/14984990912](https://www.flickr.com/photos/billgarrett-newagecrap/14984990912)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of the preceding example is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cat-orig.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Next we define a pair of functions to preprocess and deprocess the image to
+    and from a four-dimensional representation suitable for input to a pre-trained
+    VGG-16 network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: These two functions are inverses of each other, that is, passing the image through
+    `preprocess` and then through `deprocess` will return the original image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we load up our pre-trained VGG-16 network. This network has been pre-trained
+    on ImageNet data and is available from the Keras distribution. You already learned
+    how to work with pre-trained models in [Chapter 3](4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml),
+    *Deep Learning with ConvNets*. We select the version whose fully connected layers
+    have been removed already. Apart from saving us the trouble of having to remove
+    them ourselves, this also allows us to pass in any shape of image, since the reason
+    we need to specify the image width and height in our input is because this determines
+    the size of the weight matrices in the fully connected layers. Because CNN transformations
+    are local in nature, the size of the image doesn''t affect the sizes of the weight
+    matrices for the convolutional and pooling layers. So the only constraint on image
+    size is that it must be constant within the batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will need to refer to the CNN''s layer objects by name in our following
+    calculations, so let us construct a dictionary. We also need to understand the
+    layer naming convention, so we dump it out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of the preceding example is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then compute the loss at each of the five pooling layers and compute the
+    gradient of the mean activation for three steps each. The gradient is added back
+    to the image and the image displayed at each of the pooling layers for each step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The resulting images are shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cat-pool1.png)![](img/cat-pool2.png)![](img/cat-pool3.png)![](img/cat-pool5.png)![](img/cat-pool6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see, the process of deep dreaming amplifies the effect of the gradient
+    on the chosen layer, resulting in images that are quite surreal. Later layers
+    backpropagate gradients that result in more distortion, reflecting their larger
+    receptive fields and their capacity to recognize more complex features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To convince ourselves that a trained network really learns a representation
+    of the various categories of the image it was trained on, let us consider a completely
+    random image, shown next, and pass it through the pre-trained network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of the preceding example is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/random-noise.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Passing this image through the preceding code results in very specific patterns
+    at each layer, as shown next, showing that the network is trying to find a structure
+    in the random data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/noise-pool1.png)![](img/noise-pool2.png)![](img/noise-pool3.png)![](img/noise-pool4.png)![](img/noise-pool5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can repeat our experiment with the noise image as input and compute the
+    loss from a single filter instead of taking the mean across all the filters. The
+    filter we choose is for the ImageNet label African elephant (`24`). Thus, we replace
+    the value of the loss in the previous code with the following. So instead of computing
+    the mean across all filters, we calculate the loss as the output of the filter
+    representing the African elephant class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We get back what looks very much like repeating images of the trunk of an elephant
+    in the `block4_pool` output, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/random-african-elephant.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Keras example — style transfer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: An extension of deep dreaming was described in this paper (for more information
+    refer to: *Image Style Transfer Using Convolutional Neural Networks*, by L. A.
+    Gatys, A. S. Ecker, and M. Bethge, Proceedings of the IEEE Conference on Computer
+    Vision and Pattern Recognition, 2016), which showed that trained neural networks,
+    such as the VGG-16, learn both content and style, and these two can be manipulated
+    independently. Thus an image of an object (content) could be styled to look like
+    a painting by combining it with the image of a painting (style).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let us start, as usual, by importing our libraries:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our example will demonstrate styling our image of a cat with this image of
+    a reproduction of Claude Monet''s *The Japanese Bridge* by Rosalind Wheeler ([https://goo.gl/0VXC39](https://goo.gl/0VXC39)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output of the preceding example is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cat-style.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'As previously, we declare our two functions to convert back and forth from
+    the image and the four-dimensional tensor that the CNN expects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We declare tensors to hold the content image and the style image, and another
+    tensor to hold the combined image. The content and style images are then concatenated
+    into a single input tensor. The input tensor will be fed to the pre-trained VGG-16
+    network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We instantiate an instance of a pre-trained VGG-16 network, pre-trained with
+    the ImageNet data, and with the fully connected layers excluded:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As previously, we construct a layer dictionary to map the layer name to the
+    output layer of the trained VGG-16 network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next block defines the code for computing the `content_loss`, the `style_loss`,
+    and the `variational_loss`. Finally, we define our loss as a linear combination
+    of these three losses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here the content loss is the root mean square distance (also known as **L2 distance**)
+    between the features of the content image extracted from the target layer and
+    the combination image. Minimizing this has the effect of keeping the styled image
+    close to the original one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The style loss is the L2 distance between the gram matrices of the base image
+    representation and the style image. A gram matrix of a matrix *M* is the transpose
+    of *M* multiplied by *M*, that is, *MT * M*. This loss measures how often features
+    appear together in the content image representation and the style image. One practical
+    implication of this is that the content and style matrices must be square.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The total variation loss measures the difference between neighboring pixels.
+    Minimizing this has the effect that neighboring pixels will be similar so the
+    final image is smooth rather than *jumpy*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We calculate the gradient and the loss function, and run our network in reverse
+    for five iterations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output from the last two iterations is shown as follows. As you can see,
+    it has picked up the impressionistic fuzziness and even the texture of the canvas
+    in the final images:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cat-style-epoch4.png)![](img/cat-style-epoch5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we covered some deep learning networks that were not covered
+    in earlier chapters. We started with a brief look into the Keras functional API,
+    which allows us to build networks that are more complex than the sequential networks
+    we have seen so far. We then looked at regression networks, which allow us to
+    do predictions in a continuous space, and opens up a whole new range of problems
+    we can solve. However, a regression network is really a very simple modification
+    of a standard classification network. The next area we looked at was autoencoders,
+    which are a style of network that allows us to do unsupervised learning and make
+    use of the massive amount of unlabeled data that all of us have access to nowadays.
+    We also learned how to compose the networks we had already learned about as giant
+    Lego-like building blocks into larger and more interesting networks. We then moved
+    from building large networks using smaller networks, to learning how to customize
+    individual layers in a network using the Keras backend layer. Finally, we looked
+    at generative models, another class of models that learn to mimic the input it
+    is trained on, and looked at some novel uses for this kind of model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will turn our attention to another learning style called
+    reinforcement learning, and explore its concepts by building and training a network
+    in Keras to play a simple computer game.
+  prefs: []
+  type: TYPE_NORMAL

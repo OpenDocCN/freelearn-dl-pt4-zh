@@ -1,0 +1,779 @@
+- en: '13'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Temporal Graph Neural Networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the previous chapters, we have only considered graphs where edges and features
+    do not change. However, in the real world, there are many applications where this
+    is not the case. For instance, in social networks, people follow and unfollow
+    other users, posts go viral, and profiles evolve over time. This dynamicity cannot
+    be represented using the GNN architectures we previously described. Instead, we
+    must embed a new temporal dimension to transform static graphs into dynamic ones.
+    These dynamic networks will then be used as inputs for a new family of GNNs: **Temporal
+    Graph Neural Networks** (**T-GNNs**), also called **Spatio-Temporal GNNs**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will describe two kinds of **dynamic graphs** that include
+    spatiotemporal information. We will list different applications and focus on time
+    series forecasting, where temporal GNNs are mainly applied. The second section
+    is dedicated to an application we previously looked at: web traffic forecasting.
+    This time, we will exploit temporal information to improve our results and obtain
+    reliable predictions. Finally, we will describe another temporal GNN architecture
+    designed for dynamic graphs. We will apply it to epidemic forecasting to predict
+    the number of cases of COVID-19 in different regions of England.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will know the difference between the two main
+    types of dynamic graphs. This is particularly useful for modeling your data into
+    the right kind of graph. Moreover, you will learn about the design and architecture
+    of two temporal GNNs and how to implement them using PyTorch Geometric Temporal.
+    This is an essential step to creating your own applications with temporal information.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing dynamic graphs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Forecasting web traffic
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Predicting cases of COVID-19
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter13](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter13).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing dynamic graphs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Dynamic graphs and temporal GNNs unlock a variety of new applications, such
+    as transport and web traffic forecasting, motion classification, epidemiological
+    forecasting, link prediction, power system forecasting, and so on. Time series
+    forecasting is particularly popular with this kind of graph, as we can use historical
+    data to predict the system’s future behavior.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we focus on graphs with a temporal component. They can be
+    divided into two categories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Static graphs with temporal signals**: The underlying graph does not change,
+    but features and labels evolve over time.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Dynamic graphs with temporal signals**: The topology of the graph (the presence
+    of nodes and edges), features, and labels evolve over time.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the first case, the graph’s topology is *static*. For example, it can represent
+    a network of cities within a country for traffic forecasting: features change
+    over time, but the connections stay the same.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the second option, nodes and/or connections are *dynamic*. It is useful to
+    represent a social network where links between users can appear or disappear over
+    time. This variant is more general, but also harder to learn how to implement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, we will see how to handle these two types of graphs
+    with temporal signals using PyTorch Geometric Temporal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Forecasting web traffic
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we will predict the traffic of Wikipedia articles (as an example
+    of a static graph with a temporal signal) using a temporal GNN. This regression
+    task has already been covered in [*Chapter 6*](B19153_06.xhtml#_idTextAnchor074),
+    *Introducing Graph Convolutional Networks*. However, in that version of the task,
+    we performed traffic forecasting using a static dataset without a temporal signal:
+    our model did not have any information about previous instances. This is an issue
+    because it could not understand whether the traffic was currently increasing or
+    decreasing, for example. We can now improve this model to include information
+    about past instances.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will first introduce the temporal GNN architecture with its two variants
+    and then implement it using PyTorch Geometric Temporal.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing EvolveGCN
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: For this task, we will use the **EvolveGCN** architecture. Introduced by Pareja
+    et al. [1] in 2019, it proposes a natural combination of GNNs and **Recurrent
+    Neural Networks** (**RNNs**). Previous approaches, such as graph convolutional
+    recurrent networks, applied RNNs with graph convolution operators to calculate
+    node embeddings. By contrast, EvolveGCN applies RNNs to the GCN parameters themselves.
+    As the name implies, the GCN evolves over time to produce relevant temporal node
+    embeddings. The following figure illustrates a high-level view of this process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.1 – The EvolveGCN’s architecture to produce node embeddings for
+    a static or dynamic graph with temporal signal](img/B19153_13_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.1 – The EvolveGCN’s architecture to produce node embeddings for a
+    static or dynamic graph with temporal signal
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This architecture has two variants:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**EvolveGCN-H**, where the recurrent neural network considers both the previous
+    GCN parameters and the current node embeddings'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**EvolveGCN-O**, where the recurrent neural network only considers the previous
+    GCN parameters'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'EvolveGCN-H typically uses a **Gated Recurrent Unit** (**GRU**) instead of
+    a vanilla RNN. The GRU is a streamlined version of the **Long Short-Term Memory**
+    (**LSTM**) unit that achieves comparable performance with fewer parameters. It
+    is comprised of a reset gate, an update gate, and a cell state. In this architecture,
+    GRU updates the GCN’s weight matrix for layer ![](img/Formula_B19153_13_001.png)
+    at time ![](img/Formula_B19153_13_002.png) as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_13_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/Formula_B19153_13_004.png) denotes the node embeddings produced at
+    layer ![](img/Formula_B19153_13_008.png) and time ![](img/Formula_B19153_13_006.png),
+    and ![](img/Formula_B19153_13_007.png) is the weight matrix for layer ![](img/Formula_B19153_13_0081.png)
+    from the previous time step.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This resulting GCN weight matrix is then used to calculate the next layer’s
+    node embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_13_009.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/Formula_B19153_13_010.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_13_011.png) is the adjacency matrix, including
+    self-loops, and ![](img/Formula_B19153_13_012.png) is the degree matrix with self-loops.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These steps are summarized in the following figure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.2 – The EvolveGCN-H’s architecture with GRU and GNN](img/B19153_13_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.2 – The EvolveGCN-H’s architecture with GRU and GNN
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'EvolveGCN-H can be implemented with a GRU that receives two extensions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The inputs and hidden states are matrices instead of vectors to store the GCN
+    weight matrices properly
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The column dimension of the input must match that of the hidden state, which
+    requires summarizing the node embedding matrix ![](img/Formula_B19153_13_013.png)
+    to only keep the appropriate number of columns
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'These extensions are not required for the EvolveGCN-O variant. Indeed, EvolveGCN-O
+    is based on an LSTM network to model the input-output relationship. We do not
+    need to feed a hidden state to the LSTM, as it already includes a cell that remembers
+    previous values. This mechanism simplifies the update step, which can be written
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_13_014.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The resulting GCN weight matrix is used in the same way to produce the next
+    layer’s node embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_13_015.jpg)![](img/Formula_B19153_13_016.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This implementation is simpler since the temporal dimension entirely relies
+    on a vanilla LSTM network. The following figure shows how EvolveGCN-O updates
+    the weight matrix ![](img/Formula_B19153_13_017.png) and calculates node embeddings
+    ![](img/Formula_B19153_13_018.png):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.3 – EvolveGCN-O’s architecture with LSTM and GCN](img/B19153_13_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.3 – EvolveGCN-O’s architecture with LSTM and GCN
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So which version should we use? As is often the case in machine learning, the
+    best solution is data-dependent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: EvolveGCN-H works better when the node features are essential because its RNN
+    explicitly incorporates node embeddings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: EvolveGCN-O works better when the graph structure plays an important role, as
+    it focuses more on topological changes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Note that these remarks are primarily theoretical, which is why it can be helpful
+    to test both variants in your applications. This is what we will do by implementing
+    these models for web traffic forecasting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing EvolveGCN
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this section, we want to forecast web traffic on a static graph with a temporal
+    signal. The **WikiMaths** dataset is comprised of 1,068 articles represented as
+    nodes. Node features correspond to the past daily number of visits (eight features
+    by default). Edges are weighted, and weights represent the number of links from
+    the source page to the destination page. We want to predict the daily user visits
+    to these Wikipedia pages between March 16, 2019, and March 15, 2021, which results
+    in 731 snapshots. Each snapshot is a graph describing the state of the system
+    at a certain time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Figure 13**.4* shows a representation of WikiMaths made with Gephi, where
+    the size and color of the nodes are proportional to their number of connections.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.4 – WikiMaths dataset as an unweighted graph (t=0)](img/B19153_13_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.4 – WikiMaths dataset as an unweighted graph (t=0)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'PyTorch Geometric does not natively support static or dynamic graphs with a
+    temporal signal. Fortunately, an extension called PyTorch Geometric Temporal [2]
+    fixes this issue and even implements various temporal GNN layers. The WikiMaths
+    dataset was also made public during the development of PyTorch Geometric Temporal.
+    In this chapter, we will use this library to simplify the code and focus on applications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We need to install this library in an environment containing PyTorch Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We import the WikiMaths dataset, called `WikiMathDatasetLoader`, a temporal-aware
+    train-test split with `temporal_signal_split`, and our GNN layer, `EvolveGCNH`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the WikiMaths dataset, which is a `StaticGraphTemporalSignal` object.
+    In this object, `dataset[0]` describes the graph (also called a snapshot in this
+    context) at ![](img/Formula_B19153_13_019.png) and `dataset[500]` at ![](img/Formula_B19153_13_020.png).
+    We also create a train-test split with a ratio of `0.5`. The training set is composed
+    of snapshots from the earlier time periods, while the test set regroups snapshots
+    from the later periods:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The graph is static, so the node and edge dimensions do not change. However,
+    the values contained in these tensors are different. It is difficult to visualize
+    the values of each of the 1,068 nodes. To better understand this dataset, we can
+    calculate the mean and standard deviation values for each snapshot instead. The
+    moving average is also helpful in smoothing out short-term fluctuations.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We plot these time series with `matplotlib` to visualize our task:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This produces *Figure 13**.5*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.5 – WikiMaths’ mean normalized number of visits with moving average](img/B19153_13_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.5 – WikiMaths’ mean normalized number of visits with moving average
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our data presents periodic patterns that the temporal GNN can hopefully learn.
+    We can now implement it and see how it performs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The temporal GNN takes two parameters as inputs: the number of nodes (`node_count`)
+    and the input dimension (`dim_in`). The GNN only has two layers: an EvolveGCN-H
+    layer and a linear layer that outputs a predicted value for each node:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `forward()` function applies both layers to the input with a ReLU activation
+    function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create an instance of `TemporalGNN` and give it the number of nodes and
+    input dimension from the WikiMaths dataset. We will train it using the `Adam`
+    optimizer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can print the model to observe the layers contained in `EvolveGCNH`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We see three layers: `TopKPooling`, which summarizes the input matrix in eight
+    columns; `GRU`, which updates the GCN weight matrix; and `GCNConv`, which produces
+    the new node embedding. Finally, a linear layer outputs a predicted value for
+    every node in the graph.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create a training loop that trains the model on every snapshot from the
+    training set. The loss is backpropagated for every snapshot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Likewise, we evaluate the model on the test set. The MSE is averaged on the
+    entire test set to produce the final score:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain a loss value of 0.7559\. Next, we will plot the mean values predicted
+    by our model on the previous graph to interpret it. The process is straightforward:
+    we must average the predictions and store them in a list. Then, we can add them
+    to the previous plot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: That gives us *Figure 13**.6*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.6 – Predicted mean normalized number of visits](img/B19153_13_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.6 – Predicted mean normalized number of visits
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that the predicted values follow the general trend in the data. This
+    is an excellent result, considering the limited size of the dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, let’s create a scatter plot to show how predicted and ground truth
+    values differ for a single snapshot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: '![Figure 13.7 – Predicted versus ground truth values for the WikiMaths dataset](img/B19153_13_007.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.7 – Predicted versus ground truth values for the WikiMaths dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: We observe a moderate positive correlation between predicted and real values.
+    Our model is not remarkably accurate, but the previous figure showed that it understands
+    the periodic nature of the data very well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Implementing the EvolveGCN-O variant is very similar. Instead of using the
+    `EvolveGCNH` layer from PyTorch Geometric Temporal, we replace it with `EvolveGCNO`.
+    This layer does not require the number of nodes, so we only give it the input
+    dimension. It is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: On average, the EvolveGCN-O model obtains similar results with an average MSE
+    of 0.7524\. In this case, the use of a GRU or LSTM network does not impact the
+    predictions. This is understandable since both the past numbers of visits contained
+    in node features (EvolveGCN-H) and the connections between pages (EvolveGCN-O)
+    are essential. As a result, this GNN architecture is particularly well-suited
+    to this traffic forecasting task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that we have seen an example of a static graph, let’s explore how to process
+    dynamic graphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predicting cases of COVID-19
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This section will focus on a new application with epidemic forecasting. We will
+    use the **England Covid dataset**, a dynamic graph with temporal information introduced
+    by Panagopoulos et al. in 2021 [3]. While nodes are static, connections between
+    and edge weights vary over time. This dataset represents the number of reported
+    cases of COVID-19 in 129 England NUTS 3 regions between March 3 and May 12, 2020\.
+    Data was collected from mobile phones that installed the Facebook application
+    and shared their location history. Our goal is to predict the number of cases
+    in each node (region) in 1 day.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.8 – NUTS 3 areas in England are colored in red](img/B19153_13_008.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.8 – NUTS 3 areas in England are colored in red
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This dataset represents England as a graph ![](img/Formula_B19153_13_021.png).
+    Due to the temporal nature of this dataset, it is composed of multiple graphs
+    corresponding to each day of the studied period ![](img/Formula_B19153_13_022.png).
+    In these graphs, node features correspond to the number of cases in each of the
+    past ![](img/Formula_B19153_13_023.png) days in this region. Edges are unidirectional
+    and weighted: the weight ![](img/Formula_B19153_13_024.png) of edge ![](img/Formula_B19153_13_025.png)
+    represents the number of people that moved from region ![](img/Formula_B19153_13_026.png)
+    to region ![](img/Formula_B19153_13_027.png) at time ![](img/Formula_B19153_13_028.png).
+    These graphs also contain self-loops corresponding to people moving within the
+    same region.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This section will introduce a new GNN architecture designed for this task and
+    show how to implement it step by step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing MPNN-LSTM
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As its name suggests, **MPNN-LSTM** architecture relies on combining an MPNN
+    and an LSTM network. Like the England Covid dataset, it was also introduced by
+    Panagopoulos et al. in 2021 [3].
+  prefs: []
+  type: TYPE_NORMAL
+- en: The input node features with the corresponding edge indexes and weights are
+    fed to a GCN layer. We apply a batch normalization layer and a dropout to this
+    output. This process is repeated a second time with the outcome of the first MPNN.
+    It produces a node embedding matrix ![](img/Formula_B19153_13_029.png). We create
+    a sequence ![](img/Formula_B19153_13_030.png) of node embedding representations
+    by applying these MPNNs for each time step. This sequence is fed to a 2-layer
+    LSTM network to capture the temporal information from the graphs. Finally, we
+    apply a linear transformation and a ReLU function to this output to produce a
+    prediction at ![](img/Formula_B19153_13_031.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following figure shows a high-level view of the MPNN-LSTM’s architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.9 – MPNN-LSTM’s architecture](img/B19153_13_009.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.9 – MPNN-LSTM’s architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: The authors of MPNN-LSTM note that it is not the best-performing model on the
+    England Covid dataset (the MPNN with a two-level GNN is). However, it is an interesting
+    approach that could perform better in other scenarios. They also state that it
+    is more suited for long-term forecasting, such as 14 days in the future instead
+    of a single day, as in our version of this dataset. Despite this issue, we use
+    the latter for convenience, as it does not impact the design of the solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing MPNN-LSTM
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'First, it is important to visualize the number of cases we want to predict.
+    As in the previous section, we will summarize the 129 different time series that
+    composed the dataset by calculating their mean and standard deviation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import `pandas`, `matplotlib`, the England Covid dataset, and the temporal
+    train-test split function from PyTorch Geometric Temporal:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the dataset with 14 lags, corresponding to the number of node features:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We perform a temporal signal split with a training ratio of `0.8`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We plot the following graph to show the mean normalized number of reported cases
+    (they are reported approximately every day). The code is available on GitHub and
+    adapts the snippet we used in the last section.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 13.10 – England Covid dataset’s mean normalized number of cases](img/B19153_13_010.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.10 – England Covid dataset’s mean normalized number of cases
+  prefs: []
+  type: TYPE_NORMAL
+- en: This plot shows a lot of volatility and a low number of snapshots. This is why
+    we use an 80/20 train-test split in this example. Obtaining good performance on
+    such a small dataset might be challenging, nonetheless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now implement the MPNN-LSTM architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the `MPNNLSTM` layer from PyTorch Geometric Temporal:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The temporal GNN takes three parameters as inputs: the input dimension, the
+    hidden dimension, and the number of nodes. We declare three layers: the MPNN-LSTM
+    layer, a dropout layer, and a linear layer with the right input dimension:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `forward()` function considers the edge weights, an essential piece of
+    information in this dataset. Note that we are processing a dynamic graph, so a
+    new set of values for `edge_index` and `edge_weight` are provided at each time
+    step. Unlike the original MPNN-LSTM described previously, we replace the final
+    ReLU function with a `tanh` function. The main motivation is that tanh outputs
+    values between -1 and 1, instead of 0 and 1, which is closer to what we observed
+    in the dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create our MPNN-LSTM model with a hidden dimension of 64 and print it to
+    observe the different layers:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We see that the MPNN-LSTM layer contains two GCN, two batch normalization, and
+    two LSTM layers (but no dropout), which corresponds to our previous description.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We train this model for `100` epochs with the `Adam` optimizer and a learning
+    rate of `0.001`. This time, we backpropagate the loss after every snapshot instead
+    of every instance:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We evaluate the trained model on the test set and obtain the following MSE
+    loss:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The MPNN-LSTM model obtained an MSE loss of 1.3722, which seems relatively high.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We cannot invert the normalization process that was applied to this dataset,
+    so we will use the normalized numbers of cases instead. First, let’s plot the
+    mean normalized number of cases that our model predicted (code available on GitHub).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.11 – Mean normalized number of cases with true values in black
+    and predicted values in red](img/B19153_13_011.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.11 – Mean normalized number of cases with true values in black and
+    predicted values in red
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As expected, the predicted values do not match the ground truth very well.
+    This is probably due to the lack of data: our model learned an average value that
+    minimizes the MSE loss but cannot fit the curve and understand its periodicity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s inspect the scatter plot corresponding to the test set’s first snapshot
+    (code available on GitHub).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 13.12 – Predicted versus ground truth values for the England Covid
+    dataset](img/B19153_13_012.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 13.12 – Predicted versus ground truth values for the England Covid dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: The scatter plot shows a weak correlation. We see that the predictions (y-axis)
+    are mostly centered around 0.35 with little variance. This does not correspond
+    to the ground truth values, spanning from -1.5 to 0.6\. As per our experiments,
+    adding a second linear layer did not improve the MPNN-LSTM’s predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Several strategies could be implemented to help the model. First, more data
+    points could greatly help because this is a small dataset. Additionally, the time
+    series contains two interesting characteristics: trends (continued increase and
+    decrease over time) and seasonality (predictable pattern). We could add a preprocessing
+    step to remove these characteristics, which add noise to the signal we want to
+    predict.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Beyond recurrent neural networks, self-attention is another popular technique
+    to create temporal GNNs [4]. Attention can be restricted to temporal information
+    or also consider spatial data, typically handled by graph convolution. Finally,
+    temporal GNNs can also be extended to heterogeneous settings described in the
+    previous chapter. Unfortunately, this combination requires even more data and
+    is currently an active area of research.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This chapter introduced a new type of graph with spatiotemporal information.
+    This temporal component is helpful in many applications, mostly related to time
+    series forecasting. We described two types of graphs that fit this description:
+    static graphs, where features evolve over time, and dynamic graphs, where features
+    and topology can change. Both of them are handled by PyTorch Geometric Temporal,
+    PyG’s extension dedicated to temporal graph neural networks.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additionally, we covered two applications of temporal GNNs. First, we implemented
+    the EvolveGCN architecture, which uses a GRU or an LSTM network to update the
+    GCN parameters. We applied it by revisiting web traffic forecasting, a task we
+    encountered in [*Chapter 6*](B19153_06.xhtml#_idTextAnchor074), *Introducing Graph
+    Convolutional Networks*, and achieved excellent results with a limited dataset.
+    Secondly, we used the MPNN-LSTM architecture for epidemic forecasting. We applied
+    to the England Covid dataset a dynamic graph with a temporal signal, but its small
+    size did not allow us to obtain comparable results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 14*](B19153_14.xhtml#_idTextAnchor165), *Explaining Graph Neural
+    Networks*, we will focus on how to interpret our results. Beyond the different
+    visualizations we have introduced so far, we will see how to apply techniques
+    from **eXplainable Artificial Intelligence** (**XAI**) to graph neural networks.
+    This field is a key component to build robust AI systems and improve machine learning
+    adoption. In that chapter, we will introduce post hoc explanation methods and
+    new layers to build models that are explainable by design.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] A. Pareja et al., *EvolveGCN: Evolving Graph Convolutional Networks for
+    Dynamic Graphs*. arXiv, 2019\. DOI: 10.48550/ARXIV.1902.10191\. Available: [https://arxiv.org/abs/1902.10191](https://arxiv.org/abs/1902.10191)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] B. Rozemberczki et al., *PyTorch Geometric Temporal: Spatiotemporal Signal
+    Processing with Neural Machine Learning Models*, in Proceedings of the 30th ACM
+    International Conference on Information and Knowledge Management, 2021, pp. 4564–4573\.
+    Available: [https://arxiv.org/abs/2104.07788](https://arxiv.org/abs/2104.07788)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] G. Panagopoulos, G. Nikolentzos, and M. Vazirgiannis. *Transfer Graph Neural
+    Networks for Pandemic Forecasting*. arXiv, 2020\. DOI: 10.48550/ARXIV.2009.08388\.
+    Available: [https://arxiv.org/abs/2009.08388](https://arxiv.org/abs/2009.08388)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] Guo, S., Lin, Y., Feng, N., Song, C., & Wan, H. (2019). Attention Based
+    Spatial-Temporal Graph Convolutional Networks for Traffic Flow Forecasting. Proceedings
+    of the AAAI Conference on Artificial Intelligence, 33(01), 922-929\. [https://doi.org/10.1609/aaai.v33i01.3301922](https://doi.org/10.1609/aaai.v33i01.3301922)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

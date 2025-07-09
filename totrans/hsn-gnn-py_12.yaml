@@ -1,0 +1,882 @@
+- en: '12'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Learning from Heterogeneous Graphs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we tried to generate realistic molecules that contain
+    different types of nodes (atoms) and edges (bonds). We also observe this kind
+    of behavior in other applications, such as recommender systems (users and items),
+    social networks (followers and followees), or cybersecurity (routers and servers).
+    We call these kinds of graphs **heterogeneous**, as opposed to homogeneous graphs,
+    which only involve one type of node and one type of edge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will recap everything we know about homogeneous GNNs. We
+    will introduce the message passing neural network framework to generalize the
+    architectures we have seen so far. This summary will allow us to understand how
+    to expand our framework to heterogeneous networks. We will start by creating our
+    own heterogeneous dataset. Then, we will transform homogeneous architectures into
+    heterogeneous ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the last section, we will take a different approach and discuss an architecture
+    specifically designed to process heterogeneous networks. We will describe how
+    it works to understand better the difference between this architecture and a classic
+    GAT. Finally, we will implement it in PyTorch Geometric and compare our results
+    with the previous techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will have a strong understanding of the differences
+    between homogeneous and heterogeneous graphs. You will be able to create your
+    own heterogeneous datasets and convert traditional models to use them in this
+    context. You will also be able to implement architectures specifically designed
+    to make the most of heterogeneous networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The message passing neural network framework
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introducing heterogeneous graphs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Transforming homogeneous GNNs to heterogeneous GNNs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a hierarchical self-attention network
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter12](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter12).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The installation steps required to run the code on your local machine can be
+    found in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The message passing neural network framework
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Before exploring heterogeneous graphs, let’s recap what we have learned about
+    homogeneous GNNs. In the previous chapters, we saw different functions for aggregating
+    and combining features from different nodes. As seen in [*Chapter 5*](B19153_05.xhtml#_idTextAnchor064),
+    the simplest GNN layer consists of summing the linear combination of features
+    from neighboring nodes (including the target node itself) with a weight matrix.
+    The output of the previous sum then replaces the previous target node embedding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The node-level operator can be written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/Formula_B19153_12_002.png) is the set of neighboring nodes of the ![](img/Formula_B19153_12_003.png)
+    node (including itself), ![](img/Formula_B19153_12_004.png) is the embedding of
+    the ![](img/Formula_B19153_12_005.png) node, and ![](img/Formula_B19153_12_006.png)
+    is a weight matrix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GCN and GAT layers added fixed and dynamic weights to node features but kept
+    the same idea. Even GraphSAGE’s LSTM operator or GIN’s max aggregator did not
+    change the main concept of a GNN layer. If we look at all these variants, we can
+    generalize GNN layers into a common framework called the **Message Passing Neural
+    Network** (**MPNN** or **MP-GNN**). Introduced in 2017 by Gilmer et al. [1], this
+    framework consists of three main operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Message**: Every node uses a function to create a message for each neighbor.
+    It can simply consist of its own features (as in the previous example) or also
+    consider the neighboring node’s features and edge features.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Aggregate**: Every node aggregates messages from its neighbors using a permutation-equivariant
+    function, such as the sum in the previous example.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Update**: Every node updates its features using a function to combine its
+    current features and the aggregated messages. In the previous example, we introduced
+    a self-loop to aggregate the current features of the ![](img/Formula_B19153_12_007.png)
+    node, such as a neighbor.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'These steps can be summarized in a single equation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_008.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![](img/Formula_B19153_12_009.png) is the node embedding of the ![](img/Formula_B19153_12_010.png)
+    node, ![](img/Formula_B19153_12_011.png) is the edge embedding of the ![](img/Formula_B19153_12_012.png)
+    link, ![](img/Formula_B19153_12_013.png) is the message function, ![](img/Formula_B19153_12_014.png)
+    is the aggregation function, and ![](img/Formula_B19153_12_015.png) is the update
+    function. You can find an illustrated version of this framework in the following
+    figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.1 – The MPNN framework](img/B19153_12_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.1 – The MPNN framework
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'PyTorch Geometric directly implements this framework with the `MessagePassing`
+    class. For instance, here is how to implement the GCN layer using this class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we import the required libraries:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We declare the GCN class that inherits from `MessagePassing`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This takes two parameters – the input dimensionality and the output (hidden)
+    dimensionality. `MessagePassing` is initialized with the “add” aggregation. We
+    define a single PyTorch linear layer without bias:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `forward()` function contains the logic. First, we add self-loops to the
+    adjacency matrix to consider target nodes:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we apply a linear transformation using the linear layer we previously
+    defined:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We compute the normalization factor – ![](img/Formula_B19153_12_016.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We call the `propagate()` method with our updated `edge_index` (including self-loops)
+    and our normalization factors, stored in the `norm` tensor. Internally, this method
+    calls `message()`, `aggregate()`, and `update()`. We do not need to redefine `update()`
+    because we already included the self-loops. The `aggregate()` function is already
+    specified in *step 3* with `aggr=''add''`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We redefine the `message()` function to normalize the neighboring node features
+    `x` with `norm`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can now initialize and use this object as a GCN layer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This example shows how you can create your own GNN layers in PyTorch Geometric.
+    You can also read how the GCN or GAT layers are implemented in the source code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The MPNN framework is an important concept that will help us to transform our
+    GNNs into heterogeneous models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing heterogeneous graphs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Heterogeneous graphs are a powerful tool to represent general relationships
+    between different entities. Having different types of nodes and edges creates
+    graph structures that are more complex but also more difficult to learn. In particular,
+    one of the main problems with heterogeneous networks is that features from different
+    types of nodes or edges do not necessarily have the same meaning or dimensionality.
+    Therefore, merging different features would destroy a lot of information. This
+    is not the case with homogeneous graphs, where each dimension has the exact same
+    meaning for every node or edge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Heterogeneous graphs are a more general kind of network that can represent different
+    types of nodes and edges. Formally, it is defined as a graph, ![](img/Formula_B19153_12_017.png),
+    comprising ![](img/Formula_B19153_12_018.png), a set of nodes, and ![](img/Formula_B19153_12_019.png),
+    a set of edges. In the heterogeneous setting, it is associated with a node-type
+    mapping function, ![](img/Formula_B19153_12_020.png) (where ![](img/Formula_B19153_12_021.png)
+    denotes the set of node types), and a link-type mapping function, ![](img/Formula_B19153_12_022.png)
+    (where ![](img/Formula_B19153_12_023.png) denotes the set of edge types).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following figure is an example of a heterogeneous graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.2 – An example of a heteregeneous graph with three types of nodes
+    and three types of edges](img/B19153_12_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2 – An example of a heteregeneous graph with three types of nodes
+    and three types of edges
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this graph, we see three types of nodes (users, games, and developers) and
+    three types of edges (**follows**, **plays**, and **develops**). It represents
+    a network involving people (users and developers) and games that could be used
+    for various applications, such as recommending games. If this graph contained
+    millions of elements, it could be used as a graph-structured knowledge database,
+    or a knowledge graph. Knowledge graphs are used by Google or Bing to answer queries
+    such as, “Who plays games developed by **Dev 1**?”
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similar queries can extract useful homogeneous graphs. For example, we might
+    want only to consider users who play **Game 1**. The output would be **User 1**
+    and **User 2**. We can create more complex queries, such as, “Who are the users
+    who play games developed by **Dev 1**?” The result is the same, but we traversed
+    two relations to obtain our users. This kind of query is called a meta-path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first example, our meta-path was *User → Game → User* (commonly denoted
+    as **UGU**), and in the second one, our meta-path was *User → Game → Dev → Game
+    → User* (or **UGDGU**). Note that the start node type and the end node type are
+    the same. Meta-paths are an essential concept in heterogeneous graphs, often used
+    to measure the similarity of different nodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s see how to implement the previous graph with PyTorch Geometric.
+    We will use a special data object called `HeteroData`. The following steps create
+    a data object to store the graph from *Figure 12**.2*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the `HeteroData` class from `torch_geometric.data` and create a `data`
+    variable:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'First, let’s store node features. We can access user features with `data[''user''].x`,
+    for instance. We feed it a tensor with the `[num_users, num_features_users]` dimensions.
+    The content does not matter in this example, so we will create feature vectors
+    filled with ones for `user 1`, twos for `user 2`, and threes for `user 3`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We repeat this process with `games` and `devs`. Note that the dimensionality
+    of feature vectors is not the same; this is an important benefit of heterogeneous
+    graphs when handling different representations:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s create connections between our nodes. Links have different meanings,
+    which is why we will create three sets of edge indices. We can declare each set
+    using a triplet ![](img/Formula_B19153_12_024.png), such as `data[''user'', ''follows'',
+    ''user''].edge_index`. Then, we store the connections in a tensor with the `[2,
+    number of` `edges]` dimensions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Edges can also have features – for example, the `plays` edges could include
+    the number of hours the user played the corresponding game. In the following,
+    we assume that `user 1` played `game 1` for 2 hours, `user 2` played `game 1`
+    for half an hour and `game 2` for 10 hours, and `user 3` played `game 2` for 12
+    hours:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, we can print the `data` object to see the result:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: As you can see in this implementation, different types of nodes and edges do
+    not share the same tensors. In fact, it is impossible because they don’t share
+    the same dimensionality either. This raises a new issue – how do we aggregate
+    information from multiple tensors using GNNs?
+  prefs: []
+  type: TYPE_NORMAL
+- en: So far, we have only focused our efforts on a single type. In practice, our
+    weight matrices have the right size to be multiplied with a predefined dimension.
+    However, how do we implement GNNs when we get inputs with different dimensionalities?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transforming homogeneous GNNs to heterogeneous GNNs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To better understand the problem, let’s take a real dataset as an example. The
+    DBLP computer science bibliography offers a dataset, `[2-3]`, that contains four
+    types of nodes – `papers` (14,328), `terms` (7,723), `authors` (4,057), and `conferences`
+    (20). This dataset’s goal is to correctly classify the authors into four categories
+    – database, data mining, artificial intelligence, and information retrieval. The
+    authors’ node features are a bag-of-words (“`0`” or “`1`”) of 334 keywords they
+    might have used in their publications. The following figure summarizes the relations
+    between the different node types.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.3 – Relationships between node types in the DBLP dataset](img/B19153_12_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3 – Relationships between node types in the DBLP dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: These node types do not have the same dimensionalities and semantic relationships.
+    In heterogeneous graphs, relations between nodes are essential, which is why we
+    want to consider node pairs. For example, instead of feeding author nodes to a
+    GNN layer, we would consider a pair such as (`author`, `paper`). It means we now
+    need a GNN layer per relation; in this case, the “to” relations are bidirectional,
+    so we would get six layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: These new layers have independent weight matrices with the right size for each
+    node type. Unfortunately, we have only solved half of the problem. Indeed, we
+    now have six distinct layers that do not share any information. We can fix that
+    by introducing **skip-connections**, **shared layers**, **jumping knowledge**,
+    and so on [4].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we transform a homogeneous model into a heterogeneous one, let’s implement
+    a classic GAT on the DBLP dataset. The GAT cannot take into account different
+    relations; we have to give it a unique adjacency matrix that connects authors
+    to each other. Fortunately, we now have a technique to generate this adjacency
+    matrix easily – we can create a meta-path, such as `author-paper-author`, that
+    will connect authors from the same papers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can also build a good adjacency matrix through random walks. Even if the
+    graph is heterogeneous, we can explore it and connect nodes that often appear
+    in the same sequences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code is a little more verbose, but we can implement a regular GAT as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the required libraries:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We define the meta-path we will use using this specific syntax:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We use the `AddMetaPaths` transform function to automatically calculate our
+    meta-path. We use `drop_orig_edge_types=True` to remove the other relations from
+    the dataset (the GAT can only consider one):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the `DBLP` dataset and print it:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following output. Note the `(author, metapath_0, author)` relation
+    that was created with our transform function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We directly create a one-layer GAT model with `in_channels=-1` to perform lazy
+    initialization (the model will automatically calculate the value) and `out_channels=4`
+    because we need to classify the author nodes into four categories:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We implement the `Adam` optimizer and store the model and the data on a GPU
+    if possible:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `test()` function measures the accuracy of the prediction:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a classic training loop, where the node features (`author`) and edge
+    indexes (`author`, `metapath_0`, and `author`) are carefully selected:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We test it on the test set with the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We reduced our heterogeneous dataset into a homogeneous one using a meta-path
+    and applied a traditional GAT. We obtained a test accuracy of 73.29%, which provides
+    a good baseline to compare it to other techniques.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s create a heterogeneous version of this GAT model. Following the
+    method we described previously, we need six GAT layers instead of one. We don’t
+    have to do it manually, since PyTorch Geometric can do it automatically using
+    the `to_hetero()` or `to_hetero_bases()` functions. The `to_hetero()` function
+    takes three important parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`module`: The homogeneous model we want to convert'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`metadata`: Information about the heterogeneous nature of the graph, represented
+    by a tuple, `(``node_types, edge_types)`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`aggr`: The aggregator to combine node embeddings generated by different relations
+    (for instance, `sum`, `max`, or `mean`)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The following figure shows our homogeneous GAT (left) and its heterogeneous
+    version (right), obtained with `to_hetero()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.4 – Architecture of a homogeneous GAT (left) and a heterogeneous
+    GAT (right) on the DBLP dataset](img/B19153_12_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.4 – Architecture of a homogeneous GAT (left) and a heterogeneous GAT
+    (right) on the DBLP dataset
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following steps, the heterogeneous GAT’s implementation is
+    similar:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we import GNN layers from PyTorch Geometric:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the `DBLP` dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'When we printed information about this dataset, you might have noticed that
+    conference nodes do not have any features. This is an issue because our architecture
+    assumes that each node type has its own features. We can fix this problem by generating
+    zero values as features, as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create our own GAT class with a GAT and linear layers. Note that we use
+    lazy initialization again with the `(-1, -``1)` tuple:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We `instantiate` the model and convert it using `to_hetero()`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We implement the `Adam` optimizer and store the model and data on a GPU if
+    possible:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The test process is very similar. This time, we don’t need to specify any relation,
+    since the model considers all of them:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The same is true for the training loop:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following test accuracy:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The heterogeneous GAT obtains a test accuracy of 78.42%. This is a good improvement
+    (+5.13%) over the homogeneous version, but can we do better? In the next section,
+    we will explore an architecture that is specifically designed to process heterogeneous
+    networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a hierarchical self-attention network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we will implement a GNN model designed to handle heterogeneous
+    graphs – the **hierarchical self-attention network** (**HAN**). This architecture
+    was introduced by Liu et al. in 2021 [5]. HAN uses self-attention at two different
+    levels:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Node-level attention** to understand the importance of neighboring nodes
+    in a given meta-path (such as a GAT in a homogeneous setting).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`game-user-game` might be more relevant than `game-dev-game` in some tasks,
+    such as predicting the number of players.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the following section, we will detail the three main components – node-level
+    attention, semantic-level attention, and the prediction module. This architecture
+    is illustrated in *Figure 12**.5*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 12.5 – HAN’s architecture with its three main modules](img/B19153_12_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.5 – HAN’s architecture with its three main modules
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Like in a GAT, the first step consists of projecting nodes into a unified feature
+    space for each meta-path. We then calculate the weight of a node pair (concatenation
+    of two projected nodes) in the same meta-path, with a second weight matrix. A
+    nonlinear function is applied to this result, which is then normalized with the
+    softmax function. The normalized attention score (importance) of the ![](img/Formula_B19153_12_025.png)
+    node to the ![](img/Formula_B19153_12_026.png) node is calculated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_027.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_12_028.png) denotes the features of the ![](img/Formula_B19153_12_029.png)
+    node, ![](img/Formula_B19153_12_030.png) is a shared weight matrix for the ![](img/Formula_B19153_12_031.png)
+    meta-path, ![](img/Formula_B19153_12_032.png) is the attention weight matrix for
+    the ![](img/Formula_B19153_12_033.png) meta-path, ![](img/Formula_B19153_12_034.png)
+    is a nonlinear activation function (such as LeakyReLU), and ![](img/Formula_B19153_12_035.png)
+    is the set of neighbors of the ![](img/Formula_B19153_12_036.png) node (including
+    itself) in the ![](img/Formula_B19153_12_031.png) meta-path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Multi-head attention is also performed to obtain the final embedding:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_038.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'With semantic-level attention, we repeat a similar process for the attention
+    score of every meta-path (denoted ![](img/Formula_B19153_12_039.png)). Every node
+    embedding in a given meta-path (denoted as ![](img/Formula_B19153_12_040.png))
+    is fed to an MLP that applies a nonlinear transformation. We compare this result
+    to a new attention vector, ![](img/Formula_B19153_12_041.png), as a similarity
+    measure. We average this result to calculate the importance of a given meta-path:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_042.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_12_043.png) (the MLP’s weight matrix), ![](img/Formula_B19153_12_044.png)
+    (the MLP’s bias), and ![](img/Formula_B19153_12_045.png) (the semantic-level attention
+    vector) are shared across the meta-paths.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We must normalize this result to compare the different semantic-level attention
+    scores. We use the softmax function to obtain our final weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_046.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The final embedding, ![](img/Formula_B19153_12_047.png), that combines node-level
+    and semantic-level attention is obtained as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_12_048.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: A final layer, like an MLP, is used to fine-tune the model for a particular
+    downstream task, such as node classification or link prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s implement this architecture in PyTorch Geometric on the `DBLP` dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we import the HAN layer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We load the `DBLP` dataset and introduce dummy features for conference nodes:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create the `HAN` class with two layers – a `HAN` convolution using `HANConv`
+    and a `linear` layer for the final classification:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'In the `forward()` function, we have to specify that we are interested in the
+    authors:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We initialize our model with lazy initialization (`dim_in=-1`), so PyTorch
+    Geometric automatically calculates the input size for each node type:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We choose the `Adam` optimizer and transfer our data and model to the GPU if
+    possible:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `test()` function calculates the accuracy of the classification task:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We train the model for 100 epochs. The only difference with a training loop
+    for a homogeneous GNN is that we need to specify we’re interested in the author
+    node type:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The training gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, we test our solution on the test set:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: HAN obtains a test accuracy of 81.58%, which is higher than what we got with
+    the heterogeneous GAT (78.42%) and the classic GAT (73.29%). It shows the importance
+    of building good representations that aggregate different types of nodes and relations.
+    Heterogeneous graphs’ techniques are highly application-dependent, but it is worth
+    trying different options, especially when the relationships described in the network
+    are meaningful.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we introduced the MPNN framework to generalize GNN layers using
+    three steps – message, aggregate, and update. In the rest of the chapter, we expanded
+    this framework to consider heterogeneous networks, composed of different types
+    of nodes and edges. This particular kind of graph allows us to represent various
+    relations between entities, which are more insightful than a single type of connection.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Moreover, we saw how to transform homogeneous GNNs into heterogeneous ones thanks
+    to PyTorch Geometric. We described the different layers in our heterogeneous GAT,
+    which take node pairs as inputs to model their relations. Finally, we implemented
+    a heterogeneous-specific architecture with `HAN` and compared the results of three
+    techniques on the `DBLP` dataset. It proved the importance of exploiting the heterogeneous
+    information that is represented in this kind of network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 13*](B19153_13.xhtml#_idTextAnchor153), *Temporal Graph Neural
+    Networks*, we will see how to consider time in GNNs. This chapter will unlock
+    a lot of new applications thanks to temporal graphs, such as traffic forecasting.
+    It will also introduce PyG’s extension library called PyTorch Geometric Temporal,
+    which will help us to implement new models specifically designed to handle time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] J. Gilmer, S. S. Schoenholz, P. F. Riley, O. Vinyals, and G. E. Dahl. *Neural
+    Message Passing for Quantum Chemistry*. arXiv, 2017\. DOI: 10.48550/ARXIV.1704.01212\.
+    Available: [https://arxiv.org/abs/1704.01212](https://arxiv.org/abs/1704.01212).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] Jie Tang, Jing Zhang, Limin Yao, Juanzi Li, Li Zhang, and Zhong Su. *ArnetMiner:
+    Extraction and Mining of Academic Social Networks*. In Proceedings of the Fourteenth
+    ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (SIGKDD’2008).
+    pp.990–998\. Available: [https://dl.acm.org/doi/abs/10.1145/1401890.1402008](https://dl.acm.org/doi/abs/10.1145/1401890.1402008).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] X. Fu, J. Zhang, Z. Meng, and I. King. *MAGNN: Metapath Aggregated Graph
+    Neural Network for Heterogeneous Graph Embedding*. Apr. 2020\. DOI: 10.1145/3366423.3380297\.
+    Available: [https://arxiv.org/abs/2002.01680](https://arxiv.org/abs/2002.01680).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] M. Schlichtkrull, T. N. Kipf, P. Bloem, R. van den Berg, I. Titov, and
+    M. Welling. *Modeling Relational Data with Graph Convolutional Networks*. arXiv,
+    2017\. DOI: 10.48550/ARXIV.1703.06103\. Available: [https://arxiv.org/abs/1703.06103](https://arxiv.org/abs/1703.06103).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[5] J. Liu, Y. Wang, S. Xiang, and C. Pan. *HAN: An Efficient Hierarchical
+    Self-Attention Network for Skeleton-Based Gesture Recognition*. arXiv, 2021\.
+    DOI: 10.48550/ARXIV.2106.13391\. Available: [https://arxiv.org/abs/2106.13391](https://arxiv.org/abs/2106.13391).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

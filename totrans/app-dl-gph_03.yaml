@@ -1,0 +1,925 @@
+- en: '3'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Graph Representation Learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Having explained why applying deep learning techniques to graph data is a worthy
+    endeavor, let’s jump right into the thick of things. In this chapter, we’ll introduce
+    you to **graph** **representation learning** .
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we’ll examine representation learning from the perspective of traditional
+    (tabular data-based) **machine learning** ( **ML** ) and then extend the idea
+    to the graph data space. Following this, we’ll talk about the initial challenges
+    that need to be addressed when you’re trying to learn features within graph data.
+    Next, you’ll be introduced to a few simple graph representation learning algorithms,
+    namely, **Node2Vec** and **DeepWalk** , and understand the differences between
+    them. Finally, we’ll discuss the limitations of such **shallow encoding** techniques
+    and why we need algorithms with more firepower to capture more complex relationships
+    in graphs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll also introduce implementations of relevant algorithms in Python. We’ll
+    use Python as our language of choice and primarily use the **PyTorch Geometric**
+    ( **PyG** ) library to implement our algorithms. Other libraries are popular as
+    well (such as **Tensorflow-Graph Neural Networks (GNNs)** ), but PyG seems to
+    be the most established in the industry at the time of writing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’ll cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Representation learning – what is it?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Graph representation learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A framework for graph learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: DeepWalk
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Node2Vec
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Limitations of shallow encodings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Representation learning – what is it?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Modern ML-related tasks and experiments have settled into a standardized workflow
+    pipeline. Here’s a quick and simplified overview of the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Convert the business/domain-specific problem into an ML problem (supervised
+    or unsupervised, what metric is being optimized, baseline levels of metrics, and
+    so on).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Get the data.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Pamper the data (by introducing new columns based on existing ones, imputing
+    missing values, and more).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train an ML model on the data and evaluate its performance on the test set.
+    Iterate on this step with new models until a satisfactory performance is achieved.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: One of the most important and time-consuming steps in this list is deciding
+    how new columns can be created from the existing ones to add to the knowledge
+    being specified in the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To understand this, let’s understand the meaning of what a dataset is. A row
+    in a dataset is effectively just a record of an event. The different columns (features)
+    in a row represent the different variables (or dimensions, gauges, and so on),
+    whose values were recorded at that event. Now, for ML models to learn useful information,
+    the values of the primarily *useful* features must be recorded in the dataset.
+    When we refer to features as useful, we mean those whose values, when changed,
+    significantly alter the overall outcome of the event.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s try to understand this with an example. An extremely popular problem
+    in the domain of **natural language processing** ( **NLP** ) is the task of predicting
+    what the next word would be, given the previous words. We won’t get into the nitty-gritty
+    of this, instead just concentrating on a few scenarios where different feature
+    choices have been made. The different features here are essentially the previous
+    words:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Take the following unfinished sentence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*As the sun set over the horizon, the mountains cast* *elongated ___.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The features (along with the expected word, given a training dataset) would
+    be as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| F11 | F10 | F9 | F8 | F7 | F6 | F5 | F4 | F3 | F2 | F1 | P |'
+  prefs: []
+  type: TYPE_TB
+- en: '| As | the | sun | set | over | the | horizon | the | mountains | cast | elongated
+    | shadows |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 3.1 – The features for predicting the next word
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this understanding of what features are, let’s look at different subsets
+    of features that can be taken as *eligible features* for model training. Let’s
+    take a look at three different cases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this instance, we have the following training set (the words in parentheses
+    indicate the word to be predicted by the model):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see what the dataset would look like once feature transformation
+    has been performed for the three use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s *Case 1* :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| R | F10 | F9 | F8 | F7 | F6 | F5 | F4 | F3 | F2 | F1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R1 | sun | set | over | the | horizon | the | sky | turned | a | fiery |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R2 | set | over | the | horizon | the | clouds | glowed | with | a | golden
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R3 | sun | set | over | the | horizon | the | ocean | shimmed | with | reflected
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R4 | sun | set | over | the | horizon | the | landscape | transformed | into
+    | a |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 3.2 – Features with a lookback window of 10 (Case 1)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is *Case 2* :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| R | F10 | F9 | F8 | F7 | F6 | F5 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R1 | sun | set | over | the | horizon | the |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R2 | set | over | the | horizon | the | clouds |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R3 | sun | set | over | the | horizon | the |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R4 | sun | set | over | the | horizon | the |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 3.3 – Features with 10 th -last to 5 th -last window (Case 2)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we have *Case 3* :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| R | F10 | F8 | F6 | F4 | F2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R1 | sun | over | horizon | sky | a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R2 | set | the | the | glowed | a |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R3 | sun | over | horizon | ocean | with |'
+  prefs: []
+  type: TYPE_TB
+- en: '| R4 | sun | over | horizon | landscape | into |'
+  prefs: []
+  type: TYPE_TB
+- en: Table 3.4 – Features with even indexed words (Case 3)
+  prefs: []
+  type: TYPE_NORMAL
+- en: In which case do you think the model would learn something useful?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Case 1* , without a doubt. This example might be trivial, but it shows how
+    decisions regarding feature selection heavily affect model performance down the
+    pipeline. Feature selection is a step that involves taking the raw data and deciding
+    on the useful truths within it; a mistake in this step can be devastating.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this understanding as to why feature selection is an important step, let’s
+    go back to our discussion on representation learning. Representation learning
+    is encountered in almost all subdomains of ML.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the domain of images, representation learning was initially explored along
+    the lines of traditional statistical approaches such as **principal component
+    analysis** ( **PCA** ). However, given that the data to be learned from was in
+    the form of pixel data, or equivalently, a 2D matrix of float values, other ideas
+    that were more optimized for the task were explored. The most successful idea
+    in this domain was the idea of using **convolutional filters** to extract meaningful
+    patterns from the data matrix. This was the fundamental driving force behind most
+    of the ML tasks that were conducted on images in the modern day. The **convolutional
+    neural network** ( **CNN** ) has its initial layers reliant on finding the filters
+    with the right values so that meaningful patterns can be extracted from the image
+    when they’re filtered through it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the domain of natural language, the key breakthrough in feature learning
+    was understanding the dependence of every token on its previous tokens. A representation
+    needed to be formulated that learned as we passed each token while maintaining
+    a state of the learned knowledge thus far. **Recurrent neural networks** ( **RNNs**
+    ) maintain the concept of memory where, as the tokens are passed sequentially,
+    the memory vector gets updated based on the memory state and the new token. Other
+    architectures, such as **long short-term memory** ( **LSTM** ), improve upon the
+    RNN model to support longer-range dependencies and interactions between tokens.
+    Other traditional methods have included algorithms such as **GloVe** and **Word2Vec**
+    , which are of the shallow variant.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In tabular data, there are several tried and tested approaches to feature manipulation
+    that can be used to denoise and extract meaningful information from the data.
+    Common dimensionality reduction approaches such as PCA and **encoder-decoder networks**
+    have proven effective in the industry. Using matrix factorization methods over
+    incomplete and sparse interaction matrices to generate embeddings has been a very
+    effective first step in building business-facing technologies such as search and
+    recommendation engines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The list of innovations in the field of representation learning is endless.
+    The key takeaway is that representation learning is strongly tied to the domain
+    of the problem being tackled. Effectively, it’s a way to guide the algorithm so
+    that it uses more effective techniques instead of a generic architecture, and
+    it doesn’t exploit the invariant patterns of the underlying data it’s trying to
+    learn from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Graph representation learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous section, we talked about the need to perform representation
+    learning on different types of data, such as images, tabular, and text. In this
+    section, we’ll try to extend this idea to graph data. Graph data, theoretically,
+    is more expressive than all the other data representation methods we’ve dealt
+    with so far (such as matrices for images, word tokens, and tables). With this
+    expressivity comes the added challenge of finding a representation framework that
+    captures relevant information, even though fewer constraints are enforced in the
+    data representation itself. Words in text are sequential, pixels in images are
+    represented as 2D matrices, and tabular data assumes independence of rows (most
+    of the time).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Such inherent patterns in data allow us to exploit it during the representation
+    learning step (think skip-grams for words and convolutional filters for images).
+    However, the constraints in graphs are very loose – so loose in fact that there
+    is no obvious pattern to be exploited. There are two primary challenges that graph
+    data poses compared to other forms of data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Increased computational costs** : One of the goals of representation learning
+    is to output features that make the patterns more obvious for the model to learn
+    from. As discussed in [*Chapter 1*](B22118_01.xhtml#_idTextAnchor014) , there
+    are several useful properties in graphs that can be exploited to make quick inferences.
+    Understanding the shortest path between two nodes can be a useful feature to add
+    to the representation, but computing that takes at least ![<mml:math  ><mml:mi>O</mml:mi><mml:mo>(</mml:mo><mml:mo>|</mml:mo><mml:msup><mml:mrow><mml:mi>V</mml:mi><mml:mo>|</mml:mo></mml:mrow><mml:mrow><mml:mn>2</mml:mn></mml:mrow></mml:msup><mml:mo>)</mml:mo></mml:math>](img/82.png)
+    time on average. Pattern mining using traditional techniques is a difficult process
+    to undertake when we try to apply ML to graphs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**It’s difficult to attack the problem in a distributed manner** : Modern ML
+    pipelines are performant because of their ability to horizontally scale as the
+    volume of data grows. Traditional data representations of images, texts, and tabular
+    data can be easily parallelized owing to their inherent independence within data
+    elements. Graph data is difficult to break down into smaller chunks, where one
+    chunk has no dependence on another (essentially, this is graph partitioning).
+    This is the biggest bottleneck and is a point of active research for making graph-based
+    ML solutions feasible for production use cases. One great resource on this is
+    *Graph neural networks meet with distributed graph partitioners and reconciliations*
+    by Mu et al. ( 2023, [https://www.sciencedirect.com/science/article/abs/pii/S0925231222011894](https://www.sciencedirect.com/science/article/abs/pii/S0925231222011894)
+    ).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Given these issues, it was quickly understood that traditional representation
+    learning approaches that worked on other kinds of data wouldn’t be useful for
+    graph data. There needed to be a fresh approach tailored toward graph data. Even
+    though the differences that we’ve mentioned concerning the problems in representation
+    learning in graph data versus traditional data exist, graph representation learning
+    maintains a partially common objective regarding representation learning in other
+    domains. The objective of graph representation learning includes finding a representation
+    mechanism that will reduce noise in the truth data, as well as highlight patterns
+    that exist in the graph. The representation space also needs to be friendly toward
+    modern-day ML algorithms so that gradients and scalar products can be easily computed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Keeping all these objectives and constraints in mind, graph representation
+    learning tries to find a transformation so that the following two goals can be
+    achieved:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**The representations capture the relationship between the nodes** . If two
+    nodes are connected by an edge, the distance between the representations of these
+    two nodes should be small. This concept should also hold to higher orders. So,
+    if a subgraph is densely connected, the representations of the nodes of that subgraph
+    should also form a dense cluster in the representation space.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**The representations are optimized so that they solve the inference problem
+    being tackled** . Popular graph problems include node classification, link prediction,
+    and important node identification. Without this goal, the graph representation
+    would remain too generic to solve interesting problems that lead to a business
+    lift.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In conclusion, graph representation learning involves finding embeddings (or
+    vectors) for every node of the graph so that vital information about the graph
+    structure and information relevant to the inference problem can be captured in
+    the embedding space. The first goal is often called the reconstruction constraint
+    in this domain, whereby you can (to a certain degree) reconstruct the graph data,
+    given the node embeddings. Before we delve deeper into various graph representation
+    learning approaches, we must clarify two things:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Graph data is rarely just a set of *nodes* ( *V* ) and *edges* ( *E* ). Often,
+    all the nodes (and possibly the edges) contain side information, meaning additional
+    fields are used to describe the nature of the nodes and edges. Modern representation
+    techniques must also have a way to incorporate this information in the embeddings
+    since they’re often pivotal in the inference task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Graph representation learning is a ubiquitous step in graph learning. As with
+    traditional ML approaches, some approaches involve distinct steps of learning
+    the representation embeddings, followed by learning the model that’s being used
+    for inference. Other approaches combine both steps, where the embedding step is
+    handled internally within the model that’s responsible for outputting the inference
+    output. In the world of graph learning, the same two approaches apply.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, let’s dive into some graph representation learning approaches. There has
+    been substantial work on graph representation learning, and different approaches
+    have tried to tackle different aspects of the problem. Without diving too deep
+    into the chronological development of algorithms in this field, we’ll discuss
+    the most relevant approaches in the industry today. All approaches can be segregated
+    into two concepts: **shallow encodings** and **deep encodings** .'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To explain the difference in a single statement, encodings are *shallow* when
+    only the fields of the node embeddings need to be estimated; if more parameters
+    need to be estimated alongside the fields of the node embeddings, then the encoding
+    method is called *deep* encoding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The remainder of this chapter will primarily focus on the most popular shallow
+    encoding algorithms in graph representation learning: DeepWalk and Node2Vec. The
+    different GNN architectures that will be mentioned in the following chapters are
+    examples of deep encoding techniques.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A framework for graph learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'If we take a holistic view of the approaches that are followed for learning
+    inference models on graphs, we’ll notice a pattern. Every solution can be divided
+    into three distinct steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step involves coming up with a mechanism to find a **local subgraph**
+    , given a node in the graph. This term needs to be defined here. For example,
+    the graph containing all the nodes that are directly connected to an edge of the
+    concerned node can be a local subgraph. Another example can be the set of nodes
+    that have a first or second-degree connection to the concerned node. This local
+    subgraph is often called the receptive field of the concerned node in academic
+    literature.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The second step involves a mechanism that takes input from the concerned node
+    and its receptive field and outputs the node embedding. The node embedding is
+    simply a vector of real values of a certain dimension. It’s important to have
+    a similarity metric defined in this metric space. A low similarity score between
+    two vectors suggests that they are close to each other in this space.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The final step involves defining a learning objective. A learning objective
+    is a function that tries to emulate what the learned node embeddings need to be
+    optimized for. This can involve trying to mimic the graph structure, where if
+    nodes are connected by edges, their embeddings will be more similar to each other.
+    Alternatively, it could involve some graph inference tasks, such as optimizing
+    the embeddings so that the nodes can be classified correctly.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This framework should always be in the back of your mind while you go through
+    the rest of this book. Several algorithms and learning models will be outlined
+    in the following few chapters, and you should always be looking to answer the
+    question of how different components of the algorithm conform to this framework.
+    With this knowledge at hand, let’s look at the DeepWalk algorithm and its varieties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DeepWalk
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: DeepWalk is a learning technique that falls under the subcategory of algorithms
+    where a random walk must be performed over the graph to find optimal embeddings.
+    To make sense of random walk-based learning techniques, let’s rewind and pick
+    up from where the previous section left off. Remember that the objective of this
+    exercise is to come up with an embedding for every node in the graph so that pairs
+    of embeddings are very similar in the vector space if – and only if – the nodes
+    these embeddings represent are also very similar in the graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To achieve this goal, we must define what *similar* means in both the vector
+    space and the graph. Similarity in the vector space is often defined using the
+    cosine similarity function (other similarity functions can also be used, such
+    as L1-similarity, but for the graph use case, cosine similarity remains the most
+    popular). Let’s start by defining cosine similarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s say we have the embeddings of two nodes, ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>1</mml:mn></mml:mrow></mml:msub></mml:math>](img/83.png)
+    and ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>2</mml:mn></mml:mrow></mml:msub></mml:math>](img/84.png)
+    :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><mrow><msub><mi>v</mi><msub><mi>n</mi><mn>1</mn></msub></msub><mo>=</mo><mo>(</mo><msub><mi>x</mi><mn>1</mn></msub><mo>,</mo><msub><mi>x</mi><mn>2</mn></msub><mo>,</mo><msub><mi>x</mi><mn>3</mn></msub><mo>,</mo><mo>…</mo><mo>,</mo><msub><mi>x</mi><mi>d</mi></msub><mo>)</mo></mrow></mrow></mrow></math>](img/85.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![<math  display="block"><mrow><mrow><mrow><msub><mi>v</mi><msub><mi>n</mi><mn>2</mn></msub></msub><mo>=</mo><mo>(</mo><msub><mi>y</mi><mn>1</mn></msub><mo>,</mo><msub><mi>y</mi><mn>2</mn></msub><mo>,</mo><msub><mi>y</mi><mn>3</mn></msub><mo>,</mo><mo>…</mo><mo>,</mo><msub><mi>y</mi><mi>d</mi></msub><mo>)</mo></mrow></mrow></mrow></math>](img/86.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In this case, the cosine similarity function, ![<mml:math  ><mml:mi>C</mml:mi><mml:mi>o</mml:mi><mml:mi>s</mml:mi><mml:mfenced
+    separators="|"><mml:mrow><mml:msub><mml:mrow><mml:mi>v</mml:mi></mml:mrow><mml:mrow><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>1</mml:mn></mml:mrow></mml:msub></mml:mrow></mml:msub><mml:mo>,</mml:mo><mml:mi> </mml:mi><mml:msub><mml:mrow><mml:mi>v</mml:mi></mml:mrow><mml:mrow><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>2</mml:mn></mml:mrow></mml:msub></mml:mrow></mml:msub></mml:mrow></mml:mfenced></mml:math>](img/87.png)
+    , is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><mi>cos</mi><mfenced open="(" close=")"><mrow><msub><mi>v</mi><msub><mi>n</mi><mn>1</mn></msub></msub><mo>,</mo><msub><mi>v</mi><msub><mi>n</mi><mn>2</mn></msub></msub></mrow></mfenced><mo>=</mo><mfrac><mrow><mo>(</mo><msub><mi>x</mi><mn>1</mn></msub><mo>.</mo><msub><mi>y</mi><mn>1</mn></msub><mo>+</mo><msub><mi>x</mi><mn>2</mn></msub><mo>.</mo><msub><mi>y</mi><mn>2</mn></msub><mo>+</mo><msub><mi>x</mi><mn>3</mn></msub><mo>.</mo><msub><mi>y</mi><mn>3</mn></msub><mo>+</mo><mo>…</mo><mo>+</mo><msub><mi>x</mi><mi>d</mi></msub><mo>.</mo><msub><mi>y</mi><mi>d</mi></msub><mo>)</mo></mrow><msqrt><mrow><mfenced
+    open="(" close=")"><mrow><msubsup><mi>x</mi><mn>1</mn><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>x</mi><mn>2</mn><mn>2</mn></msubsup><mo>+</mo><mo>…</mo><mo>+</mo><msubsup><mi>x</mi><mi>d</mi><mn>2</mn></msubsup></mrow></mfenced><mo>(</mo><msubsup><mi>y</mi><mn>1</mn><mn>2</mn></msubsup><mo>+</mo><msubsup><mi>y</mi><mn>2</mn><mn>2</mn></msubsup><mo>+</mo><mo>…</mo><mo>+</mo><msubsup><mi>y</mi><mi>d</mi><mn>2</mn></msubsup><mo>)</mo></mrow></msqrt></mfrac></mrow></mrow></math>](img/88.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The interpretation is well-studied in the field of ML, so not much has been
+    elaborated here. In short, you can think of cosine similarity as the score of
+    how similarly oriented the two vectors are in the vector space. Vectors that point
+    almost in a similar direction will have a cosine similarity score closer to 1,
+    while two vectors that are perpendicular to each other will have a score closer
+    to 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The easy part was defining the similarity score between the embeddings. Now,
+    we need to come up with a similarity score between the nodes of the graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Random walk – the what and the why
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: How do we define the similarity between two nodes in a graph? Could it be as
+    simple as saying, assign a score of 1 if they are directly connected by an edge;
+    if they are not directly connected but share common neighbors, assign a score
+    equal to the natural logarithm of the number of common neighbors; if neither condition
+    is met, assign a score of 0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A lot of thought can be put into finding the best definition of similarity
+    between the two nodes, and you can imagine how this definition would need to approximate
+    a key structural property of the graph. All heuristics that would try to define
+    the similarity score between the nodes would have advantages and disadvantages.
+    However, there’s one idea we can implement that’s simple and mathematically elegant:
+    **random walks** .'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The idea of random walks is quite self-explanatory. This algorithm is used
+    to find a neighborhood for some node in the graph, say ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/89.png)
+    . Based on some strategy, say ![<mml:math  ><mml:mi>R</mml:mi></mml:math>](img/90.png)
+    (we’ll explain what strategies mean in a bit), we try to find the elements that
+    would be part of the neighborhood of ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/91.png)
+    ; here, the neighborhood is ![<mml:math  ><mml:msub><mml:mrow><mml:mi>N</mml:mi></mml:mrow><mml:mrow><mml:mi>R</mml:mi></mml:mrow></mml:msub><mml:mo>(</mml:mo><mml:mi>v</mml:mi><mml:mo>)</mml:mo></mml:math>](img/92.png)
+    . The following steps explain the algorithm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Starting from ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/89.png) , we
+    ask the strategy, ![<mml:math  ><mml:mi>R</mml:mi></mml:math>](img/4.png) , to
+    decide (with some degree of randomness) which node that’s connected to ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/95.png)
+    we should jump to. Let that node be called ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>1</mml:mn></mml:mrow></mml:msub></mml:math>](img/96.png)
+    . Add ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>1</mml:mn></mml:mrow></mml:msub></mml:math>](img/97.png)
+    to the set, ![<mml:math  ><mml:msub><mml:mrow><mml:mi>N</mml:mi></mml:mrow><mml:mrow><mml:mi>R</mml:mi></mml:mrow></mml:msub><mml:mo>(</mml:mo><mml:mi>v</mml:mi><mml:mo>)</mml:mo></mml:math>](img/92.png)
+    .
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat *Step 1* , but start from ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>1</mml:mn></mml:mrow></mml:msub></mml:math>](img/99.png)
+    instead of ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/89.png) . The output
+    of the strategy would be ![<mml:math  ><mml:msub><mml:mrow><mml:mi>n</mml:mi></mml:mrow><mml:mrow><mml:mn>2</mml:mn></mml:mrow></mml:msub></mml:math>](img/101.png)
+    , and that would be appended to ![<math ><mrow><mrow><mrow><msub><mi>N</mi><mi>R</mi></msub><mo>(</mo><mi>v</mi><mo>)</mo></mrow></mrow></mrow></math>](img/102.png)
+    . Repeat this for a fixed number of steps until you have enough entries in your
+    set.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: That’s it! We’re pretty much done with the random walk step of the algorithm.
+    Before we consider how random walks generate neighborhoods, let’s discuss strategies.
+    The strategy, ![<mml:math  ><mml:mi>R</mml:mi></mml:math>](img/4.png) , decides
+    which node should we jump to from the previous node. The simplest strategy is
+    a random choice where, given all the connected nodes, you choose a node at random
+    with the same probability as all others. Other strategies can be employed as well,
+    where, for example, the unvisited nodes can be given more bias, instead of us
+    adding the same node to the neighborhood repeatedly. The different choice of strategies
+    often ends up being the differentiating factor between different shallow embedding
+    learning algorithms in this class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why random walks? Random walks are a good way to sample the important features
+    of the graph efficiently. First, if we notice that a node occurs within the random
+    walk neighborhood of another node with high probability, we can probably conclude
+    they’re supposed to be very similar to each other. Such a technique doesn’t rely
+    on hacky heuristics, which are often limited by the degree of connections. Random
+    walk-based sampling doesn’t need to worry about the degree of connections to figure
+    out the best candidates to be part of the neighborhood at a statistical level.
+    Second, it’s a quick and efficient way to sample. The training step doesn’t need
+    to evaluate across all the nodes in the graph; it just needs to concern itself
+    with the ones in the neighborhood.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next subsection, we’ll build on our understanding of random walks and
+    use it to come up with a method of estimating the embedding components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Estimating the node embeddings
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Now that we’ve learned the neighborhood set ![<mml:math  ><mml:msub><mml:mrow><mml:mi>N</mml:mi></mml:mrow><mml:mrow><mml:mi>R</mml:mi></mml:mrow></mml:msub><mml:mo>(</mml:mo><mml:mi>v</mml:mi><mml:mo>)</mml:mo></mml:math>](img/104.png)
+    for the node, ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/95.png) , let’s
+    understand how it’s relevant to the task of learning node embeddings. Recall that
+    before we started talking about random walks, our subproblem of concern was to
+    find a way to estimate the similarity of two nodes in a graph. Coming up with
+    a similarity function over the nodes of a graph is a tough ask, but can we make
+    some guided assumptions about this similarity score?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An important assumption could be as follows: “ *When two nodes are similar,
+    one node likely lies within the neighborhood of the other.* ” If we assume this
+    statement to be true, we’ve pretty much solved our problem. Now, we can leverage
+    this assumption to come up with the node embeddings. Without delving deep into
+    probability magic (such as that of likelihood functions, and so on), the crux
+    of the idea is that if this assumption is true in the graph space, then it must
+    also be true in the vector space where the embeddings are defined. If that’s the
+    case, we need to find the embedding fields so that the likelihood function is
+    maximized whenever one node is within the neighborhood of the other.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So, if ![<mml:math  ><mml:msub><mml:mrow><mml:mi>z</mml:mi></mml:mrow><mml:mrow><mml:mi>v</mml:mi></mml:mrow></mml:msub></mml:math>](img/106.png)
+    is an embedding vector of node ![<mml:math  ><mml:mi>v</mml:mi></mml:math>](img/45.png)
+    , we can find the components of ![<mml:math  ><mml:msub><mml:mrow><mml:mi>z</mml:mi></mml:mrow><mml:mrow><mml:mi>v</mml:mi></mml:mrow></mml:msub></mml:math>](img/108.png)
+    so that the following value is being maximized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><msub><mi>L</mi><mi>v</mi></msub><mo>=</mo><mrow><munder><mo>∑</mo><mrow><mi>u</mi><mo>∈</mo><msub><mi>N</mi><mi>R</mi></msub><mfenced
+    open="(" close=")"><mi>v</mi></mfenced></mrow></munder><mrow><mo>−</mo><mo>(</mo><mi
+    mathvariant="normal">l</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">g</mi><mo>(</mo><mi>P</mi><mo>(</mo><mi>u</mi><mo>|</mo><msub><mi>z</mi><mi>v</mi></msub><mo>)</mo><mo>)</mo></mrow></mrow></mrow></mrow></math>](img/109.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The negative log of the probability is a form of the log-likelihood function.
+    Now, since this must be true across all the nodes and their embeddings, we must
+    optimize the components while keeping all the nodes in mind, essentially maximizing:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><mi>L</mi><mo>=</mo><mrow><munder><mo>∑</mo><mrow><mi>v</mi><mo>∈</mo><mi>V</mi></mrow></munder><msub><mi>L</mi><mi>v</mi></msub></mrow><mo>=</mo><mrow><munder><mo>∑</mo><mrow><mi>v</mi><mo>∈</mo><mi>V</mi></mrow></munder><mrow><munder><mo>∑</mo><mrow><mi>u</mi><mo>∈</mo><msub><mi>N</mi><mi>R</mi></msub><mfenced
+    open="(" close=")"><mi>v</mi></mfenced></mrow></munder><mrow><mo>−</mo><mo>(</mo><mi
+    mathvariant="normal">l</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">g</mi><mo>(</mo><mi>P</mi><mo>(</mo><mi>u</mi><mo>|</mo><msub><mi>z</mi><mi>v</mi></msub><mo>)</mo><mo>)</mo></mrow></mrow></mrow></mrow></mrow></math>](img/110.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The final step is to tie the probability function to the similarity function
+    we defined previously. A common way of creating a probability distribution within
+    an embedding space is to use a **softmax** function, which converts a function
+    into a probability density function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><mi>P</mi><mfenced open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>|</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced><mo>=</mo><mi>s</mi><mi>o</mi><mi>f</mi><mi>t</mi><mi>m</mi><mi>a</mi><mi>x</mi><mfenced
+    open="(" close=")"><mrow><mi>s</mi><mi>i</mi><mi>m</mi><mfenced open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced></mrow></mfenced><mo>=</mo><mfrac><mrow><mi
+    mathvariant="normal">e</mi><mi mathvariant="normal">x</mi><mi mathvariant="normal">p</mi><mo>(</mo><mi>s</mi><mi>i</mi><mi>m</mi><mfenced
+    open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced><mo>)</mo></mrow><mrow><msub><mo>∑</mo><mrow><mi>u</mi><mo>∈</mo><mi>V</mi></mrow></msub><mrow><mi
+    mathvariant="normal">e</mi><mi mathvariant="normal">x</mi><mi mathvariant="normal">p</mi><mo>(</mo><mi>s</mi><mi>i</mi><mi>m</mi><mfenced
+    open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced><mo>)</mo></mrow></mrow></mfrac></mrow></mrow></math>](img/111.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![<math ><mrow><mrow><mi>s</mi><mi>i</mi><mi>m</mi><mfenced open="("
+    close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced></mrow></mrow></math>](img/112.png)
+    is simply the cosine similarity function we defined previously. By plugging this
+    definition back into our optimization metric, we get the final parameterized form
+    of the loss function that needs to be optimized:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![<math  display="block"><mrow><mrow><mi>L</mi><mo>=</mo><mrow><munder><mo>∑</mo><mrow><mi>v</mi><mo>∈</mo><mi>V</mi></mrow></munder><mrow><munder><mo>∑</mo><mrow><mi>u</mi><mo>∈</mo><msub><mi>N</mi><mi>R</mi></msub><mfenced
+    open="(" close=")"><mi>v</mi></mfenced></mrow></munder><mrow><mo>−</mo><mo>(</mo><mi
+    mathvariant="normal">l</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">g</mi><mo>(</mo><mfrac><mrow><mi
+    mathvariant="normal">e</mi><mi mathvariant="normal">x</mi><mi mathvariant="normal">p</mi><mo>(</mo><mi>s</mi><mi>i</mi><mi>m</mi><mfenced
+    open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced><mo>)</mo></mrow><mrow><msub><mo>∑</mo><mrow><mi>u</mi><mo>∈</mo><mi>V</mi></mrow></msub><mrow><mi
+    mathvariant="normal">e</mi><mi mathvariant="normal">x</mi><mi mathvariant="normal">p</mi><mo>(</mo><mi>s</mi><mi>i</mi><mi>m</mi><mfenced
+    open="(" close=")"><mrow><msub><mi>z</mi><mi>u</mi></msub><mo>,</mo><msub><mi>z</mi><mi>v</mi></msub></mrow></mfenced><mo>)</mo></mrow></mrow></mfrac><mo>)</mo></mrow></mrow></mrow></mrow></mrow></math>](img/113.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Using gradient descent, we’ll find the embeddings, ![<mml:math  ><mml:mi>z</mml:mi></mml:math>](img/114.png)
+    , so that ![<mml:math  ><mml:mi>L</mml:mi></mml:math>](img/115.png) is maximized.
+    This will ensure we find the embeddings that satisfy our criterion.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that there are a few other steps in the optimization process that make
+    the process computationally feasible, with one of the most important being the
+    concept of negative sampling. Here, instead of calculating the normalization component
+    (the denominator) of the **softmax** function across all nodes on each iteration,
+    we take a few random nodes that aren’t in the neighborhood of the concerned node
+    and calculate the sum over that. This type of optimization problem is called **noise
+    contrastive estimations** , and it’s a popular technique in NLP learning tasks.
+    It’s often called the **skip-gram model** .
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we conclude this section, it might be a good time to mention that the preceding
+    algorithm in its entirety is termed *DeepWalk* , as stated in the original paper,
+    which was published in 2014 ( [https://dl.acm.org/doi/10.1145/2623330.2623732](https://dl.acm.org/doi/10.1145/2623330.2623732)
+    ). The DeepWalk algorithm is an efficient process of estimating shallow encodings.
+    However, the simplicity of the approach is one of its major shortcomings: the
+    random unbiased nature of the random walk strategy often wanders too far away
+    from the concerned node, so it samples neighborhoods that aren’t very local to
+    the node. As a result, the embeddings aren’t optimized based on the most local
+    information of the node. Several other algorithms build on the work that was done
+    in this paper. We’ll talk about one such prominent improvement in the next section,
+    known as *Node2Vec.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the pseudocode for DeepWalk:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding pseudocode outlines two main functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, **DeepWalk** generates multiple random walks for each node in the graph
+    and uses Word2Vec to create embeddings
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Second, **RandomWalk** performs a single random walk, starting from a given
+    node for a specified length
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Node2Vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The DeepWalk algorithm uses unbiased randomized walks to generate the neighborhood
+    of any concerned node. Its unbiased nature ensures the graph structure is captured
+    in the best possible manner statistically, but, in practice, this is often the
+    less optimal choice. The premise of Node2Vec is that we introduce bias in the
+    random walk strategy to ensure that sampling is done in such a way that both the
+    local and global structures of the graph are represented in the neighborhood.
+    Most of the other concepts in Node2Vec are the same as those for DeepWalk, including
+    the learning objective and the optimization step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we delve into the nitty-gritty of the algorithm, let’s do a quick recap
+    of graph traversal approaches.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Graph traversal approaches
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As we covered briefly in [*Chapter 1*](B22118_01.xhtml#_idTextAnchor014) , the
+    two most popular graph traversal approaches are **breadth-first search** ( **BFS**
+    ) and **depth-first search** ( **DFS** ). BFS is the local first approach to graph
+    exploration where, given a starting node, all first-degree connections are explored
+    before we venture away from the starting node. DFS, on the other hand, takes a
+    global first approach to graph exploration, where the impetus is to explore as
+    deep into the graph as possible before backtracking upon reaching a leaf node.
+    The random walk strategy that’s employed in the DeepWalk algorithm is statistically
+    closer to the DFS approach than the BFS approach, which is why the local structure
+    is under-represented in the neighborhood.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*How can a random walk strategy emulate BFS* *and DFS?*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, let’s consider the case for DFS. In a random walk process, when the
+    current position is on some node, we have two choices: visit the last node that
+    was visited or visit some other node. If we can ensure that the first option happens
+    only when the current node has no other connected nodes, then we can ensure the
+    random walk follows DFS traversal.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For a random walk to emulate BFS, a bit more consideration is needed. First,
+    the random walk entity needs to keep track of which node it came from in the last
+    step. Now, from the current node, we have three options: go back to the previous
+    node, go to a node that’s further away from the previous node, or go to a node
+    that’s equidistant from the previous node as the current node is. If we minimize
+    the chances of the second option happening, we’re effectively left with a BFS
+    traversal.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, we can add biases to the random walk algorithm to emulate the BFS and DFS
+    traversal patterns. With this knowledge, we can enforce finer control over the
+    random walk so that the neighborhoods contain local structure and global structure
+    representations with the ratio we’re interested in.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finalizing the random walk strategy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s formalize the strategy mentioned previously. For this, we’ll use two
+    hyperparameters: **p** and **q** . The first hyperparameter, **p** , is related
+    to a weight that decides how likely the random walk will go back to the node it
+    came from in the last step. The second hyperparameter, **q** , decides how likely
+    the walk will venture off to a node that’s further away from the previous node
+    or not. It can also be interpreted as a parameter that decides how much preference
+    the BFS strategy gets over the DFS strategy. The example in *Figure 3* *.1* can
+    clarify this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 3.1 – A small graph showing the effect of the Node2Vec hyperparameters](img/B22118_03_1.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 3.1 – A small graph showing the effect of the Node2Vec hyperparameters
+  prefs: []
+  type: TYPE_NORMAL
+- en: Take a look at this graph. Here, the random walk has migrated from node **n**
+    L to **n** in the last step. In the current step, it needs to decide which node
+    it should migrate to, with its options being **n** 1 , **n** 2 , or **n** L .
+    The probabilities of the next migration are decided by the hyperparameters, **p**
+    and **q** . Let **c** be the probability that the next migration is to **n** 1
+    . Then, the probability of migration to **n** L is **c/p** , while the probability
+    of migration to **n** 2 is **c/q** . Here, **c** should be such that the sum of
+    all probabilities adds up to 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To clarify this, the values of the probabilities are the way they are because
+    of what each node represents; **n** L is the last visited node, which is why its
+    visit is weighed additionally by the **p** value. Here, **n** 1 is the BFS option
+    since it is at the same distance from **n** L as **n** is, while **n** 2 is the
+    DFS option since it is further away from **n** L . This is why the ratio of their
+    visits is **q** .
+  prefs: []
+  type: TYPE_NORMAL
+- en: With this strategy of assigning biases to each step of neighborhood creation,
+    we can ensure the neighborhood consists of representatives from both the local
+    and global context of the concerned node. Note that this random walk strategy
+    is called a random walk strategy of the second order since we need to maintain
+    a state – that is, the knowledge of the previous state from where the walk has
+    migrated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s the pseudocode for Node2Vec:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Node2Vec extends DeepWalk by introducing biased random walks that are controlled
+    by the **p** and **q** parameters. The **BiasedRandomWalk** function uses these
+    parameters to balance between exploring local neighborhoods ( **q** ) and reaching
+    farther nodes ( **p** ), allowing for a more flexible exploration of the graph
+    structure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Node2Vec versus DeepWalk
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The steps that follow are the same as the ones that were mentioned for DeepWalk.
+    We try to maximize the likelihood that the embeddings within the neighborhood
+    of the concerned node are most similar to the concerned node. This optimization
+    step, when performed across all the nodes, gives us the optimal embeddings. The
+    difference from DeepWalk is in terms of what the embeddings are being optimized
+    for. In DeepWalk, the choice of neighbors for a node was different than it was
+    for the Node2Vec scenario.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we’ve covered the two most popular shallow graph representation learning
+    algorithms. We’ve learned how DeepWalk and Node2Vec, two similar algorithms, can
+    elegantly employ the random walk approach to generate shallow node embeddings.
+    However, we need to understand the limitations of such approaches since such restrictions
+    will act as motivation for the topics that will be discussed later in this book
+    to be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Limitations of shallow encodings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Shallow embeddings have the advantage of being easy to understand and relatively
+    easy to implement. However, they have several disadvantages, especially compared
+    to deep encoding techniques:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**This method can’t incorporate node or link-level features** . When using
+    graph data, it’s common to have auxiliary information attached to every node or
+    every edge, to describe further properties. By default, the random walk approaches
+    aren’t capable of incorporating such information in their embeddings.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**They can be computationally expensive** . How? If we’re interested in embeddings
+    of some dimension, **d** , and the number of nodes is **v** , then we need to
+    learn a total of **v.d** values. Deep approaches with hidden layers would likely
+    have much lower parameters to learn, making the process more computationally efficient.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building from the previous point, since there are so many parameters to learn
+    in this approach, **we often can’t utilize the advantages that come with making
+    the representations denser** . Denser representations (which use fewer parameters)
+    can often reduce the amount of noise that’s learned. Obviously, below a minimum
+    threshold, the number of parameters would become too low to be able to effectively
+    represent the complexity of the graph data being learned.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, **the learning approaches for shallow encodings provide no provision
+    to incorporate the graph inference tasks within the learning problem** . The embeddings
+    are learned based on graph structure and are to be used for generic purposes,
+    instead being optimized for one inference task.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Many of these limitations can be overcome with more sophisticated architectures
+    that are optimized to learn node embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we introduced graph representation learning, a fundamental
+    concept in the domain of using ML on graph data. First, we discussed what representation
+    learning is, in the general sense in ML. When concentrating solely on graphs,
+    you learned that the primary objective of representation learning is to find embeddings
+    that can emulate the structure of the graph, as well as learn important concepts
+    that are necessary for the inference task, if any.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also explored DeepWalk and Node2Vec, two popular graph representation learning
+    approaches, which comprise a class of algorithms that use random walks to generate
+    a neighborhood for a node. Based on this neighborhood, you can optimize the embedding
+    values so that the embeddings of the nodes in the neighborhood are highly similar
+    to those of the embeddings of the concerned node. Finally, we looked at the drawbacks
+    of using these approaches in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we’ll concentrate on the most popular deep learning architectures
+    that can be used to learn graph node embeddings. You’ll learn how such architectures
+    exploit patterns in graphs while maintaining the invariants in the graph data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 2: Advanced Graph Learning Techniques'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this part of the book, you will explore advanced concepts in graph learning,
+    including deep learning architectures for graphs, common challenges in the field,
+    and the integration of large language models. You will learn about state-of-the-art
+    approaches, technical challenges, and emerging solutions in graph-based AI systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part has the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 4*](B22118_04.xhtml#_idTextAnchor078) , *Deep Learning Models for
+    Graphs*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 5*](B22118_05.xhtml#_idTextAnchor093) , *Graph Deep Learning Challenges*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 6*](B22118_06.xhtml#_idTextAnchor118) , *Harnessing Large Language
+    Models for Graph Learning*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

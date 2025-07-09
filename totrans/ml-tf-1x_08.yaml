@@ -1,0 +1,1052 @@
+- en: The Doctor Will See You Now
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have, so far, used deep networks for image, text, and time series processing.
+    While most of our examples were interesting and relevant, they weren't enterprise-grade.
+    Now, we'll tackle an enterprise-grade problem—medical diagnosis. We make the enterprise-grade
+    designation because medical data has attributes one does not typically deal with
+    outside large enterprises, namely proprietary data formats, large native sizes,
+    inconvenient class data, and atypical features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Medical imaging files and their peculiarities
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dealing with large image files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extracting class data from typical medical files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applying networks "pre-trained" with non-medical data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scaling training to accommodate the scale typically with medical data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Obtaining medical data is a challenge on its own, so we'll piggyback on a popular
+    site all readers should become familiarized with—Kaggle. While there are a good
+    number of medical datasets freely available, most require an involved sign-up
+    process to even access them. Many are only publicized in specific sub-communities
+    of the medical image processing field, and most have bespoke submission procedures.
+    Kaggle is probably the most normalized source for a significant medical imaging
+    dataset as well as non-medical ones you can try your hand on. We'll focus specifically
+    on Kaggle's Diabetic Retinopathy Detection challenge.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can view the dataset here: [https://www.kaggle.com/c/diabetic-retinopathy-detection/data](https://www.kaggle.com/c/diabetic-retinopathy-detection/data)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The dataset has a training set and a blind test set. The training set is used
+    for, of course, training our network, and the test set is used to submit our results
+    using our network on the Kaggle website.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the data is quite large (32 GB for the training set and 49 GB for the test
+    set), both of them are divided into multiple ZIP files of about 8 GB.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The test set here is blind—we don't know their labels. This is for the purpose
+    of having fair submissions of the test set results from our trained network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As far as the training set goes, its labels are present in the `trainLabels.csv`
+    file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The challenge
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Before we deep-dive into the code, remember how most machine learning efforts
+    involve one of two simple goals—classification or ranking. In many cases, the
+    classification is itself a ranking because we end up choosing the classification
+    with the greatest rank (often a probability). Our foray into medical imaging will
+    be no different—we will be classifying images into either of these binary categories:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Disease state/positive
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Normal state/negative
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Or, we will classify them into multiple classes or rank them. In the case of
+    the diabetic retinopathy, we''ll rank them as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Class 0: No Diabetic Retinopathy'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Class 1: Mild'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Class 2: Moderate'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Class 3: Severe'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Class 4: Widespread Diabetic Retinopathy'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Often, this is called scoring. Kaggle kindly provides participants over 32
+    GB of training data, which includes over 35,000 images. The test data is even
+    larger—49 GB. The goal is to train on the 35,000+ images using the known scores
+    and propose scores for the test set. The training labels look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Image** | **Level** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `10_left` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `10_right` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `13_left` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `13_right` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `15_left` | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `15_right` | 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `16_left` | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `16_right` | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `17_left` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `17_right` | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: Some context here—diabetic retinopathy is a disease of the retina, inside the
+    eye, so we have scores for the left and right eye. We can treat them as independent
+    training data, or we can get creative later and consider them in the larger context
+    of a single patient. Let's start simple and iterate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By now, you are probably familiar with taking a set of data and segmenting out
+    chunks for training, validation, and testing. That worked well for some of the
+    standard datasets we've used, but this dataset is part of a competition and one
+    that is publicly audited, so we don't know the answers! This is a pretty good
+    reflection of real life. There is one wrinkle—most Kaggle competitions let you
+    propose an answer and tell you your aggregate score, which helps with learning
+    and direction-setting. It also helps them and the community know which users are
+    doing well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since the test labels are blinded, we''ll need to change two things we''ve
+    done before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will need to have one procedure for internal development and iteration (we'll
+    likely chunk our training set into a training, validation, and test set). We will
+    need another procedure for external testing (we may settle upon a promising setup
+    that works well, and then we may either run it on the blind test set or we may
+    retrain on the entire training set first).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We will need to make a formal proposal in a very specific format, submit it
+    to the independent auditor (Kaggle, in this case), and gauge the progress accordingly.
+    Here is what a sample submission may look like:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '| **Image** | **Level** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44342_left` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44342_right` | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44344_left` | 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44344_right` | 2 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44345_left` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44345_right` | 0 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44346_left` | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44346_right` | 3 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44350_left` | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44350_right` | 1 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44351_left` | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `44351_right` | 4 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Not surprisingly, it looks very much like the training label file. You can
+    make your submission here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.kaggle.com/c/diabetic-retinopathy-detection/submithttps://www.kaggle.com/c/diabetic-retinopathy-detection/submit](https://www.kaggle.com/c/diabetic-retinopathy-detection/submit%20%20)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You need to login in order to open the preceding link.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's start to peek at the data. Open up some of the sample files and be prepared
+    for a shocker—these are neither 28x28 tiles of handwriting nor 64x64 icons with
+    cat faces. This is a real dataset from the real world. In fact, not even the sizes
+    are consistent across images. Welcome to the real world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You'll find sizes ranging from 2,000 pixels per side to almost 5,000 pixels!
+    This brings us to our first real-life task—creating a training **pipeline**. The
+    pipeline will be a set of steps that abstract away the ugly realities of life
+    and produce a set of clean and consistent data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will go about this intelligently. There are a lot of pipeline model structures
+    made by Google using different networks in their `TensorFlow` library. What we'll
+    do here is take one of those model structures and networks and modify the code
+    to our needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is good because we won't waste our time building a pipeline from scratch
+    and won't have to worry about incorporating the TensorBoard visualization stuff
+    as it is already present in the Google pipeline models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use a pipeline model from here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/tensorflow/models/](https://github.com/tensorflow/models/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, there are a lot of different models made in TensorFlow in this
+    repository. You can dive deeper into some models that are related to natural language
+    processing (NLP), recursive neural networks, and other topics. This is a really
+    good place to start if you want to understand complex models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this chapter, we will use the **Tensorflow-Slim image classification model
+    library**. You can find the library here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/tensorflow/models/tree/master/research/slim](https://github.com/tensorflow/models/tree/master/research/slim)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are a lot of details already present on the website that explain how to
+    use this library. They also tell you how to use this library in a distributed
+    environment and also how to utilize multiple GPUs to get a faster training time
+    and even deploy to production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The best thing about using this is that they provide you with the pre-trained
+    model snapshot, which you can use to dramatically reduce the training time of
+    your network. So, even if you have slow GPUs, you won't have to train your network
+    this large for weeks to get to a reasonable level of training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is called fine-tuning of the model, in which you just have to provide a
+    different dataset and tell the network to reinitialize the final layers of the
+    network in order to retrain them. Also, you tell it how many output label classes
+    you have in your dataset. In our case, there are five unique classes to identify
+    different levels of **diabetic retinopathy** (**DR**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The pre-trained snapshot can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/tensorflow/models/tree/master/research/slim#Pretrained](https://github.com/tensorflow/models/tree/master/research/slim#Pretrained)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you can see in the preceding link, they provide many types of pre-trained
+    models that we can leverage. They have used the `ImageNet` dataset to train these
+    models. `ImageNet` is a standard dataset of 1,000 classes with dataset sizing
+    almost 500 GB. You can find more about it here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[http://image-net.org/](http://image-net.org/)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the pipeline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s start by cloning the `models` repository into your computer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let's dive into the pipeline that we got from Google's model repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you look at the folder at this path prefix (`models/research/slim`) in the
+    repository, you'll see folders named `datasets`, `deployment`, `nets`, `preprocessing`,
+    and `scripts`; a bunch of files related to generating the model, plus training
+    and testing pipelines and files related to training the `ImageNet` dataset, and
+    a dataset named `flowers`**.**
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will use the `download_and_convert_data.py` to build our DR dataset. This
+    `image classification model` library is built based on the `slim` library. In
+    this chapter, we will fine-tune the inception network defined in `nets/inception_v3.py`
+    (we'll talk more about the network specifications and its concept later in this
+    chapter), which includes the calculation of the loss function, adding different
+    ops, structuring the network, and more. Finally, the `train_image_classifier.py`
+    and `eval_image_classifier.py` files contain the generalized procedures for making
+    a training and testing pipeline for our network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this chapter, due to the complex nature of the network, we are using a GPU-based
+    pipeline to train the network. If you want to find out how to install TensorFlow
+    for GPU in your machine, then refer to [Appendix A](8022db02-d24f-4620-9da7-ae53df279306.xhtml), *Advanced
+    Installation*, in this book. Also, you should have about **120 GB** space inside
+    your machine to be able to run this code. You can find the final code files in
+    the `Chapter 8` folder of this book's code files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the dataset
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now, let's start preparing the dataset of our network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this inception network, we'll use the `TFRecord` class to manage our dataset.
+    The output dataset files after the preprocessing will be protofiles, which `TFRecord`
+    can read, and it's just our data stored in a serialized format for faster reading
+    speed. Each protofile has some information stored within it, which is information
+    such as image size and format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason we are doing this is that the size of the dataset is too large and
+    we cannot load the entire dataset into memory (RAM) as it will take up a huge
+    amount of space. Therefore, to manage efficient RAM usage, we have to load the
+    images in batches and delete the previously loaded images that are not being used
+    right now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The input size the network will take is 299x299\. So, we will find a way to
+    first reduce the image size to 299x299 to have a dataset of consistent images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After reducing the images, we will make protofiles that we can later feed into
+    our network, which will get trained on our dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You need to first download the five training ZIP files and the labels file
+    from here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.kaggle.com/c/diabetic-retinopathy-detection/data](https://www.kaggle.com/c/diabetic-retinopathy-detection/data)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, Kaggle only lets you download the training ZIP files through
+    an account, so this procedure of downloading the dataset files (as in the previous
+    chapters) can't be made automatic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s assume that you have downloaded all five training ZIP files and
+    labels file and stored them in a folder named `diabetic`. The structure of the
+    `diabetic` folder will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`diabetic`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.001`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.002`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.003`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.004`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.005`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`trainLabels.csv.zip`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In order to simplify the project, we will do the extraction manually using
+    the compression software. After the extraction is completed, the structure of
+    the `diabetic` folder will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`diabetic`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '` 10_left.jpeg`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`10_right.jpeg`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '...'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`trainLabels.csv`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.001`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.002`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '` train.zip.003`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '` train.zip.004`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`train.zip.005`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`trainLabels.csv.zip`'
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In this case, the `train` folder contains all the images in the .zip files and `trainLabels.csv`
+    contains the ground truth labels for each image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The author of the models repository has provided some example code to work with
+    some popular image classification datasets. Our diabetic problem can be solved
+    with the same approach. Therefore, we can follow the code that works with other
+    datasets such as `flower` or `MNIST` dataset. We have already provided the modification
+    to work with diabetic in the repository of this book at [https://github.com/mlwithtf/mlwithtf/](https://github.com/mlwithtf/mlwithtf/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You need to clone the repository and navigate to the `chapter_08` folder. You
+    can run the `download_and_convert_data.py` file as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case, we will use `dataset_name` as `diabetic` and `dataset_dir` is
+    the folder that contains the `trainLabels.csv` and `train` folder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It should run without any issues, start preprocessing our dataset into a suitable
+    (299x299) format, and create some `TFRecord` file in a newly created folder named `tfrecords`.
+    The following figure shows the content of the `tfrecords` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e6e0c22a-1342-443c-85f0-aa66e157c294.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Explaining the data preparation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now let's get to the coding part for the data preprocessing. From now on, we
+    will show you what we have changed from the original repository of the `tensorflow/models`.
+    Basically, we take the code to the process `flowers` dataset as the starting point
+    and modify them to suit our needs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the `download_and_convert_data.py` file, we have added a new line at the
+    beginning of the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: With this code, we can call the run method in the `download_and_convert_diabetic.py`
+    in the `datasets` folder. This is a really simple approach to separating the preprocessing
+    code of multiple datasets, but we can still take advantage of the others parts
+    of the `image classification` library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `download_and_convert_diabetic.py` file is a copy of the `download_and_convert_flowers.py`
+    file with some modifications to prepare our diabetic dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the run method of the `download_and_convert_diabetic.py` file, we made changes
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In this code, we use the `prepare_dr_dataset` from the `data_utils` package
+    that was prepared in the root of this book repository. We will look at that method
+    later. Then, we changed the `_get_filenames_and_classes` method to return the
+    `training` and `validation` filenames. The last few lines are the same as the
+    `flowers` dataset example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding method, we find all the filenames in the `processed_images/train`
+    and `processed/validation` folder, which contains the images that were preprocessed
+    in the `data_utils.prepare_dr_dataset` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the `data_utils.py` file, we have written the `prepare_dr_dataset(dataset_dir)`
+    function, which is responsible for the entire preprocessing of the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start by defining the necessary variables to link to our data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `num_of_processing_threads` variable is used to specify the number of threads
+    we want to use while preprocessing our dataset, as you may have already guessed.
+    We will use a multi-threaded environment to preprocess our data faster. Later
+    on, we have specified some directory paths to contain our data inside different
+    folders while preprocessing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will extract the images in their raw form and then preprocess them to get
+    them into a suitable consistent format and size, and then we will generate the
+    `tfrecords` files from the processed images with the `_convert_dataset` method
+    in the `download_and_convert_diabetic.py` file. After that, we will feed these
+    `tfrecords` files into the training and testing networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we said in the previous section, we have already extracted the `dataset`
+    files and the labels files. Now, as we have all of the data extracted and present
+    inside our machine, we will process the images. A typical image from the DR dataset
+    looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d8fd4a61-193c-420c-a0eb-fa2cf12a79a3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: What we want is to remove this extra black space because it is not necessary
+    for our network. This will reduce the unnecessary information inside the image.
+    After this, we will scale this image into a 299x299 JPG image file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will repeat this process for all of the training datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The function to crop the black image borders is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function takes the image and a threshold for a grayscale, below which it
+    will remove the black borders around the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we are doing all of this processing in a multithreaded environment, we will
+    process the images in batches. To process an image batch, we will use the following
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `thread_index`tells us the ID of the thread in which the function has been
+    called. The threaded environment around processing the image batch is defined
+    in the following function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: To get the final result from all of the threads, we use a `TensorFlow` class,
+    `tf.train.Coordinator()`, whose `join` function is responsible for handling all
+    of the threads' final approach point.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the threading, we use `threading.Thread`, in which the `target` argument
+    specifies the function to be called and the `args` argument specifies the target
+    function arguments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we will process the training images. The training dataset is divided into
+    a train set (30,000 images) and a validation set (5,126 images).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The total preprocessing is handled as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we will look at the last method for preparing the dataset, the `_convert_dataset`
+    method that is called in the `download_and_convert_diabetic.py` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding function, we will get the image filenames and then store them
+    in the `tfrecord` files. We will also split the `train` and `validation` files
+    into multiple `tfrecord` files instead of using only one file for each split set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, as the data processing is out of the way, we will formalize the dataset
+    into an instance of `slim.dataset`. Dataset from `Tensorflow Slim`. In the `datasets/diabetic.py`
+    file, you will see a method named `get_split`, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding method will be called during the training and evaluating routines.
+    We will create an instance of `slim.dataset` with the information about our `tfrecord`
+    files so that it can automatically perform the work to parse the binary files.
+    Moreover, we can also use `slim.dataset.Dataset` with the support of `DatasetDataProvider`
+    from Tensorflow Slim to read the dataset in parallel, so we can increase the training
+    and evaluating routines.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we start training, we need to download the pre-trained model of Inception
+    V3 from the `Tensorflow Slim image classification` library so we can leverage
+    the performance of Inception V3 without training from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The pre-trained snapshot can be found here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/tensorflow/models/tree/master/research/slim#Pretrained](https://github.com/tensorflow/models/tree/master/research/slim#Pretrained)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will use Inception V3, so we need to download the `inception_v3_2016_08_28.tar.gz`
+    file and extract it to have the checkpoint file named `inception_v3.ckpt`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training routine
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now let's move towards training and evaluating our model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training script is present inside `train_image_classifer.py`. Since we
+    have followed the workflow of the library, we can leave this file untouched and
+    run our training routine with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In our setup, we have run the training process overnight. Now, we will run the
+    trained model through the validation process to see how it works.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Validation routine
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'You can run the validation routine with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: '![](img/e5a39134-d138-4657-b5b0-b0cdbf535885.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see, the current accuracy is about 75 percent. In the *Going further*
+    section, we will give you some ideas to improve this accuracy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we will look at the TensorBoard to visualize the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Visualize outputs with TensorBoard
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now, we will visualize the training result with TensorBoard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, you need to change the `command-line` directory to the folder that contains
+    the checkpoints. In our case, it is the `train_dir` parameter in the previous
+    command, `D:\datasets\diabetic\checkpoints`. Then, you should run the following
+    command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here is some output when we run TensorBoard for our network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ef7909a6-8cb9-4a9e-8ce6-f3c1aedfa0ea.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The preceding image shows the nodes containing the RMS prop optimizer for the
+    training network and some logits that it contains for the output of DR classification.
+    The next screenshot shows the images coming as input, along with their preprocessing
+    and modifications:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0f3edeef-914b-49a9-ba3b-4c993b857449.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In this screenshot, you can see the graph showing the network output during
+    training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ac215a51-fc57-4826-81a0-3aa05b16bc2e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This screenshot depicts the total raw loss of the network during training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/10d1ce85-4786-4914-bb10-4f363202e7fa.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Inception network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The main concept behind the inception network is to combine different convolutions
+    in a single layer. The combination is done by combining 7x7, 5x5, 3x3, and 1x1
+    convolutions to give to the next layer. Through this, the network can extract
+    more features of the network and thus give better accuracy. This is shown in the
+    following image of the Google inception V3 network. You can try to access the
+    code at `chapter_08/nets/inception_v3.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e3cb0bf3-f977-4546-9046-fc474ee35279.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The image is taken from [https://github.com/tensorflow/models/blob/master/research/inception/g3doc/inception_v3_architecture.png](https://github.com/tensorflow/models/blob/master/research/inception/g3doc/inception_v3_architecture.png)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Going further
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The result we got from running this network is 75 percent accurate on the validation
+    set. This is not very good because of the criticality of the network usage. In
+    medicine, there is not much room for error because a person's medical condition
+    is on the line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To make this accuracy better, we need to define a different criterion for evaluation.
+    You can read more about it here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://en.wikipedia.org/wiki/Confusion_matrix](https://en.wikipedia.org/wiki/Confusion_matrix)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Also, you can balance the dataset. What we have now is an unbalanced dataset
+    in which the number of diseased patients is much lower than the number of normal
+    patients. Thus, the network becomes more sensitive to normal patients' features
+    and less sensitive to diseased patients' features.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To fix this problem, we can SMOTE our dataset. SMOTing is basically replicating
+    the data of less frequent classes (flipping the image horizontally or vertically,
+    changing saturation, and so on) to create a balanced dataset. SMOTE stands for
+    **Synthetic Minority Over-sampling Technique**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is a good read on this topic:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.jair.org/media/953/live-953-2037-jair.pdf](https://www.jair.org/media/953/live-953-2037-jair.pdf)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Other medical data challenges
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Understandably, medical data is not as easy to release as other datasets, so
+    there are far fewer datasets in the public domain. This is changing slowly, but
+    in the meantime, here are some datasets and associated challenges you can try
+    your hand at. Note that many of these challenges have been overcome, but they
+    have luckily continued to publish the datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ISBI grand challenge
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: ISBI is the International Symposium on Biomedical Imaging, a popular venue for
+    furthering the type of work you're seeing in this chapter. Their annual conferences
+    often feature multiple challenges posed to the academic community. They posed
+    several challenges in 2016.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One popular challenge was the AIDA-E: Analysis of Images to Detect Abnormalities
+    in Endoscopy. The challenge website is [http://isbi-aida.grand-challenge.org/](http://isbi-aida.grand-challenge.org/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another popular challenge was the Cancer Metastasis Detection in Lymph Nodes,
+    which features pathology data. The challenge website is [http://camelyon16.grand-challenge.org/](http://camelyon16.grand-challenge.org/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the radiology side, a popular challenge in 2016 was the Data Science Bowl
+    challenge on heart disease diagnosis. Titled *Transforming How We Diagnose Heart
+    Disease*, the challenge sought to segment parts of the cardiac Magnetic Resonance
+    Imaging data to gauge pump volume, which was then used as a proxy for heart health.
+    The challenge website and dataset is [http://www.datasciencebowl.com/competitions/transforming-how-we-diagnose-heart-disease/](http://www.datasciencebowl.com/competitions/transforming-how-we-diagnose-heart-disease/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another popular radiology dataset is the Lung Image Database Consortium's **computed
+    tomography** (**CT**) data in the LIDC-IDRI image collection. This is a dataset
+    of diagnostic and lung cancer screening thoracic CT scans. Interestingly, instead
+    of image-level classes, this dataset annotates the actual locations of the lesions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The two radiology competitions are interesting for two more reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: They feature three-dimensional **volume** data, which is essentially an ordered
+    stack of two-dimensional images that form an actual space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: They feature **segmentation** tasks where you want to classify parts of an image
+    or volume into certain classes. This is a familiar classification challenge, except
+    we're trying to also localize the feature on the image. In one case, we seek to
+    localize the feature and point to it (rather than classify the entire image),
+    and in another case, we seek to classify a section as a way to measure the size
+    of a region.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We'll speak more about dealing with volume data later, but for now, you've got
+    some really interesting and varied datasets to work with.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reading medical data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The diabetic retinopathy challenge, despite the challenges, is not as complicated
+    as it gets. The actual images were provided in JPEG format, but most medical data
+    is not in JPEG format. They are usually within container formats such as DICOM.
+    DICOM stands for **Digital Imaging and Communications in Medicine** and has a
+    number of versions and variations. It contains the medical image, but also header
+    data. The header data often includes general demographic and study data, but it
+    can contain dozens of other custom fields. If you are lucky, it will also contain
+    a diagnosis, which you can use as a label.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DICOM data adds another step to the pipeline we discussed earlier because we
+    now need to read the DICOM file, extract the header (and hopefully class/label
+    data), and extract the underlying image. DICOM is not as easy to work with as
+    JPEG or PNG, but it is not too difficult. It will require some extra packages.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since we're writing almost everything in Python, let's use a `Python` library
+    for DICOM processing. The most popular is **pydicom**, which is available at [https://github.com/darcymason/pydicom](https://github.com/darcymason/pydicom).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The documentation is available at [https://pydicom.readthedocs.io/en/stable/getting_started.html](https://pydicom.readthedocs.io/en/stable/getting_started.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: It should be noted that the `pip` installation is currently broken, so it must
+    be cloned from the source repository and installed via the setup script before
+    it can be used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A quick excerpt from the documentation will help set the stage for understanding
+    how to work with `DICOM` files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This may seem a bit messy, but this is the type of interaction you should expect
+    when working with medical data. Worse, each vendor often places the same data,
+    even basic data, into slightly different tags. The typical industry practice is
+    to simply look around! We do that by dumping the entire tag set as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Suppose we were seeking the diagnosis. We would look through several files of
+    tags and try to see whether the diagnosis consistently shows up under tag `(0008,
+    0018) Diagnosis`, and if so, we'd test our hypothesis by pulling out just this
+    field from a large portion of our training set to see whether it is indeed consistently
+    populated. If it is, we're ready for the next step. If not, we need to start again
+    and look at other fields. Theoretically, the data provider, broker, or vendor
+    can provide this information, but, practically speaking, it is rarely that simple.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next step is to see the domain of values. This is very important because
+    we want to see what our classes look like. Ideally, we will have a nice clean
+    set of values such as {`Negative`, `Positive`}, but, in reality, we often get
+    a long tail of dirty values. So, the typical approach is to loop through every
+    single image and keep a count of each unique domain value encountered, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: A very common finding at this point would be that 99 percent of domain values
+    exist across a handful of domain values (such as *positive* and *negative*), and
+    there is a long tail of 1% domain values that are dirty (such as *positive, but
+    under review*, *@#Q#$%@#$%*, or *sent for re-read*). The easiest thing to do is
+    throw out the long tail—just keep the good data. This is especially easy if there
+    is plenty of training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'OK, so we''ve extracted the class information, but we''ve still got to extract
+    the actual image. We can do that as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unfortunately, this only gives us a raw matrix of pixel values. We still need
+    to convert this into a readable format (ideally, JPEG or PNG.) We''ll achieve
+    the next step as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ec447807-fda1-4c53-a986-6834101d3663.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Next, we''ll scale the image to the bit length we desire and write the matrix
+    to a file using another library geared to writing data in our destination format.
+    In our case, we''ll use a PNG output format and write it using the `png` library.
+    This means some extra imports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We''ll export like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/57b56d7d-07a9-4dfd-a369-80e391a0793e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Skills Learned
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'You should have learned these skills in the chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dealing with arcane and proprietary medical imaging formats
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dealing with large image files, a common medical image hallmark
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extracting class data from medical files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Extending our existing pipeline to deal with heterogeneous data inputs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Applying networks pre-trained with non-medical data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Scaling training to accommodate new datasets.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we created a deep neural network for image classification problem
+    in an enterprise-grade problem, medical diagnosis. Moreover, we also guided you
+    through the process of reading DICOM digital medical image data for further researches.
+    In the next chapter, we will build a production system that can self-improve by
+    learning from users feedback.
+  prefs: []
+  type: TYPE_NORMAL

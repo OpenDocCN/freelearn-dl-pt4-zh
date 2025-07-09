@@ -1,0 +1,637 @@
+- en: Your First Classifier
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: With TensorFlow now installed, we need to kick the tires. We will do so by writing
+    our first classifier and then training and testing it from start to finish!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our first classifier will be a handwriting recognizer. One of the most common
+    datasets to train is the **MNIST** handwritten digits dataset. We'll be using
+    a similar dataset called `notMNIST`, which features the first ten letters of the
+    English alphabet.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The key parts
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are three key parts to most machine learning classifiers, which are as
+    follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The neural network setup and training outputs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The usage pipeline
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The training pipeline obtains data, stages it, cleanses it, homogenizes it,
+    and puts it in a format acceptable to the neural network. Do not be surprised
+    if the training pipeline takes 80% to 85% of your effort initially—this is the
+    reality of most machine learning work. Generally, the more realistic the training
+    data, the more time spent on the training pipeline. In enterprise settings, the
+    training pipeline might be an ongoing effort being enhanced perpetually. This
+    is especially true as datasets get larger.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second part, the neural network setup, and training, can be quick for routine
+    problems and can be a research-grade effort for harder problems. You may find
+    yourself making small changes to the network setup, over and over, until you finally
+    achieve the desired classifier accuracy. The training is the most computationally
+    expensive part, so it takes time before you can evaluate the result of each incremental
+    modification.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once the initial setup is complete and the network is trained to a sufficient
+    level of accuracy, we can just use it over and over. In [Chapter 10](f1a5c9c4-6076-487f-abd1-b5a6e800890f.xhtml),
+    *Go Live and Go Big*, we'll explore more advanced topics, such as continuous learning,
+    where even usage can feed back into further training the classifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Obtaining training data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Machine learning requires training data—often a lot of training data. One of
+    the great things about machine learning is the availability of standard training
+    datasets. These are often used to benchmark node models and configurations and
+    provide a consistent yardstick to gauge performance against previous progress.
+    Many of the datasets are also used in annual global competitions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter uses training data, which is kindly provided by Yaroslav Bulatov,
+    a machine learning researcher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Downloading training data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'You should start by downloading the training data from the following links:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[http://yaroslavvb.com/upload/notMNIST/notMNIST_small.tar.gz](http://yaroslavvb.com/upload/notMNIST/notMNIST_small.tar.gz)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[http://yaroslavvb.com/upload/notMNIST/notMNIST_large.tar.gz](http://yaroslavvb.com/upload/notMNIST/notMNIST_large.tar.gz)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will download this programmatically, but we should start with a manual download
+    just to peek at the data and structure of the archive. This will be important
+    when we write the pipeline, as we'll need to understand the structure so we can
+    manipulate the data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The small set is ideal for peeking. You can do this via the following command
+    line, or just use a browser to download the file with an unarchiver to extract
+    the files (I suggest getting familiarized with the command line as all of this
+    needs to be automated):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding command line will reveal a container folder called `notMNIST_small`
+    with ten subfolders underneath, one for each letter of the alphabet `a` through
+    `j`. Under each lettered folder, there are thousands of 28x28 pixel images of
+    the letter. Additionally, an interesting thing to note is the filename of each
+    letter image, (`QnJhbmRpbmcgSXJvbi50dGY=`), suggesting a random string that does
+    not contain information of use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding classes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The classifier we''re writing seeks to assign unknown images to a class. Classes
+    can be of the following types:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feline versus canine
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Two versus seven
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Tumor versus normal
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Smiling versus frowning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In our case, we are considering each letter a class for a total of 10 classes.
+    The training set will reveal 10 subfolders with thousands of images underneath
+    each subfolder. The name of the subfolder is important as it is the label for
+    each of the images. These details will be used by the pipeline to prepare data
+    for TensorFlow.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Automating the training data setup
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Ideally, we will want the entire process automated. This way, we can easily
+    run the process end to end on any computer we use without having to carry around
+    ancillary assets. This will be important later, as we will often develop on one
+    computer (our development machine) and deploy on a different machine (our production
+    server).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'I have already written the code for this chapter, as well as all the other
+    chapters; it is available at [https://github.com/mlwithtf/MLwithTF](https://github.com/mlwithtf/MLwithTF).
+    Our approach will be to rewrite it together while understanding it. Some straightforward
+    parts, such as this, may be skipped. I recommend forking the repository and cloning
+    a local copy for your projects:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The code for this specific section is available at— [https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/download.py.](https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/download.py)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Preparing the dataset is an important part of the training process. Before
+    we go deeper into the code, we will run `download.py` to automatically download
+    and prepare the dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The result will look like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**![](img/12200b7b-6dbd-481d-a663-03ed6c482479.png)**'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we will take a look at several functions that are used in `download.py`.
+    You can find the code in this file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com/mlwithtf/mlwithtf/blob/master/data_utils.py](https://github.com/mlwithtf/mlwithtf/blob/master/data_utils.py)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following `downloadFile` function will automatically download the file
+    and validate it against an expected file size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The function can be called as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The code to extract the contents is as follows (note that the additional import is
+    required):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We call the `download` and extract methods in sequence as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Additional setup
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The next part will focus on image processing and manipulation. This requires
+    some extra libraries you may not have. At this point, it may make sense to just
+    install all the typical packages required in scientific computing, which can be
+    done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Additionally, install the image processing library, some external matrix mathematics
+    libraries, and underlying requirements, which can be done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Converting images to matrices
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Much of machine learning is just operations on matrices. We will start that
+    process next by converting our images into a series of matrices—essentially, a
+    3D matrix as wide as the number of images we have.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Almost all matrix operations that we will perform in this chapter, and the entire
+    book, use NumPy—the most popular scientific computing package in the Python landscape.
+    NumPy is available at [http://www.numpy.org/](http://www.numpy.org/). You should
+    install it before running the next series of operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code opens images and creates the matrices of data (note the
+    three extra imports now required):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have our extracted files from the previous section. Now, we can simply run
+    this procedure on all our extracted images, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The procedure essentially loads letters into a matrix that looks something
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a75199c9-3913-41b5-9d5a-69e450dd4ee2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'However, a peek into the matrix reveals more subtlety. Go ahead and take a
+    look by printing an arbitrary layer on the stack (for example, `np.set_printoptions(precision=2);
+    print (dataset[47]`). You will find a matrix not of bits, but of floating point
+    numbers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/eed77f16-0ef9-4f7c-8cef-8a2501e7fda2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The images first get loaded into a matrix of values 0 to 255:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/21972f82-50be-496d-b548-73f8ec47175d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'These get scaled down to numbers between -0.5 and 0.5, we will revisit the
+    reasons why later. We will end up with a stack of images that looks like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9c07636d-2cf7-4b1b-8bbf-75c312f2bef9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: These are all greyscale images, so we will deal with just one layer. We'll deal
+    with color images in future chapters; in those cases, each photo will have a matrix
+    of height three and a separate matrix for red, green, and blue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logical stopping points
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Downloading our training file took a long time. Even extracting all the images
+    took a while. To avoid repeating all this, we will try to do all the work just
+    once and then create **pickle files**—archives of the Python data structures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following procedure runs through each class in our training and test set
+    and creates a separate `pickle` file for each. In future runs, we''ll just begin
+    from here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Pickle` files are essentially persistable and reconstitutable dumps of
+    dictionaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The machine learning briefcase
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We just created nice, clean, `pickle` files with preprocessed images to train
+    and test our classifier. However, we've ended up with 20 `pickle` files. There
+    are two problems with this. First, we have too many files to keep track of easily.
+    Secondly, we've only completed part of our pipeline, where we've processed our
+    image sets but have not prepared a TensorFlow consumable file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we will need to create our three major sets—the training set, the validation
+    set, and the test set. The training set will be used to nudge our classifier,
+    while the validation set will be used to gauge progress on each iteration. The
+    test set will be kept secret until the end of the training, at which point, it
+    will be used to test how well we've trained the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code to do all this is long, so we''ll leave you to review the Git repository.
+    Pay close attention to the following three functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These three complete our pipeline methods. But, we will still need to use the
+    pipeline. To do so, we will first define our training, validation, and test sizes.
+    You can change this, but you should keep it less than the full size available,
+    of course:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'These sizes will then be used to construct merged (that is, combining all our
+    classes) datasets. We will pass in the list of `pickle` files to source our data
+    from and get back a vector of labels and a matrix stack of images. We will finish
+    by shuffling our datasets, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can peek into our newly-merged datasets as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Whew! That was a lot of work we do not want to repeat in the future. Luckily,
+    we won''t have to, because we''ll re-pickle our three new datasets into a single,
+    giant, `pickle` file. Going forward, all learning will skip the preceding steps
+    and work straight off the giant `pickle`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The ideal way to feed the matrices into TensorFlow is actually as a one-dimensional
+    array; so, we''ll reformat our 28x28 matrices into strings of 784 decimals. For
+    that, we''ll use the following `reformat` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Our images now look like this, with a row for every image in the training,
+    validation, and test sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c59f15a1-8a00-492b-a94c-4333666cbe79.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Finally, to open up and work with the contents of the `pickle` file, we will
+    simply read the variable names chosen earlier and pick off the data like a hashmap:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training day
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now, we arrive at the fun part—the neural network. The complete code to train
+    this model is available at the following link: [https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/training.py](https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/training.py)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train the model, we''ll import several more modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we will define a few parameters for the training process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After that, we will use the `data_utils` package to load the dataset that was
+    downloaded in the previous section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We''ll start off with a fully-connected network. For now, just trust the network
+    setup (we''ll jump into the theory of setup a bit later). We will represent the
+    neural network as a graph, called `graph` in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `loss` function that is used to train the model is also an important factor
+    in this process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: This is the optimizer being used (Stochastic Gradient Descent) along with the
+    `learning_rate (0.3)` and the function we're trying to minimize (softmax with
+    cross-entropy).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The real action, and the most time-consuming part, lies in the next and final
+    segment—the training loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/4ed292fc-aeb9-4402-bf14-a09bcc8a5085.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can run this training process using the following command in the `chapter_02`
+    directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Running the procedure produces the following output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/feedd131-0973-44c5-9ce0-fd1f31c7ff75.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We are running through hundreds of cycles and printing indicative results once
+    every 500 cycles. Of course, you are welcome to modify any of these settings.
+    The important part is to appreciate the cycle:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will cycle through the process many times.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each time, we will create a mini batch of photos, which is a carve-out of the
+    full image set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Each step runs the TensorFlow session and produces a loss and a set of predictions.
+    Each step additionally makes a prediction on the validation set.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At the end of the iterative cycle, we will make a final prediction on our test
+    set, which is a secret up until now.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For each prediction made, we will observe our progress in the form of prediction
+    accuracy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We did not discuss the `accuracy` method earlier. This method simply compares
+    the predicted labels against known labels to calculate a percentage score:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Just running the preceding classifier will yield accuracy in the general range
+    of 85%. This is remarkable because we have just begun! There are much more tweaks
+    that we can continue to make.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Saving the model for ongoing use
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To save variables from the TensorFlow session for future use, you can use the
+    `Saver()` function, which is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Later, you can retrieve the state of the model and avoid tedious retraining
+    by restoring the following checkpoint:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: Why hide the test set?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Notice how we did not use the test set until the last step. Why not? This is
+    a pretty important detail to ensure that the test remains a good one. As we iterate
+    through the training set and nudge our classifier one way or another, we can sometimes
+    *wrap the classifier* around the images or overtrain. This happens when you learn
+    the training set rather than learn the features inside each of the classes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we overtrain, our accuracy on the iterative rounds of the training set
+    will look promising, but that is all false hope. Having a never-before-seen test
+    set should introduce reality back into the process. Great accuracy on the training
+    set followed by poor results on the test set suggests overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is why we've kept a separate test set. It helps indicate the real accuracy
+    of our classifier. This is also why you should never shuffle your dataset or intermingle
+    the dataset with the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the classifier
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will demonstrate the usage of the classifier with `notMNIST_small.tar.gz`,
+    which becomes the test set. For ongoing use of the classifier, you can source
+    your own images and run them through a similar pipeline to test, not train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can create some 28x28 images yourself and place them into the test set for
+    evaluation. You will be pleasantly surprised!
+  prefs: []
+  type: TYPE_NORMAL
+- en: The practical issue with field usage is the heterogeneity of images in the wild.
+    You may need to find images, crop them, downscale them, or perform a dozen other
+    transformations. This all falls into the usage pipeline, which we discussed earlier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another technique to cover larger images, such as finding a letter on a page-sized
+    image, is to slide a small window across the large image and feed every subsection
+    of the image through the classifier.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We'll be taking our models into production in future chapters but, as a preview,
+    one common setup is to move the trained model into a server on the cloud. The
+    façade of the system might be a smartphone app that takes photos and sends them
+    off for classification behind the scenes. In this case, we will wrap our entire
+    program with a web service to accept incoming classification requests and programmatically
+    respond to them. There are dozens of popular setups and we will explore several
+    of them in [Chapter 9](b38dd75a-b632-4e7b-b581-202500f4e001.xhtml), *Cruise Control
+    -Automation*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep diving into the network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Notice how we achieved 86% accuracy. This is a great result for two hours of
+    work, but we can do much better. Much of the future potential is in changing the
+    neural network. Our preceding application used a **fully-connected** setup, where
+    each node on a layer is connected to each node on the previous layer and looks
+    like this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0be54afc-3577-4dfb-b045-2e916734b1d2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you will learn with more complex network setups in coming chapters, this
+    setup is fast but not ideal. The biggest issue is the large number of parameters,
+    which can cause overfitting of the model on the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Skills learned
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'You should have learned these skills in the chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing training and test data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creating a training set consumable by TensorFlow
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Setting up a basic neural network graph
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training the TensorFlow classifier
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Validating the classifier
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Piping in real-world data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Superb progress! We just built a handwriting classifier that would have been
+    world class a decade ago. Also, we built an entire pipeline around the process
+    to fully automate the training setup and execution. This means that our program
+    can be migrated to almost any server and continue to function almost turn-key.
+  prefs: []
+  type: TYPE_NORMAL

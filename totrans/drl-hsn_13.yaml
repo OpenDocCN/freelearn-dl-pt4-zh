@@ -1,0 +1,1538 @@
+- en: '13'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The TextWorld Environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will now use RL to solve text-based interactive fiction
+    games, using the environment published by Microsoft Research called TextWorld.
+    This will provide a good illustration of how RL can be applied to complicated
+    environments with a rich observation space. In addition, we’ll touch on deep NLP
+    methods a bit and play with LLMs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cover a brief historical overview of interactive fiction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Study the TextWorld environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implement the simple baseline deep Q-network (DQN) method, and then try to improve
+    it by adding several tweaks to the observation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use pretrained tronsformers from the Hugging Face Hub to implement sentence
+    embedding for our agent
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use OpenAI ChatGPT to check the power of modern Large Language Models (LLMs)
+    on interactive fiction games
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Interactive fiction
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As you have already seen, computer games are not only entertaining for humans
+    but also provide challenging problems for RL researchers due to the complicated
+    observations and action spaces, long sequences of decisions to be made during
+    the gameplay, and natural reward systems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Arcade games like those on the Atari 2600 are just one of many genres that the
+    gaming industry has. Let’s take a step back and take a quick look at the historical
+    perspective. The Atari 2600 platform peaked in popularity during the late 70s
+    and early 80s. Then followed the era of Z80 and clones, which evolved into the
+    period of the PC-compatible platforms and consoles we have now. Over time, computer
+    games continually become more complex, colorful, and detailed in terms of graphics,
+    which inevitably increased hardware requirements. This trend makes it harder for
+    RL researchers and practitioners to apply RL methods to the more recent games;
+    for example, almost everybody can train an RL agent to solve an Atari game, but
+    for StarCraft II, DeepMind had to burn electricity for weeks, leveraging clusters
+    of graphics processing unit (GPU) machines. Of course, this activity is needed
+    for future research, as it allows us to check ideas and optimize methods, but
+    the complexity of StarCraft II and Dota, for example, makes them prohibitively
+    expensive for most people.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several ways of solving this problem:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first one is to take games that are “in the middle” of the complexities
+    of Atari and StarCraft. Luckily, there are literally thousands of games from the
+    Z80, NES, Sega, and C64 platforms.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another way is to take a challenging game but make a simplification to the environment.
+    There are several Doom environments (available in Gym), for example, that use
+    the game engine as a platform, but the goal is much simpler than in the original
+    game, like navigating the corridor, gathering weapons, or shooting enemies. Those
+    microgames are also available on StarCraft II.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The third, and completely different, approach is to take some game that may
+    not be very complex in terms of observation but requires long-term planning, complex
+    exploration of the state space, and has challenging interactions between objects.
+    An example of this family is the famous Montezuma’s Revenge from the Atari suite,
+    which is still challenging even for modern RL methods.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The last approach is quite appealing, due to the accessibility of resources,
+    combined with still having a complexity that reaches the edge of RL methods’ limits.
+    Another example of this is text-based games, which are also known as interactive
+    fiction. This genre is almost dead now, being made obsolete by modern games and
+    hardware progress, but at the time of Atari and Z80, interactive fiction was provided
+    concurrently with traditional games. Instead of using rich graphics to show the
+    game state (which was tricky for hardware from the 70s), these games relied on
+    the players’ minds and imagination.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The gaming process was communicated via text when the description of the current
+    game state was given to the player. An example is, You are standing at the end
+    of a road before a small brick building. Around you is a forest. A small stream
+    flows out of the building and down a gully.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see in Figure [13.1](#x1-220004r1), this is the very beginning of
+    the Adventure game from 1976, which was the first game of this kind. Actions in
+    the game were given in the form of free-text commands, which normally had a simple
+    structure and a limited set of words, for example, “verb + noun.”
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file150.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.1: An example of the interactive fiction game process'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Despite the simplistic descriptions, in the 80s and early 90s, hundreds of large
+    and small games were developed by individual developers and commercial studios.
+    Those games sometimes required many hours of gameplay, contained thousands of
+    locations, and had a lot of objects to interact with. For example, Figure [13.2](#x1-220006r2)
+    shows part of the Zork I game map published by Infocom in 1980.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file151.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.2: The underground portion of the Zork I map (for better visualization,
+    refer to https://packt.link/gbp/9781835882702)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As you can imagine, the challenges of such games could be increased almost
+    infinitely, as complex interactions between objects, exploration of game states,
+    communication with other characters, and other real-life scenarios could be included.
+    There are many such games available on the Interactive Fiction Archive website:
+    [http://ifarchive.org](http://ifarchive.org).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In June 2018, Microsoft Research released an open source project that aimed
+    to provide researchers and RL enthusiasts with a simple way to experiment with
+    text-based games using familiar tools. Their project, called TextWorld, is available
+    on GitHub ([https://github.com/microsoft/TextWorld](https://github.com/microsoft/TextWorld))
+    and provides the following functionality:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A Gym environment for text-based games. It supports games in two formats: Z-machine
+    bytecode (versions 1–8 are supported) and Glulx games.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: A game generator that allows you to produce randomly generated quests with pre-defined
+    complexity like the number of objects, the description, and the quest length.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The capability to tune (for generated games) the complexity of the environment
+    by peeking at the game state. For example, intermediate rewards could be enabled,
+    which will give a positive reward to the agent every time it makes a step in the
+    right direction. Several such factors will be described in the next section.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As we progress with this chapter, we will experiment with several games to
+    explore the environment’s capabilities and implement several versions of training
+    code to solve the generated games. You need to generate them by using the provided
+    script: Chapter13/game/make_games.sh. It generates 21 games of length 5, using
+    different seed values to ensure variability between the games. The complexity
+    of the games will not be very high, but you can use them as a basis for your own
+    experiments and idea validation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'At the time of writing, the TextWorld environment supports only Linux and macOS
+    platforms (for Windows, you can use a Docker container) and internally relies
+    on the Inform 7 system ([https://inform7.com](https://inform7.com)). There are
+    two web pages for the project: one is the Microsoft Research web page ( [https://www.microsoft.com/en-us/research/project/textworld/](https://www.microsoft.com/en-us/research/project/textworld/)),
+    which contains general information about the environment, and the another is on
+    GitHub ([https://github.com/microsoft/TextWorld](https://github.com/microsoft/TextWorld))
+    and describes installation and usage. Let’s start with installation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Installation can be done with simple pip install textworld==1.6.1\. All the
+    examples in this chapter were tested with the latest 1.6.1 release of the package.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once installed, the package can be imported in Python code, and it also provides
+    two command-line utilities for game generation and gameplay: tw-make and tw-play.
+    They are not needed if you have ambitious plans to solve full-featured interactive
+    fiction games from [http://ifarchive.org](http://ifarchive.org), but in our case,
+    we will start with artificially generated quests for simplicity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Game generation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The tw-make utility allows you to generate games with the following characteristics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Game scenario: For example, you can choose a classic quest with the aim of
+    using objects and following some sequence of actions, or a “coin collection” scenario,
+    when the player needs to navigate the scenes and find coins'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Game theme: You can set up the interior of the game, but at the moment, only
+    the “house” and “basic” themes exist'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Object properties: You can include adjectives with objects; for instance, it
+    might be the “green key” that opens the box, not just the “key”'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The number of parallel quests that the game can have: By default, there is
+    only one sequence of actions to be found, but you can change this and allow the
+    game to have subgoals and alternative paths'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The length of the quest: You can define how many steps the player needs to
+    take before reaching the end or solution of the game'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Random seeds: You can use these to generate reproducible games'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The resulting game generated could be in Glulx or Z-machine format, which are
+    standard portable virtual machine instructions that are widely used for normal
+    games and supported by several interactive fiction interpreters, so you can play
+    the generated games in the same way as normal interactive fiction games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s generate some games and check what they bring us:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The command generates three files: t1.ulx, t1.ni, and t1.json. The first one
+    contains bytecode to be loaded into the interpreter, and the others are extended
+    data that could be used by the environment to provide extra information during
+    the gameplay.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To play the game in interactive mode, you can use any interactive fiction interpreter
+    supporting the Glulx format, or use the provided utility tw-play, which might
+    not be the most convenient way to play interactive fiction games but will enable
+    you to check the result:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Observation and action spaces
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Generating and playing a game might be fun, but the core value of TextWorld
+    is in its ability to provide an RL interface for generated or existing games.
+    Let’s check what we can do with the game we just generated in the previous section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we registered the generated game and created the environment. You might
+    notice that we are not using the Gymnasium make() function, but instead, we use
+    a function from the textworld module, which has the same name. This is not a mistake.
+    In fact, the latest TextWorld release (at the time of writing) removed dependency
+    on Gym API packages and provides their own environment class that looks very similar
+    to the Env class (but not exactly the same).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'I believe this removal is temporary and part of the transition from OpenAI
+    Gym to Farama Gymnasium. But at the moment, there are several aspects we have
+    to take into account when using TextWorld:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have to create games using the textworld.gym.make() function, not gym.make().
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Created environments don’t have observation and action space specifications.
+    By default, both observation and actions are strings.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function step() in the environment doesn’t return the is_truncated flag,
+    just observation, reward, flag is_done, and a dictionary with extra information.
+    Because of that, you cannot apply Gymnasium wrappers to this environment — small
+    “adapter” wrapper has to be created.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In previous versions of TextWorld, they provided tokenization functions, but
+    they were removed, so we’ll need to deal with text preprocessing ourselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now take a look at additional information the game engine provides us.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extra game information
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Before we start planning our first training code, we need to discuss one additional
+    functionality of TextWorld that we will use. As you might guess, even a simple
+    problem might be too challenging for us:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observations are text sequences of up to 200 tokens from the vocabulary of size
+    1,250\. Actions could be up to eight tokens long. Generated games have five actions
+    to be executed in the correct order. So, our chance of randomly finding the proper
+    sequence of 8 × 5 = 40 tokens is something around ![1215040](img/eq48.png). This
+    is not very promising, even with the fastest GPUs. Of course, we have start- and
+    end-sequence tokens, which we can take into account to increase our chances; still,
+    the probability of finding the correct sequence of actions with random exploration
+    is tiny.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another challenge is the partially observable Markov decision process (POMDP)
+    nature of the environment, which comes from the fact that our inventory in the
+    game is usually not shown. It is a normal practice in interactive fiction games
+    to display the objects your character possesses only after some explicit command,
+    like inventory. But our agent has no idea about the previous state. So, from its
+    point of view, the situation after the command take apple is exactly the same
+    as before (with the difference that the apple is no longer mentioned in the scene
+    description). We can deal with that by stacking states, as we did in Atari games,
+    but we need to do it explicitly, and the amount of information the agent needs
+    to process will increase significantly.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'With all this being said, we should make some simplifications in the environment.
+    Luckily, TextWorld provides us with convenient means for such workarounds. During
+    the game registration, we can pass extra flags to enrich the observation space
+    with extra pieces of more structured information. Here is the list of internals
+    that we can peek into:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A separate description of the current room, as it will be given by the look
+    command
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The current inventory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The name of the current location
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The facts of the current world state
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The last action and the last command performed
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The list of admissible commands in the current state
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The sequence of actions to execute to win the game
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In addition, besides extra structured observations provided on every step, we
+    can ask TextWorld to give us intermediate rewards every time we move in the right
+    direction in the quest. As you might guess, this is extremely helpful for speeding
+    up the convergence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most useful features in the additional information we can add are admissible
+    commands, which enormously decrease our action space from 1250^(40) to just a
+    dozen, and intermediate rewards, which guide the training in the right direction.
+    To enable this extra information, we need to pass an optional argument to the
+    register_game() method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see, the environment now provides us with extra information in the
+    dictionary that was empty before. In this state, only three commands make sense
+    (go east, inventory, and look). Let’s try the first one:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The command was accepted, and we were given an intermediate reward of 1\. Okay,
+    that’s great. Now we have everything needed to implement our first baseline DQN
+    agent to solve TextWorld problems! But before that, we need to dive a bit into
+    the natural language processing (NLP) world.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The deep NLP basics
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this short section, I’m going to walk you through deep NLP building blocks
+    and standard approaches. This domain is evolving at enormous speed, especially
+    now, as ChatGPT and LLMs have set a new standards in chatbots and text processing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The material in this section just scratches the surface and covers the most
+    common and standard building blocks. Some of them, like RNNs and LSTMs, might
+    even look outdated — I still believe this is fine, as being aware of historical
+    perspective is important. For simple tasks, you might consider using simple tools
+    depending on what is most suitable for the task at hand, even if they are not
+    hyped anymore.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recurrent Neural Networks (RNNs)
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: NLP has its own specifics that make it different from computer vision or other
+    domains. One such feature is processing variable-length objects. At various levels,
+    NLP deals with objects that could have different lengths; for example, a word
+    in a language could contain several characters. Sentences are formed from variable-length
+    word sequences. Paragraphs or documents consist of varying numbers of sentences.
+    Such variability is not NLP-specific and can arise in different domains, like
+    in signal processing or video processing. Even standard computer vision problems
+    could be seen as a sequence of some objects, like an image captioning problem
+    when a neural network (NN) can focus on various amounts of regions of the same
+    image to better describe the image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs provide one of the standard building blocks to deal with this variability.
+    An RNN is a network with fixed input and output that is applied to a sequence
+    of objects and can pass information along this sequence. This information is called
+    the hidden state, and it is normally just a vector of numbers of some size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following diagram, we have an RNN with one input, which is a fixed-sized
+    vector of numbers; the output is another vector. What makes it different from
+    a standard feed-forward or convolutional NN is two extra gates: one input and
+    one output. The extra input feeds the hidden state from the previous item into
+    the RNN unit, and the extra output provides a transformed hidden state to the
+    next sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file152.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.3: The structure of an RNN building block'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As an RNN has two inputs, it can be applied to input sequences of any length,
+    just by passing the hidden state produced by the previous entry to the next one.
+    In Figure [13.4](#x1-227007r4), an RNN is applied to the sentence this is a cat,
+    producing the output for every word in the sequence. During the application, we
+    have the same RNN applied to every input item, but by having the hidden state,
+    it can now pass information along the sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file153.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.4: How an RNN is applied to a sentence'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is similar to convolutional NNs, when we have the same set of filters applied
+    to various locations of the image, but the difference is that a convolutional
+    NN can’t pass the hidden state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Despite the simplicity of this model, it adds an extra degree of freedom to
+    the standard feed-forward NN model. The feed-forward NNs are determined by their
+    input and always produce the same output for some fixed input (during the inference,
+    of course, and not during the training). An RNN’s output depends not only on the
+    input but also on the hidden state, which could be changed by the NN itself. So,
+    the NN could pass some information from the beginning of the sequence to the end
+    and produce a different output for the same input in different contexts. This
+    context dependency is very important in NLP, as in natural language, a single
+    word could have a completely different meaning in different contexts, and the
+    meaning of a whole sentence could be changed by a single word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Of course, such flexibility comes with its own cost. RNNs usually require more
+    time to train and can produce some weird behavior, like loss oscillations or sudden
+    amnesia during the training. However, the research community has already done
+    a lot of work and is still working hard to make RNNs more practical and stable,
+    so RNNs and their modern alternatives like transformers can be seen as a standard
+    building block of the systems that need to process variable-length input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our example, we’ll use the evolution of RNNs, called the Long Short-Term
+    Memory (LSTM) model, which was first proposed in 1995 by Sepp Hochreiter and Jürgen
+    Schmidhuber in the paper LSTM can solve hard long time lag problems, and then
+    published in 1996 at a Neural Information Processing Systems (NIPS) conference
+    [[HS96](#)]. This model is very similar to the RNN we just discussed, but has
+    more complicated internal structure to address some RNN problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Word embedding
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another standard building block of modern DL-driven NLP is word embeddings,
+    which is also called word2vec by one of the most popular training methods for
+    simple tasks. The idea comes from the problem of representing our language sequences
+    in NNs. Normally, NNs work with fixed-sized vectors of numbers, but in NLP, we
+    normally have words or characters as input to the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While older methods like word2vec are commonly used for more simple tasks and
+    remain very relevant in the field, other methods such as BERT and transformers
+    are widely used for more complex tasks. We’ll briefly discuss transformers later
+    in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One possible solution might be one-hot encoding our dictionary, which is when
+    every word has its own position in the input vector and we set this number to
+    1 when we encounter this word in the input sequence. This is a standard approach
+    for NNs when you have to deal with some relatively small discrete set of items
+    and want to represent them in an NN-friendly way. Unfortunately, one-hot encoding
+    doesn’t work very well for several reasons:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our input set is usually not small. If we want to encode only the most commonly
+    used English dictionary, it will contain at least several thousand words. The
+    Oxford English Dictionary has 170,000 commonly used words and 50,000 obsolete
+    and rare words. This is only established vocabulary and doesn’t count slang, new
+    words, scientific terms, abbreviations, typos, jokes, Twitter/X memes, and so
+    on. And this is only for the English language!
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second problem related to the one-hot representation of words is the uneven
+    frequency of vocabulary. There are relatively small sets of very frequent words,
+    like a and cat, but a very large set of much more rarely used words, like covfefe
+    or bibliopole, and those rare words can occur only once or twice in a very large
+    text corpus. So, our one-hot representation is very inefficient in terms of space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another issue with simple one-hot representation is not capturing a word’s relations.
+    For example, some words are synonyms and have the same meaning, but they will
+    be represented by different vectors. Some words are used very frequently together,
+    like United Nations or fair trade, and this fact is also not captured in one-hot
+    representation.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To overcome all this, we can use word embeddings, which map every word in some
+    vocabulary into a dense, fixed-length vector of numbers. These numbers are not
+    random but trained on a large corpus of text to capture the context of words.
+    A detailed description of word embeddings is beyond the scope of this book, but
+    this is a really powerful and widely used NLP technique to represent words, characters,
+    and other objects in some sequence. For now, you can think about them as just
+    mapping words into number vectors, and this mapping is convenient for the NN to
+    be able to distinguish words from each other. To obtain this mapping, two methods
+    exist. First, you can download pretrained vectors for the language that you need.
+    There are several sources of embeddings available; just search on Google for “GloVe
+    pretrained vectors” or “word2vec pretrained” (GloVe and word2vec are different
+    methods used to train such vectors, which produce similar results). An alternate
+    way to obtain embeddings is to train them on your own dataset. To do this, you
+    can either use special tools, such as fastText ([https://fasttext.cc/](https://fasttext.cc/),
+    an open source utility from Facebook), or just initialize embeddings randomly
+    and allow your model to adjust them during normal training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, LLMs (and, in general, any sequence-to-sequence architectures)
+    can produce very high-quality embeddings of texts. The OpenAI ChatGPT API has
+    a special request that converts any piece of text into an embedding vector.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Encoder-Decoder architecture
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Another model that is widely used in NLP is called Encoder-Decoder, or seq2seq.
+    It originally comes from machine translation, when your system needs to accept
+    a sequence of words in the source language and produce another sequence in the
+    target language. The idea behind seq2seq is to use an RNN to process an input
+    sequence and encode this sequence into some fixed-length representation. This
+    RNN is called an encoder. Then you feed the encoded vector into another RNN, called
+    a decoder, which has to produce the resulting sequence in the target language.
+    An example of this idea is shown next, where we are translating an English sentence
+    into Russian:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file154.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.5: The Encoder-Decoder architecture in machine translation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This model (with a lot of modern tweaks and extensions) is still a major workhorse
+    of machine translation, but is general enough to be applicable to a much wider
+    set of domains, for example, audio processing, image annotation, and video captioning.
+    In our TextWorld example, we’ll use it to generate embeddings of variable-sized
+    observations from the environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: RNNs continue to be very effective in certain contexts, but in recent years,
+    NLP has seen significant advancements with the introduction of the more complex
+    Transformer models. Let’s take a look at Transformer architecture next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transformers
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Transformers is an architecture proposed in 2017 in the paper Attention is
+    all you need by Vaswani et al. from Google [[Vas17](#)]. At a high-level, it uses
+    the same encoder-decoder architecture we just discussed, but adds several improvements
+    to the underlying building blocks, which turned out to be very important for addressing
+    existing RNN problems:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Positional encoding: This injects information about the input and output sequences’
+    positions into embeddings'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Attention mechanism: This concept was proposed in 2015 and could be seen as
+    a trainable way for systems to focus on specific parts of input sequences. In
+    transformers, attention was heavily used (which you can guess from the paper’s
+    title)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Nowadays, transformers are at the core of almost every NLP and DL system, including
+    LLMs. I’m not going to go deep into this architecture, as there are lots of resources
+    available about this topic, but if you’re curious, you can check the following
+    article: [https://jalammar.github.io/illustrated-transformer/](https://jalammar.github.io/illustrated-transformer/).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now we have everything needed to implement our first baseline DQN agent to solve
+    TextWorld problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Baseline DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Getting back to our TextWorld environment, the following are the major challenges:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Text sequences might be problematic on their own, as we discussed earlier in
+    this chapter. The variability of sequence lengths might cause vanishing and exploding
+    gradients in RNNs, slow training, and convergence issues. In addition to that,
+    our TextWorld environment provides us with several such sequences that we need
+    to handle separately. Our scene description string, for example, might have a
+    completely different meaning to the agent than the inventory string, which describes
+    our possessions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another obstacle is the action space. As you have seen in the previous section,
+    TextWorld might provide us with a list of commands that we can execute in every
+    state. It significantly reduces the action space we need to choose from, but there
+    are other complications. One of them is that the list of admissible commands changes
+    from state to state (as different locations might allow different commands to
+    be executed). Another issue is that every entry in the admissible commands list
+    is a sequence of words.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Potentially, we might get rid of both of those variabilities by building a dictionary
+    of all possible commands and using it as a discrete, fixed-size action space.
+    In simple games, this might work, as the number of locations and objects is not
+    that large. You can try this as an exercise, but we will follow a different path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Thus far, you have seen only discrete action spaces having a small number of
+    predefined actions, and this influenced the architecture of the DQN: the output
+    from the network predicted Q-values for all actions in one pass, which was convenient
+    both during the training and model application (as we need all Q-values for all
+    actions to find argmax anyway). But this choice of DQN architecture is not something
+    dictated by the method, so if needed, we can tweak it. And our issue with a variable
+    number of actions might be solved this way. To get a better understanding of how,
+    let’s check the architecture of our TextWorld baseline DQN, as shown in the following
+    figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file155.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.6: The architecture of the TextWorld baseline DQN'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The major part of the diagram is occupied by preprocessing blocks. On input
+    to the network (blocks on the left), we get variable sequences of individual parts
+    of observations (“Raw text”, “Description”, and “Inventory”) and the sequence
+    of one action command to be evaluated. This command will be taken from the admissible
+    commands list, and the goal of our network will be to predict a single Q-value
+    for the current game state and this particular command. This approach is different
+    from the DQNs we have used before, but as we don’t know in advance which commands
+    will be evaluated in every state, we will evaluate every command individually.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Those four input sequences (which are lists of token IDs in our vocabulary)
+    will be passed through an embeddings layer and then fed into separate LSTM RNNs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The goal of LSTM networks (which are called “Encoders” in the figure, since
+    LSTMs are concrete implementations of encoders) is to convert variable-length
+    sequences into fixed-size vectors. Every input piece is processed by its own LSTM
+    with separated weights, which will allow the network to capture different data
+    from different input sequences. Later in this chapter, we’ll replace LSTMs with
+    pretrained transformers from the Hugging Face Hub to check the effect of using
+    a much smarter and larger model on the same problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The output from the encoders is concatenated into one single vector and passed
+    to the main DQN network. As our variable-length sequences have been transformed
+    into fixed-size vectors, the DQN network is simple: just several feed-forward
+    layers producing one single Q-value. This is less efficient computationally, but
+    for the baseline, it is fine.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The complete source code is in the Chapter13 directory and it includes the
+    following modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'train_basic.py: A baseline training program'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'lib/common.py: Common utilities to set up the Ignite engine and hyperparameters'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'lib/preproc.py: The preprocessing pipeline, including embeddings and encoder
+    classes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'lib/model.py: The DQN model and DQN agent with helper functions'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We won’t be presenting the full source code in the chapter. Instead, we will
+    be explaining only the most important or tricky parts in the subsequent sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Observation preprocessing
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Let’s start with the leftmost part of our pipeline (Figure [13.6](#x1-231002r6)).
+    On the input, we’re going to get several lists of tokens, both for the individual
+    state observation and for our command that we’re going to evaluate. But as you
+    have already seen, the TextWorld environment produces the string and a dict with
+    the extended information, so we need to tokenize the strings and get rid of non-relevant
+    information. That’s the responsibility of the TextWorldPreproc class, which is
+    defined in the lib/preproc.py module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The class implements the gym.Wrapper interface, so it will transform the TextWorld
+    environment observations and actions in the way we need. The constructor accepts
+    several flags, which simplifies future experiments. For example, you can disable
+    the usage of admissible commands or intermediate rewards, set the limit of tokens,
+    or change the set of observation fields to be processed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, the num_fields property returns the count of observation sequences, which
+    is used to get the idea of the encoded observation’s shape:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The _maybe_tokenize() method performs tokenization of input string. If no vocabulary
+    is given, the string is returned unchanged. We will use this functionality in
+    the transformer version, as Hugging Face libraries are performing their own tokenization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The _encode() method is the heart of the observation transformation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding method takes the observation string and the extended information
+    dictionary and returns a single dictionary with the following keys:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'obs: The list of lists with the token IDs of input sequences.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'admissible_commands: A list with commands available from the current state.
+    Every command is tokenized and converted into the list of token IDs.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In addition, the method remembers the extra information dictionary and raw admissible
+    commands list. This is not needed for training, but will be useful during the
+    model application, to be able to get back the command text from the index of the
+    command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With the _encode() method defined, implementation of the reset() and step()
+    methods is simple — we’re encoding observations and handling intermediate rewards
+    (if they are enabled):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: It’s worth noting that the step() method is expecting 4 items to be returned
+    from the wrapped environment, but returns 5 elements. This hides the TextWorld
+    environment incompatibility with the modern Gym interface we’ve already discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, there are two properties that give access to the remembered state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To illustrate how the preceding class is supposed to be applied and what it
+    does with the observation, let’s check the following small interactive session.
+    Here, we register the game, asking for inventory, intermediate reward, admissible
+    commands, and scene description:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So, that’s our raw observation obtained from the TextWorld environment. Now
+    let’s extract the game vocabulary and apply our preprocessor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let’s try to execute an action. The 0th action corresponds to the first entry
+    in the admissible commands list, which is “drop sponge” in our case:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, we no longer have the sponge, but it wasn’t the right action
+    to take, thus an intermediate reward was not given.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Okay, this representation still can’t be fed directly into NNs, but it is much
+    closer to what we want.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Embeddings and encoders
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The next step in the preprocessing pipeline is implemented in two classes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Encoder: A wrapper around the LSTM unit that transforms one single sequence
+    (after embeddings have been applied) into a fixed-size vector'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Preprocessor: This class is responsible for the application of embeddings and
+    the transformation of individual sequences with corresponding encoder classes'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The Encoder class is simpler, so let’s start with it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The logic is that: we apply the LSTM layer and return its hidden state after
+    processing the sequence.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Preprocessor class is a bit more complicated, as it combines several Encoder
+    instances and is also responsible for embeddings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the constructor, we create an embeddings layer, which will map every token
+    in our dictionary into a fixed-size dense vector. Then we create num_sequences
+    instances of Encoder for every input sequence and one additional instance to encode
+    command tokens.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The internal method _apply_encoder() takes the batch of sequences (every sequence
+    is a list of token IDs) and transforms it with an encoder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In earlier versions of PyTorch, we needed to sort a batch of variable-length
+    sequences before RNN application. Since PyTorch 1.0, this is no longer needed,
+    as this sorting and transformation is handled by the PackedSequence class internally.
+    To enable this functionality, we need to pass the enforce_sorted=False parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The encode_observations() method takes a batch of observations (from TextWorldPreproc)
+    and encodes them into a tensor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Besides variable sequences, we can pass extra “flags” fields directly into the
+    encoded tensor. This functionality will be used in later experiments and extensions
+    to the basic method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, two methods, encode_sequences() and encode_commands(), are used to
+    apply different encoders to the batch of variable-length sequences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: The DQN model and the agent
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With all those preparations made, let’s look at the brains of our agent: the
+    DQN model. It should accept vectors of num_sequences ×encoder_size and produce
+    a single scalar value. But there is one difference from the other DQN models covered,
+    which is in the way we apply the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, the forward() method accepts two batches — observations
+    and commands — producing the batch of Q-values for every pair. Another method,
+    q_values(), takes one observation produced by the Preprocessor class and the tensor
+    of encoded commands, then applies the model and returns a list of Q-values for
+    every command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the model.py module, we have the DQNAgent class, which takes the preprocessor
+    and implements the PTAN Agent interface to hide the details of observation preprocessing
+    on decision-making.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training code
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: With all the preparations and preprocessing in place, the rest of the code is
+    almost the same as we already implemented in previous chapters, so I won’t repeat
+    the training code; I will just describe the training logic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train the model, the Chapter13/train_basic.py utility has to be used. It
+    allows several command-line arguments to change the training behavior:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '-g or --game: This is the prefix of the game files in the games directory.
+    The provided script generates several games named simpleNN.ulx, where NN is the
+    game seed.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-s or --suffices: This is the count of games to be used during the training.
+    If you specify 1 (which is the default), the training will be performed only on
+    the file simple1.ulx. If option -s 10 is given, 10 games with indices 1…10 will
+    be registered and used for training. This option is used to increase the variability
+    in the training games, as our goal is not just to learn how to play concrete games
+    but also (hopefully) to learn how to behave in other similar games.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-v or --validation: This is the suffix of the game to be used for validation.
+    It equals to -val by default and defines the game file that will be used to check
+    the generalization of our trained agent.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--params: This means the hyperparameters to be used. Two sets are defined in
+    lib/common.py: small and medium. The first one has a small number of embeddings
+    and encoder vectors, which is great for solving a couple of games quickly; however,
+    this set struggles with converging when many games are used for training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '--dev: This option specifies the device name for computations.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '-r or --run: This is the name of the run and is used in the name of the save
+    directory and TensorBoard.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: During the training, validation is performed every 100 training iterations and
+    the validation game is run on the current network. The reward and the number of
+    steps are recorded in TensorBoard and help us to understand the generalization
+    capabilities of our agent. Generalization in RL is known to be a large issue,
+    as with a limited set of trajectories, the training process has a tendency to
+    overfit to some states, which doesn’t guarantee good behavior on unseen games.
+    In comparison to Atari games, where the gameplay normally doesn’t change much,
+    the variability of interactive fiction games might be high, due to different quests,
+    objects, and the way they communicate. So, it’s an interesting experiment to check
+    how our agent is able to generalize between games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training results
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'By default, the script games/make_games.sh generates 20 games with names from
+    simple1.ulx to simple20.ulx, plus a game for validation: simple-val.ulx.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To begin, let’s train the agent on one game, using the small hyperparameters
+    set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: Option -s specifies the number of game indices that will be used for training.
+    In this case, only one will be used. The training stops when the average number
+    of steps in the game drops below 15, which means the agent has found the proper
+    sequence of steps and can reach the end of the game in an efficient way.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the case of one game, it takes just 3 minutes and about 120 episodes to
+    solve the game. The following figure shows the reward and number of steps dynamics
+    during the training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.7: Training reward (left) and count of steps in episodes (right)
+    for training on one game'
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if we check the validation reward (which is a reward obtained on the game
+    simple-val.ulx), we see zero improvement over time. In my case, validation reward
+    was zero and count of steps on validation episodes were 50 (which is a default
+    time limit). It just means that the learned agent wasn’t able to generalize.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we try to increase the number of games used for the training, the convergence
+    will require more time, as the network needs to discover more sequences of actions
+    in different states. The following are the same charts for reward and steps for
+    20 games (with option -s 20 passed):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.8: Training reward (left) and count of steps in episodes (right)
+    for training on 20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, it takes almost two hours to converge, but still, our small
+    hyperparameter set is able to improve the performance on 20 games played during
+    the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Validation metrics, as shown in the following figure, are now slightly more
+    interesting — at the end of the training, the agent was able to obtain the score
+    of 2 (with maximum 6) and somewhere in the middle of the training, it got 4\.
+    But count of steps on validation game are still 50, which means that the agent
+    just walks around semi-randomly executing some actions. Not very impressive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.9: Validation reward during the training on 20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: I haven’t tried different hyperparameters on this agent (you can do this with
+    -s medium).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tweaking observations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Our first series of attempts will be in feeding more information to the agent.
+    Here, I will just briefly introduce the changes made and effect they had on a
+    training result. You can find the full example in Chapter13/train_preproc.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Tracking visited rooms
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: First, you will notice that our agent has no idea whether the current room was
+    already visited or not. In situations when the agent already knows the optimal
+    way to the goal, it might be not needed (as generated games always have different
+    rooms). But if the policy is not perfect, it might be useful to have a clear indication
+    that we’re visiting the same room over and over again.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To feed this knowledge into the observation, I implemented a simple room tracking
+    in the preproc.LocationWrapper class, which tracks visited rooms over the episode.
+    Then this flag is concatenated to the agent’s observation as a single 1 if the
+    room was visited before or 0 if it is a new location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To train our agent with this extension, you can run train_preproc.py with the
+    additional command-line option --seen-rooms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following are charts comparing our baseline version with this extra observation
+    on 20 games. As you can see, reward on training games are almost the same, but
+    validation reward was improved — we were able to get non-zero validation reward
+    almost during the whole training. But count of steps on validation game are still
+    50.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.10: Training reward (left) and validation reward (right) on 20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But after trying this extension on 200 games (you need to change the script
+    to generate them), I’ve got an interesting result: after 14 hours of training
+    and 8,000 episodes, the agent was not just getting the maximum score on validation
+    game but was able to do this efficiently (with count of steps less than 10). This
+    is shown in Figure [13.11](#x1-238004r11) and Figure [13.12](#x1-238005r12).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.11: Training reward (left) and episode steps (right) on 200 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.12: Validation reward (left) and episode steps (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Relative actions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The second attempt to improve the agent’s learning was about the action space.
+    In principle, our agent’s task is to navigate the rooms and perform specific actions
+    on objects around (like opening the locker and taking something out of it). So,
+    navigation is a very important aspect in learning process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At the moment, we move around by executing “absolute coordinate” commands, like
+    “go north” or “go east”, which are room-specific, as different rooms might have
+    different exits available. In addition, after executing some action, the inverse
+    action (to get back to the original room) depends on the first action. For example,
+    if we are in the room with an exit to the north, after using this exit, we need
+    to execute “go south” to get back. But our agent has no memory of the history
+    of actions, so after going north, we have no idea how to get back.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the previous section, we added information about whether the room was visited
+    or not. Now we’ll transform absolute actions into relative actions. To get that,
+    our wrapper preproc.RelativeDirectionsWrapper tracks our “heading direction” and
+    replaces the “go north” or “go east” commands with “go left”, “go right”, “go
+    forward”, or “go back” depending on the heading direction. In this example, when
+    we’re in the room with an exit to the north and we’re heading north, we need to
+    execute the command “go forward” to use the exit. After that, we can run the command
+    “go back” to step back in the originating room. Hopefully, this transformation
+    will allow our model to navigate the TextWorld games with more ease.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To enable this extension, you need to run train_preproc.py with the --relative-actions
+    command-line option. This extension also requires “seen rooms” to be enabled,
+    so here, we’re testing the effect of both modifications combined. On 20 games,
+    training dynamics and validation results are very similar to the baseline version
+    (Figure [13.13](#x1-239002r13)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.13: Training reward (left) and validation reward (right) on 20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But on 200 games, the agent was able to get the maximum score on validation
+    game after just 2.5 hours (instead of 13 in the “Seen rooms” extension). The number
+    of steps on validation was also decreased below 10\. But, unfortunately, after
+    further training, validation metrics reverted to lower validation scores, so the
+    agent overfitted to the games and unlearned the skills it had:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.14: Validation reward (left) and episode steps (right) on 200 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Objective in observation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Another idea is to feed the game objective into the agent observations. The
+    objective is presented as text at the beginning of the game, for example, First
+    thing I need you to do is to try to venture east. Then, venture south. After that,
+    try to go to the south. Once you succeed at that, try to go west. If you can finish
+    that, pick up the coin from the floor of the chamber. Once that’s all handled,
+    you can stop!.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This information might be useful for the agent to plan its actions, so let’s
+    add it to the encoded vectors. We don’t need to implement another wrapper, as
+    our existing ones are flexible enough already. Just a couple of extra arguments
+    need to be passed to them. To enable the objective, you need to run train_preproc.py
+    with the --objective command-line argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Results on 20 games are almost identical to the baseline and shown in Figure [13.15](#x1-240002r15):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_15.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.15: Training reward (left) and validation reward (right) on 20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Training on 200 games was less successful than for previous modifications:
+    during the validation, score was around 2-4 but never reached 6\. Charts for reward
+    and validation reward are shown in Figure [13.16](#x1-240003r16):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.16: Training reward (left) and validation reward (right) on 200 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transformers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The next approach we’ll try is pretrained language models, which is a de facto
+    standard in modern NLP. Thanks to public model repositories, like the [Hugging
+    Face Hub](https://huggingface.co/docs/hub/en/index), we don’t need to train them
+    from scratch, which might be very costly. We can just plug the pretrained model
+    into our architecture and fine-tune a small portion of our network to our dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is a wide variety of models — different sizes, datasets they were pretrained
+    on, training techniques, etc. But all of them use a simple API, so plugging them
+    into our code is simple and straightforward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we need to install the libraries. For our task, we’ll use the package
+    sentence-transformers==2.6.1, which you need to install manually. Once this is
+    done, you can use it to compute embeddings of any sentences given as strings:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here we used the all-MiniLM-L6-v2 model, which is relatively small — 22M parameters
+    trained on 1.2B tokens. You can find more information on the Hugging Face website:
+    [https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our case, we’ll use the high-level interface, where we feed strings with
+    sentences, and the library and model are doing all the conversion for us. But
+    there is lots of flexibility if needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preproc.TransformerPreprocessor class implements the same interface as our
+    old Preprocessor class (which used LSTM for embeddings) and I’m not going to show
+    the code as it is very straightforward.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train our agent with transformers, you need to run the Chapter13/train_tr.py
+    module. During the training, transformers turned out to be slower (2 FPS vs 6
+    FPS on my machine), which is not surprising, as the model is much more complicated
+    than LSTM models. But training dynamics is better on 20 and 200 games. In Figure [13.17](#x1-241017r17),
+    you can see training reward and count of episode steps for transformers and baseline.
+    The baseline version required 1,000 episodes to reach 15 steps, where transformers
+    required just 400\. Validation on 20 games had worse reward than baseline version
+    (max score was 2):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_13_17.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 13.17: Training reward (left) and training episodes length (right) on
+    20 games'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The same situation was on 200 games — the agent learns more efficiently (in
+    terms of games), but validation is not great. This could be explained by the much
+    larger capacity of transformers — the embeddings they produce are almost 20 times
+    larger than our baseline model (384 vs 20), so it is easier for our agent to just
+    memorize the correct sequence of steps instead of trying to find high-level generic
+    observations to actions mapping.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ChatGPT
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To finalize the discussion of TextWorld, let’s try a different approach — using
+    LLMs. Right after public release at the end of 2022, OpenAI ChatGPT became very
+    popular and literally transformed the chatbot and text-based assistant landscape.
+    Just in a year since its release, hundreds of new use cases appeared and thousands
+    of applications using LLMs under the hood were developed. Let’s try to apply this
+    technology to our problem of solving TextWorld games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Setup
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: First, you will need an account on [https://openai.com](https://openai.com).
+    We’ll start our experiment with an interactive web-based chat, which could be
+    tried for free and without registration (at the moment of writing), but our next
+    example will use the ChatGPT API, for which you will need to generate an API key
+    at [https://platform.openai.com](https://platform.openai.com). Once the key is
+    created, you need to set it to the environment variable OPENAI_API_KEY in the
+    shell you’re using.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’ll also use the langchain library to communicate with ChatGPT from Python,
+    so please install it with the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that these packages are quite dynamic and new versions might break compatibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Interactive mode
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In our first example, we’ll use the web-based ChatGPT interface, asking it
+    to generate game commands from room descriptions and game objectives. The code
+    is in Chapter13/chatgpt_interactive.py and it does the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Starts the TextWorld environment for the game ID given in the command line
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Creates the prompt for ChatGPT with instructions, game objective, and room description
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Writes this prompt to the console
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Reads the command to be executed from the console
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Executes the command in the environment
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeats from step 2 until the limit of steps has been reached or until we’ve
+    solved the game
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: So, your task is to copy the generated prompt and paste it into the [https://chat.openai.com](https://chat.openai.com)
+    web interface. ChatGPT will generate the command that has to be entered into the
+    console.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The full code is very simple and short. It has just a single play_game function,
+    which executes the game loop using the created environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'During environment creation, we ask just for two extra information pieces:
+    room description and game objective. In principle, both are present in free-text
+    observations, so we could parse them from this text. But for convenience, we ask
+    TextWorld to provide this explicitly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning of the play_game function, we reset the environment and generate
+    the initial prompt:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: I haven’t spent much time designing it, as basically, everything worked from
+    the first attempt and I’m sure it could be improved. The last sentence, “Reply
+    with just a command in lowercase and nothing else,” prevents the chatbot from
+    being too verbose and saves us from parsing the output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then we execute the loop until the game is solved or the limit of steps has
+    been reached:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The continuation prompt is much simpler — we just give the obtained observation
+    (which is an outcome of the command) and new room description. We don’t need to
+    pass the objective again, as the web interface keeps the context of conversation,
+    so the chatbot is aware of our prior instructions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s take a look at one game test (with seed 1). I stripped the room descriptions
+    to decrease the verbosity; otherwise, it would take several pages of the book.
+    But you should copy the generated text fully:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the LLM was able to solve the task perfectly. What is even more
+    spectacular is that overall task is harder — we ask it to generate commands and
+    not to make a decision from a list of “admissible commands” as earlier in the
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: ChatGPT API
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Since copy-pasting is tedious and boring, let’s automate our agent using the
+    ChatGPT API. We’ll use the langchain library ([https://python.langchain.com/](https://python.langchain.com/)),
+    which provides enough flexibility and control to leverage the LLM functionality.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The full code example is in Chapter13/chatgpt_auto.py. Here, I will cover the
+    core function, play_game():'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our initial prompt is the same as before — we’re instructing the chatbot about
+    the kind of the game we’re playing and asking it to reply only with commands to
+    be fed into the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then we reset the environment and generate the first message, passing the information
+    from TextWorld:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: The variable context is very important and it contains the list of all messages
+    (both from human and the chatbot) in our conversation so far. We’ll pass those
+    messages to the chatbot to preserve the process of the game. This is needed because
+    the game objective is being shown only once and not repeated again. Without the
+    history, the agent doesn’t have enough information to perform the required sequence
+    of steps. On the other hand, having lots of text passed to the chatbot might lead
+    to high costs (as the ChatGPT API is billed for tokens being processed). Our game
+    is not long (5-7 steps is enough to finish the task), so it is not a major concern,
+    but for more complex games, history might be optimized.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then the game loop follows, which is very similar to what we had in interactive
+    version, but without console communication:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the continuation prompt, we pass the history of conversation, result of last
+    command, description of the current room, and ask for the next command.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We also limit the amount of steps to prevent the agent from getting stuck in
+    loops (it happens sometimes). If the game isn’t solved after 20 steps, we exit
+    the loop:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: I did experiment with the preceding code on 20 TextWorld games (with seeds 1…20)
+    and it was able to solve 9 games out of 20\. Most of the failed situations were
+    because the agent went into the loop — issuing the wrong command not properly
+    interpreted by TextWorld (like “take the key” instead of “take the key from the
+    box”), or getting stuck in navigation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In two games, ChatGPT failed because of generating the command “exit”, which
+    makes TextWorld stop immediately. Most likely, detecting this command or prohibiting
+    its generation in the prompt might increase the number of solved games. But still,
+    even 9 games solved by the agent without any prior training is quite an impressive
+    result. In terms of ChatGPT costs, running the experiment took 450K tokens to
+    be processed, which cost me $0.20\. Not a big price for having fun!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, you have seen how DQN can be applied to interactive fiction
+    games, which is an interesting and challenging domain at the intersection of RL
+    and NLP. You learned how to handle complex textual data with NLP tools and experimented
+    with fun and challenging interactive fiction environments, with lots of opportunities
+    for future practical experimentation. In addition, we used the transformer model
+    from the Hugging Face library and experimented with ChatGPT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will continue our exploration of “RL in the wild” and
+    check the applicability of RL methods in web automation.
+  prefs: []
+  type: TYPE_NORMAL

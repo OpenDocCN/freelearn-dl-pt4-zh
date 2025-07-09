@@ -1,0 +1,881 @@
+- en: '5'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Tabular Learning and the Bellman Equation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the previous chapter, you became acquainted with your first reinforcement
+    learning (RL) algorithm, the cross-entropy method, along with its strengths and
+    weaknesses. In this new part of the book, we will look at another group of methods
+    that has much more flexibility and power: Q-learning. This chapter will establish
+    the required background shared by those methods.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will also revisit the FrozenLake environment and explore how new concepts
+    fit with this environment and help us to address issues related to its uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Review the value of the state and the value of the action, and learn how to
+    calculate them in simple cases
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Talk about the Bellman equation and how it establishes the optimal policy if
+    we know the values of states
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Discuss the value iteration method and try it on the FrozenLake environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Do the same for the Q-iteration method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Despite the simplicity of the environments in this chapter, it establishes the
+    required preparation for deep Q-learning, which is a very powerful and generic
+    RL method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Value, state, and optimality
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: You may remember our definition of the value of the state from Chapter [1](ch005.xhtml#x1-190001).
+    This is a very important notion and the time has come to explore it further.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This whole part of the book is built around the value of the state and how to
+    approximate it. We defined this value as an expected total reward (optionally
+    discounted) that is obtainable from the state. In a formal way, the value of the
+    state is given by
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: where r[t] is the local reward obtained at step t of the episode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The total reward could be discounted with 0 < γ < 1 or not discounted (when
+    γ = 1); it’s up to us how to define it. The value is always calculated in terms
+    of some policy that our agent follows. To illustrate this, let’s consider a very
+    simple environment with three states, as shown in Figure [5.1](#x1-83004r1):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![SsSeSerr=ta=n=n==1r2d3d12t ](img/B22150_05_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.1: An example of an environment’s state transition with rewards'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The agent’s initial state.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The final state that the agent is in after executing action “right” from the
+    initial state. The reward obtained from this is 1.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The final state that the agent is in after action “down.” The reward obtained
+    from this is 2.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The environment is always deterministic — every action succeeds and we always
+    start from state 1\. Once we reach either state 2 or state 3, the episode ends.
+    Now, the question is, what’s the value of state 1? This question is meaningless
+    without information about our agent’s behavior or, in other words, its policy.
+    Even in a simple environment, our agent can have an infinite amount of behaviors,
+    each of which will have its own value for state 1\. Consider these examples:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Agent always goes right
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Agent always goes down
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Agent goes right with a probability of 50% and down with a probability of 50%
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Agent goes right in 10% of cases and in 90% of cases executes the “down” action
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To demonstrate how the value is calculated, let’s do it for all the preceding
+    policies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value of state 1 in the case of the “always right” agent is 1.0 (every time
+    it goes left, it obtains 1 and the episode ends)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the “always down” agent, the value of state 1 is 2.0
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the 50% right/50% down agent, the value is 1.0⋅0.5+2.0⋅0.5 = 1.5
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: For the 10% right/90% down agent, the value is 1.0⋅0.1+2.0⋅0.9 = 1.9
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Now, another question: what’s the optimal policy for this agent? The goal of
+    RL is to get as much total reward as possible. For this one-step environment,
+    the total reward is equal to the value of state 1, which, obviously, is at the
+    maximum at policy 2 (always down).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, such simple environments with an obvious optimal policy are not
+    that interesting in practice. For interesting environments, the optimal policies
+    are much harder to formulate and it’s even harder to prove their optimality. However,
+    don’t worry; we are moving toward the point when we will be able to make computers
+    learn the optimal behavior on their own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the preceding example, you may have a false impression that we should always
+    take the action with the highest reward. In general, it’s not that simple. To
+    demonstrate this, let’s extend our preceding environment with yet another state
+    that is reachable from state 3\. State 3 is no longer a terminal state but a transition
+    to state 4, with a bad reward of -20\. Once we have chosen the “down” action in
+    state 1, this bad reward is unavoidable, as from state 3, we have only one exit
+    to state 4\. So, it’s a trap for the agent, which has decided that “being greedy”
+    is a good strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![SsSeSSerrr=ta=n==n===1r2d34d12−t20 ](img/B22150_05_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.2: The same environment, with an extra state added'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With that addition, our values for state 1 will be calculated this way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The “always right” agent is the same: 1.0'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The “always down” agent gets 2.0 + (−20) = −18
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The 50%/50% agent gets 0.5 ⋅ 1.0 + 0.5 ⋅ (2.0 + (−20)) = −8.5
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The 10%/90% agent gets 0.1 ⋅ 1.0 + 0.9 ⋅ (2.0 + (−20)) = −16.1
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So, the best policy for this new environment is now policy 1: always go right.
+    We spent some time discussing naïve and trivial environments so that you realize
+    the complexity of this optimality problem and can appreciate the results of Richard
+    Bellman better. Bellman was an American mathematician who formulated and proved
+    his famous Bellman equation. We will talk about it in the next section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Bellman equation of optimality
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To explain the Bellman equation, it’s better to go a bit abstract. Don’t be
+    afraid; I’ll provide concrete examples later to support your learning! Let’s start
+    with a deterministic case, when all our actions have a 100% guaranteed outcome.
+    Imagine that our agent observes state s[0] and has N available actions. Every
+    action leads to another state, s[1]…s[N], with a respective reward, r[1]…r[N].
+    Also, assume that we know the values, V [i], of all states connected to state
+    s[0]. What will be the best course of action that the agent can take in such a
+    state?
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![rrrr====rrrr123N sssssaaaa0123N====VVVV123N123N ](img/B22150_05_03.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.3: An abstract environment with N states reachable from the initial
+    state'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we choose the concrete action, a[i], and calculate the value given to this
+    action, then the value will be V [0](a = a[i]) = r[i] + V [i]. So, to choose the
+    best possible action, the agent needs to calculate the resulting values for every
+    action and choose the maximum possible outcome. In other words, V [0] = max[a∈1…N](r[a]
+    + V [a]). If we are using the discount factor, γ, we need to multiply the value
+    of the next state by gamma: V [0] = max[a∈1…N](r[a] + γV [a]).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This may look very similar to our greedy example from the previous section,
+    and, in fact, it is. However, there is one difference: when we act greedily, we
+    do not only look at the immediate reward for the action, but at the immediate
+    reward plus the long-term value of the state. This allows us to avoid a possible
+    trap with a large immediate reward but a state that has a bad value.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Bellman proved that with that extension, our behavior will get the best possible
+    outcome. In other words, it will be optimal. So, the preceding equation is called
+    the Bellman equation of value (for a deterministic case).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It’s not very complicated to extend this idea for a stochastic case, when our
+    actions have the chance of ending up in different states. What we need to do is
+    calculate the expected value for every action, instead of just taking the value
+    of the next state. To illustrate this, let’s consider one single action available
+    from state s[0], with three possible outcomes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![rrr===rrr 123 ssssappp0123=123VVV1123 ](img/B22150_05_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.4: An example of the transition from the state in a stochastic case'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we have one action, which can lead to three different states with different
+    probabilities. With probability p[1], the action can end up in state s[1], with
+    p[2] in state s[2], and with p[3] in state s[3] (p[1] + p[2] + p[3] = 1, of course).
+    Every target state has its own reward (r[1], r[2], or r[3]). To calculate the
+    expected value after issuing action 1, we need to sum all values, multiplied by
+    their probabilities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: or, more formally
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, 𝔼 [s∼S] means taking the expected value over all states in our state space,
+    S.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By combining the Bellman equation, for a deterministic case, with a value for
+    stochastic actions, we get the Bellman optimality equation for a general case:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Note that p[a,i→j] means the probability of action a, issued in state i, ending
+    up in state j. The interpretation is still the same: the optimal value of the
+    state corresponds to the action, which gives us the maximum possible expected
+    immediate reward, plus the discounted long-term reward for the next state. You
+    may also notice that this definition is recursive: the value of the state is defined
+    via the values of the immediately reachable states. This recursion may look like
+    cheating: we define some value, pretending that we already know it. However, this
+    is a very powerful and common technique in computer science and even in math in
+    general (proof by induction is based on the same trick). This Bellman equation
+    is a foundation not only in RL but also in much more general dynamic programming,
+    which is a widely used method for solving practical optimization problems.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'These values not only give us the best reward that we can obtain, but they
+    basically give us the optimal policy to obtain that reward: if our agent knows
+    the value for every state, then it automatically knows how to gather this reward.
+    Thanks to Bellman’s optimality proof, at every state the agent ends up in, it
+    needs to select the action with the maximum expected reward, which is a sum of
+    the immediate reward and the one-step discounted long-term reward – that’s it.
+    So, those values are really useful to know. Before you get familiar with a practical
+    way to calculate them, I need to introduce one more mathematical notation. It’s
+    not as fundamental as the value of the state, but we need it for our convenience.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value of the action
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To make our life slightly easier, we can define different quantities, in addition
+    to the value of the state, V (s), as the value of the action, Q(s,a). Basically,
+    this equals the total reward we can get by executing action a in state s and can
+    be defined via V (s). Being a much less fundamental entity than V (s), this quantity
+    gave a name to the whole family of methods called Q-learning, because it is more
+    convenient. In these methods, our primary objective is to get values of Q for
+    every pair of state and action:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Q, for this state, s, and action, a, equals the expected immediate reward and
+    the discounted long-term reward of the destination state. We also can define V
+    (s) via Q(s,a):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This just means that the value of some state equals to the value of the maximum
+    action we can execute from this state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we can express Q(s,a) recursively (which will be used in Chapter [6](#)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the last formula, the index on the immediate reward, (s,a), depends on the
+    environment details:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the immediate reward is given to us after executing a particular action,
+    a, from state s, index (s,a) is used and the formula is exactly as shown above.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'But if the reward is provided for reaching some state, s′, via action a′, the
+    reward will have the index (s′,a′) and will need to be moved into the max operator:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq15.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: That difference is not very significant from a mathematical point of view, but
+    it could be important during the implementation of the methods. The first situation
+    is more common, so we will stick to the preceding formula.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give you a concrete example, let’s consider an environment that is similar
+    to FrozenLake, but has a much simpler structure: we have one initial state (s[0])
+    surrounded by four target states, s[1], s[2], s[3], s[4], with different rewards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![s0 – initial state ssssss012431,s2,s3,s4 – final states ](img/B22150_05_05.png)
+    Figure 5.5: A simplified grid-like environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Every action is probabilistic in the same way as in FrozenLake: with a 33%
+    chance that our action will be executed without modifications, but with a 33%
+    chance that we will slip to the left, relatively, of our target cell and a 33%
+    chance that we will slip to the right. For simplicity, we use discount factor
+    γ = 1.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![sssssuledr000000000000rrrr01234pfoig.3.3.3.3.3.3.3.3.3.3.3.3====twh3333333333331234nt
+    ](img/B22150_05_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.6: A transition diagram of the grid environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s calculate the values of the actions to begin with. Terminal states s[1]…s[4]
+    have no outbound connections, so Q for those states is zero for all actions. Due
+    to this, the values of the terminal states are equal to their immediate reward
+    (once we get there, our episode ends without any subsequent states): V [1] = 1,
+    V [2] = 2, V [3] = 3, V [4] = 4.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The values of the actions for state 0 are a bit more complicated. Let’s start
+    with the “up” action. Its value, according to the definition, is equal to the
+    expected sum of the immediate reward plus the long-term value for subsequent steps.
+    We have no subsequent steps for any possible transition for the “up” action:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Repeating this for the rest of the s[0] actions results in the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Q(s[0],left) | = 0.33 ⋅V [1] + 0.33 ⋅V [2] + 0.33 ⋅V [3] = 1.98 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Q(s[0],right) | = 0.33 ⋅V [4] + 0.33 ⋅V [1] + 0.33 ⋅V [3] = 2.64 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Q(s[0],down) | = 0.33 ⋅V [3] + 0.33 ⋅V [2] + 0.33 ⋅V [4] = 2.97 |'
+  prefs: []
+  type: TYPE_TB
+- en: The final value for state s[0] is the maximum of those actions’ values, which
+    is 2.97.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Q-values are much more convenient in practice, as for the agent, it’s much
+    simpler to make decisions about actions based on Q than on V . In the case of
+    Q, to choose the action based on the state, the agent just needs to calculate
+    Q for all available actions using the current state and choose the action with
+    the largest value of Q. To do the same using values of the states, the agent needs
+    to know not only the values, but also the probabilities for transitions. In practice,
+    we rarely know them in advance, so the agent needs to estimate transition probabilities
+    for every action and state pair. Later in this chapter, you will see this in practice
+    by solving the FrozenLake environment both ways. However, to be able to do this,
+    we have one important thing still missing: a general way to calculate V [i] and
+    Q[i].'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value iteration method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the simplistic example you just saw, to calculate the values of the states
+    and actions, we exploited the structure of the environment: we had no loops in
+    transitions, so we could start from terminal states, calculate their values, and
+    then proceed to the central state. However, just one loop in the environment builds
+    an obstacle in our approach. Let’s consider such an environment with two states:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ssrrγ12==12= 0.9 ](img/B22150_05_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.7: A sample environment with a loop in the transition diagram'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start from state s[1], and the only action we can take leads us to state
+    s[2]. We get the reward, r = 1, and the only transition from s[2] is an action,
+    which brings us back to s[1]. So, the life of our agent is an infinite sequence
+    of states [s[1],s[2],s[1],s[2],…]. To deal with this infinity loop, we can use
+    a discount factor: γ = 0.9\. Now, the question is, what are the values for both
+    the states? The answer is not very complicated, in fact. Every transition from
+    s[1] to s[2] gives us a reward of 1 and every back transition gives us 2\. So,
+    our sequence of rewards will be [1,2,1,2,1,2,1,2,…]. As there is only one action
+    available in every state, our agent has no choice, so we can omit the max operation
+    in formulas (there is only one alternative).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The value for every state will be equal to the infinite sum:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| V (s[1]) | = 1 + γ(2 + γ(1 + γ(2 + …))) = ∑ [i=0]^∞1γ^(2i) + 2γ^(2i+1) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| V (s[2]) | = 2 + γ(1 + γ(2 + γ(1 + …))) = ∑ [i=0]^∞2γ^(2i) + 1γ^(2i+1) |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Strictly speaking, we can’t calculate the exact values for our states, but
+    with γ = 0.9, the contribution of every transition quickly decreases over time.
+    For example, after 10 steps, γ^(10) = 0.9^(10) ≈ 0.349, but after 100 steps, it
+    becomes just 0.0000266\. Due to this, we can stop after 50 iterations and still
+    get quite a precise estimation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The preceding example can be used to get the gist of a more general procedure
+    called the value iteration algorithm. This allows us to numerically calculate
+    the values of the states and values of the actions of Markov decision processes
+    (MDPs) with known transition probabilities and rewards. The procedure (for values
+    of the states) includes the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize the values of all states, V [i], to some initial value (usually zero)
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'For every state, s, in the MDP, perform the Bellman update:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq17.png)'
+  prefs:
+  - PREF_IND
+  type: TYPE_IMG
+- en: Repeat step 2 for some large number of steps or until changes become too small
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Okay, so that’s the theory. In practice, this method has certain obvious limitations.
+    First of all, our state space should be discrete and small enough to perform multiple
+    iterations over all states. This is not an issue for FrozenLake-4x4 and even for
+    FrozenLake-8x8 (it exists in Gym as a more challenging version), but for CartPole,
+    it’s not totally clear what to do. Our observation for CartPole is four float
+    values, which represent some physical characteristics of the system. Potentially,
+    even a small difference in those values could have an influence on the state’s
+    value. One of the solutions for that could be discretization of our observation’s
+    values; for example, we can split the observation space of CartPole into bins
+    and treat every bin as an individual discrete state in space. However, this will
+    create lots of practical problems, such as how large bin intervals should be and
+    how much data from the environment we will need to estimate our values. I will
+    address this issue in subsequent chapters, when we get to the usage of neural
+    networks in Q-learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The second practical problem arises from the fact that we rarely know the transition
+    probability for the actions and rewards matrix. Remember the interface provided
+    by Gym to the agent’s writer: we observe the state, decide on an action, and only
+    then do we get the next observation and reward for the transition. We don’t know
+    (without peeking into Gym’s environment code) what the probability is of getting
+    into state s[1] from state s[0] by issuing action a[0]. What we do have is just
+    the history from the agent’s interaction with the environment. However, in Bellman’s
+    update, we need both a reward for every transition and the probability of this
+    transition. So, the obvious answer to this issue is to use our agent’s experience
+    as an estimation for both unknowns. Rewards could be used as they are. We just
+    need to remember what reward we got on the transition from s[0] to s[1] using
+    action a, but to estimate probabilities, we need to maintain counters for every
+    tuple (s[0],s[1],a) and normalize them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that you’re familiar with the theoretical background, let’s look at this
+    method in practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Value iteration in practice
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we will look at how the value iteration method will work for
+    FrozenLake. The complete example is in Chapter05/01_frozenlake_v_iteration.py.
+    The central data structures in this example are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Reward table: A dictionary with the composite key “source state” + “action”
+    + “target state.” The value is obtained from the immediate reward.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Transitions table: A dictionary keeping counters of the experienced transitions.
+    The key is the composite “state” + “action,” and the value is another dictionary
+    that maps the “target state” into a count of times that we have seen it.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'For example, if in state 0 we execute action 1 ten times, after three times,
+    it will lead us to state 4 and after seven times to state 5\. Then entry with
+    the key (0, 1) in this table will be a dict with the contents {4: 3, 5: 7}. We
+    can use this table to estimate the probabilities of our transitions.'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Value table: A dictionary that maps a state into the calculated value of this
+    state.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The overall logic of our code is simple: in the loop, we play 100 random steps
+    from the environment, populating the reward and transition tables. After those
+    100 steps, we perform a value iteration loop over all states, updating our value
+    table. Then we play several full episodes to check our improvements using the
+    updated value table. If the average reward for those test episodes is above the
+    0.8 boundary, then we stop training. During the test episodes, we also update
+    our reward and transition tables to use all data from the environment.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let’s come to the code. We first import the used packages and define constants.
+    Then we define several type aliases. They are not necessary, but make our code
+    more readable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the FrozenLake environment, both observation and action spaces are of the
+    Box class, so states and actions are represented by int values. We also define
+    types for our reward and transition tables’ keys. For the reward table, it is
+    a tuple with [State, Action, State] and for the transition table it is [State,
+    Action]:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then we define the Agent class, which will keep our tables and contain functions
+    that we will be using in the training loop. In the class constructor, we create
+    the environment that we will be using for data samples, obtain our first observation,
+    and define tables for rewards, transitions, and values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The function play_n_random_steps is used to gather random experience from the
+    environment and update the reward and transition tables. Note that we don’t need
+    to wait for the end of the episode to start learning; we just perform N steps
+    and remember their outcomes. This is one of the differences between value iteration
+    and the cross-entropy method, which can learn only on full episodes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next function (calc_action_value()) calculates the value of the action
+    from the state using our transition, reward, and values tables. We will use it
+    for two purposes: to select the best action to perform from the state and to calculate
+    the new value of the state on value iteration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We extract transition counters for the given state and action from the transition
+    table. Counters in this table have a form of dict, with target states as the key
+    and a count of experienced transitions as the value. We sum all counters to obtain
+    the total count of times we have executed the action from the state. We will use
+    this total value later to go from an individual counter to probability.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Then we iterate every target state that our action has landed on and calculate
+    its contribution to the total action value using the Bellman equation. This contribution
+    is equal to immediate reward plus discounted value for the target state. We multiply
+    this sum to the probability of this transition and add the result to the final
+    action value.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'This logic is illustrated in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![transit[(s,a)] = {s1:c1,s2:c2} total = c1 + c2 sssaccQ1212(s,a) = tco1tal(rs1
+    + γVs1)+ tco2tal(rs2 + γVs2) ](img/B22150_05_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.8: The calculation of the state’s value'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding diagram, we do a calculation of the value for state s and
+    action a. Imagine that, during our experience, we have executed this action several
+    times (c[1] + c[2]) and it ends up in one of two states, s[1] or s[2]. How many
+    times we have switched to each of these states is stored in our transition table
+    as dict {s[1]: c[1], s[2]: c[2]}.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, the approximate value for the state and action, Q(s,a), will be equal
+    to the probability of every state, multiplied by the value of the state. From
+    the Bellman equation, this equals the sum of the immediate reward and the discounted
+    long-term state value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next function uses the function that I just described to make a decision
+    about the best action to take from the given state. It iterates over all possible
+    actions in the environment and calculates the value for every action. The action
+    with the largest value wins and is returned as the action to take. This action
+    selection process is deterministic, as the play_n_random_steps() function introduces
+    enough exploration. So, our agent will behave greedily in regard to our value
+    approximation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The play_episode() function uses select_action() to find the best action to
+    take and plays one full episode using the provided environment. This function
+    is used to play test episodes, during which we don’t want to mess with the current
+    state of the main environment used to gather random data. So, we use the second
+    environment passed as an argument. The logic is very simple and should already
+    be familiar to you: we just loop over states accumulating the reward for one episode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The final method of the Agent class is our value iteration implementation and
+    it is surprisingly simple, thanks to the functions we already defined. What we
+    do is just loop over all states in the environment, then for every state, we calculate
+    the values for the states reachable from it, obtaining candidates for the value
+    of the state. Then we update the value of our current state with the maximum value
+    of the action available from the state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'That’s all of our agent’s methods, and the final piece is a training loop and
+    the monitoring of the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We create the environment that we will be using for testing, the Agent class
+    instance, and the summary writer for TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The last two lines in the preceding code snippet are the key piece in the training
+    loop. We first perform 100 random steps to fill our reward and transition tables
+    with fresh data, and then we run value iteration over all states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The rest of the code plays test episodes using the value table as our policy,
+    then writes data into TensorBoard, tracks the best average reward, and checks
+    for the training loop stop condition:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Okay, let’s run our program:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Our solution is stochastic, and my experiments usually required 10 to 100 iterations
+    to reach a solution, but in all cases, it took less than a second to find a good
+    policy that could solve the environment in 80% of runs. If you remember, about
+    an hour was needed to achieve a 60% success ratio using the cross-entropy method,
+    so this is a major improvement. There are two reasons for that.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the stochastic outcome of our actions, plus the length of the episodes
+    (6 to 10 steps on average), makes it hard for the cross-entropy method to understand
+    what was done right in the episode and which step was a mistake. Value iteration
+    works with individual values of the state (or action) and incorporates the probabilistic
+    outcome of actions naturally by estimating probability and calculating the expected
+    value. So, it’s much simpler for value iteration and requires much less data from
+    the environment (which is called sample efficiency in RL).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The second reason is the fact that value iteration doesn’t need full episodes
+    to start learning. In an extreme case, we can start updating our values just from
+    a single example. However, for FrozenLake, due to the reward structure (we get
+    1 only after successfully reaching the target state), we still need to have at
+    least one successful episode to start learning from a useful value table, which
+    may be challenging to achieve in more complex environments. For example, you can
+    try switching the existing code to a larger version of FrozenLake, which has the
+    name FrozenLake8x8-v1\. The larger version of FrozenLake can take from 150 to
+    1,000 iterations to solve, and, according to TensorBoard charts, most of the time
+    it waits for the first successful episode, then it very quickly reaches convergence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are two charts: the first one shows reward dynamics during training
+    on FrozenLake-4x4 and the second is for the 8 × 8 version.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_05_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.9: The reward dynamics for FrozenLake-4x4'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_05_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 5.10: The reward dynamics on FrozenLake-8x8'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now it’s time to compare the code that learns the values of the states, as we
+    just discussed, with the code that learns the values of the actions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Q-iteration for FrozenLake
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The whole example is in the Chapter05/02_frozenlake_q_iteration.py file, and
+    the differences are really minor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most obvious change is to our value table. In the previous example, we kept
+    the value of the state, so the key in the dictionary was just a state. Now we
+    need to store values of the Q-function, which has two parameters, state and action,
+    so the key in the value table is now a composite of (State, Action) values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The second difference is in our calc_action_value() function. We just don’t
+    need it anymore, as our action values are stored in the value table.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the most important change in the code is in the agent’s value_iteration()
+    method. Before, it was just a wrapper around the calc_action_value() call, which
+    did the job of Bellman approximation. Now, as this function has gone and been
+    replaced by a value table, we need to do this approximation in the value_iteration()
+    method.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let’s look at the code. As it’s almost the same, I will jump directly to the
+    most interesting value_iteration() function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The code is very similar to calc_action_value() in the previous example and,
+    in fact, it does almost the same thing. For the given state and action, it needs
+    to calculate the value of this action using statistics about target states that
+    we have reached with the action. To calculate this value, we use the Bellman equation
+    and our counters, which allow us to approximate the probability of the target
+    state. However, in Bellman’s equation, we have the value of the state; now, we
+    need to calculate it differently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before, we had it stored in the value table (as we approximated the value of
+    the states), so we just took it from this table. We can’t do this anymore, so
+    we have to call the select_action method, which will choose for us the action
+    with the largest Q-value, and then we take this Q-value as the value of the target
+    state. Of course, we can implement another function that can calculate this value
+    of the state, but select_action does almost everything we need, so we will reuse
+    it here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is another piece of this example that I’d like to emphasize here. Let’s
+    look at our select_action method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: As I said, we don’t have the calc_action_value method anymore; so, to select
+    an action, we just iterate over the actions and look up their values in our values
+    table. It could look like a minor improvement, but if you think about the data
+    that we used in calc_action_value, it may become obvious why the learning of the
+    Q-function is much more popular in RL than the learning of the V-function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our calc_action_value function uses both information about the reward and probabilities.
+    It’s not a huge problem for the value iteration method, which relies on this information
+    during training. However, in the next chapter, you will learn about the value
+    iteration method extension, which doesn’t require probability approximation, but
+    just takes it from the environment samples. For such methods, this dependency
+    on probability adds an extra burden for the agent. In the case of Q-learning,
+    what the agent needs to make the decision is just Q-values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I don’t want to say that V-functions are completely useless, because they are
+    an essential part of the actor-critic method, which we will talk about in Part
+    3 of this book. However, in the area of value learning, Q-functions are the definite
+    favorite. With regard to convergence speed, both our versions are almost identical
+    (but the Q-learning version requires four times more memory for the value table).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the output of the Q-learning version and it has no major differences
+    from the value iteration version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'My congratulations; you have made another step toward understanding modern,
+    state-of-the-art RL methods! In this chapter, you learned about some very important
+    concepts that are widely used in deep RL: the value of the state, the value of
+    the action, and the Bellman equation in various forms.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also covered the value iteration method, which is a very important building
+    block in the area of Q-learning. Finally, you got to know how value iteration
+    can improve our FrozenLake solution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you will learn about deep Q-networks, which started the
+    deep RL revolution in 2013 by beating humans on lots of Atari 2600 games.
+  prefs: []
+  type: TYPE_NORMAL

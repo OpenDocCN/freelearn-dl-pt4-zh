@@ -1,0 +1,653 @@
+- en: Exploring the Learning Algorithm Landscape - DDPG (Actor-Critic), PPO (Policy-Gradient),
+    Rainbow (Value-Based)
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we looked at several promising learning environments
+    that you can use to train agents to solve a variety of different tasks. In [Chapter
+    7](part0131.html#3STPM0-22c7fc7f93b64d07be225c00ead6ce12), *Creating Custom OpenAI
+    Gym Environments – CARLA Driving Simulator*, we also saw how you can create your
+    own environments to solve the task or problem that you may be interested in developing
+    a solution for, using intelligent and autonomous software agents. That provides
+    you with directions on where you can head after finishing in order to explore
+    and play around with all the environments, tasks, and problems we discussed in
+    this book. Along the same lines, in this chapter, we will discuss several promising
+    learning algorithms that serve as future references for your intelligent agent
+    development endeavors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'So far in this book, we have gone through the step-by-step process of implementing
+    intelligent agents that can learn to improve and solve discrete decision making/control
+    problems ([Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*)
+    and continuous action/control problems ([Chapter 8](part0151.html#4G04U0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing an Intelligent Autonomous Car Driving Agent Using the Deep Actor-Critic
+    algorithm*). They served as good starting points in the development of such learning
+    agents. Hopefully, the previous chapters gave you a holistic picture of an autonomous
+    intelligent software agent/system that can learn to improve given the task or
+    problem at hand. We also looked at the overall pipeline with useful utilities
+    and routines (such as logging, visualization, parameter management, and so on)
+    that help when developing, training, and testing such complex systems. We saw
+    two main classes of algorithms: deep Q-learning (and its extensions) and deep
+    actor-critic (and their extensions)-based deep reinforcement learning algorithms.
+    They are good baseline algorithms and in fact are still referenced in state-of-the
+    art research papers in this area. This area of research has been under active
+    development in recent years, and several new algorithms have been proposed. Some
+    have better sample complexity, which is the number of samples the agent collects
+    from the environment before it reaches a certain level of performance. Some other
+    algorithms have stable learning characteristics and find optimal policies, given
+    enough time, for most problems with little or no tuning. Several new architectures,
+    such as IMPALA and Ape-X, have also been introduced and enable highly scaleable
+    learning algorithm implementations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will have a quick look at these promising algorithms, their advantages, and
+    their potential application types. We will also look at code examples for the
+    key components that these algorithms add to what we already know. Sample implementations
+    of these algorithms are available in this book's code repository under the `ch10`
+    folder at [https://github.com/PacktPublishing/Hands-On-Intelligent-Agents-with-OpenAI-Gym](https://github.com/PacktPublishing/Hands-On-Intelligent-Agents-with-OpenAI-Gym).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep Deterministic Policy Gradients
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Deep Deterministic Policy Gradient** (**DDPG**) is an off-policy, model-free,
+    actor-critic algorithm and is based on the **Deterministic Policy Gradient** (**DPG**)
+    theorem ([proceedings.mlr.press/v32/silver14.pdf](http://proceedings.mlr.press/v32/silver14.pdf)). Unlike
+    the deep Q-learning-based methods, actor-critic policy gradient-based methods
+    are easily applicable to continuous action spaces, in addition to problems/tasks
+    with discrete action spaces.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core concepts
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In [Chapter 8](part0151.html#4G04U0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Autonomous Car Driving Agent Using the Deep Actor-Critic algorithm*,
+    we walked you through the derivation of the policy gradient theorem and reproduced
+    the following for bringing in context:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00315.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'You may recall that the policy we considered was a stochastic function that
+    assigned a probability to each action given the **state** (**s**) and the parameters
+    (![](img/00316.jpeg)). In deterministic policy gradients, the stochastic policy
+    is replaced by a deterministic policy that prescribes a fixed policy for a given
+    state and set of parameters ![](img/00317.jpeg). In short, DPG can be represented
+    using the following two equations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is the policy objective function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00318.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/00319.jpeg) is the deterministic policy parametrized by ![](img/00320.jpeg),
+    r(s,a) is the reward function for taking action *a* in state s, and ![](img/00321.jpeg) is
+    the discounted state distribution under the policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The gradient of the deterministic policy objective function is proven (in the
+    paper linked before) to be:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00322.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: We now see the familiar action-value function term, which we typically call
+    the critic. DDPG builds on this result and uses a deep neural network to represent
+    the action-value function, like we did in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*, along
+    with a few other modifications to stabilize the training. Specifically, a Q-target
+    network is used (like what we discussed in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*),
+    but now this target network is slowly updated rather than keeping it fixed for
+    a few update steps and then updating it. DDPG also uses the experience replay
+    buffer and uses a noisy version of ![](img/00323.jpeg), represented using the
+    equation ![](img/00324.jpeg), to encourage exploration as the policy. ![](img/00325.jpeg) is
+    deterministic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is an extension to DDPG called D4PG, short for Distributed Distributional
+    DDPG. I can guess what you might be thinking: DPG -> DDPG -> {Missing?}-> DDDDPG.
+    Yes! The missing item is for you to implement.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The D4PG algorithm applies four main improvements to the DDPG algorithm, which
+    are listed here briefly if you are interested:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Distributional critic (the critic now estimates a distribution for Q-values
+    rather than a single Q-value for a given state and action)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: N-step returns (similar to what we used in [Chapter 8](part0151.html#4G04U0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Autonomous Car Driving Agent Using the Deep Actor-Critic algorithm*,
+    n-step TD returns are used instead of the usual 1-step return)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prioritized experience replay (this is used to sample experiences from the experience
+    replay memory)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Distributed parallel actors (utilizes K independent actors, gathering experience
+    in parallel and populating the experience replay memory)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Proximal Policy Optimization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Proximal Policy Optimization** (**PPO**) is a policy gradient-based method
+    and is one of the algorithms that have been proven to be stable as well as scalable.
+    In fact, PPO was the algorithm used by the OpenAI Five team of agents that played
+    (and won) against several human DOTA II players, which we discussed in our previous
+    chapter.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Core concept
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In policy gradient methods, the algorithm performs rollouts to collect samples
+    of transitions and (potentially) rewards, and updates the parameters of the policy
+    using gradient descent to minimize the objective function. The idea is to keep
+    updating the parameters to improve the policy until a good policy is obtained.
+    To improve the training stability, the **Trust Region Policy Optimization** (**TRPO**)
+    algorithm enforces a **Kullback-Liebler** (**KL**) divergence constraint on the
+    policy updates, so that the policy is not updated too much in one step when compared
+    to the old policy. TRPO was the precursor to the PPO algorithm. Let's briefly
+    discuss the objective function used in the TRPO algorithm in order to get a better
+    understanding of PPO.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Off-policy learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As we know, in the case of off-policy learning, the agent follows a behavioral
+    policy that is different from the policy that the agent is trying to optimize.
+    Just to remind you, Q-learning, which we discussed in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*, along
+    with several extensions, is also an off-policy algorithm. Let''s denote the behavior
+    policy using ![](img/00326.jpeg). Then, we can write the objective function of
+    the agent to be the total advantage over the state-visitation distribution and
+    actions given by the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00327.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![](img/00328.jpeg) is the policy parameters before the update and ![](img/00329.jpeg) is
+    the state visitation probability distribution under the old policy parameters. We
+    can multiply and divide the terms in the inner summation by the behavior policy ![](img/00330.jpeg),
+    with the idea being the use of importance sampling to account for the fact that
+    the transitions are sampled using the behavior policy ![](img/00331.jpeg):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00332.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The changed terms in the preceding equation compared to the previous equation
+    are shown in red.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can write the previous summations over a distribution as an expectation,
+    like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00333.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: On-policy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the case of on-policy learning, the behavior policy and the target policy
+    for the agent are one and the same. So, naturally the current policy (before the
+    update) that the agent is using to collect samples is going to be ![](img/00334.jpeg),
+    which is the behavior policy, and therefore the objective function becomes this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00335.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The changed terms in the preceding equation compared to the previous equation
+    are shown in red.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'TRPO optimizes the previous object function with a *trust region* constraint,
+    which using the KL divergence metric given by the following equation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00336.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'This is the constraint that makes sure that the new update to the policy is
+    not diverging too much from the current policy. Although the idea behind TRPO
+    was neat and intuitively simple, the implementation and gradient updates involved
+    complexities. PPO simplifies the approach using a clipped surrogate objective
+    that was effective and simple as well. Let''s get a deeper understanding of the
+    core concepts behind PPO using the math behind the algorithm. Let the probability
+    ratio of taking action *a* given state *s* between the new policy ![](img/00337.jpeg) and
+    the old policy ![](img/00338.jpeg) be defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00339.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Substituting this into the on-policy objective function equation of TRPO that
+    we discussed earlier results in the objective function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00340.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Simply removing the KL divergence constraint will result in instability, due
+    to the large number of parameter updates that may result. PPO imposes the constraint
+    by forcing ![](img/00341.jpeg) to lie within the interval ![](img/00342.jpeg),
+    where ![](img/00343.jpeg) is a tunable hyperparameter. Effectively, the objective
+    function used in PPO takes the minimum value between the original parameter values
+    and the clipped version, which can mathematically be described as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00344.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This results in a stable learning objective with monotonically improving policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Rainbow
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Rainbow ([https://arxiv.org/pdf/1710.02298.pdf](https://arxiv.org/abs/1710.02298))
+    is an off-policy deep reinforcement learning algorithm based on DQN. We looked
+    at and implemented deep Q-learning (DQN) and some of the extensions to DQN in
+    [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*. There
+    have been several more extensions and improvements to the DQN algorithm. Rainbow
+    combines six of those extensions and shows that the combination works much better.
+    Rainbow is a state-of-the art algorithm that currently holds the record for the
+    highest score on all Atari games. If you are wondering why the algorithm is named
+    *Rainbow*, it is most probably due to the fact that it combines seven (the number
+    of colors in a rainbow) extensions to the Q-learning algorithm, namely:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Double Q-Learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prioritized experience replay
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Dueling networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multi-step learning/n-step learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Distributional RL
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Noisy nets
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Core concept
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Rainbow combines DQN with six selected extensions that were shown to address
+    the limitations of the original DQN algorithm. We will briefly look at the six
+    extensions to understand how they contributed to the overall performance boost
+    and landed Rainbow in the top spot on the Atari benchmark, and also how they proved
+    to be successful in the OpenAI Retro contest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'By now, you should be very familiar with DQN, as we went through the step-by-step
+    implementation of a deep Q-learning agent in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*, where
+    we discussed DQN in detail and how it extends standard Q-learning with a deep
+    neural network function approximation, replay memory, and a target network. Let''s
+    recall the Q-learning loss that we used in the deep Q-learning agent in [Chapter
+    6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing an Intelligent
+    Agent for Optimal Discrete Control Using Deep Q-Learning*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00345.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This is basically the mean squared error between the TD target and DQN's Q-estimate,
+    as we noted in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*,
+    where ![](img/00346.jpeg) is the slow-moving target network and ![](img/00347.jpeg) is
+    the main Q network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Double Q-Learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In Double Q-Learning, there are two action-value/Q functions. Let''s call them
+    Q1 and Q2\. The idea in double Q-learning is to *decouple action selection from
+    the value estimation*. That is, when we want to update Q1, we select the best
+    action according to Q1, but use Q2 to find the value of the selected action. Similarly,
+    when Q2 is being updated, we select the action based on Q2, but use Q1 to determine
+    the value of the selected action. In practice, we can use the main Q network ![](img/00348.jpeg) as
+    Q1 and the slow-moving target network ![](img/00349.jpeg) as Q2, which gives us
+    the following Double Q-Learning loss equation (the differences from the DQN equation
+    are shown in red):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00350.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The motivation behind this change in the loss function is that Q-learning is
+    affected by overestimation bias, and this can harm learning. The overestimation
+    is due to the fact that the expectation of a maximum is greater than or equal
+    to the maximum of the expectation (often the inequality is the one that holds)
+    which arises due to the maximization step in the Q-learning algorithm and DQN.
+    The change introduced by double Q-learning was shown to reduce overestimations
+    that were harmful to the learning process, thereby improving performance over
+    DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prioritized experience replay
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'When we implemented deep Q-learning in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*, we used
+    an experience replay memory to store and retrieve sampled transition experience.
+    In our implementation, and in the DQN algorithm, the experiences from the replay
+    memory buffer are sampled uniformly. Intuitively, we would want to sample those
+    experiences more frequently, as there is much to learn. Prioritized experience
+    replay samples transition with probability ![](img/00351.jpeg) relative to the
+    last encountered absolute TD error, given by the following equation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00352.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/00353.jpeg) is a hyperparameter that determines the shape of the
+    distribution. This makes sure that we sample those transitions in which the predictions
+    of the Q-values were more different from the correct values. In practice, new
+    transitions are inserted into the replay memory with maximum priority to signify
+    the importance of recent transition experiences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Dueling networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Dueling networks is a neural network architecture designed for value-based
+    reinforcement learning. The name *dueling* stems from the main feature of this
+    architecture, which is that there are two streams of computations, one for the
+    value function and the other for the advantage. The following diagram, from a
+    research paper ([https://arxiv.org/pdf/1511.06581.pdf](https://arxiv.org/pdf/1511.06581.pdf)),
+    shows the comparison of the dueling network architecture (the network shown at
+    the bottom of the diagram) with the typical DQN architecture (shown at the top
+    of the diagram):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00354.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The convolutional layers that encode features are shared by both the value
+    and advantage streams, and are merged by a special aggregation function, as discussed
+    in the paper that corresponds to the following factorization of the action values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00355.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/00356.jpeg), and ![](img/00357.jpeg) are, respectively, the parameters
+    of the value stream, the shared convolutional encoder, and the advantage stream,
+    and ![](img/00358.jpeg) is their concatenation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multi-step learning/n-step learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In [Chapter 8](part0151.html#4G04U0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Autonomous Car Driving Agent Using the Deep Actor-Critic algorithm*,
+    we implemented the n-step return TD return method and discussed how forward-view
+    multi-step targets can be used in place of a single/one-step TD target. We can
+    use that n-step return with DQN, and that is essentially the idea behind this
+    extension. Recall that the truncated n-step return from state ![](img/00359.jpeg) is
+    given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00360.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Using this equation, a multi-step variant of DQN can be defined to minimize
+    the following loss (the differences from the DQN equation are shown in red):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00361.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This equation shows the change introduced to DQN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Distributional RL
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The distributional RL method ([https://arxiv.org/abs/1707.06887](https://arxiv.org/abs/1707.06887))
+    is about learning to approximate the distribution of returns rather than the expected
+    (average) return. The distributional RL method proposes the use of probability
+    masses placed on a discrete support to model such distributions. This, in essence,
+    means that rather than trying to model one action-value given the state, a distribution
+    of action-values for each action given the state is sought. Without going too
+    much into the details (as that would require a lot of background information),
+    we will look at one of the key contributions of this method to RL in general,
+    which is the formulation of the Distributional Bellman equation. As you may recall
+    from the previous chapters of this book, the action-value function, using a one-step
+    Bellman backup for it, can be returned as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00362.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In the case of Distributional Bellman equations, the scalar quantity ![](img/00363.jpeg) is
+    replaced by a random variable ![](img/00364.jpeg), which gives us the following
+    equation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00365.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Because the quantity is no longer a scalar, the update equation needs to be
+    dealt with more car than just adding the discounted value of the next state-action-value
+    to the step-return. The update step of the distributional bellman equation can
+    be understood easily with the help of the following diagram (stages from left
+    to right):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00366.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the previous illustration, the distribution of the next state action-value
+    is depicted in red on the left, which is then scaled by the discount factor ![](img/00367.jpeg) (middle),
+    and finally the distribution is shifted by ![](img/00368.jpeg) to yield the Distributional
+    Bellman update. After the update, the target distribution ![](img/00369.jpeg)that
+    results from the previous update operation is projected onto the supports of the
+    current distribution ![](img/00370.jpeg) by minimizing the cross entropy loss
+    between ![](img/00371.jpeg) and ![](img/00372.jpeg).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this background, you can briefly glance through the pseudo code of the
+    C51 algorithm from the Distributional RL paper, which is integrated into the Rainbow
+    agent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00373.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Noisy nets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If you recall, we used an ![](img/00374.jpeg)-greedy policy for the deep Q-learning
+    agent in [Chapter 6](part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12), *Implementing
+    an Intelligent Agent for Optimal Discrete Control Using Deep Q-Learning*, to take
+    action based on the action-values learned by the deep Q-network, which basically
+    means taking the action with the highest action-value for a given state most of
+    the time, except when, for some tiny fraction of the time (that is, with a very
+    small probability ![](img/00375.jpeg)), the agent selects a random action. This
+    may prevent the agent from exploring more reward states, especially if the action-values
+    it has converged to are not the optimal action-values. The limitations of exploring
+    using ![](img/00376.jpeg)-greedy policies were evident from the performance of
+    the DQN variants and the value-based learning methods in the Atari game Montezuma's
+    Revenge, where a long sequence of actions have to be executed in the right way
+    to collect the first reward. To overcome this exploration limitation, Rainbow
+    uses the idea of noisy nets—which are a simple but effective method proposed in
+    2017.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main idea behind noisy nets is a noisy version of the linear neural network
+    layer that combines a deterministic and a noisy stream, as exemplified in the
+    following equation for the case of the linear neural network layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00377.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/00378.jpeg) and ![](img/00379.jpeg) are the parameters of the
+    noisy layer, which are learned along with the other parameters of the DQN using
+    gradient descent. The ![](img/00380.jpeg) represents the element-wise product
+    operation and ![](img/00381.jpeg) and ![](img/00382.jpeg) are zero-mean random
+    noise. We can use the noisy linear layer in place of the usual linear layer in
+    our DQN implementation, which will have the added advantage of exploring better.
+    Because ![](img/00383.jpeg) and ![](img/00384.jpeg) are learnable parameters,
+    the network can learn to ignore the noisy stream. Because this happens over time
+    for each of the neurons, the noisy stream decays at different rates in different
+    parts of the state space, allowing better exploration with a form of self-annealing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The Rainbow agent implementation combines all of these methods to achieve state-of-the
+    art results with better performance than any other method on the Atari suite of
+    57 games. Overall, the performance of the Rainbow agent against the previous best-performing
+    agent algorithms on the combined benchmark for Atari games is summarized in the
+    following graph from the Rainbow paper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00385.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: From the plot, it is clearly evident that the methods incorporated into the
+    Rainbow agent lead to substantially improved performance across 57 different Atari
+    games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Quick summary of advantages and applications
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'A few of the key advantages of the Rainbow agent are summarized here for your
+    quick reference:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combines several notable extensions to Q-learning developed over the past several
+    years
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Achieves state-of-the art results in the Atari benchmarks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: n-step targets with a suitably tuned value for *n* often leads to faster learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Unlike other DQN variants, the Rainbow agent can start learning with 40% less
+    frames collected in the experience replay memory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Matches the best performance of DQN in under 10 hours (7 million frames) on
+    a single-GPU machine
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The Rainbow algorithm has become the most sought after agent for discrete control
+    problems where the action space is small and discrete. It has been very successful
+    with other game environments, such as Gym-Retro, and notably a tweaked version
+    of the Rainbow agent placed second in the OpenAI Retro contest held in 2018, which
+    is a transfer learning contest where the task is to learn to play the retro Genesis
+    console games Sonic The Hedgehog, Sonic The Hedgehog II, and Sonic & Knuckles
+    on some levels, and then be able to play well on other levels that the agent was
+    not trained on. Considering the fact that in typical reinforcement learning settings,
+    agents are trained and tested in the same environment, the retro contest measured
+    the learning algorithm's ability to generalize its learning from previous experience.
+    In general, the Rainbow agent is the best first bet to try on any RL problem/task
+    in a discrete action space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Being the final chapter of this book, this chapter provided summaries of key
+    learning algorithms that are currently state of the art in this domain. We looked
+    at the core concepts behind three different state-of-the-art algorithms, each
+    with their own unique elements and their own categories (actor-critic/policy based/value-function
+    based).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Specifically, we discussed the deep deterministic policy gradient algorithm,
+    which is an actor-critic architecture method that uses a deterministic policy
+    rather than the usual stochastic policy, and achieves good performance on several
+    continuous control tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then looked at the PPO algorithm, which is a policy gradient-based method
+    that uses a clipped version of the TRPO objective and learns a monotonically better
+    and stable policy, and has been successfully used in very high-dimensional environments
+    such as DOTA II.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we looked at the Rainbow algorithm, which is a value-based method and
+    combines several extensions to the very popular Q-learning algorithm, namely DQN,
+    double Q-learning, prioritized experience replay, dueling networks, multi-step
+    learning/n-step learning, distributional reinforcement learning, and noisy-network
+    layers. The Rainbow agent achieved significantly better performance in the Atari
+    benchmark suite of 57 games and also performed very well in transfer learning
+    tasks in the OpenAI Retro contest.
+  prefs: []
+  type: TYPE_NORMAL
+- en: With that, we are into the last paragraph of this book! I hope you enjoyed your
+    journey through the book, learned a lot, and acquired a lot of hands-on skills
+    to implement intelligent agent algorithms and the necessary building blocks to
+    train and test the agents on the learning environment/problem of your choice.
+    You can use the issue-tracking system in the book's code repository to report
+    issues with the code, or if you would like to discuss a topic further, or need
+    any additional references/pointers to move to the next level.
+  prefs: []
+  type: TYPE_NORMAL

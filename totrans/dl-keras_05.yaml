@@ -1,0 +1,1114 @@
+- en: Word Embeddings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Wikipedia defines word embedding as the collective name for a set of language
+    modeling and feature learning techniques in **natural language processing** (**NLP**)
+    where words or phrases from the vocabulary are mapped to vectors of real numbers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Word embeddings are a way to transform words in text to numerical vectors so
+    that they can be analyzed by standard machine learning algorithms that require
+    vectors as numerical input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You have already learned about one type of word embedding called **one-hot encoding**,
+    in [Chapter 1](c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml), *Neural Networks Foundations*.
+    One-hot encoding is the most basic embedding approach. To recap, one-hot encoding
+    represents a word in the text by a vector of the size of the vocabulary, where
+    only the entry corresponding to the word is a one and all the other entries are
+    zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A major problem with one-hot encoding is that there is no way to represent the
+    similarity between words. In any given corpus, you would expect words such as
+    (*cat*, *dog*), (*knife*, *spoon*), and so on to have some similarity. Similarity
+    between vectors is computed using the dot product, which is the sum of element-wise
+    multiplication between vector elements. In the case of one-hot encoded vectors,
+    the dot product between any two words in a corpus is always zero.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To overcome the limitations of one-hot encoding, the NLP community has borrowed
+    techniques from **information retrieval** (**IR**) to vectorize text using the
+    document as the context. Notable techniques are TF-IDF ([https://en.wikipedia.org/wiki/Tf%E2%80%93idf](https://en.wikipedia.org/wiki/Tf%E2%80%93idf)),
+    **latent semantic analysis** (**LSA**) ([https://en.wikipedia.org/wiki/Latent_semantic_analysis](https://en.wikipedia.org/wiki/Latent_semantic_analysis)),
+    and topic modeling ([https://en.wikipedia.org/wiki/Topic_model](https://en.wikipedia.org/wiki/Topic_model)).
+    However, these representations capture a slightly different document-centric idea
+    of semantic similarity.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Development of word embedding techniques began in earnest in 2000\. Word embedding
+    differs from previous IR-based techniques in that they use words as their context,
+    which leads to a more natural form of semantic similarity from a human understanding
+    perspective. Today, word embedding is the technique of choice for vectorizing
+    text for all kinds of NLP tasks, such as text classification, document clustering,
+    part of speech tagging, named entity recognition, sentiment analysis, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will learn about two specific forms of word embedding, GloVe
+    and word2vec, collectively known as distributed representations of words. These
+    embeddings have proven more effective and have been widely adopted in the deep
+    learning and NLP communities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will also learn different ways in which you can generate your own embeddings
+    in your Keras code, as well as how to use and fine-tune pre-trained word2vec and
+    GloVe models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building various distributional representations of words in context
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building models for leveraging embeddings to perform NLP tasks such as sentence
+    parsing and sentiment analysis
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Distributed representations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Distributed representations attempt to capture the meaning of a word by considering
+    its relations with other words in its context. The idea is captured in this quote
+    from J. R. Firth (for more information refer to the article: *Document Embedding
+    with Paragraph Vectors*, by Andrew M. Dai, Christopher Olah, and Quoc V. Le, arXiv:1507.07998,
+    2015), a linguist who first proposed this idea:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You shall know a word by the company it keeps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following pair of sentences:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Paris is the capital of France.* *Berlin is the capital of Germany.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Even assuming you have no knowledge of world geography (or English for that
+    matter), you would still conclude without too much effort that the word pairs
+    (*Paris*, *Berlin*) and (*France*, *Germany*) were related in some way, and that
+    corresponding words in each pair were related in the same way to each other, that
+    is:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Paris : France :: Berlin : Germany*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Thus, the aim of distributed representations is to find a general transformation
+    function φ to convert each word to its associated vector such that relations of
+    the following form hold true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/paris-framce-eqn.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In other words, distributed representation aims to convert words to vectors
+    where the similarity between the vectors correlate with the semantic similarity
+    between the words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The most well-known word embeddings are word2vec and GloVe, which we cover in
+    more detail in subsequent sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: word2vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The word2vec group of models was created in 2013 by a team of researchers at
+    Google led by Tomas Mikolov. The models are unsupervised, taking as input a large
+    corpus of text and producing a vector space of words. The dimensionality of the
+    word2vec embedding space is usually lower than the dimensionality of the one-hot
+    embedding space, which is the size of the vocabulary. The embedding space is also
+    more dense compared to the sparse embedding of the one-hot embedding space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The two architectures for word2vec are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Continuous Bag Of Words** (**CBOW**)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Skip-gram**'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the CBOW architecture, the model predicts the current word given a window
+    of surrounding words. In addition, the order of the context words does not influence
+    the prediction (that is, the bag of words assumption). In the case of skip-gram
+    architecture, the model predicts the surrounding words given the center word.
+    According to the authors, CBOW is faster but skip-gram does a better job at predicting
+    infrequent words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An interesting thing to note is that even though word2vec creates embeddings
+    that are used in deep learning NLP models, both flavors of word2vec that we will
+    discuss, which also happens to be the most successful and acknowledged recent
+    models, are shallow neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The skip-gram word2vec model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The skip-gram model is trained to predict the surrounding words given the current
+    word. To understand how the skip-gram word2vec model works, consider the following
+    example sentence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*I love green eggs and ham.*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assuming a window size of three, this sentence can be broken down into the
+    following sets of (context, word) pairs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*([I, green], love)*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*([love, eggs], green)*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*([green, and], eggs)*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since the skip-gram model predicts a context word given the center word, we
+    can convert the preceding dataset to one of (input, output) pairs. That is, given
+    an input word, we expect the skip-gram model to predict the output word:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*(love, I), (love, green), (green, love), (green, eggs), (eggs, green), (eggs,
+    and), ...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can also generate additional negative samples by pairing each input word
+    with some random word in the vocabulary. For example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*(love, Sam), (love, zebra), (green, thing), ...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we generate positive and negative examples for our classifier:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*((love, I), 1), ((love, green), 1), ..., ((love, Sam), 0), ((love, zebra),
+    0), ...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now train a classifier that takes in a word vector and a context vector
+    and learns to predict one or zero depending on whether it sees a positive or negative
+    sample. The deliverables from this trained network are the weights of the word
+    embedding layer (the gray box in the following figure):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/word2vec-skipgram.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The skip-gram model can be built in Keras as follows. Assume that the vocabulary
+    size is set at `5000`, the output embedding size is `300`, and the window size
+    is `1`. A window size of one means that the context for a word is the words immediately
+    to the left and right. We first take care of the imports and set our variables
+    to their initial values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then create a sequential model for the word. The input to this model is
+    the word ID in the vocabulary. The embedding weights are initially set to small
+    random values. During training, the model will update these weights using backpropagation.
+    The next layer reshapes the input to the embedding size:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The other model that we need is a sequential model for the context words. For
+    each of our skip-gram pairs, we have a single context word corresponding to the
+    target word, so this model is identical to the word model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The outputs of the two models are each a vector of size (`embed_size`). These
+    outputs are merged into one using a dot product and fed into a dense layer, which
+    has a single output wrapped in a sigmoid activation layer. You have seen the sigmoid
+    activation function in [Chapter 1](c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml),
+    *Neural Network Foundations*. As you will recall, it modulates the output so numbers
+    higher than 0.5 tend rapidly to 1 and flatten out, and numbers lower than 0.5
+    tend rapidly to 0 and also flatten out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The loss function used is the `mean_squared_error`; the idea is to minimize
+    the dot product for positive examples and maximize it for negative examples. If
+    you recall, the dot product multiplies corresponding elements of two vectors and
+    sums up the result—this causes similar vectors to have higher dot products than
+    dissimilar vectors, since the former has more overlapping elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Keras provides a convenience function to extract skip-grams for a text that
+    has been converted to a list of word indices. Here is an example of using this
+    function to extract the first 10 of 56 skip-grams generated (both positive and
+    negative).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We first declare the necessary imports and the text to be analyzed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to declare the `tokenizer` and run the text against it. This
+    will produce a list of word tokens:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `tokenizer` creates a dictionary mapping each unique word to an integer
+    ID and makes it available in the `word_index` attribute. We extract this and create
+    a two-way lookup table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we convert our input list of words to a list of IDs and pass it to
+    the `skipgrams` function. We then print the first 10 of the 56 (pair, label) skip-gram
+    tuples generated:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The results from the code is shown below. Note that your results may be different
+    since the skip-gram method randomly samples the results from the pool of possibilities
+    for the positive examples. Additionally, the process of negative sampling, used
+    for generating the negative examples, consists of randomly pairing up arbitrary
+    tokens from the text. As the size of the input text increases, this is more likely
+    to pick up unrelated word pairs. In our example, since our text is very short,
+    there is a chance that it can end up generating positive examples as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The code for this example can be found in `skipgram_example.py` in the source
+    code download for the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CBOW word2vec model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let us now look at the CBOW word2vec model. Recall that the CBOW model predicts
+    the center word given the context words. Thus, in the first tuple in the following
+    example, the CBOW model needs to predict the output word *love*, given the context
+    words *I* and *green*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*([I, green], love) ([love, eggs], green) ([green, and], eggs) ...*'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Like the skip-gram model, the CBOW model is also a classifier that takes the
+    context words as input and predicts the target word. The architecture is somewhat
+    more straightforward than the skip-gram model. The input to the model is the word
+    IDs for the context words. These word IDs are fed into a common embedding layer
+    that is initialized with small random weights. Each word ID is transformed into
+    a vector of size (`embed_size`) by the embedding layer. Thus, each row of the
+    input context is transformed into a matrix of size (`2*window_size`, `embed_size`)
+    by this layer. This is then fed into a lambda layer, which computes an average
+    of all the embeddings. This average is then fed to a dense layer, which creates
+    a dense vector of size (`vocab_size`) for each row. The activation function on
+    the dense layer is a softmax, which reports the maximum value on the output vector
+    as a probability. The ID with the maximum probability corresponds to the target
+    word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The deliverable for the CBOW model is the weights from the embedding layer
+    shown in gray in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/word2vec-cbow.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The corresponding Keras code for the model is shown as follows. Once again,
+    assume a vocabulary size of `5000`, an embedding size of `300`, and a context
+    window size of `1`. Our first step is to set up all our imports and these values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then construct a sequential model, to which we add an embedding layer whose
+    weights are initialized with small random values. Note that the `input_length`
+    of this embedding layer is equal to the number of context words. So each context
+    word is fed into this layer and will update the weights jointly during backpropagation.
+    The output of this layer is a matrix of context word embeddings, which are averaged
+    into a single vector (per row of input) by the lambda layer. Finally, the dense
+    layer will convert each row into a dense vector of size (`vocab_size`). The target
+    word is the one whose ID has the maximum value in the dense output vector:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The loss function used here is `categorical_crossentropy`, which is a common
+    choice for cases where there are two or more (in our case, `vocab_size`) categories.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for the example can be found in the `keras_cbow.py` file in
+    the source code download for the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extracting word2vec embeddings from the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As noted previously, even though both word2vec models can be reduced to a classification
+    problem, we are not really interested in the classification problem itself. Rather,
+    we are interested in the side effect of this classification process, that is,
+    the weight matrix that transforms a word from the vocabulary to its dense, low-dimensional
+    distributed representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are many examples of how these distributed representations exhibit often
+    surprising syntactic and semantic information. For example, as shown in the following
+    figure from Tomas Mikolov''s presentation at NIPS 2013 (for more information refer
+    to the article: *Learning Representations of Text using Neural Networks*, by T.
+    Mikolov, I. Sutskever, K. Chen, G. S. Corrado, J. Dean, Q. Le, and T. Strohmann,
+    NIPS 2013), vectors connecting words that have similar meanings but opposite genders
+    are approximately parallel in the reduced 2D space, and we can often get very
+    intuitive results by doing arithmetic with the word vectors. The presentation
+    provides many other examples.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/word2vec_regularities.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Intuitively, the training process imparts enough information to the internal
+    encoding to predict an output word that occurs in the context of an input word.
+    So points representing words shift in this space to be nearer to words with which
+    it co-occurs. This causes similar words to clump together. Words that co-occur
+    with these similar words also clump together in a similar way. As a result, vectors
+    connecting points representing semantically related points tend to exhibit these
+    regularities in the distributed representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Keras provides a way to extract weights from trained models. For the skip-gram
+    example, the embedding weights can be extracted as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Similarly, the embedding weights for the CBOW example can be extracted using
+    the following one-liner:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: In both cases, the shape of the weights matrix is `vocab_size` and `embed_size`.
+    In order to compute the distributed representation for a word in the vocabulary,
+    you will need to construct a one-hot vector by setting the position of the word
+    index to one in a zero vector of size (`vocab_size`) and multiply it with the
+    matrix to get the embedding vector of size (`embed_size`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A visualization of word embeddings from work done by Christopher Olah (for
+    more information refer to the article: *Document Embedding with Paragraph Vectors*,
+    by Andrew M. Dai, Christopher Olah, and Quoc V. Le, arXiv:1507.07998, 2015) is
+    shown as follows. This is a visualization of word embeddings reduced to two dimensions
+    and visualized with T-SNE. The words forming entity types were chosen using WordNet
+    synset clusters. As you can see, points corresponding to similar entity types
+    tend to cluster together:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/word_embeddings_colah.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The source code for the example can be found in `keras_skipgram.py` in the source
+    code download.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using third-party implementations of word2vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have covered word2vec extensively over the past few sections. At this point,
+    you understand how the skip-gram and CBOW models work and how to build your own
+    implementation of these models using Keras. However, third-party implementations
+    of word2vec are readily available, and unless your use case is very complex or
+    different, it makes sense to just use one such implementation instead of rolling
+    your own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The gensim library provides an implementation of word2vec. Even though this
+    is a book about Keras and not gensim, we include a discussion on this because
+    Keras does not provide any support for word2vec, and integrating the gensim implementation
+    into Keras code is very common practice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Installation of gensim is fairly simple and described in detail on the gensim
+    installation page ([https://radimrehurek.com/gensim/install.html](https://radimrehurek.com/gensim/install.html)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code shows how to build a word2vec model using gensim and train
+    it with the text from the text8 corpus, available for download at: [http://mattmahoney.net/dc/text8.zip](http://mattmahoney.net/dc/text8.zip).
+    The text8 corpus is a file containing about 17 million words derived from Wikipedia
+    text. Wikipedia text was cleaned to remove markup, punctuation, and non-ASCII
+    text, and the first 100 million characters of this cleaned text became the text8
+    corpus. This corpus is commonly used as an example for word2vec because it is
+    quick to train and produces good results. First we set up the imports as usual:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: We then read in the words from the text8 corpus, and split up the words into
+    sentences of 50 words each. The gensim library provides a built-in text8 handler
+    that does something similar. Since we want to illustrate how to generate a model
+    with any (preferably large) corpus that may or may not fit into memory, we will
+    show you how to generate these sentences using a Python generator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `Text8Sentences` class will generate sentences of `maxlen` words each from
+    the text8 file. In this case, we do ingest the entire file into memory, but when
+    traversing through directories of files, generators allows us to load parts of
+    the data into memory at a time, process them, and yield them to the caller:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then set up the caller code. The gensim word2vec uses Python logging to
+    report on progress, so we first enable it. The next line declares an instance
+    of the `Text8Sentences` class, and the line after that trains the model with the
+    sentences from the dataset. We have chosen the size of the embedding vectors to
+    be `300`, and we only consider words that appear a minimum of 30 times in the
+    corpus. The default window size is `5`, so we will consider the words *w[i-5]*,
+    *w[i-4]*, *w[i-3]*, *w[i-2]*, *w[i-1]*, *w[i+1]*, *w[i+2]*, *w[i+3]*, *w[i+4]*,
+    and *w[i+5]* as the context for word *w[i]*. By default, the word2vec model created
+    is CBOW, but you can change that by setting `sg=1` in the parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The word2vec implementation will make two passes over the data, first to generate
+    a vocabulary and then to build the actual model. You can see its progress on the
+    console as it runs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-5-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Once the model is created, we should normalize the resulting vectors. According
+    to the documentation, this saves lots of memory. Once the model is trained, we
+    can optionally save it to disk:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The saved model can be brought back into memory using the following call:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can now query the model to find all the words it knows about:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can find the actual vector embedding for a given word:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can also find words that are most similar to a certain word:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can provide hints for finding word similarity. For example, the following
+    command returns the top 10 words that are like `woman` and `king` but unlike `man`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can also find similarities between individual words. To give a feel of how
+    the positions of the words in the embedding space correlates with their semantic
+    meanings, let us look at the following word pairs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, `girl` and `woman` are more similar than `girl` and `man`, and
+    `car` and `bus` are more similar than `girl` and `car`. This agrees very nicely
+    with our human intuition about these words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for the example can be found in `word2vec_gensim.py` in the
+    source code download.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploring GloVe
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The global vectors for word representation, or GloVe, embeddings was created
+    by Jeffrey Pennington, Richard Socher, and Christopher Manning (for more information
+    refer to the article: *GloVe: Global Vectors for Word Representation*, by J. Pennington,
+    R. Socher, and C. Manning, Proceedings of the 2014 Conference on Empirical Methods
+    in Natural Language Processing (EMNLP), Pp. 1532–1543, 2013). The authors describe
+    GloVe as an unsupervised learning algorithm for obtaining vector representations
+    for words. Training is performed on aggregated global word-word co-occurrence
+    statistics from a corpus, and the resulting representations showcase interesting
+    linear substructures of the word vector space.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GloVe differs from word2vec in that word2vec is a predictive model while GloVe
+    is a count-based model. The first step is to construct a large matrix of (word,
+    context) pairs that co-occur in the training corpus. Each element of this matrix
+    represents how often a word represented by the row co-occurs in the context (usually
+    a sequence of words) represented by the column, as shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/glove-matfact.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The GloVe process converts the co-occurrence matrix into a pair of (word, feature)
+    and (feature, context) matrices. This process is known as **matrix factorization**
+    and is done using **stochastic gradient descent** (**SGD**), an iterative numerical
+    method. Rewriting in equation form:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/matfact-eqn.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, *R* is the original co-occurrence matrix. We first populate *P* and *Q*
+    with random values and attempt to reconstruct a matrix *R'* by multiplying them.
+    The difference between the reconstructed matrix *R'* and the original matrix *R*
+    tells us how much we need to change the values of *P* and *Q* to move *R'* closer
+    to *R*, to minimize the reconstruction error. This is repeated multiple times
+    until the SGD converges and the reconstruction error is below a specified threshold.
+    At that point, the (word, feature) matrix is the GloVe embedding. To speed up
+    the process, SGD is often used in parallel mode, as outlined in the *HOGWILD!*
+    paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One thing to note is that predictive neural network based models such as word2vec
+    and count based models such as GloVe are very similar in intent. Both of them
+    build a vector space where the position of a word is influenced by its neighboring
+    words. Neural network models start with individual examples of word co-occurrences
+    and count based models start with aggregate co-occurrence statistics between all
+    words in the corpus. Several recent papers have demonstrated the correlation between
+    these two types of model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will not cover generation of GloVe vectors in more detail in this book. Even
+    though GloVe generally shows higher accuracy than word2vec and is faster to train
+    if you use parallelization, Python tooling is not as mature as for word2vec. The
+    only tool available to do this as of the time of writing is the GloVe-Python project
+    ([https://github.com/maciejkula/glove-python](https://github.com/maciejkula/glove-python)),
+    which provides a toy implementation for GloVe on Python.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using pre-trained embeddings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In general, you will train your own word2vec or GloVe model from scratch only
+    if you have a very large amount of very specialized text. By far the most common
+    use case for Embeddings is to use pre-trained embeddings in some way in your network.
+    The three main ways in which you would use embeddings in your network are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learn embeddings from scratch
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fine-tune learned embeddings from pre-trained GloVe/word2vec models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Look up embeddings from pre-trained GloVe/word2vec models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the first option, the embedding weights are initialized to small random values
+    and trained using backpropagation. You saw this in the examples for skip-gram
+    and CBOW models in Keras. This is the default mode when you use a Keras Embedding
+    layer in your network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the second option, you build a weight matrix from a pre-trained model and
+    initialize the weights of your embedding layer with this weight matrix. The network
+    will update these weights using backpropagation, but the model will converge faster
+    because of good starting weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third option is to look up word embeddings from a pre-trained model, and
+    transform your input to embedded vectors. You can then train any machine learning
+    model (that is, not necessarily even a deep learning network) on the transformed
+    data. If the pre-trained model is trained on a similar domain as the target domain,
+    this usually works very well and is the least expensive option.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For general use with English language text, you can use Google's word2vec model
+    trained over 10 billion words from the Google news dataset. The vocabulary size
+    is about 3 million words and the dimensionality of the embedding is 300\. The
+    Google news model (about 1.5 GB) can be downloaded from here: [https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit?usp=sharing](https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit?usp=sharing).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similarly, a pre-trained model trained on 6 billion tokens from English Wikipedia
+    and the gigaword corpus can be downloaded from the GloVe site. The vocabulary
+    size is about 400,000 words and the download provides vectors with dimensions
+    50, 100, 200, and 300\. The model size is about 822 MB. Here is the direct download
+    URL ([http://nlp.stanford.edu/data/glove.6B.zip](http://nlp.stanford.edu/data/glove.6B.zip))
+    for this model. Larger models based on the Common Crawl and Twitter are also available
+    from the same location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, we will look at how to use these pre-trained models
+    in the three ways listed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Learn embeddings from scratch
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this example, we will train a one-dimensional **convolutional neural network**
+    (**CNN**) to classify sentences as either positive or negative. You have already
+    seen how to classify images using two-dimensional CNNs in [Chapter 3](4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml),
+    *Deep Learning with ConvNets*. Recall that CNNs exploit spatial structure in images
+    by enforcing local connectivity between neurons of adjacent layers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Words in sentences exhibit linear structure in the same way as images exhibit
+    spatial structure. Traditional (non-deep learning) NLP approaches to language
+    modeling involve creating word *n*-grams ([https://en.wikipedia.org/wiki/N-gram](https://en.wikipedia.org/wiki/N-gram)[)](https://en.wikipedia.org/wiki/N-gram)
+    to exploit this linear structure inherent among words. One-dimensional CNNs do
+    something similar, learning convolution filters that operate on sentences a few
+    words at a time, and max pooling the results to create a vector that represents
+    the most important ideas in the sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is another class of neural network, called **recurrent neural network**
+    (**RNN**), which is specially designed to handle sequence data, including text,
+    which is a sequence of words. The processing in RNNs is different from that in
+    a CNN. We will learn about RNNs in a future chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our example network, the input text is converted to a sequence of word indices.
+    Note that we have used the **natural language toolkit** (**NLTK**) to parse the
+    text into sentences and words. We could also have used regular expressions to
+    do this, but the statistical models supplied by NLTK are more powerful at parsing
+    than regular expressions. If you are working with word embeddings, it is very
+    likely that you are also working with NLP, in which case you would have NLTK installed
+    already.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This link ([http://www.nltk.org/install.html](http://www.nltk.org/install.html))
+    has information to help you install NLTK on your machine. You will also need to
+    install NLTK data, which is some trained corpora that comes standard with NLTK.
+    Installation instructions for NLTK data are available here: [http://www.nltk.org/data.html](http://www.nltk.org/data.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sequence of word indices is fed into an array of embedding layers of a
+    set size (in our case, the number of words in the longest sentence). The embedding
+    layer is initialized by default to random values. The output of the embedding
+    layer is connected to a 1D convolutional layer that convolves (in our example)
+    word trigrams in 256 different ways (essentially, it applies different learned
+    linear combinations of weights on the word embeddings). These features are then
+    pooled into a single pooled word by a global max pooling layer. This vector (256)
+    is then input to a dense layer, which outputs a vector (2). A softmax activation
+    will return a pair of probabilities, one corresponding to positive sentiment and
+    another corresponding to negative sentiment. The network is shown in the following
+    figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/umich_conv1d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let us look at how to code this up using Keras. First we declare our imports.
+    Right after the constants, you will notice that I set the `random.seed` value
+    to `42`. This is because we want consistent results between runs. Since the initializations
+    of the weight matrices are random, differences in initialization can lead to differences
+    in output, so this is a way to control that:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: We declare our constants. For all subsequent examples in this chapter, we will
+    classify sentences from the UMICH SI650 sentiment classification competition on
+    Kaggle. The dataset has around 7,000 sentences, and is labeled *1* for positive
+    and *0* for negative. The `INPUT_FILE` defines the path to this file of sentences
+    and labels. The format of the file is a sentiment label (*0* or *1*) followed
+    by a tab, followed by a sentence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `VOCAB_SIZE` setting indicates that we will consider only the top 5,000
+    tokens in the text. The `EMBED_SIZE` setting is the size of the embedding that
+    will be generated by the embedding layer in the network. `NUM_FILTERS` is the
+    number of convolution filters we will train for our convolution layer, and `NUM_WORDS`
+    is the size of each filter, that is, how many words we will convolve at a time.
+    The `BATCH_SIZE` and `NUM_EPOCHS` is the number of records to feed the network
+    each time and how many times we will run through the entire dataset during training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the next block, we first read our input sentences and construct our vocabulary
+    out of the most frequent words in the corpus. We then use this vocabulary to convert
+    our input sentences into a list of word indices:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We pad each of our sentences to predetermined length `maxlen` (in this case
+    the number of words in the longest sentence in the training set). We also convert
+    our labels to categorical format using a Keras utility function. The last two
+    steps are a standard workflow for handling text input that we will see again and
+    again:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we split up our data into a *70/30* training and test set. The data
+    is now in a form ready to be fed into the network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We define the network that we described earlier in this section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then compile the model. Since our target is binary (positive or negative)
+    we choose `categorical_crossentropy` as our loss function. For the optimizer,
+    we choose `adam`. We then train the model using our training set, using a batch
+    size of 64 and training for 20 epochs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output from the code looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-5-4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see, the network gives us 98.6% accuracy on the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for this example can be found in `learn_embedding_from_scratch.py`
+    in the source code download for the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fine-tuning learned embeddings from word2vec
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this example, we will use the same network as the one we used to learn our
+    embeddings from scratch. In terms of code, the only major difference is an extra
+    block of code to load the word2vec model and build up the weight matrix for the
+    embedding layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As always, we start with the imports and set up a random seed for repeatability.
+    In addition to the imports we have seen previously, there is an additional one
+    to import the word2vec model from gensim:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next up is setting up the constants. The only difference here is that we reduced
+    the `NUM_EPOCHS` setting from `20` to `10`. Recall that initializing the matrix
+    with values from a pre-trained model tends to set them to good values that converge
+    faster:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next block extracts the words from the dataset and creates a vocabulary
+    of the most frequent terms, then parses the dataset again to create a list of
+    padded word lists. It also converts the labels to categorical format. Finally,
+    it splits the data into a training and a test set. This block is identical to
+    the previous example and has been explained in depth there:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: The next block loads up the word2vec model from a pre-trained model. This model
+    is trained with about 10 billion words of Google News articles and has a vocabulary
+    size of 3 million. We load it and look up embedding vectors from it for words
+    in our vocabulary, and write out the embedding vector into our weight matrix `embedding_weights`.
+    Rows of this weight matrix correspond to words in the vocabulary, and columns
+    of each row constitute the embedding vector for the word.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dimensions of the `embedding_weights` matrix is `vocab_sz` and `EMBED_SIZE`.
+    The `vocab_sz` is one more than the maximum number of unique terms in the vocabulary,
+    the additional pseudo-token `_UNK_` representing words that are not seen in the
+    vocabulary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Note that it is possible that some words in our vocabulary may not be there
+    in the Google News word2vec model, so when we encounter such words, the embedding
+    vectors for them remain at the default value of all zeros:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We define our network. The difference in this block from our previous example
+    is that we initialize the weights of the embedding layer with the `embedding_weights`
+    matrix we built in the previous block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then compile our model with the categorical cross-entropy loss function
+    and the Adam optimizer, and train the network with batch size 64 and for 10 epochs,
+    then evaluate the trained model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Output from running the code is shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: The model gives us an accuracy of 99.3% on the test set after 10 epochs of training.
+    This is an improvement over the previous example, where we got an accuracy of
+    98.6% accuracy after 20 epochs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for this example can be found in  `finetune_word2vec_embeddings.py`
+    in the source code download for the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fine-tune learned embeddings from GloVe
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Fine tuning using pre-trained GloVe embeddings is very similar to fine tuning
+    using pre-trained word2vec embeddings. In fact, all of the code, except for the
+    block that builds the weight matrix for the embedding layer, is identical. Since
+    we have already seen this code twice, I will just focus on the block of code that
+    builds the weight matrix from the GloVe embeddings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GloVe embeddings come in various flavors. We use the model pre-trained on 6
+    billion tokens from the English Wikipedia and the gigaword corpus. The vocabulary
+    size for the model is about 400,000, and the download provides vectors of dimensions
+    50, 100, 200, and 300\. We will use embeddings from the 300 dimensional model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The only thing we need to change in the code for the previous example is to
+    replace the block that instantiated a word2vec model and loaded the embedding
+    matrix using the following block of code. If we use a model with vector size other
+    than 300, then we also need to update `EMBED_SIZE`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The vectors are provided in space-delimited text format, so the first step
+    is to read the code into a dictionary, `word2emb`. This is analogous to the line
+    instantiating the Word2Vec model in our previous example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then instantiate an embedding weight matrix of size (`vocab_sz` and `EMBED_SIZE`)
+    and populate the vectors from the `word2emb` dictionary. Vectors for words that
+    are found in the vocabulary but not in the GloVe model remain set to all zeros:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The full code for this program can be found in `finetune_glove_embeddings.py`
+    in the book''s code repository on GitHub. The output of the run is shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-5-2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This gives us 99.1% accuracy in 10 epochs, which is almost as good as the results
+    we got from fine-tuning the network using word2vec `embedding_weights`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for this example can be found in `finetune_glove_embeddings.py`
+    in the source code download for this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Look up embeddings
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Our final strategy is to look up embeddings from pre-trained networks. The
+    simplest way to do this with the current examples is to just set the `trainable`
+    parameter of the embedding layer to `False`. This ensures that backpropagation
+    will not update the weights on the embedding layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: Setting this value with the word2vec and GloVe examples gave us accuracies of
+    98.7% and 98.9% respectively after 10 epochs of training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: However, in general, this is not how you would use pre-trained embeddings in
+    your code. Typically, it involves preprocessing your dataset to create word vectors
+    by looking up words in one of the pre-trained models, and then using this data
+    to train some other model. The second model would not contain an Embedding layer,
+    and may not even be a deep learning network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following example describes a dense network that takes as its input a vector
+    of size `100`, representing a sentence, and outputs a `1` or `0` for positive
+    or negative sentiment. Our dataset is still the one from the UMICH S1650 sentiment
+    classification competition with around 7,000 sentences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As previously, large parts of the code are repeated, so we only explain the
+    parts that are new or otherwise need explanation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We begin with the imports, set the random seed for repeatability, and set some
+    constant values. In order to create the 100-dimensional vectors for each sentence,
+    we add up the GloVe 100-dimensional vectors for the words in the sentence, so
+    we choose the `glove.6B.100d.txt` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next block reads the sentences and creates a word frequency table. From
+    this, the most common 5,000 tokens are selected and lookup tables (from word to
+    word index and back) are created. In addition, we create a pseudo-token `_UNK_`
+    for tokens that do not exist in the vocabulary. Using these lookup tables, we
+    convert each sentence to a sequence of word IDs, padding these sequences so that
+    all sequences are of the same length (the maximum number of words in a sentence
+    in the training set). We also convert the labels to categorical format:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We load the GloVe vectors into a dictionary. If we wanted to use word2vec here,
+    all we have to do is replace this block with a gensim `Word2Vec.load_word2vec_format()`
+    call and replace the following block to look up the word2vec model instead of
+    the `word2emb` dictionary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next block looks up the words for each sentence from the word ID matrix
+    `W` and populates a matrix `E` with the corresponding embedding vector. These
+    embedding vectors are then added to create a sentence vector, which is written
+    back into the `X` matrix. The output of this code block is the matrix `X` of size
+    (`num_records` and `EMBED_SIZE`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We have now preprocessed our data using the pre-trained model and are ready
+    to use it to train and evaluate our final model. Let us split the data into *70/30*
+    training/test as usual:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The network we will train for doing the sentiment analysis task is a simple
+    dense network. We compile it with a categorical cross-entropy loss function and
+    the Adam optimizer, and train it with the sentence vectors that we built out of
+    the pre-trained embeddings. Finally, we evaluate the model on the 30% test set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output for the code using GloVe embeddings is shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-5-3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The dense network gives us 96.5% accuracy on the test set after 10 epochs of
+    training when preprocessed with the 100-dimensional GloVe embeddings. With preprocessed
+    with the word2vec embeddings (300-dimensional fixed) the network gives us 98.5%
+    on the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The source code for this example can be found in `transfer_glove_embeddings.py`
+    (for the GloVe example) and `transfer_word2vec_embeddings.py` (for the word2vec
+    example) in the source code download for the chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned how to transform words in text into vector embeddings
+    that retain the distributional semantics of the word. We also now have an intuition
+    of why word embeddings exhibit this kind of behavior and why word embeddings are
+    useful for working with deep learning models for text data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then looked at two popular word embedding schemes, word2vec and GloVe, and
+    understood how these models work. We also looked at using gensim to train our
+    own word2vec model from data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we learned about different ways of using embeddings in our network.
+    The first was to learn embeddings from scratch as part of training our network.
+    The second was to import embedding weights from pre-trained word2vec and GloVe
+    models into our networks and fine-tune them as we train the network. The third
+    was to use these pre-trained weights as is in our downstream applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will learn about recurrent neural networks, a class
+    of network that is optimized for handling sequence data such as text.
+  prefs: []
+  type: TYPE_NORMAL

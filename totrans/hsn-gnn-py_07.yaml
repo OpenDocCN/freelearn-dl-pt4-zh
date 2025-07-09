@@ -1,0 +1,763 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Graph Attention Networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**Graph Attention Networks** (**GATs**) are a theoretical improvement over
+    GCNs. Instead of static normalization coefficients, they propose weighting factors
+    calculated by a process called **self-attention**. The same process is at the
+    core of one of the most successful deep learning architectures: the **transformer**,
+    popularized by **BERT** and **GPT-3**. Introduced by Veličković et al. in 2017,
+    GATs have become one of the most popular GNN architectures thanks to excellent
+    out-of-the-box performance.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will learn how the graph attention layer works in four steps.
+    This is actually the perfect example for understanding how self-attention works
+    in general. This theoretical background will allow us to implement a graph attention
+    layer from scratch in `NumPy`. We will build the matrices by ourselves to understand
+    how their values are calculated at each step.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the last section, we’ll use a GAT on two node classification datasets: `Cora`,
+    and a new one called `CiteSeer`. As anticipated in the last chapter, this will
+    be a good opportunity to analyze our results a little further. Finally, we will
+    compare the accuracy of this architecture with a GCN.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will be able to implement a graph attention
+    layer from scratch and a GAT in **PyTorch Geometric** (**PyG**). You will learn
+    about the differences between this architecture and a GCN. Furthermore, you will
+    master an error analysis tool for graph data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we’ll cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing the graph attention layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing the graph attention layer in NumPy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a GAT in PyTorch Geometric
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter07](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter07).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The installation steps required to run the code on your local machine can be
+    found in the *Preface* section of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introducing the graph attention layer
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The main idea behind GATs is that some nodes are more important than others.
+    In fact, this was already the case with the graph convolutional layer: nodes with
+    few neighbors were more important than others, thanks to the normalization coefficient
+    ![](img/Formula_B19153_07_001.png). This approach is limiting because it only
+    takes into account node degrees. On the other hand, the goal of the graph attention
+    layer is to produce weighting factors that also consider the importance of node
+    features.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s call our weighting factors **attention scores** and note, ![](img/Formula_B19153_07_002.png),
+    the attention score between the nodes ![](img/Formula_B19153_07_005.png) and ![](img/Formula_B19153_07_007.png).
+    We can define the graph attention operator as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'An important characteristic of GATs is that the attention scores are calculated
+    implicitly by comparing inputs to each other (hence the name *self*-attention).
+    In this section, we will see how to calculate these attention scores in four steps
+    and also how to make an improvement to the graph attention layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linear transformation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Activation function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Softmax normalization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Multi-head attention
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Improved graph attention layer
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: First things first, let’s see how the linear transformation differs from previous
+    architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Linear transformation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The attention score represents the importance between a central node ![](img/Formula_B19153_07_0051.png)
+    and a neighbor ![](img/Formula_B19153_07_0071.png). As stated previously, it requires
+    node features from both nodes. In the graph attention layer, it is represented
+    by a concatenation between the hidden vectors ![](img/Formula_B19153_07_008.png)
+    and ![](img/Formula_B19153_07_009.png), ![](img/Formula_B19153_07_010.png). Here,
+    ![](img/Formula_B19153_07_011.png) is a classic shared weight matrix to compute
+    hidden vectors. An additional linear transformation is applied to this result
+    with a dedicated learnable weight matrix ![](img/Formula_B19153_07_012.png). During
+    training, this matrix learns weights to produce attention coefficients ![](img/Formula_B19153_07_013.png).
+    This process is summarized by the following formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_014.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This output is given to an activation function like in traditional neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Activation function
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Nonlinearity is an essential component in neural networks to approximate nonlinear
+    target functions. Such functions could not be captured by simply stacking linear
+    layers, as their final outcome would still behave like a single linear layer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the official implementation ([https://github.com/PetarV-/GAT/blob/master/utils/layers.py](https://github.com/PetarV-/GAT/blob/master/utils/layers.py)),
+    the authors chose the **Leaky Rectified Linear Unit** (**ReLU**) activation function
+    (see *Figure 7**.1*). This function fixes the *dying ReLU* problem, where ReLU
+    neurons only output zero:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1 – ReLU versus Leaky ReLU functions](img/B19153_07_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.1 – ReLU versus Leaky ReLU functions
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This is implemented by applying the Leaky ReLU function to the output of the
+    previous step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_015.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'However, we are now facing a new problem: the resulting values are not normalized!'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Softmax normalization
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We want to compare different attention scores, which means we need normalized
+    values on the same scale. In machine learning, it is common to use the softmax
+    function for this purpose. Let’s call ![](img/Formula_B19153_07_016.png) the neighboring
+    nodes of node ![](img/Formula_B19153_07_0052.png), including itself:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_018.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The result of this operation gives us our final attention scores ![](img/Formula_B19153_07_019.png).
+    But there’s another problem: self-attention is not very stable.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Multi-head attention
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This issue was already noticed by Vaswani et al. (2017) in the original transformer
+    paper. Their proposed solution consists of calculating multiple embeddings with
+    their own attention scores instead of a single one. This technique is called multi-head
+    attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The implementation is straightforward, as we just have to repeat the three
+    previous steps multiple times. Each instance produces an embedding ![](img/Formula_B19153_07_020.png),
+    where ![](img/Formula_B19153_07_021.png) is the index of the attention head. There
+    are two ways of combining these results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Averaging**: With this, we sum the different embeddings and normalize the
+    result by the number of attention heads ![](img/Formula_B19153_07_022.png):'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_023.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Concatenation**: Here, we concatenate the different embeddings, which will
+    produce a larger matrix:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_024.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In practice, there is a simple rule to know which one to use: we choose the
+    concatenation scheme when it’s a hidden layer and the average scheme when it’s
+    the last layer of the network. The entire process can be summarized by the following
+    diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.2 – Calculating attention scores with multi-head attention](img/B19153_07_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.2 – Calculating attention scores with multi-head attention
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is all there is to know about the theoretical aspect of the graph attention
+    layer. However, since its inception in 2017, an improvement has been suggested.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Improved graph attention layer
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Brody et al. (2021) argued that the graph attention layer only computes a static
+    type of attention. This is an issue because there are simple graph problems we
+    cannot express with a GAT. So they introduced an improved version, called GATv2,
+    which computes a strictly more expressive dynamic attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Their solution consists of modifying the order of operations. The weight matrix
+    ![](img/Formula_B19153_07_025.png) is applied after the concatenation and the
+    attention weight matrix ![](img/Formula_B19153_07_026.png) after the ![](img/Formula_B19153_07_027.png)
+    function. In summary, here is the original **Graph Attentional Operator**, also
+    **GAT**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_028.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'And this is the modified operator, GATv2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_029.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Which one should we use? According to Brody et al., GATv2 consistently outperforms
+    the GAT and thus should be preferred. In addition to the theoretical proof, they
+    also ran several experiments to show the performance of GATv2 compared to the
+    original GAT. In the rest of this chapter, we will consider both options: the
+    GAT in the second section and GATv2 in the third section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the graph attention layer in NumPy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As previously stated, neural networks work in terms of matrix multiplications.
+    Therefore, we need to translate our individual embeddings into operations for
+    the entire graph. In this section, we will implement the original graph attention
+    layer from scratch to properly understand the inner workings of self-attention.
+    Naturally, this process can be repeated several times to create multi-head attention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The first step consists of translating the original graph attention operator
+    in terms of matrices. This is how we defined it in the last section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_059.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'By taking inspiration from the graph linear layer, we can write the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_07_031.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Where ![](img/Formula_B19153_07_032.png) is a matrix that stores every ![](img/Formula_B19153_07_033.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this example, we will use the following graph from the previous chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.3 – Simple graph where nodes have different numbers of neighbors](img/B19153_07_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.3 – Simple graph where nodes have different numbers of neighbors
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The graph must provide two important pieces of information: the adjacency matrix
+    with self-loops ![](img/Formula_B19153_07_034.png) and the node features ![](img/Formula_B19153_07_035.png).
+    Let’s see how to implement it in NumPy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can build the adjacency matrix from the connections in *Figure 7**.3*:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For ![](img/Formula_B19153_07_036.png), we generate a random matrix of node
+    features using `np.random.uniform()`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The next step is to define our weight matrices. Indeed, in graph attention
+    layers, there are two of them: the regular weight matrix ![](img/Formula_B19153_07_037.png),
+    and the attention weight matrix ![](img/Formula_B19153_07_038.png). There are
+    different ways to initialize them (Xavier or He initialization, for example),
+    but we can just reuse the same random function in this example.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The matrix ![](img/Formula_B19153_07_039.png) has to be carefully designed
+    as its dimensions are ![](img/Formula_B19153_07_040.png) Notice that ![](img/Formula_B19153_07_041.png)
+    is already fixed because it represents the number of nodes in ![](img/Formula_B19153_07_042.png).
+    On the contrary, the value of ![](img/Formula_B19153_07_043.png) is arbitrary:
+    we’ll choose ![](img/Formula_B19153_07_044.png) in this example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This attention matrix is applied to the concatenation of hidden vectors to
+    produce a unique value. Thus, its size needs to be ![](img/Formula_B19153_07_045.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We want to concatenate hidden vectors from source and destination nodes. A
+    simple way to obtain pairs of source and destination nodes is to look at our adjacency
+    matrix ![](img/Formula_B19153_07_046.png) in COO format: rows store source nodes,
+    and columns store destination nodes. NumPy provides a quick and efficient way
+    of doing it with `np.where()`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can concatenate hidden vectors of source and destination nodes using `np.concatenate`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We then apply a linear transformation to this result with the attention matrix
+    ![](img/Formula_B19153_07_047.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The second step consists of applying a Leaky ReLU function to the previous
+    outcome:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We have the right values but need to place them correctly in a matrix. This
+    matrix should look like ![](img/Formula_B19153_07_048.png) because there is no
+    need for unnormalized attention scores when there is no connection between two
+    nodes. To build this matrix, we know the sources ![](img/Formula_B19153_07_049.png)
+    and destinations ![](img/Formula_B19153_07_050.png) thanks to `connections`. So,
+    the first value in `e` corresponds to ![](img/Formula_B19153_07_051.png), the
+    second value to ![](img/Formula_B19153_07_052.png), but the seventh value corresponds
+    to ![](img/Formula_B19153_07_053.png) and not to ![](img/Formula_B19153_07_054.png).
+    We can fill the matrix as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The next step is to normalize every row of attention scores. This requires
+    a custom `softmax` function to produce our final attention scores:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This attention matrix ![](img/Formula_B19153_07_055.png) provides weights for
+    every possible connection in the network. We can use it to calculate our matrix
+    of embeddings ![](img/Formula_B19153_07_056.png), which should give us two-dimensional
+    vectors for each node:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Our graph attention layer is now complete! Adding multi-head attention consists
+    of repeating these steps with different ![](img/Formula_B19153_07_057.png) and
+    ![](img/Formula_B19153_07_058.png) before aggregating the results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The graph attention operator is an essential building block to developing GNNs.
+    In the next section, we will use a PyG implementation to create a GAT.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a GAT in PyTorch Geometric
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We now have a complete picture of how the graph attention layer works. These
+    layers can be stacked to create our new architecture of choice: the GAT. In this
+    section, we will follow the guidelines from the original GAT paper to implement
+    our own model using PyG. We will use it to perform node classification on the
+    `Cora` and `CiteSeer` datasets. Finally, we will comment on these results and
+    compare them.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start with the `Cora` dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import `Cora` from the `Planetoid` class using PyG:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We import the necessary libraries to create our own GAT class, using the GATv2
+    layer:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We implement the `accuracy()` function to evaluate the performance of our model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The class is initialized with two improved graph attention layers. Note it
+    is important to declare the number of heads used for multi-head attention. The
+    authors stated that eight heads improved performance for the first layer, but
+    it didn’t make any difference for the second one:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Compared to the previous implementation of a GCN, we’re adding two dropout
+    layers to prevent overfitting. These layers randomly zero some values from the
+    input tensor with a predefined probability (`0.6` in this case). Conforming to
+    the original paper, we also use the **Exponential Linear Unit** (**ELU**) function,
+    which is the exponential version of the Leaky ReLU:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `fit()` function is identical to the GCN’s. The parameters of the Adam
+    optimizer have been tuned to match the best values for the `Cora` dataset, according
+    to the authors:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `test()` function is exactly the same:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a GAT and train it for `100` epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This outputs the final test accuracy:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This accuracy score is slightly better than the average score we obtained with
+    a GCN. We’ll make a proper comparison after applying the GAT architecture to the
+    second dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use a new popular dataset for node classification called `CiteSeer`
+    (MIT License). Like `Cora`, it represents a network of research papers where each
+    connection is a citation. `CiteSeer` involves `3327` nodes, whose features represent
+    the presence (1) or absence (0) of `3703` words in a paper. The goal of this dataset
+    is to correctly classify these nodes into six categories. *Figure 7**.4* shows
+    a plot of `CiteSeer` made with yEd Live:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.4 – The CiteSeer dataset (made with yEd Live)](img/B19153_07_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.4 – The CiteSeer dataset (made with yEd Live)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Compared to `Cora`, this dataset is larger in terms of the number of nodes
+    (from 2,708 to 3,327) and also in terms of feature dimensionality (from 1,433
+    to 3,703). However, the exact same process can be applied to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we load the `CiteSeer` dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'For good measure, we plot the number of nodes per node degree, using the code
+    from the last chapter:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'It gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.5 – Number of nodes per node degree (CiteSeer)](img/B19153_07_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.5 – Number of nodes per node degree (CiteSeer)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Figure 7**.5* looks like a typical heavy-tailed distribution but with a twist:
+    some nodes have a degree of zero! In other words, they are not connected to any
+    other node. We can assume that they will be much more difficult to classify than
+    the rest.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We initialize a new GAT model with the correct number of input and output nodes
+    and train it for `100` epochs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following test accuracy score:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Is it a good result? This time, we have no point of comparison.
+  prefs: []
+  type: TYPE_NORMAL
+- en: According to Schur et al. in *Pitfalls of Graph Neural Network Evaluation*,
+    the GAT is slightly better than the GCN (82.8% ± 0.6% versus 81.9% ± 0.8%) on
+    `Cora` and `CiteSeer` (71.0 ± 0.6% versus 69.5% ± 0.9%). The authors also note
+    that the accuracy scores are not normally distributed, making the usage of standard
+    deviation less relevant. It is important to keep that in mind in this type of
+    benchmark.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Previously, I speculated that poorly connected nodes might negatively impact
+    performance. We can verify this hypothesis by plotting the average accuracy score
+    for each node degree:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We get the model’s classifications:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We calculate the degree of each node:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We store the accuracy scores and sample sizes:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We get the average accuracy for each node degree between zero and five using
+    a mask with `np.where()`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We repeat this process for every node with a degree higher than five:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We plot these accuracy scores with the corresponding node degrees:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'It outputs the following graph:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 7.6 – Accuracy score per node degree (CiteSeer)](img/B19153_07_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 7.6 – Accuracy score per node degree (CiteSeer)
+  prefs: []
+  type: TYPE_NORMAL
+- en: '*Figure 7**.6* confirms our hypothesis: nodes with few neighbors are harder
+    to classify correctly. Furthermore, it even shows that, in general, the higher
+    the node degree, the better the accuracy score. This is quite natural because
+    a higher number of neighbors will provide more information to the GNN to make
+    its predictions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this chapter, we introduced a new essential architecture: the GAT. We saw
+    its inner workings with four main steps, from linear transformation to multi-head
+    attention. We saw how it works in practice by implementing a graph attention layer
+    in NumPy. Finally, we applied a GAT model (with GATv2) to the `Cora` and `CiteSeer`
+    datasets, where it provided excellent accuracy scores. We showed that these scores
+    were dependent on the number of neighbors, which is a first step toward error
+    analysis.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In [*Chapter 8*](B19153_08.xhtml#_idTextAnchor096), *Scaling Graph Neural Networks
+    with GraphSAGE*, we will introduce a new architecture dedicated to managing large
+    graphs. To test this claim, we will implement it on a new dataset several times
+    bigger than what we’ve seen so far. We will talk about transductive and inductive
+    learning, which is an important distinction for GNN practitioners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Part 3: Advanced Techniques'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this third part of the book, we will delve into the more advanced and specialized
+    GNN architectures that have been developed to solve a variety of graph-related
+    problems. We will cover state-of-the-art GNN models designed for specific tasks
+    and domains, which can address challenges and requirements more effectively. In
+    addition, we will provide an overview of several new graph-based tasks that can
+    be tackled using GNNs, such as link prediction and graph classification, and demonstrate
+    their applications through practical code examples and implementations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this part, you will be able to understand and implement advanced
+    GNN architectures and apply them to solve your own graph-based problems. You will
+    have a comprehensive understanding of specialized GNNs and their respective strengths,
+    as well as hands-on experience with code examples. This knowledge will equip you
+    with the skills to apply GNNs to real-world use cases and potentially contribute
+    to the development of new and innovative GNN architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This part comprises the following chapters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[*Chapter 8*](B19153_08.xhtml#_idTextAnchor096)*, Scaling Up Graph Neural Networks
+    with GraphSAGE*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 9*](B19153_09.xhtml#_idTextAnchor106)*, Defining Expressiveness for
+    Graph Classification*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 10*](B19153_10.xhtml#_idTextAnchor116)*, Predicting Links with Graph
+    Neural Networks*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 11*](B19153_11.xhtml#_idTextAnchor131)*, Generating Graphs Using
+    Graph Neural Networks*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 12*](B19153_12.xhtml#_idTextAnchor144)*, Learning from Heterogeneous
+    Graphs*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 13*](B19153_13.xhtml#_idTextAnchor153)*, Temporal Graph Neural Networks*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[*Chapter 14*](B19153_14.xhtml#_idTextAnchor165)*, Explaining Graph Neural
+    Networks*'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

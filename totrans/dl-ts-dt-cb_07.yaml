@@ -1,0 +1,1070 @@
+- en: '7'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Probabilistic Time Series Forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the preceding chapters, we delved into time series problems from a point
+    forecasting perspective. Point forecasting models predict a single value. However,
+    forecasts are inherently uncertain, so it makes sense to quantify the uncertainty
+    around a prediction. This is the goal of probabilistic forecasting, which can
+    be a valuable approach for better-informed decision-making.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we’ll focus on three types of probabilistic forecasting settings.
+    We’ll delve into exceedance probability forecasting, which helps us estimate the
+    likelihood of a time series surpassing a predefined threshold. We will also deal
+    with prediction intervals, which provide a range of possible values within which
+    a future observation is likely to fall. Finally, we will explore predicted probability
+    forecasting, which offers a probabilistic assessment of individual outcomes, providing
+    a fine-grained perspective of future possibilities.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter covers the following recipes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to exceedance probability forecasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exceedance probability forecasting with an LSTM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Creating prediction intervals using conformal prediction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Probabilistic forecasting with an LSTM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Probabilistic forecasting with DeepAR
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to Gaussian Processes
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using Prophet for probabilistic forecasting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We’ll focus on the PyTorch ecosystem in this chapter. Here’s the full list
+    of libraries that will be used in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NumPy (1.26.2)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: pandas (2.1.3)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: scikit-learn (1.3.2)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch Forecasting (1.0.0)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: PyTorch Lightning (2.1.2)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: torch (2.1.1)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: statsforecast (1.6.0)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: GluonTS (0.14.2)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: gpytorch (1.11)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: prophet (1.1.5)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can install these libraries using `pip`, Python’s package manager. For
+    example, to install `scikit-learn`, you can run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The code for this chapter can be found in this book’s GitHub repository: [https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook](https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to exceedance probability forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This recipe introduces exceedance probability forecasting problems. Exceedance
+    events occur when a time series exceeds a predefined threshold in a predefined
+    future period. This problem is relevant when the tails of the time series distribution
+    can have a significant impact on the domain. For example, consider the case of
+    the inflation rate in the economy. Central banks leverage this type of forecast
+    to assess the possibility that the inflation rate will exceed some critical threshold,
+    above which they might consider increasing interest rates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a data science perspective, exceedance events are binary problems. Thus,
+    it is common to tackle them using binary probabilistic classification models.
+    One of the challenges is that the class representing the exceedance events is
+    rare, which makes the learning task more difficult.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’ll use a multivariate time series as an example to describe what an exceedance
+    probability task is and why they are relevant. Specifically, we’ll use the solar
+    radiation dataset that was used in previous chapters (check, for example, the
+    *Preparing a multivariate time series for supervised learning* recipe from [*Chapter
+    4*](B21145_04.xhtml#_idTextAnchor259)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by loading the dataset using `pandas`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see how to define an exceedance problem using this time series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Exceedance probability forecasting is the process of predicting the probability
+    that a time series will exceed a critical threshold in a future period. We’ll
+    use a data module from PyTorch Lightning, which can be used to handle all the
+    necessary steps for defining the task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The main component of this module is the `setup()` method. Most of the steps
+    were already explained in the *Feedforward neural networks for multivariate time
+    series forecasting* recipe. To create an exceedance task, we must start by defining
+    the new binary target variable, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we use the `diff``()` method to compute how the solar
+    radiation values change between consecutive observations. Then, we check whether
+    the total daily solar radiation (in watts/m2) decreases by `2000` from one day
+    to the next. This value was set arbitrarily. The intuition is that this should
+    be a major event that we are interested in predicting. In this case study, such
+    significant decreases in solar radiation mean that power systems will not be able
+    to produce as much solar energy from photovoltaic devices. Therefore, predicting
+    these events promptly allows power systems to generate energy from alternative
+    sources efficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a plot of the differenced series and the selected threshold:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.1: Difference in total daily solar radiation in consecutive observations](img/B21145_07_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.1: Difference in total daily solar radiation in consecutive observations'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Afterward, we pass this variable as the target variable in the `TimeSeriesDataSet`
+    instance within the data module. Let’s start by loading the required libraries
+    and building the constructor of the data modules:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the constructor, we store all the elements that are used during the data
+    preprocessing stage. The `setup()` method of the class is implemented in the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function works similarly to a standard auto-regressive pipeline. The crucial
+    difference is that we’re setting the target variable to a binary variable that
+    denotes whether there’s an exceedance event. We also set up the training, validation,
+    and testing sets to build and evaluate the model. We set the number of lags to
+    `14` (`max_encoder_length`) and the forecasting horizon to `7` (`max_prediction_length`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The remaining methods of the `LightningDataModule` instance are similar to
+    what we built in the previous chapter (for example, see the *Feedforward neural
+    networks for multivariate time series* *forecasting* recipe):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s how to get a single observation using this data module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we create an instance of `ExceedanceDataModule`, after
+    which we use the `iter``()` and `next``()` methods to get observations from it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Exceedance problems can also be tackled with an auto-regressive approach. So,
+    we can predict the probability of an exceedance event based on the value of recent
+    observations of the time series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An exceedance probability forecasting problem is a particular type of binary
+    classification task that can be defined using a time series where the events are
+    defined by exceedance. Yet, other types of events can be defined that are not
+    necessarily based on exceedance events, and a probabilistic model can be built
+    accordingly. The required logic is all set in the `setup()` method, which encapsulates
+    all the preprocessing steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this recipe, we used a single multivariate time series to describe exceedance
+    tasks. Yet, we remark that our approach can be defined trivially for datasets
+    involving multiple time series using the data module framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There is a related problem to exceedance probability forecasting tasks called
+    **time series classification**, in which a given time series has an associated
+    label. We’ll learn about this problem in the next chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exceedance probability forecasting with an LSTM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This recipe describes creating a probabilistic deep learning model to tackle
+    exceedance tasks with a multivariate time series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ll continue our example with the solar radiation dataset. Here’s the data
+    module that we defined in the previous recipe:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see how to create a classifier using an LSTM neural network and PyTorch’s
+    `LightningModule`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We will set up a binary classification using PyTorch Lightning’s `LightningModule`.
+    Here’s the constructor and the `forward()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The LSTM architecture is similar to what we learned about in [*Chapter 4*](B21145_04.xhtml#_idTextAnchor259)
+    – we create an LSTM layer based on PyTorch and set up its configuration regarding
+    the number of layers, number of units, and input dimension (number of time series
+    variables). During the forward pass, the output of the LSTM layer is passed onto
+    a linear layer. In the previous recipes involving predicting the numeric value
+    of future observations, this would be the final layer of the network. Yet, for
+    classification, we add a sigmoid layer (`torch.sigmoid`), which transforms the
+    model’s output into a value between `0` and `1`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training and validation steps of the module are coded as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code, the training and validation methods follow similar steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we check if any of the observations in the forecasting horizon is positive
+    (in the `y[0] > 0).any(axis=1).long()` snippet). In effect, we’re building a neural
+    network that models whether there’s an exceedance event in any of the next `7`
+    observations.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: We convert the output of this test into a `torch.FloatTensor` data structure,
+    which is required for the `loss``()` function to work.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Then, we compare the prediction with the actual value using binary cross entropy
+    (`F.binary_cross_entropy`), which is used to train the model.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Besides these methods, we also set up the optimizer as Adam with a 0.001 learning
+    rate. Finally, we set up the testing method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we add the area under the `ROC` curve as an evaluation
+    metric, which is commonly used to test binary classification models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we must train and test the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, the workflow follows the PyTorch Lightning style, where a `Trainer`
+    instance uses the neural network model and the data module for training and testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The deep learning models we built in the previous chapters can be extended for
+    classification predictive tasks. In this case, we added a sigmoid layer, which
+    maps the output of the previous layer into a `0–1` value range. This value can
+    be interpreted as the likelihood of the observations belonging to the positive
+    class, which in our case is the exceedance event.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Classification models are no longer optimized with metrics such as mean squared
+    error. For binary problems, we use binary cross entropy. In the testing phase,
+    we added the area under the `ROC` curve as a secondary evaluation metric, which
+    is helpful in understanding how the model distinguishes the two classes. The following
+    figure shows the results of the ROC curve:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.2: Results of the exceedance probability model in a ROC curve](img/B21145_07_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.2: Results of the exceedance probability model in a ROC curve'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The ROC curve provides a way of visualizing the performance of the probabilistic
+    classifier for different decision thresholds. Results on the diagonal line denote
+    a performance identical to a random guess. As the curve goes toward the top-left
+    corner, it indicates better performance by the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides these tweaks to the pipeline, the design pattern provided by PyTorch
+    Lightning makes the overall code similar to what we used in previous chapters
+    for building models for point forecasting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We remark that while we are focusing on an LSTM here, other architectures can
+    be used, such as feedforward neural networks or convolutional neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating prediction intervals using conformal prediction
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll explore how to create prediction intervals. Prediction
+    intervals describe the range of values within which future observations will likely
+    fall with some confidence level. The greater the confidence required, the larger
+    the intervals will be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In practice, the model predicts not just a single point but a distribution for
+    future observations. Various techniques exist to construct these intervals, including
+    parametric methods that assume a specific distribution of errors and non-parametric
+    methods that use empirical data to estimate intervals.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We’ll resort to a conformal prediction approach, which is increasingly popular
+    among data science practitioners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’ll build prediction intervals for an ARIMA model, which is a popular forecasting
+    approach. Yet, conformal prediction is agnostic to the underlying method and can
+    be applied to other forecasting methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by loading a time series. In this example, we’ll work with a univariate
+    time series:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let’s see how to create prediction intervals using this dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The data is split into training and testing sets to fit the ARIMA model. We’ll
+    focus on the `statsforecast` Python library, so we need to transform the time
+    series into a `pandas` DataFrame with three columns:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`ds`: The timestep for the corresponding observation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`unique_id`: The identifier of the time series, which is constant since we’re
+    working with a single time series'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`y`: The value of the observation'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'This process is done as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we must split the data into training and testing sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: The test set is composed of the last `7` observations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we must set up the conformal method using the `ConformalIntervals` class
+    from `statsforecast`. We must also create an ARIMA model and pass the conformal
+    instance to it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, we set the seasonal length to `365` since our data is
+    daily, and we expect that solar radiation will exhibit a repeating yearly variation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we must use the `StatsForecast` class instance to get the forecasts
+    from the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we set the level of the prediction intervals to `95`. This means that
+    we expect that the actual value will be within the respective interval with 95%
+    confidence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here’s a plot of the prediction interval we obtained:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![ Figure 7.3: ARIMA model forecasts and their respective intervals](img/B21145_07_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.3: ARIMA model forecasts and their respective intervals'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Conformal prediction involves using a subset of historical data to fit the ARIMA
+    model. Then, another subset is used to calibrate the conformal prediction, typically
+    through calculating nonconformity scores that measure the deviation between the
+    actual observed values and the model’s predictions. The calibration step allows
+    a threshold to be determined that corresponds to the desired confidence level
+    (for example, 95%). This threshold is used for future forecasts to construct intervals
+    around the predicted values, providing a range within which the actual values
+    are expected to fall with the specified confidence level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conformal prediction helps quantify the uncertainty behind point forecasts by
+    building intervals around these. In this recipe, we trained an ARIMA model and
+    built intervals around its predictions using conformal prediction. We set the
+    confidence level to `95`, but we can explore several values at the same time.
+    You can do this by changing the level argument to `level=[80, 95]`, for example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, this recipe follows a simple train plus testing cycle that uses the
+    `statsforecast` Python library framework.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Probabilistic forecasting with an LSTM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This recipe will walk you through building an LSTM neural network for probabilistic
+    forecasting using PyTorch Lightning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll introduce probabilistic forecasting with LSTM networks.
+    This approach combines the strengths of LSTM models in capturing long-term dependencies
+    within sequential data with the nuanced perspective of probabilistic forecasting.
+    This method goes beyond traditional point estimates by predicting a range of possible
+    future outcomes, each accompanied by a probability. This means that we are incorporating
+    uncertainty into forecasts.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This recipe uses the same dataset that we used in [*Chapter 4*](B21145_04.xhtml#_idTextAnchor259),
+    in the *Feedforward neural networks for multivariate time series forecasting*
+    recipe. We’ll also use the same data module we created in that recipe, which is
+    called `MultivariateSeriesDataModule`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s explore how to use this data module to build an LSTM model for probabilistic
+    forecasting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this subsection, we’ll define a probabilistic LSTM model that outputs the
+    predictive mean and standard deviation for each forecasted point of the time series.
+    This technique involves designing the LSTM model to predict parameters that define
+    a probability distribution for future outcomes rather than outputting a single
+    value. The model is usually configured to output parameters of a specific distribution,
+    such as the mean and variance for a Gaussian distribution. These describe the
+    expected value and the spread of future values, respectively:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s start by defining a callback:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `LossTrackingCallback` class is used to monitor the training and validation
+    losses throughout the epochs. This is important for diagnosing the learning process
+    of the model, identifying overfitting, and deciding when to stop training.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'Then, we must build the LSTM model based on PyTorch Lightning’s `LightningModule`
+    class:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `ProbabilisticLSTM` class defines the LSTM architecture for our probabilistic
+    forecasts. The class includes layers to compute the predictive mean (`fc_mu`)
+    and standard deviation (`fc_sigma`) of the forecast distribution. The standard
+    deviation is passed through a `Softplus``()` activation function to ensure it
+    is always positive, reflecting the nature of standard deviation.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'The following code implements the training and validation steps, along with
+    the network configuration parameters:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'After defining the model architecture, we initialize the data module and set
+    up training callbacks. As we saw previously, the `EarlyStopping` callback is a
+    valuable tool for preventing overfitting by halting the training process once
+    the model ceases to improve on the validation set. The `ModelCheckpoint` callback
+    ensures that we capture and save the best version of the model based on its validation
+    performance. Together, these callbacks optimize the training process, aiding in
+    developing a robust and well-tuned model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Using the `Trainer` class from PyTorch Lightning simplifies the training process,
+    handling the complex training loops internally and allowing us to focus on defining
+    the model and its behavior. It increases the code’s readability and maintainability,
+    making experimenting with different model configurations easier.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: 'After training, assessing the model’s performance and visualizing its probabilistic
+    forecasts is very important. The graphical representation of the forecasted means,
+    alongside their uncertainty intervals against the actual values, offers a clear
+    depiction of the model’s predictive power and the inherent uncertainty in its
+    predictions. We built a visualization framework to plot the forecasts. You can
+    check the functions at the following link: [https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook](https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook).'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The following figure illustrates the true values of our time series in blue,
+    with the forecasted means depicted by the dashed red line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.4: Probabilistic forecasts with uncertainty intervals and true values](img/B21145_07_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.4: Probabilistic forecasts with uncertainty intervals and true values'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The shaded area represents the uncertainty interval, calculated as a standard
+    deviation from the forecasted mean. This probabilistic approach to forecasting
+    provides a more comprehensive picture than point estimates as it accounts for
+    the variability and uncertainty inherent in the time series data. The overlap
+    between the uncertainty intervals and the actual values indicates areas where
+    the model has higher confidence in its predictions. Conversely, wider intervals
+    may suggest periods of more significant uncertainty, potentially due to inherent
+    noise in the data or complex underlying dynamics that the model finds more challenging
+    to capture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Moreover, the following figure provides insights into the training dynamics
+    of our probabilistic LSTM model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.5: Training and validation loss over epochs, demonstrating the learning
+    progress of the probabilistic LSTM model](img/B21145_07_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.5: Training and validation loss over epochs, demonstrating the learning
+    progress of the probabilistic LSTM model'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The relatively stable and low validation loss suggests that our model generalizes
+    well without overfitting the training data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The probabilistic LSTM model extends beyond traditional point prediction models.
+    Unlike point forecasts, which output a single expected value, this model predicts
+    a full distribution characterized by mean and standard deviation parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This probabilistic approach provides a richer representation by capturing the
+    uncertainty inherent in the data. The mean of the distribution gives the expected
+    value of the forecast, while the standard deviation quantifies the confidence
+    in the prediction, expressing the expected variability around the mean.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To train this model, we use a loss function that differs from those used in
+    point prediction models. Instead of using MSE or MAE, which minimizes the difference
+    between predicted and actual values, the probabilistic LSTM employs a negative
+    log-likelihood loss function. This loss function, often called the probabilistic
+    loss, maximizes the likelihood of the observed data under the predicted distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This probabilistic loss function is particularly suited for uncertainty estimation
+    as it directly penalizes the divergence between the predicted probability distribution
+    and the observed values. When the predicted distribution assigns a high probability
+    to the actual observed values, the negative log-likelihood is low, and thus the
+    loss is low.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Probabilistic forecasting with DeepAR
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This time, we’ll turn our attention to `DeepAR`, a state-of-the-art method for
+    probabilistic forecasting. We’ll also leverage the `neuralforecast` framework
+    to exemplify how to apply `DeepAR` for this task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: We’ll continue with the same dataset that we used in the previous recipe.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we are using a different Python package, we need to change our preprocessing
+    steps to get the data into a suitable format. Now, each row corresponds to a single
+    observation at a given time for a specific time series. This is similar to what
+    we did in the *Prediction intervals using conformal* *prediction* recipe:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this case, we select the targeted series within the dataset and resample
+    it to a weekly frequency, aggregating the data points using the mean.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we show how to enhance the dataset by adding time-related features. We
+    introduce Fourier series components for the week and month of the year. By incorporating
+    sine and cosine transformations, we capture the cyclical nature of time in our
+    data. Additionally, we scale the target using a `MinMaxScaler`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we split our dataset into training and testing sets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see how to build a `DeepAR` model using `neuralforecast`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'With the data prepared, we can define and train the `DeepAR` model. The `NeuralForecast`
+    class receives a list of models as input. In this case, we only define the `DeepAR`
+    class. The library provides a straightforward way to specify the architecture
+    and training behavior of the model. After training, we generate forecasts using
+    the `predict()` method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following figure illustrates a probabilistic forecast generated by `DeepAR`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.6: DeepAR probabilistic forecast showing the mean prediction and
+    associated uncertainty](img/B21145_07_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.6: DeepAR probabilistic forecast showing the mean prediction and associated
+    uncertainty'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The solid line represents the mean prediction, while the shaded region shows
+    the uncertainty bounds for the 80% and 95% confidence intervals. This plot shows
+    the range of likely future values and is more informative than a single predicted
+    value, especially for decision-making under uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: '`DeepAR` is a probabilistic forecasting method that generates a probability
+    distribution, such as a normal distribution or a negative binomial distribution,
+    for each future time point. Once again, we are interested in capturing the uncertainty
+    in our predictions rather than just producing point forecasts.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `DeepAR` model uses an autoregressive recurrent network structure and conditions
+    it on past observations, covariates, and an embedding of the time series. The
+    output is a set of parameters, typically the mean and variance, which define the
+    distribution of future values. During training, the model maximizes the likelihood
+    of the observed data given these parameters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`DeepAR` is designed to work well with multiple related time series, enabling
+    it to learn complex patterns across similar sequences and improve prediction accuracy
+    by leveraging cross-series information.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to Gaussian Processes
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll introduce **Gaussian Processes** (**GP**), a powerful
+    algorithm for probabilistic machine learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GP offers a flexible, probabilistic approach to modeling in machine learning.
+    This section introduces the concept of GP and prepares the necessary environment
+    for forecasting using a GP model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We need to import a new library to be able to fit GP, namely `gpytorch`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, we must read the multivariate time series data and process it, scaling
+    both the features and target variable, as scaled data typically improves GP modeling
+    performance significantly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'We’ll use the `gpytorch` library to implement a GP model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The key components in a GP model are the mean and covariance functions, which
+    are defined in the `GPModel` class:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The model is then trained using the standard PyTorch training loop, optimizing
+    the marginal log-likelihood:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'After training, the GP model can make predictions for new data points. The
+    key advantage of GP is its ability to quantify uncertainty in these predictions.
+    The following code snippet demonstrates how predictions are made using a trained
+    GP model:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here’s a visualization of the fitted values of the model:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 7.7: A visualization of the GP model’s predictions](img/B21145_07_007.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.7: A visualization of the GP model’s predictions'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This preceding figure illustrates the GP model’s ability to fit the historical
+    data and forecast future values with quantified uncertainty. The shaded areas
+    around the predictions visually represent the model’s forecast confidence, with
+    wider intervals indicating more significant uncertainty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: GP offers a sophisticated way to analyze and understand complicated datasets.
+    It differs from typical models because it doesn’t rely on a fixed number of parameters
+    to describe data. Instead, GP uses a limitless range of possible functions, which
+    gives it great adaptability to fit any type of data generation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: GP is a collection of random variables. The key characteristic of these variables
+    in GP is that one variable affects or is related to the values of others. The
+    dependency pattern is governed by the Gaussian distribution. A GP can model a
+    wide variety of functions (for example, nonlinear, noisy, and others). This method
+    is particularly useful in our current setting because it adopts a probabilistic
+    approach to modeling. GP can not only predict the most likely outcome but also
+    quantify the uncertainty of these predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'GP is defined by the mean and kernel functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Mean function**: The baseline expectation for the function’s values. It provides
+    a starting point for predictions and is often set to zero.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Kernel function**: The core of a GP, this determines the relationship between
+    data points by encoding the function’s properties (for example, smoothness, periodicity,
+    and so on). It influences how predictions are made by assessing the similarity
+    among points.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The kernel function is the essential component of a GP model’s predictive accuracy,
+    adapting the model to the data’s underlying structure. In practice, you can mix
+    different kernels to capture various aspects of the data. For instance, combining
+    a kernel that’s good for smooth data with one good for periodic data can help
+    model data with both characteristics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a GP involves fine-tuning specific parameters in the kernel to fit
+    your data best. This is often done using optimization techniques such as gradient
+    descent. Once the GP has been trained, it can predict new data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using Prophet for probabilistic forecasting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this recipe, we’ll show how to use Prophet for probabilistic forecasting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Getting ready
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Prophet is a tool developed by Facebook for forecasting time series data. It’s
+    particularly adept at handling data with strong seasonal patterns and irregular
+    events such as holidays. To get started with Prophet, we need to prepare our data
+    and environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The process begins with loading and preprocessing the time series data so that
+    it fits the format Prophet requires. Each time series in Prophet must have two
+    columns – `ds` (the timestamp) and `y` (the value we wish to predict):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, let’s see how to build a Prophet model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How to do it…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Follow these steps to build a Prophet model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After preprocessing, we must divide the dataset into training and testing sets.
+    Prophet is then used to fit the model on the training data:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Then, we must create a Prophet instance and train it, as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can use the model to make future predictions once the model has been trained.
+    This involves creating a future `dataframe` for the desired forecast period and
+    then using the model to predict the values:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Here’s how to visualize the forecasts:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'These forecasts are shown in the following figure:'
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: '![Figure 7.8: Prophet forecast with uncertainty intervals and observed data](img/B21145_07_008.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.8: Prophet forecast with uncertainty intervals and observed data'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition to the basic forecasting model, Prophet also provides functionality
+    to dissect and understand various components of the time series. This can be particularly
+    useful for gaining insights into the underlying patterns of the data. Here’s how
+    to visualize the forecasts by each component:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here’s the plot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 7.9: Prophet model components showing trend, as well as weekly and
+    yearly seasonality](img/B21145_07_009.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 7.9: Prophet model components showing trend, as well as weekly and yearly
+    seasonality'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The top plot illustrates the overall trend in the data over time. Here, we can
+    see a general upward trend, suggesting that the value we predict increases over
+    the years. The middle plot shows the weekly seasonality. This plot indicates how
+    each day of the week affects our forecasting value. For instance, there might
+    be peaks on specific days associated with weekly events or habits. The bottom
+    plot represents yearly seasonality, showing how the time of the year influences
+    the forecast. This could capture increased activity during certain months or seasonal
+    effects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How it works…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Prophet is an additive model that decomposes the time series into several components:
+    trend, seasonality, and holidays. In this recipe, we used the default parameters
+    of the model. However, you can tweak Prophet with several parameters. Check out
+    the documentation at [https://facebook.github.io/prophet/docs/quick_start.html](https://facebook.github.io/prophet/docs/quick_start.html)
+    for more information.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `prophet` library requires the data to be framed in a specific format:
+    a `pandas` DataFrame with two columns: `ds` (timestamps) and `y` (the values).
+    Then, the training and inference steps are carried out using a `fit()` method
+    and a `predict()` method, respectively. You can also visualize the predictions
+    by each component, which gives the model a more interpretable characteristic.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: There’s more…
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: There’s a newer extension of the Prophet model called `NeuralProphet`. It incorporates
+    neural network models for improved forecasting, especially in complex patterns
+    and multiple seasonality scenarios.
+  prefs: []
+  type: TYPE_NORMAL

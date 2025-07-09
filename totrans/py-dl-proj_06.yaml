@@ -1,0 +1,746 @@
+- en: Generative Language Model for Content Creation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This work is certainly getting exciting, and the word is out that we're demonstrating
+    a professional set of deep learning capabilities by producing solutions for a
+    wide range of business use cases! As data scientists, we understand the transferability
+    of our skills. We know that we can provide value by employing core skills when
+    working on problems that we know are similar in structure but that may seem different
+    at first glance. This couldn't be more true than in the next deep learning project.
+    Next, we're (hypothetically) going to be working on a project in which a creative
+    group has asked us to help produce some original content for movie scripts, song
+    lyrics, and even music!
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can we leverage our experience in solving problems for restaurant chains
+    to such a different industry? Let's explore what we know and what we're going
+    to be asked to do. In past projects, we demonstrated that we could take an image
+    as input and output a class label ([Chapter 2](027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml),
+    *Training NN for Prediction Using Regression*); we trained a model to take text
+    input and output sentiment classifications ([Chapter 3](4dcd4b65-934b-4a8a-a252-9af7513a4787.xhtml),
+    *Word Representation Using word2vec*); we built a NLP pipeline for an open domain
+    question and answering chatbot where we took text as input and identified text
+    in a corpus to present as the appropriate output ([Chapter 4](c6f638a5-96bf-4488-9e14-4fbc9b969a42.xhtml),
+    *Building an NLP Pipeline for Building Chatbots*); and we expanded that chatbot's
+    functionality so that it was able to serve a restaurant with an automated ordering
+    system ([Chapter 5](856ccfef-cfe1-462f-9998-73f2b5168ae7.xhtml), *Sequence-to-Sequence
+    Models for Building Chatbots*).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Define the goal**: In this next project, we''re going to take the next step
+    in our computational linguistics journey in *Python Deep Learning Projects* and
+    generate new content for our client. We need to help them by providing a deep
+    learning solution that generates new content that can be used in movie scrips,
+    song lyrics, and music.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will implement a generative model that can generate content
+    using **long short-term memory** (**LSTM**), variational autoencoders, and **Generative
+    Adversarial Networks** (**GANs**). We will be implementing models for both text
+    and images, which can then generate images and text for artists and various businesses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we''ll cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Text generation with LSTM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Additional power of a bi-directional LSTM for text generation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep (multi-layer) LSTM to generate lyrics for a song
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep (multi-layer) LSTM music generation for a song
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: LSTM for text generation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we''ll explore a popular deep learning model: the **recurrent
+    neural network** (**RNN**), and how it can be used in the generation of sequence
+    data. The universal way to create sequence data in deep learning is to train a
+    model (usually a RNN or a ConvNet) to predict the next token or next few tokens
+    in a series, based on the previous tokens as input. For instance, let''s imagine
+    that we''re given the sentence with these words as input: `I love to work in deep
+    learning`. We will train the network to predict the next character as our target.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When working with textual data, tokens are typically words or characters, and
+    any network that can model the probability of the next token given the previous
+    ones is called a language model that can capture the latent space of language.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Upon training the language model, we can then proceed to feed some initial text
+    and ask it to generate the next token, then add the generated token back into
+    the language model to predict more tokens. For our hypothetical use case, our
+    creative client will use this model and later provide examples of text that we
+    would then be asked to create novel content for in that style.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step in building the generative model for text is to import all the
+    modules required. Keras APIs will be used in this project to create the models
+    and Keras utils will be used to download the dataset. In order to build text generation
+    modules, we need a significant amount of simple text data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can find the code file for this at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Basics/generative_text.py](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Basics/generative_text.py):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Data pre-processing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Let's perform the data pre-processing to convert the raw data into its encoded
+    form. We will extract fixed length sentences, encode them using a one-hot encoding
+    process, and finally build a tensor of the (`sequence`, `maxlen`, `unique_characters`)
+    shape, as shown in the following diagram. At the same time, we will prepare the
+    target vector, `y`, to contain the associated next character that follows each
+    extracted sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the code we''ll use to pre-process the data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is how data preprocessing looks like. We have transformed the raw
+    data into the tensors which we will further use for the training purpose:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b412734c-ce09-4512-8bf6-29e1340dbd95.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Defining the LSTM model for text generation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This deep model is a network that's made up of one hidden LSTM layer with `128`
+    memory units, followed by a `Dense` classifier layer with a `softmax` activation
+    function over all possible characters. Targets are one-hot encoded, and this means
+    that we'll train the model using `categorical_crossentropy` as the `loss` function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code block defines the model''s architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following diagram helps us visualize the model''s architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/1172e519-40f4-46f6-a18b-662dfa35653e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Training the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In text generation, the way we choose the succeeding character is crucial. The
+    most common way (greedy sampling) leads to repetitive characters that does not produce a
+    coherent language. This is why we use a different approach called **stochastic
+    sampling**. This adds a degree of randomness to the prediction probability distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Use the following code to re-weight the prediction probability distribution
+    and sample a character index:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now, we iterate the training and text generation, beginning with 30 training
+    epochs and then fitting the model for 1 iteration. Then, perform a random selection
+    of the seed text, convert it into one-hot encoding format, and perform predictions
+    of 100 characters. Finally, append the newly generated character to the seed text
+    in each iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After each epoch, generation is performed by utilizing a different temperature
+    from a range of values. This makes it possible to see and understand the evolution
+    of the generated text at model convergence, and the consequences of temperature
+    in the sampling strategy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Temperature** is an LSTM hyperparameter that is used to influence prediction
+    randomness by logit scaling before applying softmax.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We need to execute the following code so that we can train the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Inference and results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This gets us to the exciting part of our generative language model—creating
+    custom content! The inference step in deep learning is where we take a trained
+    model and expose it to new data to make predictions or classifications. In the
+    current context of this project, we're looking for model outputs, that is, new
+    sentences, which will be our novel custom content. Let's see what our deep learning
+    model can do!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will use the following code to store and load the checkpoints into a binary
+    file that stores all of the weights:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we will use the trained model and generate new text:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After successfully training the model, we will see the following results at
+    the 30^(th) epoch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: We find that, with low values for the `temperature` hyperparameter, the model
+    is able to generate more practical and realistic words. When we use higher temperatures,
+    the generated text becomes more interesting and unusual—some might even say creative.
+    Sometimes, the model will even invent new words that often sound vaguely credible.
+    So, the idea of using low temperature is more reasonable for business use cases
+    where you need to be realistic, while higher temperature values can be used in
+    more creative and artistic use cases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The art of deep learning and generative linguistic models is a balance between
+    the learned structure and randomness, which makes the output interesting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating lyrics using deep (multi-layer) LSTM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have built a basic LSTM model for text generation and learned its
+    value, let''s move one step further and create a deep LSTM model suited for the
+    task of generating music lyrics. We now have a new goal: to build and train a
+    model that outputs entirely new and original lyrics that is in the style of an
+    arbitrary number of artists.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's begin. You can refer to the code file found at `Lyrics-ai` ([https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Lyrics-ai](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Lyrics-ai))
+    for this exercise.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data pre-processing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To build a model that can generate lyrics, we will need a huge amount of lyric
+    data, which can easily be extracted from various sources. We collected lyrics
+    from around 10,000 songs and stored them in a text file called `lyrics_data.txt`.
+    You can find the data file in our GitHub repository ([https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Lyrics-ai/lyrics_data.txt](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Lyrics-ai/lyrics_data.txt)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that we have our data, we need to convert this raw text into the one-hot
+    encoding version:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The overall objective of the pre-processing module is to convert the raw text
+    data into one-hot encoding, as shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e4d420da-9566-43e9-9e58-6bb5d412098f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This figure represents the data preprocessing part. The law lyrics data is used
+    to build the vocabulary mapping which is further been transformed into the on-hot
+    encoding.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After the successful execution of the pre-processing module, a binary file will
+    be dumped as `{dataset_filename}.vocab`. This `vocab` file is one of the mandatory
+    files that needs to be fed into the model during the training process, along with
+    the dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will be using a approach from the Keras model that we used earlier in this
+    project to build this model. To build a more complex model, we will use TensorFlow
+    to write each layer from scratch. TensorFlow gives us, as data scientists and
+    deep learning engineers, more fine-tuned control over our model's architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For this model, we will use the code in the following block to create two placeholders
+    that will store the input and output values:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we need to store the weights and bias in the variables that we''ve created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can build this model by using multiple LSTM layers, with the basic LSTM
+    cells assigning each layer with the specified number of cells, as shown in the
+    following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/98851e09-270a-41e3-92b0-8a269e5f7bd6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Tensorboard visualization of the LSTM architecture
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is the code for this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training the deep TensorFlow-based LSTM model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that we have the mandatory inputs, that is, the dataset file path, the `vocab`
+    file path, and the model name, we will initiate the training process. Let''s define
+    all of the hyperparameters for the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Since we are batch training the model, we will divide the dataset into batches
+    of a defined `batch_size` using the `Batch` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Each batch will return two arrays. One will be the input vector of the input
+    sequence, which will have a shape of [`batch_size`, `sequence_length`, `vocab_size`],
+    and the other array will hold the label vector, which will have a shape of [`batch_size`,
+    `vocab_size`].
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we initialize our model and create the optimizer function. In this model,
+    we used the `Adam` Optimizer.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Adam Optimizer is a powerful tool. You can read up on it from the official
+    TensorFlow documentation at
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer](https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we will train our model and perform the optimization over each batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the model completes its training, the checkpoints are stored. We can use
+    later on for inferencing. The following is a graph of the accuracy and the loss
+    that occurred during the training process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/8ec64ecd-bb63-4680-aa9e-9bc1965e6a4f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The accuracy (top) and the loss (bottom) plot with respect to the time. We can
+    see that accuracy getting increased and loss getting reduced over the period of
+    time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Inference
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that the model is ready, we can use it to make predictions. We will start
+    by defining all of the parameters. While building inference, we need to provide
+    some seed text, just like we did in the previous model. Along with that, we will
+    also provide the path of the `vocab` file and the output file in which we will
+    store the generated lyrics. We will also provide the length of the text that we
+    need to generate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will load the model by providing the name of model that we used in
+    the training step in the preceding code, and we will restore the vocabulary from
+    the file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will be using the stack methods to store the generated characters, append
+    the stack, and then use the same stack to feed it into the model in an interactive
+    fashion:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Output
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'After successful execution, we will get our own freshly brewed, AI generated
+    lyrics reviewed and published. The following is one sample of such lyrics. We
+    have modified some of the spelling so that the sentence makes sense:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we can see that the model has learned in the way it has generated the
+    paragraphs and sentences with appropriate spacing. It still lacks perfection and
+    also doesn't make sense.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Seeing signs of success**: The first task is to create a model that can learn,
+    and then the second one is used to improve on that model. This can be obtained
+    by training the model with a larger training dataset and longer training durations.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating music using a multi-layer LSTM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Our (hypothetical) creative agency client loves what we''ve done in how we
+    can generate music lyrics. Now, they want us to create some music. We will be
+    using multiple layers of LSTMs, as shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/bd77caaf-1d4a-47a4-8cdf-8808426666d5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: By now, we know that RNNs are good for sequential data, and we can also represent
+    a music track as notes and chord sequences. In this paradigm, notes become data
+    objects containing octave, offset, and pitch information. Chords become data container
+    objects holding information for the combination of notes played at one time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Pitch** is the sound frequency of a note. Musicians represent notes with
+    letter designations [A, B, C, D, E, F, G], with G being the lowest and A being
+    the highest.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Octave**identifies the set of pitches used at any one time while playing
+    an instrument.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Offset**identifies the location of a note in the piece of music.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's explore the following section to build our intuition on how to generate
+    music by first processing the sound files, converting them into the sequential
+    mapping data, and then using the RNN to train the model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's do it. You can refer to the Music-ai code for this exercise, which can
+    be found at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Pre-processing data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To generate music, we will need a good size set of training data of music files.
+    These will be used to extract sequences while building our training dataset. To
+    simplify this process, in this chapter, we are using the soundtrack of a single
+    instrument. We collected some melodies and stored them in MIDI files. The following
+    sample of a MIDI file shows you what this looks like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/4259903c-6f13-47a5-b084-50843c671689.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The image represents the pitch and note distribution for a sample MIDI file
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see the intervals between notes, the offset for each note, and the pitch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To extract the contents of our dataset, we will be using music21\. This also
+    takes the output of the model and translates it into musical notation. Music21
+    ([http://web.mit.edu/music21/](http://web.mit.edu/music21/)) is a very helpful Python
+    toolkit that's used for computer-aided musicology.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To get started, we will load each file and use the `converter.parse(file)` function
+    to create a music21 `stream` object*. *We will get a list of all of the notes
+    and chords in the file by using this `stream` object later. Because the most salient
+    features of a note's pitch can be recreated from string notation, we'll append
+    the pitch of every note. To handle chords, we will encode the ID of every note
+    in the chord as a single string, where each note is separated by a dot, and append
+    this to the chord. This encoding process makes it possible for us to decode the
+    model generated output with ease into the correct notes and chords.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will load the data from the MIDI files into an array, as you can see in
+    the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to create input sequences for the model and the corresponding
+    outputs, as shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a2924167-d48a-495a-8162-7c797127dd54.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The overview of data processing part in which we take the MIDI files, extract
+    the notes and chords from each file and strore them as an array.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model outputs a note or chord for each input sequence. We use the first
+    note or chord, following the input sequence in our list of notes. To complete
+    the final step in data preparation for our network, we need to one-hot encode
+    the output. This normalizes the input for the next iteration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can do this with the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now that we have all the notes and chords extracted. We will create our training
+    data X and Y as shown in the following figure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f70cadbb-c649-4c33-aba7-dc12505592a5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The captured notes any chords in the array is further transformed into a one
+    -hot encoding vector by mapping the values from the vocabulary. So we will fed
+    the sequences in X matrix and expect the model to learn to predict Y for the given
+    sequence.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the model and training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now, we are getting to the part that all deep learning engineers love: designing
+    the model''s architecture!  We will be using four distinctive types of layers
+    in our model architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**LSTM**: This is a type of RNN layer.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Dropout**:A technique for regularization. This helps prevent the model from
+    overfitting by randomly dropping some nodes.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Dense:** This is a fully connected layer where every input node is connected
+    to every output node.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Activation**: This determines the `activation` function that''s going to
+    be used to produce the node''s output.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We will again employ the Keras APIs to make the implementation quick:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The generative model architecture we designed has three LSTM layers, three
+    `Dropout` layers, two `Dense` layers, and one `Activation` layer, as shown in
+    the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7d431f84-1eb2-4ed9-95d8-dc10562177d7.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The model architecture for music generation
+  prefs: []
+  type: TYPE_NORMAL
+- en: Categorical cross entropy will be used to calculate the loss for each iteration
+    of the training. We will once again use the Adam optimizer in this network. Now
+    that we have our deep learning model architecture configured, it's time to train
+    the model. We have decided to train the model for 200 epochs, each with 25 batches,
+    by using `model.fit()`. We also want to track the reduction in loss over each
+    epoch and will use checkpoints for this purpose.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now we will perform the training operation and dump the model in the file mentioned
+    in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The performance of the model can be seen as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/bb82d271-5ac9-40c9-9342-ce2f84d03c58.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The accuracy and the loss plot over the epochs
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now that the training process is completed, we will load the trained models and
+    generate our own music.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating music
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It's time for the real fun! Let's generate some instrumental music. We will
+    use the code from the model setup and training, but instead of executing the training
+    (as our model is already trained), we will insert the learned weights that we
+    obtained in earlier training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code block executes these two steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: By doing this, we created the same model, but this time for prediction purposes,
+    and added one extra line of code to load the weights into memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because we need a seed input so that the model can start generating music,
+    we chose to use a random sequence of notes that we obtained from our processed
+    files. You can also send your own nodes as long as you can ensure that the sequence
+    length is precisely 100:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: We iterated the model generation 1,000 times, which created 1,000 notes using
+    the network, producing approximately five minutes of music. The process we used
+    to select the next sequence for each iteration was that we'd start with the first
+    sequence to submit, since it was of the sequence of notes that was at the starting
+    index. For subsequent input sequences, we removed the first note and appended
+    the output from the previous iteration at the end of the sequence. This is a very
+    crude way to do this and is known as the sliding window approach. You can play
+    around and add some randomness to each sequence we select, which could give more
+    creativity to the music that is generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It is at this point that we have an array of all of the encoded representations
+    of the notes and chords. To turn this array back into `Note` and `Chord` objects,
+    we need to decode it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When we detect that the pattern is that of a `Chord` object, we will separate
+    the string into an array of notes. We will then loop through the string's representation
+    of each note to create a `Note` object for each item. The `Chord` object is then
+    created, which contains each of these notes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the pattern is that of a `Note` object, we will use the string representation
+    of the pitch pattern to create a `Note` object. At the end of each iteration,
+    we increase the offset by `0.5`, which can again be changed and randomness can
+    be introduced to it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The following function is responsible for determining whether the output is
+    a `Note` or `Chord` object. Finally, can we use the music21 output `stream` object
+    to create the MIDI file. Here are a few samples of generated music: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai/generated_music](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai/generated_music).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To execute these steps, you can make use of this `helper` function, as shown
+    in the following code block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Wow, that's an impressive set of practical examples of using deep learning projects
+    in Python to build solutions in a creative space! Let's revisit the goals we set
+    up for ourselves.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Defining the goal**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this project, we're going to take the next step in our computational linguistics
+    journey in deep learning projects in Python and generate new content for our client.
+    We need to help them by providing a deep learning solution that generates new
+    content that can be used in movie scripts, song lyrics, and music.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Deep learning generated content for creative purposes is obviously very tricky.
+    Our realistic goal in this chapter was to demonstrate and train you on the skills
+    and architecture needed to get started on these types of projects. Producing acceptable
+    results takes interacting with the data, the model, and the outputs and testing
+    it with the appropriate audiences. The key takeaway to remember is that the outputs
+    of your models can be quite personalized to the task at hand and that you can
+    expand your thinking of what types of business use cases you should feel comfortable
+    working on in your career.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we implemented a generative model, which generated content
+    with the use of LSTMs. We implemented models for both text and audio that generated
+    content for artists and various businesses in the creative space (hypothetically):
+    the music and movie industries.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'What we learned in this chapter was the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Text generation with LSTM
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The additional power of a Bi-directional LSTM for text generation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep (multi-layer) LSTM to generate lyrics for a song
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Deep (multi-layer) LSTM to generate the music for a song
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This is some exciting work regarding deep learning, and it keeps on coming in
+    the next chapter. Let's see what's in store!
+  prefs: []
+  type: TYPE_NORMAL

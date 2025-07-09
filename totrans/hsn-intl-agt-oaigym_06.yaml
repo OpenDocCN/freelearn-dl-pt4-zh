@@ -1,0 +1,1451 @@
+- en: Implementing an Intelligent Agent for Optimal Control using Deep Q-Learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we implemented an intelligent agent that used Q-learning
+    to solve the Mountain Car problem from scratch in about seven minutes on a dual-core
+    laptop CPU. In this chapter, we will implement an advanced version of Q-learning
+    called deep Q-learning, which can be used to solve several discrete control problems
+    that are much more complex than the Mountain Car problem. Discrete control problems
+    are (sequential) decision-making problems in which the action space is discretized
+    into a finite number of values. In the previous chapter, the learning agent used
+    a 2-dimensional state-space vector as the input, which contained the information
+    about the position and velocity of the cart to take optimal control actions. In
+    this chapter, we will see how we can implement a learning agent that takes (the
+    on-screen) visual image as input and learns to take optimal control actions. This
+    is close to how we would approach the problem, isn't it? We humans do not calculate
+    the location and velocity of an object to decide what to do next. We simply observe
+    what is going on and then learn to take actions that improve over time, eventually
+    solving the problem completely.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will guide you in how to progressively build a better agent by
+    improving upon our Q-learning agent implementation step-by-step using recently
+    published methods for stable Q-learning with deep neural network function approximation. By
+    the end of this chapter, you will have learnt how to implement and train a deep
+    Q-learning agent that observes the pixels on the screen and plays Atari games
+    using the Atari Gym environment and gets pretty good scores! We will also discuss
+    how you can visualize and compare the performance of the agent as the learning
+    progresses. You will see how the same agent algorithm can be trained on several
+    different Atari games and that the agent is still able to learn to play the games
+    well. If you cannot wait to see something in action or if you like to see and
+    get a glimpse of what you will be developing before diving in, you can check out
+    the code for this chapter under the `ch6` folder from the book's code repository
+    and try out the pre-trained agents on several Atari games! Instructions on how
+    to run the pre-trained agents are available in the `ch6/README.md` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter has a lot of technical details to equip you with enough background
+    and knowledge for you to understand the step-by-step process of improving the
+    basic Q-learning algorithm and building a much more capable and intelligent agent
+    based on deep Q-learning, along with several modules and tools needed to train
+    and test the agent in a systematic manner. The following is an outline of the
+    higher-level topics that will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Various methods to improve the Q-learning agent, including the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Neural network approximation of action-value functions
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Experience replay
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exploration schedules
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing deep convolutional neural networks using PyTorch for action-value
+    function approximation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stabilizing deep Q-networks using target networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Logging and monitoring learning performance of PyTorch agents using TensorBoard
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Managing parameters and configurations
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Atari Gym environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training deep Q-learners to play Atari games
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's get started with the first topic and see how we can start from where we
+    left off in the previous chapter and continue making progress toward a more capable
+    and intelligent agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Improving the Q-learning agent
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the last chapter, we revisited the Q-learning algorithm and implemented the `Q_Learner` class.
+    For the Mountain car environment, we used a multi-dimensional array of shape 51x51x3
+    to represent the action-value function,![](img/00130.jpeg). Note that we had discretized
+    the state space to a fixed number of bins given by the `NUM_DISCRETE_BINS` configuration
+    parameter (we used 50) . We essentially quantized or approximated the observation
+    with a low-dimensional, discrete representation to reduce the number of possible
+    elements in the n-dimensional array. With such a discretization of the observation/state
+    space, we restricted the possible location of the car to a fixed set of 50 locations
+    and the possible velocity of the car to a fixed set of 50 values. Any other location
+    or velocity value would be approximated to one of those fixed set of values. Therefore,
+    it is possible that the agent receives the same value for the position when the
+    car was actually at different positions. For some environments, that can be an
+    issue. The agent may not learn enough to distinguish between falling off a cliff
+    versus standing just on the edge so as to leap forward. In the next section, we
+    will look into how we can use a more powerful function approximator to represent
+    the action-value function instead of a simple n-dimensional array/table that has
+    its limitations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using neural networks to approximate Q-functions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Neural networks are shown to be effective as universal function approximators.
+    In fact, there is a universal approximation theorem that states that a single
+    hidden layer feed-forward neural network can approximate any continuous function
+    that is closed and bounded in ![](img/00131.jpeg). It basically means that even
+    simple (shallow) neural networks can approximate several functions. Doesn't it
+    feel too good to be true that you can use a simple neural network with a fixed
+    number of weights/parameters to approximate practically any function? It is actually
+    true, except for one note that prevents it from being used practically anywhere
+    and everywhere. Though a single hidden layer neural network can approximate any
+    function with a finite set of parameters, we do not have a universally guaranteed
+    way of *learning* those parameters that can best represent any function. You will
+    see that researchers have been able to use neural networks to approximate several
+    sophisticated and useful functions. Today, most of the intelligence that is built
+    into the ubiquitous smartphones are powered by (heavily optimized) neural networks.
+    Several best-performing systems that organize your photos into albums automatically
+    based on people, places, and the context in the photos, systems that recognize
+    your face and voice, or systems that automatically compose email replies for you
+    are all powered by neural networks. Even the state-of-the-art techniques that
+    generate human-like realistic voices that you hear from voice assistants such
+    as Google Assistant, are powered by neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Google Assistant currently uses WaveNet and WaveNet2 developed by Deepmind for
+    **Text-To-Speech** (**TTS**) synthesis, which is shown to be much more realistic
+    than any other TTS system that has been developed so far.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I hope that motivates you enough to use a neural network to approximate the
+    Q-function! In this section, we will start by approximating the Q-function with
+    a shallow (not deep) single-hidden layer neural network and use it to solve the
+    famous Cart Pole problem. Though neural networks are powerful function approximators,
+    we will see that it is not trivial to train even a single layer neural network
+    to approximate Q-functions for reinforcement learning problems. We will look at
+    some ways to improve Q-learning with neural network approximation and, in the
+    later sections of this chapter, we will look at how we can use deep neural networks
+    with much more representation power to approximate the Q-function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s get started with the neural network approximation by first revisiting
+    the `Q_Learner` class''s `__init__(...)` method that we implemented in the previous
+    chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the preceding code, the line in bold font is where we initialize the Q-function
+    as a multi-dimensional NumPy array. In the following sections, we will see how
+    we can replace the NumPy array representation with a more powerful neural network
+    representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a shallow Q-network using PyTorch
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will start implementing a simple neural network using PyTorch's
+    neural network module and then look at how we can use that to replace the multi-dimensional
+    array-based Q action-value table-like function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s start with the neural network implementation. The following code illustrates
+    how you can implement a **Single Layer Perceptron** (**SLP**) using PyTorch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: The SLP class implements a single layer neural network with 40 hidden units
+    between the input and the output layer using the `torch.nn.Linear`class, and uses
+    the **Rectified Linear Unit** (**ReLU** or **relu**) as the activation function.
+    This code is available as `ch6/function_approximator/perceptron.py` in this book's
+    code repository. The number 40 is nothing special, so feel free to vary the number
+    of hidden units in the neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the Shallow_Q_Learner
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We can then modify the `Q_Learner` class to use this SLP to represent the Q-function.
+    Note that we will have to modify the `Q_Learner` class `learn(...)` method as
+    well to calculate the gradients of loss with respect to the weights of the SLP
+    and backpropagate them so as to update and optimize the neural network''s weights
+    to improve its Q-value representation to be close to the actual values. We''ll
+    also slightly modify the `get_action(...)` method to get the Q-values with a forward
+    pass through the neural network. The following code for the `Shallow_Q_Learner` class with
+    the changes from the `Q_Learner` class implementation are shown in bold to make
+    it easy for you to see the differences at a glance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `Shallow_Q_Learner` class implementation is discussed here just to make
+    it easy for you to understand how a neural network-based Q-function approximation
+    can be implemented to replace the traditional tabular Q-learning implementations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Solving the Cart Pole problem using a Shallow Q-Network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we will implement a full training script to solve the Cart
+    Pole problem using the Shallow `Q_Learner` class that we developed in the previous
+    section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Create a script named `shallow_Q_Learner.py` with the preceding code in the
+    `ch6` folder and run it like so:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will see the agent learning to balance the Pole on the Cart in the Gym's
+    `CartPole-v0` environment. You should see the episode number, the number of steps
+    the agent took before the episode ended, the episode reward the agent received,
+    the mean episode reward that the agent has received, and also the best episode
+    reward that the agent has received so far printed on the console. You can uncomment
+    the `env.render()` line if you want to visually see the Cart Pole environment
+    and how the agent is trying to learn and balance it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Shallow_Q_Learner` class implementation and the full training script shows
+    how you can use a simple neural network to approximate the Q-function. It is not
+    a good implementation to solve complex games like Atari. In the following subsequent
+    sections, we will systematically improve their performance using new techniques.
+    We will also implement a Deep Convolutional Q-Network that can take the raw screen
+    image as the input and predict the Q-values that the agent can use to play various
+    Atari games.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You may notice that it takes a very long time for the agent to improve and finally
+    be able to solve the problem. In the next section, we will implement the concept
+    of experience replay to improve the performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experience replay
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In most environments, the information received by the agent is not **independent
+    and identically distributed** (**i.i.d**). What this means is that the observation
+    that the agent receives is strongly correlated with the previous observation it
+    had received and the next observation it will receive. This is understandable
+    because typically, the problems that the agent solves in typical reinforcement
+    learning environments are sequential. Neural networks are shown to converge better
+    if the samples are i.i.d.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experience replay also enables the reuse of the past experience of the agent.
+    Neural network updates, especially with lower learning rates, require several
+    back-propagation and optimization steps to converge to good values. Reusing the
+    past experience data, especially in mini-batches to update the neural network,
+    greatly helps with the convergence of the Q-network which is close to the true
+    action values.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the experience memory
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s implement an experience memory class to store the experiences collected
+    by the agent. Before that, let''s cement our understanding of what we mean by
+    *experience*. In reinforcement learning where the problems are represented using
+    **Markov Decision Processes** (**MDP**), which we discussed in [Chapter 2](part0033.html#VF2I0-22c7fc7f93b64d07be225c00ead6ce12), *Reinforcement
+    Learning and Deep Reinforcement Learning*, it is efficient to represent one experience
+    as a data structure that consists of the observation at time step *t*, the action
+    taken following that observation, the reward received for that action, and the
+    next observation (or state) that the environment transitioned to due to the agent''s
+    action. It is useful to also include the "done" Boolean value that signifies whether
+    this particular next observation marked the end of the episode or not. Let''s
+    use Python''s `namedtuple` from the collections library to represent such a data
+    structure, as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `namedtuple` data structure makes it convenient to access the elements using
+    a name attribute (like 'obs', 'action', and so on) instead of a numerical index
+    (like 0, 1 and so on).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can now move on to implement the experience memory class using the experience
+    data structure we just created. To figure out what methods we need to implement
+    in the experience memory class, let's think about how we will be using it later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we want to be able to store new experiences in the experience memory
+    that the agent collects. Then, we want to sample or retrieve experiences in batches
+    from the experience memory when we want to replay to update the Q-function. So,
+    essentially, we will need a method that can store new experiences and a method
+    that can sample a single or a batch of experiences.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s dive into the experience memory implementation, starting with the initialization
+    method where we initialize the memory with the desired capacity, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `mem_idx` member variable will be used to point to the current writing head
+    or the index location where we will be storing new experiences when they arrive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A "cyclic buffer" is also known by other names that you may have heard of:
+    "circular buffer", "ring buffer", and "circular queue". They all represent the
+    same underlying data structure that uses a ring-like fixed-size data representation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Next, we''ll look at the `store` method''s implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Simple enough, right? We are storing the experience at `mem_idx`, like we discussed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The next code is our `sample` method implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding code, we make use of Python''s random library to uniformly
+    sample experiences from the experience memory at random. We will also implement
+    a simple `get_size` helper method, which we will use to find out how many experiences
+    are already stored in the experience memory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The full implementation of the experience memory class is available at `ch6/utils/experience_memory.py`,
+    in this book's code repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we'll look at how we can replay experiences sampled from the experience
+    memory to update the agent's Q-function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the replay experience method for the Q-learner class
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So, we have implemented a memory system for the agent to store its past experience
+    using a neat cyclic buffer. In this section, we will look at how we can use the
+    experience memory to replay experience in the Q-learner class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the case of online learning methods like SARSA, the action value estimate
+    was updated after every step of interaction between the agent and the environment.
+    This way, the updates propagated information that the agent just experienced.
+    If the agent does not experience something quite often, such updates may let the
+    agent forget about those experiences and may result in bad performance when the
+    agent encounters a similar situation in the future. This is undesirable, especially
+    with neural networks which have many parameters (or weights) that needs to be
+    adjusted to the right set of values. That is one of the main motivations behind
+    using an experience memory and replaying the past experiences during updates to
+    the Q action-value estimates. We will now implement the `learn_from_batch_experience` method
+    that extends the `learn` method we implemented in the previous chapter to learn
+    from a batch of experiences rather than from a single experience. The following
+    is the method''s implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The method receives a batch (or a mini-batch) of experience and first extracts
+    the observation batches, action batches, reward batches, and the next observation
+    batches separately in order to use them individually in the subsequent steps.
+    The `done_batch` signifies for each experience whether or not the next observation
+    is the end of an episode. We then calculate the **Temporal Difference** (**TD**)
+    error with a max over action, which is the Q-learning target. Note that we multiply
+    the second term in the `td_target` calculation with `~done_batch`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This takes care of specifying a zero value for terminal states. So, if a particular
+    `next_obs` in the `next_obs_batch` was terminal, the second term would become
+    0, resulting in just `td_target = rewards_batch`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then calculate a mean squared error between the `td_target` (target Q-value)
+    and the Q-value predicted by the Q-network. We use this error as the guiding signal
+    and back-propagate it to all the nodes in the neural network before making an
+    optimization step to update the parameters/weights to minimize the error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Revisiting the epsilon-greedy action policy
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapter, we discussed the ![](img/00132.jpeg)-greedy action
+    selection policy which takes the best action as per the agent's action-value estimate
+    with a probability of 1-![](img/00133.jpeg) and takes a random action with a probability
+    given by epsilon, ![](img/00134.jpeg). Epsilon is a hyperparameter that can be
+    tuned based on the experiments to a good value. A higher value of ![](img/00135.jpeg) means
+    that the agent's actions will be random and a lower value of ![](img/00136.jpeg) means
+    that the agent's action will more likely exploit what it already knows about the
+    environment and will not try to explore. Should I explore more by taking never/less
+    tried actions? Or should I exploit what I already know and take the best action
+    to my knowledge which may be limited? This is the exploration-exploitation dilemma
+    that a reinforcement learning agent suffers from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Intuitively, it is helpful to have a very high value (the maximum is 1.0) for ![](img/00137.jpeg) during
+    the initial stages of the agent's learning process so that the agent can explore
+    the state space by taking mostly random actions. Once it has got enough experience
+    and has gained a better understanding of the environment, lowering the ![](img/00138.jpeg) value
+    will let the agent take actions based on what it believes to be the best actions
+    more often. It will be useful to have a utility function that takes care of varying
+    the ![](img/00139.jpeg) value, right? Let's implement such a function in the next
+    section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing an epsilon decay schedule
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We can decay (or decrease) the ![](img/00140.jpeg) value linearly (in the following
+    left-hand side graph), exponentially (in the following right-hand side graph)
+    or using some other decay schedule. Linear and exponential schedules are the most
+    commonly used decay schedules for the exploration parameter ![](img/00141.jpeg):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00142.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the preceding graphs, you can see how the epsilon (exploration) value varies
+    with the different schedule schemes (linear on the left graph, exponential on
+    the right graph). The decay schedule shown in the preceding graphs use an epsilon_max
+    (start) value of 1, epsilon_min (final) value of 0.01 in the linear case, and
+    exp(-10000/2000) in the exponential case, with both of them maintaining a constant
+    value of epsilon_min after 10,000 episodes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code implements the `LinearDecaySchedule`, which we will use
+    for our `Deep_Q_Learning` agent implementation to play Atari games:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding script is available at `ch6/utils/decay_schedule.py` in this book's
+    code repository. If you run the script, you will see that the `main `function
+    creates a linear decay schedule for epsilon and plots the value. You can experiment
+    with different values of `MAX_NUM_EPISODES`, `MAX_STEPS_PER_EPISODE`, `epsilon_initial`,
+    and `epsilon_final` to visually see how the epsilon values vary with the number
+    of steps. In the next section, we will implement the `get_action(...)` method
+    which implements the ![](img/00143.jpeg)-greedy action selection policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a deep Q-learning agent
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will discuss how we can scale up our shallow Q-learner to
+    a more sophisticated and powerful deep Q-learner-based agent that can learn to
+    act based on raw visual image inputs, which we will use towards the end of this
+    chapter to train agents that play Atari games well. Note that you can train this
+    deep Q-learning agent in any learning environments with a discrete action space.
+    The Atari game environments are one such interesting class of environments that
+    we will use in this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will start with a deep convolutional Q-network implementation and incorporate
+    it into our Q-learner. Then, we will see how we can use the technique of target
+    Q-networks to improve the stability of the deep Q-learner. We will then combine
+    all the techniques we have discussed so far to put together the full implementation
+    of our deep Q learning-based agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing a deep convolutional Q-network in PyTorch
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s implement a 3-layer deep **Convolutional Neural Network** (**CNN**)
+    that takes the Atari game screen pixels as the input and outputs the action-values
+    for each of the possible actions for that particular game, which is defined in
+    the OpenAI Gym environment. The following code is for the CNN class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, it is easy to add more layers to the neural network. We could
+    use a deeper network that has more than three layers, but it will come at the
+    cost of requiring more compute power and time. In deep reinforcement learning,
+    and especially in Q learning with function approximation, there are no proven
+    convergence guarantees. We should therefore make sure that our agent's implementation
+    is good enough to learn and make progress well before increasing the capacity
+    of the Q /value-function representation by using a much deeper neural network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using the target Q-network to stabilize an agent's learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: A simple technique of freezing the Q-network for a fixed number of steps and
+    then using that to generate the Q learning targets to update the parameters of
+    the deep Q-network was shown to be considerably effective in reducing the oscillations
+    and stabilize Q learning with neural network approximation. This technique is
+    a relatively simpler one, but it turns out to be very helpful for stable learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The implementation is going to be straightforward and simple. We have to make
+    two changes or updates to our existing deep Q-learner class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a target Q-network and sync/update it with the original Q-network periodically
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use the target Q-network to generate the Q-learning targets
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To compare how the agent performs with and without the target Q-network, you
+    can use the parameter manager and the logging and visualization tools that we
+    developed in the earlier sections of this chapter to visually verify the performance
+    gain with the target Q-network enabled.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can then modify the `learn_from_batch_experience` method that we implemented
+    earlier to use the target Q-network to create the Q-learning target. The following
+    code snippet shows the changes in bold font from our first implementation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This completes our target Q-network implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do we know if the agent is benefiting from the target Q-network and other
+    improvements we discussed in the previous sections? In the next section, we will
+    look at ways to log and visualize the agent's performance so that we can monitor
+    and figure out whether or not the improvements we discussed actually lead to better
+    performances.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Logging and visualizing an agent's learning process
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We now have a learning agent that uses a neural network to learn Q-values and
+    update itself to perform better at the task. The agent takes a while to learn
+    before it starts acting wisely. How do we know what is going on with the agent
+    at a given time? How do we know if the agent is making progress or simply acting
+    dumb? How do we see and measure the progress of the agent with time? Should we
+    just sit and wait for the training to end? No. There should be some better way,
+    don't you think?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Yes, and there is! It is actually important for us, the developers of the agents,
+    to be able to observe how the agent is performing in order to figure out if there
+    is an issue with the implementation or if some of the hyperparameters are too
+    bad for the agent to learn anything. We have had the preliminary version of logging
+    and seen how the agent's learning was progressing with the console outputs generated
+    using the print statements. That gave us a first-hand look into the episode number,
+    episode reward, the maximum reward, and so on, but it was more like a single snapshot
+    at a given time. We want to be able to see the history of the progress to see
+    if the agent's learning is converging with the learning error decreasing or not,
+    and so on. This will enable us to think in the right direction to update our implementation
+    or tweak the parameters to improve the learning performance of the agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The TensorFlow deep learning library offers a tool called TensorBoard. It is
+    a powerful tool to visualize the neural network graphs, plot quantitative metrics
+    like learning errors, rewards, and so on as the training progresses. It can even
+    be used to visualize images and a few other useful data types. It makes it easier
+    to understand, identify, and debug our deep learning algorithm implementations.
+    In the next section, we will see how we can use TensorBoard to log and visualize
+    our agent's progress.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using TensorBoard for logging and visualizing a PyTorch RL agent's progress
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Though TensorBoard is a tool that was released for the TensorFlow deep learning
+    library, it is a flexible tool in itself, which can be used with other deep learning
+    libraries like PyTorch. Basically, the TensorBoard tool reads the TensorFlow events
+    summary data from log files and updates the visualizations and plots periodically.
+    Fortunately, we have a library called `tensorboardX` that provides a convenient
+    interface to create the events that TensorBoard can work with. This way, we can
+    easily generate the appropriate events from our agent training code to log and
+    visualize how our agent''s learning process is progressing. The use of this library
+    is pretty straightforward and simple. We import `tensorboardX` and create a `SummaryWriter` object
+    with the desired log file name. We can then add new scalars (and also other supported
+    data) using the `SummaryWriter` object to add new data points to the plot which
+    will be updated periodically. The following screenshot is an example of what the
+    TensorBoard''s output will look like with the kind of information we will be logging
+    in our agent training script to visualize its progress:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00144.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the preceding screenshot, the bottom-right most plot titled **main/mean_ep_reward** shows
+    how the agent has been learning to progressively get higher and higher rewards
+    over time steps. In all the plots in the preceding screenshot, the *x*-axis shows
+    the number of training steps and the *y*-axis has the value of the data that was
+    logged, as signified by the titles of each of the plots.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we know how to log and visualize the performance of the agent as it is
+    training. But still, a question remains as to how we can compare the agent with
+    and without one or more of the improvements we discussed in the earlier sections
+    in this chapter. We discussed several improvements, and each adds new hyperparameters.
+    In order to manage the various hyperparameters and to easily turn on and off the
+    improvements and configurations, in the next section, we will discuss a way to
+    achieve this by building a simple parameter management class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Managing hyperparameters and configuration parameters
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As you may have noticed, our agent has several hyperparameters like the learning
+    rate, gamma, epsilon start/minimum value, and so on. There are also several configuration
+    parameters for both the agent and the environment that we would want to be able
+    to modify easily and run instead of searching through the code to find where that
+    parameter was defined. Having a simple and good way to manage these parameters
+    also helps when we want to automate the training process or run parameter sweeps
+    or other methods to tune and find the best set of parameters that work for the
+    agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following two subsections, we will look at how we can use a JSON file
+    to specify the parameters and hyperparameters in an easy to use way and implement
+    a parameter manager class to handle these externally configurable parameters to
+    update the agent and the environment configuration.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using a JSON file to easily configure parameters
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: The parameters manager
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Did you like the parameter configuration file example that you just saw? I hope
+    you did. In this section, we will implement a parameter manger that will help
+    us load, get, and set these parameters as necessary.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will start by creating a Python class named `ParamsManger` that initializes
+    the `params` member variable with the dictionary of parameters read from the `params_file` using
+    the JSON Python library, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will then implement a few methods that will be convenient for us. We will
+    start with the `get_params` method that returns the whole dictionary of parameters
+    that we read from the JSON file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Sometimes, we may just want to get the parameters that correspond to the agent
+    or those that correspond to the environment which we can pass in while we initialize
+    the agent or the environment. Since we had neatly separated the agent and the
+    environment parameters in the `parameters.json` file that we saw in the previous
+    section, the implementation is straightforward, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We will also implement another simple method to update the agent parameters
+    so that we can also supply/read the agent parameters from the command line when
+    we launch our training script:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding parameter manager implementation, along with a simple test procedure,
+    is available at `ch6/utils/params_manager.py`, in this book's code repository. In
+    the next section, we will consolidate all the techniques we have discussed and
+    implemented so far to put together a complete deep Q learning-based agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A complete deep Q-learner to solve complex problems with raw pixel input
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: From the beginning of this chapter, we have implemented several additional techniques
+    and utility tools to improve the agent. In this section, we will consolidate all
+    the improvements and the utility tools we have discussed so far into a unified
+    `deep_Q_Learner.py` script. We will be using this unified agent script to train
+    on the Atari Gym environment in the next section and watch the agent improving
+    its performance and fetching more and more scores over time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code is the unified version that utilizes the following features
+    that we developed in the previous sections of this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experience memory
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Experience replay to learn from (mini) batches of experience
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Linear epsilon decay schedule
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Target network for stable learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Parameter management using JSON files
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Performance visualization and logging using TensorBoard:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: The preceding code, along with some additional changes required for using the
+    Atari wrappers that we will be discussing in the next section, are available at `ch6/deep_Q_Learner.py`,
+    in this book's code repository. After we complete the next section on *The Atari
+    Gym environment*, we will use the agent implementation in `deep_Q_Learner.py` to
+    train the agents on the Atari games and see their performance in the end.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This book's code repository will have the latest and up-to-date code implementations
+    with improvements and bug fixes that will be committed after this book is printed.
+    So, it is a good idea to star and watch the book's code repository on GitHub to
+    get automatic updates about these changes and improvements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Atari Gym environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In [Chapter 4](part0071.html#23MNU0-22c7fc7f93b64d07be225c00ead6ce12), *Exploring
+    the Gym and its Features*, we looked at the various list of environments available
+    in the Gym, including the Atari games category, and used a script to list all
+    the Gym environments available on your computer. We also looked at the nomenclature
+    of the environment names, especially for the Atari games. In this section, we
+    will use the Atari environments and see how we can customize the environments
+    with Gym environment wrappers. The following is a collage of 9 screenshots from
+    9 different Atari environments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00145.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Customizing the Atari Gym environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Sometimes, we may want to change the way the observations are sent back by
+    the environment or change the scale of the rewards so that our agents can learn
+    better or filter out some information before the agent receives them or change
+    the way the environment is rendered on the screen. So far, we have been developing
+    and customizing our agent to make it act well in the environment. Wouldn''t it
+    be nice to have some flexibility around how and what the environment sends back
+    to the agent so that we can customize how the agent learns to act? Fortunately,
+    the Gym library makes it easy to extend or customize the information sent by the
+    environment with the help of Gym environment wrappers. The wrapper interface allows
+    us to subclass and add routines as layers on top of the previous routines. We
+    can add custom processing statements to one or more of the following methods of
+    the Gym environment class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`__init__(self, env)__`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`_seed`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`_reset`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`_step`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`_render`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`_close`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Depending on the customization we would like to do to the environment, we can
+    decide which methods we want to extend. For example, if we want to change the
+    shape/size of the observation, we can extend the `_step` and `_reset` methods. In
+    the next subsection, we will see how we can make use of the wrapper interface
+    to customize the Atari Gym environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing custom Gym environment wrappers
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will look at a few Gym environment wrappers that are especially
+    very useful for the Gym Atari environments. Most of the wrappers we will implement
+    in this section can be used with other environments as well to improve the learning
+    performance of the agents.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following table mentions a list of the wrappers will be implementing in
+    the following section with a brief description for each of the wrappers to give
+    you an overview:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Wrapper** | **Brief description of the purpose** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `ClipRewardEnv` |  To implement reward clipping |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `AtariRescale` |  To rescale the screen pixels to a 84x84x1 gray scale image
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `NormalizedEnv` | To normalize the images based on the mean and variance
+    observed in the environment |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `NoopResetEnv` | To perform a random number of `noop` (empty) actions on
+    reset to sample different initial states |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `FireResetEnv` | To perform a fire action on reset |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `EpisodicLifeEnv` | To mark end of life as end of episode and reset when
+    game is over |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `MaxAndSkipEnv` | Repeats the action for a fixed number (specified using
+    the `skip` argument; the default is 4) of steps |'
+  prefs: []
+  type: TYPE_TB
+- en: Reward clipping
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Different problems or environments provide different ranges of reward values.
+    For example, we saw in the previous chapter that in the `Mountain Car v0` environment,
+    the agent receives a reward of -1 for every time step until episode termination,
+    no matter which way the agent moves the car. In the `Cart Pole v0` environment,
+    the agent receives a reward of +1 for every time step until episode termination. In
+    Atari game environments like MS Pac-Man, if the agent eats a single ghost, it
+    will receive a reward of up to +1,600\. We can start to see how the magnitudes
+    of the reward as well as the occasion of the reward varies widely across different
+    environments and learning problems. If our deep Q-learner agent algorithm has
+    to solve this variety of problems without us trying to fine-tune the hyperparameters
+    to work well for each of the environments independently, we have to do something
+    about the varying scales of reward. This is exactly the intuition behind reward
+    clipping, in which we clip the reward to be either -1, 0, or +1, depending on
+    the sign of the actual reward received from the environment. This way, we limit
+    the magnitude of the reward which can vary widely across the different environments.
+    We can implement this simple reward clipping technique and apply it to our environments
+    by inheriting from the `gym.RewardWrapper` class and modifying the `reward(...) `function,
+    as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: The technique of clipping the reward to (-1, 0, 1) works well for Atari games.
+    But, it is good to know that this may not be the the best technique to universally
+    handle environments with varying reward magnitudes and frequency. Clipping the
+    reward value modifies the learning objective of the agent and may sometimes lead
+    to qualitatively different policies being learned by the agent than what is desired.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preprocessing Atari screen image frames
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The Atari Gym environment produces observations which typically have a shape
+    of 210x160x3, which represents a RGB (color) image of a width of 210 pixels and
+    a height of 160 pixels. While the color image at the original resolution of 210x160x3
+    has more pixels and therefore more information, it turns out that often, better
+    performance is possible with reduced resolution. Lower resolution means less data
+    to be processed by the agent at every step, which translates to faster training
+    time, especially on consumer grade computing hardware that you and I own.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s create a preprocessing pipeline that would take the original observation
+    image (of the Atari screen) and perform the following operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00146.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: We can crop out the region on the screen that does not have any useful information
+    regarding the environment for the agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we resize the image to a dimension of 84x84\. We can choose a different
+    number, other than 84, as long as it contains a reasonable amount of pixels. However,
+    it is efficient to have a square matrix (like 84x84 or 80x80) as the convolution
+    operations (for example, with CUDA) are optimized for such square input:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that with a resolution of 84x84 pixels for one observation frame with a
+    data type of `numpy.float32` which takes 4 bytes, we need about 4x84x84 = 28,224
+    bytes. As you may recall from the *Experience memory* section, one experience
+    object contains two frames (one for the observation and the other for the next
+    observation), which means we'll need 2x 28,224 = 56,448 bytes (+ 2 bytes for *action*
+    + 4 bytes for *reward). *The 56,448 bytes (or 0.056448 MB) may not seem much,
+    but if you consider the fact that it is typical to be using an experience memory
+    capacity in the order of 1e6 (million), you may realize that we need about 1e6
+    x 0.056448 MB = 56,448 MB or 56.448 GB! This means that we will need 56.448 GB
+    of RAM just for the experience memory with a capacity of 1 million experiences!
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can do a couple of memory optimizations to reduce the required RAM for training
+    the agent. Using a smaller experience memory is a straightforward way to reduce
+    the memory footprint in some games. In some environments, having a larger experience
+    memory will help the agent to learn faster. One way to reduce the memory footprint
+    it by not scaling the frames (by dividing by 255) while storing, which requires
+    a floating point representation (`numpy.float32`) and rather storing the frames
+    as numpy.uint8 so that we only need 1 byte instead of 4 bytes per pixels, which
+    will help in reducing the memory requirement by a factor of 4\. Then, when we
+    want to use the stored experiences in our forward pass to the network to the deep
+    Q-network to get the Q-value predictions, we can scale the images to be in the
+    range 0.0 to 1.0.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Normalizing observations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In some cases, normalizing the observations can help with convergence speed.
+    The most commonly used normalization process involves two steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Zero-centering using mean subtraction
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Scaling using the standard deviation
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'In essence, the following is the normalization process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the previous process, x is the observation. Note that other normalization
+    processes are also used, depending on the range of the normalized value that is
+    desired. For example, if we wanted the values after the normalization to lie between
+    0 and 1, we could use the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the previous process, instead of subtracting the mean, we subtract the minimum
+    value and divide by the difference between the maximum and the minimum value.
+    This way, the minimum value in the observation/x gets normalized to 0 and the
+    maximum value gets normalized to a value of 1.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Alternatively, if we wanted the values after the normalization to lie between
+    -1 and +1, then the following can be used:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In our environment normalization wrapper implementation, we will use the first
+    method where we zero-center the observation data using mean subtraction and scale
+    using the standard deviation of the data in the observation. In fact, we will
+    go one step further and calculate the running mean and standard deviation of all
+    the observations we have received so far to normalize the observations based on
+    the distribution of the observation data the agent has observed so far. This is
+    more appropriate as there can be high variance between different observations
+    from the same environment. The following is the implementation code for the normalization
+    wrapper that we discussed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: The image frames that we get as observation from the environment (even after
+    our preprocessing wrapper) is already on the same scale (0-255 or 0.0 to 1.0).
+    The scaling step in the normalization procedure may not be very helpful in this
+    case. This wrapper in general could be useful for other environment types and
+    was also not observed to be detrimental to the performance for already scaled
+    image observations from Gym environments like Atari.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Random no-ops on reset
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'When the environment is reset, the agent usually starts from the same initial
+    state and therefore receives the same observation on reset. The agent may memorize
+    or get used to the starting state in one game level so much that they might start
+    performing poorly they start in a slightly different position or game level. Sometimes,
+    it was found to be helpful to randomize the initial state, such as sampling different
+    initial states from which the agent starts the episode. To make that happen, we
+    can add a Gym wrapper that performs a random number of "no-ops" before sending
+    out the first observation after the reset. The Arcade Learning Environment for
+    the Atari 2600 that the Gym library uses for the Atari environment supports a
+    "NOOP" or no-operation action, which in the Gym library is coded as an action
+    with a value of 0\. So, we will step the environment with a random number of *action*=0before
+    returning the observation to the agent, as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: Fire on reset
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Some Atari games require the player to press the Fire button to start the game.
+    Some games require the Fire button to be pressed after every life is lost. More
+    often that not, this is the only use for the Fire button! Although it might look
+    trivial for us to realize that, it may be difficult for the reinforcement learning
+    agents to figure that out on their own sometimes. It is not the case that they
+    are incapable of learning that. In fact, they are capable of figuring out lots
+    of hidden glitches or modes in the game that no human has ever figured out! For
+    example, in the game of Qbert, an agent trained using Evolutionary Strategies
+    (which is a black-box type learning strategy inspired by genetic algorithms) figured
+    out a peculiar way with which it can keep receiving scores and never let the game
+    end! You know how much the agent was able to score? ~1,000,000! They could only
+    get that much because the game was reset artificially due to a time limit. Can
+    you try scoring that much in the game of Qbert? You can see that agent scoring
+    in action here: [https://www.youtube.com/watch?v=meE5aaRJ0Zs](https://youtu.be/meE5aaRJ0Zs).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The point is not that the agents are so smart to figure all these things out.
+    They definitely can, but most of the time, this harms the progress the agent can
+    make in a reasonable amount of time. This is especially true when we want a single
+    agent to tackle several different varieties of games (one at a time). We are better
+    off starting with simpler assumptions and making them more complicated after we
+    have been able to train the agents to play well using the simpler assumptions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, we will implement a `FireResetEnv` Gym wrapper that will press the
+    Fire button on every reset and get the environment started for the agent. The
+    code''s implementation is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: Episodic life
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In many games, including Atari games, the player gets to play with more than
+    one life.
+  prefs: []
+  type: TYPE_NORMAL
+- en: It was observed, used, and reported by Deepmind that terminating an episode
+    when a life is lost helps the agent learn better. It has to be noted that the
+    intention is to signify to the agent that losing a life is a bad thing to do.
+    In this case, when the episode terminates, we will not reset the environment and
+    rather continue until the game is actually over, after which we reset the environment.
+    If we reset the game after every loss of life, we would be limiting the agent's
+    exposure to observations and experiences that can be collected with just one life,
+    which is usually bad for the agent's learning performance.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To implement what we just discussed, we will use the `EpisodicLifeEnv` class
+    that marks the end of an episode when a life is lost, and reset the environment
+    when the game is over, as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: Max and skip-frame
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The `Gym` library provides environments that have `NoFrameskip` in their ID,
+    which we discussed in [Chapter 4](part0071.html#23MNU0-22c7fc7f93b64d07be225c00ead6ce12), *Exploring
+    the Gym and its Features*, where we discussed the nomenclature of the Gym environments.
+    As you may recall from our discussion in [Chapter 4](part0071.html#23MNU0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Exploring the Gym and its Features*, by default, if there is no presence of `Deterministic`
+    or `NoFrameskip` in the environment name, the action sent to the environment is
+    repeatedly performed for a duration of *n *frames, where *n* is uniformly sampled
+    from (2, 3, 4). If we want to step through the environment at a specific rate,
+    we can use the Gym Atari environments with `NoFrameskip` in their ID, which will
+    step through the underlying environment without any alteration to the step duration.
+    The step rate, in this case, is of![](img/00147.jpeg) a second, which is 60 frames
+    per second. We can then customize the environment to skip at our choice to skip
+    the rate (*k*) to step at a specific rate. The implementation for such a custom
+    step/skip rate is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: Notice that we are also taking the maximum of the pixel values over the frames
+    that were skipped and sending that as the observation instead of totally ignoring
+    all the intermediate image frames that were skipped.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Wrapping the Gym environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Finally, we will apply the preceding wrappers that we developed based on the
+    environment configuration we specify using the `parameters.JSON` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: All of the environment wrappers that we discussed previously are implemented
+    and available in the `ch6/environment/atari.py` in this book's code repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the deep Q-learner to play Atari games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have gone through several new techniques in this chapter. You deserve a pat
+    on your back for making it this far! Now starts the fun part where you can let
+    your agents train by themselves to play several Atari games and see how they are
+    progressing. What is great about our deep Q-learner is the fact that we can use
+    the same agent to train and play any of the Atari games!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'By the end of this section, you should be able to use our deep Q learning agent
+    to observe the pixels on the screen and take actions by sending the joystick commands
+    to the Atari Gym environment, just like what is shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00148.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Putting together a comprehensive deep Q-learner
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'It is time to combine all the techniques we have discussed into a comprehensive
+    implementation that makes use of all of those techniques to get maximum performance. We
+    will use the `environment.atari` module that we created in the previous section
+    with several useful Gym environment wrappers. Let''s look at the code outline
+    to understand the code''s structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will notice that some sections of the code are removed for brevity and replaced
+    with`...`, signifying that the code in that section has been folded/hidden. You can
+    find the latest version of the complete code in this book's code repository at `ch6/deep_Q_Learner.py`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hyperparameters
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following is a list of hyperparameters that our deep Q-learner uses, with
+    a brief description of what they are and the types of values they take:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Hyperparameter** | **Brief description** | **Value type** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `max_num_episodes` | Maximum number of episodes to run the agent. | Integer
+    (for example, 100,000) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `replay_memory_capacity` | Total capacity of the experience memory capacity.
+    | Integer or exponential notation (for example, 1e6) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `replay_batch_size` | Number of transitions used in a (mini) batch to update
+    the Q-function in each update iteration during experience replay. | Integer (for
+    example, 2,000) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `use_target_network` | Whether a target Q-network is to be used or not. |
+    Boolean (true/false) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `target_network_update_freq` | The number of steps after which the target
+    Q-network is updated using the main Q-network. | Integer (for example, 1,000)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `lr` | The learning rate for the deep Q-network. | float (for example, 1e-4)
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `gamma` | The discount factor for the MDP. | float (for example, 0.98) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `epsilon_max` | The maximum value of the epsilon from which the decay starts.
+    | float (for example, 1.0) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `epsilon_min` | The minimum value for epsilon to which the decay will finally
+    settle to. | float (for example, :0.05) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `seed` | The seed used to seed numpy and torch (and `torch.cuda`) to be able
+    to reproduce (to some extent) the randomness introduced by those libraries. |
+    Integer (for example, :555) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `use_cuda` | Whether or not to use CUDA based GPU if a GPU is available.
+    | Boolean (for example, : true) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `load_trained_model` | Whether or not to load a trained model if one exists
+    for this environment/problem. If this parameter is set to true but no trained
+    model is available, the model will be trained from scratch. | Boolean (for example,
+    : true) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `load_dir` | The path to the directory (including the forward slash) from
+    where the trained model should be loaded from to resume training. | String (for
+    example, : "trained_models/") |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `save_dir` | The path to a directory where the models should be saved. New
+    models are saved every time the agent achieves a new best score/reward. | string
+    (for example, : trained_models/") |'
+  prefs: []
+  type: TYPE_TB
+- en: Please refer to the `ch6/parameters.JSON` file in this book's code repository
+    for the updated list of parameters used by the agent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Launching the training process
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have now put together all the pieces for the deep Q-learner and are ready
+    to train the agent! Be sure to check out/pull/download the latest code from this
+    book's code repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can pick any environment from the list of Atari environments and train
+    the agent we developed using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the previous command, `ENV_ID` is the name/ID of the Atari Gym environment.
+    For example, if you want to train the agent on the `pong` environment with no
+    frame skip, you would run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'By default, the training logs will be saved to `./logs/DQL_{ENV}_{T}`, where `{ENV}`
+    is the name of the environment and `{T}` is the time stamp obtained when you run
+    the agent. If you start a TensorBoard instance using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs: []
+  type: TYPE_PRE
+- en: By default, our `deep_Q_learner.py` script will use the `parameters.JSON` file
+    located in the same directory as the script for reading the configurable parameter
+    values. You can override with a different parameter configuration file using the
+    command-line `--params-file` argument.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the `load_trained_model` parameter is set to `true` in the `parameters.JSON`
+    file and if a saved model for the chosen environment is available, our script
+    will try to initialize the agent with the model that it learned previously so
+    that it can resume from where it left off rather than train from scratch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing performance of your deep Q-learner in Atari games
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'It feels great, doesn''t it? You have now developed an agent that can learn
+    to play any Atari game and get better at it by itself! Once you have your agent
+    trained on any Atari game, you can use the test mode of the script to test the
+    agent''s performance based on its learning so far. You can enable the test mode
+    by using the `--test` argument in the `deep_q_learner.py` script. It is useful
+    to enable rendering of the environment, too, so that you can visually see (apart
+    from the rewards printed on the console) how the agent is performing. As an example,
+    you can test the agent in the `Seaquest` Atari game using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will see the Seaquest game window come up and the agent showing of its skills!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A couple of points to note regarding the `test` mode are the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The test mode will turn off the agent's learning routine. Therefore, the agent
+    will not learn or update itself in the test mode. This mode is only used to test
+    how a trained agent is performing. If you want to see how the agent is performing
+    while it is learning, you can just use the `--render` option without the `--test`
+    option.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The test mode assumes that a trained model for the environment you choose exists
+    in the `trained_models` folder. Otherwise, a newborn agent, without any prior
+    knowledge, will start playing the game from scratch. Also, since learning is disabled,
+    you will not see the agent improving!
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Now, it's your turn to go out, experiment, review, and compare the performance
+    of the agent we implemented in different Atari Gym environments and see how much
+    the agent can score! If you train an agent to play well in a game, you can show
+    and share it to other fellow readers by opening a pull request on this book's
+    code repository from your fork. You will be featured on the page!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Once you get comfortable using the code base we developed, you can do several
+    experiments with it. For example, you can turn off the target Q-network or increase/decrease
+    the experience memory/replay batch size by simply changing the `parameters.JSON`
+    file and comparing the performance using the very convenient TensorBoard dashboard.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We started this chapter with the grand goal of developing intelligent learning
+    agents that can achieve great scores in Atari games. We made incremental progress
+    towards it by implementing several techniques to improve upon the Q-learner that
+    we developed in the previous chapter. We first started with learning how we can
+    use a neural network to approximate the Q action-value function and made our learning
+    concrete by practically implementing a shallow neural network to solve the famous
+    Cart Pole problem. We then implemented experience memory and experience replay
+    that enables the agent to learn from (mini) randomly sampled batches of experiences
+    that helped in improving the performance by breaking the correlations between
+    the agent's interactions and increasing the sample efficiency with the batch replay
+    of the agent's prior experience. We then revisited the epsilon-greedy action selection
+    policy and implemented a decay schedule to decrease the exploration based on a
+    schedule to let the agent rely more on its learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then looked at how to use TensorBoard's logging and visualization capabilities
+    with our PyTorch-based learning agent so that we can watch the agent's training
+    progress in a simple and intuitive way. We also implemented a neat little parameter
+    manager class that enabled us to configure the hyperparameters of the agent and
+    other configuration parameters using an external easy-to-read JSON file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After we got a good baseline and the helpful utility tools implemented, we started
+    our implementation of the deep Q-learner. We started that section by implementing
+    a deep convolutional neural network in PyTorch which we then used to represent
+    our agent's Q (action-value) function. We then saw how easy it was to implement
+    the idea of using a target Q-network which is known to stabilize the agent's Q
+    learning process. We then put together our deep Q learning-based agent that can
+    learn to act based on just the raw pixel observations from a Gym environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We then laid our eyes and hands on the Atari Gym environments and looked at
+    several ways to customize the Gym environments using Gym environment wrappers.
+    We also discussed several useful wrappers for the Atari environment and specifically
+    implemented wrappers to clip the reward, preprocess the observation image frames,
+    normalize the observations over all the entire sampled observation distribution,
+    send random noop actions on reset to sample different start states, press the
+    Fire button on resets, and to step at a custom rate by frame skipping. We finally
+    saw how we can consolidate this all together into a comprehensive agent training
+    code base and train the agent on any Atari game and see the progress summary on
+    TensorBoard. We also looked at how we could save the state and resume the training
+    of the agent from a previous saved state instead of rerunning the training from
+    scratch. Towards the end, we saw the improving performance of the agent we implemented
+    and trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We hope that you had a lot of fun throughout this whole chapter. We will be
+    looking at and implementing a different algorithm in the next chapter, which can
+    be used for taking much more complex actions rather than a discrete set of button
+    presses and how we can use it to train an agent to autonomously control a car
+    in simulation!
+  prefs: []
+  type: TYPE_NORMAL

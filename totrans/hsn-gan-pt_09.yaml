@@ -1,0 +1,1192 @@
+- en: Image Restoration with GANs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Have you ever stumbled upon an image (or meme) you really love from the internet
+    that has poor quality and is blurry, and even Google couldn't help you to find
+    a high-resolution version of it? Unless you are one of the few who have spent
+    years learning math and coding, knowing exactly which fractional-order regularization
+    term in your objective equation can be solved by which numerical method, we might
+    as well give GANs a shot!
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will help you to perform image super-resolution with SRGAN to generate
+    high-resolution images from low-resolution ones and use a data prefetcher to speed
+    up data loading and increase your GPU's efficiency during training. You will also
+    learn how to implement your own convolution with several methods, including the
+    direct approach, the FFT-based method, and the im2col method. Later on, we will
+    get to see the disadvantages of vanilla GAN loss functions and how to improve
+    them by using Wasserstein loss (the Wasserstein GAN). By the end of this chapter,
+    you will have learned how to train a GAN model to perform image inpainting and
+    fill in the missing parts of an image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Image super-resolution with SRGAN
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generative image inpainting
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Image super-resolution with SRGAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Image restoration is a vast field. There are three main processes involved
+    in image restoration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Image super-resolution: Expanding an image to a higher resolution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Image deblur: Turning a blurry image into a sharp one'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Image inpainting: Filling in holes or removing watermarks in an image'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'All of these processes involve estimating pixel information from existing pixels.
+    The term **restoration** of the pixels actually refers to estimating the way they
+    should have looked. Take image super-resolution, for example: to expand the image
+    size by 2, we need to estimate 3 additional pixels to form a 2 x 2 region with
+    the current pixel. Image restoration has been studied by researchers and organizations
+    for decades and many profound mathematical methods have been developed, which
+    kind of discourages non-mathematicians from having fun with it. Now, intriguingly
+    enough, GANs are starting to gain popularity.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will introduce another member of the GAN family, SRGAN,
+    to upscale our images to a higher resolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: SRGAN (Super-Resolution Generative Adversarial Network) was proposed by Christian
+    Ledig, Lucas Theis, Ferenc Huszar, et al. in their paper, *Photo-Realistic Single
+    Image Super-Resolution Using a Generative Adversarial Network*. It is considered
+    the first method to successfully upscale images by four. Its structure is very
+    straightforward. Like many other GANs, it consists of one generator network and
+    one discriminator network. Their architectures are shown in the following sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating a generator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s take a look at the components of the generator network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3db178a0-e043-429c-b455-760cdb9fec3d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Generator architecture of SRGAN (2X)
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the preceding diagram, we upscale a 512*512 image by 2x (to 1,024*1,024)
+    as an example. The size of the input image is rather arbitrary since the design
+    of each component in the generator network is independent of the size of feature
+    maps. The upsampling block is responsible for expanding the image size by two.
+    If we want to upscale by four, we simply need to append another upsampling block
+    to the end of the existing one. Using three upsampling blocks will, of course,
+    expand the image size by eight.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the generator network, the high-level features are extracted by the five
+    residual blocks, which are combined with the less-processed detail information
+    from a raw image (via the long skip-connection crossing over the residual blocks).
+    The combined feature map is expanded to ![](img/81499972-4db1-4ada-88ff-f8000c4ade9b.png) channels
+    (in which ![](img/1ca46ed6-0d0c-4e42-9ef6-47a8ade74cb3.png) stands for scale factor
+    and ![](img/9ef4e851-f96d-448c-b8f4-a5059b456f83.png) stands for the number of
+    channels in the residual blocks) with the size of ![](img/59d14244-4a4f-43fc-875b-5dcb8ce7c586.png).
+    The upsampling block transforms this ![](img/654d971b-e31f-47fa-ace9-83b19ffe87d1.png) `Tensor`
+    (![](img/5e6bfa9e-638f-4e34-8add-45fdb836d404.png) stands for batch size) into
+    ![](img/939adbda-2fba-488f-93a1-96ec6dd93a77.png). This is done by **sub**-**pixel
+    convolution**, which was proposed by Wenzhe Shi, Jose Caballero, Ferenc Huszár,
+    et al. in their paper, *Real-Time Single Image and Video Super-Resolution Using
+    an Efficient Sub-Pixel Convolutional Neural Network*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An example of sub-pixel convolution is shown in the following. For every ![](img/8505f9ca-374c-4a1c-acbd-4e19dceadf6e.png) channel
+    in the low-resolution feature map, each channel is only responsible for one pixel
+    inside the ![](img/4304736c-ad4d-4c86-8d77-d06fdba0c801.png) block in the high-resolution
+    output. A big advantage of this approach is that it only performs ![](img/97145156-a1da-44aa-8a56-28ded7205372.png) of
+    the convolution operations compared to the vanilla convolution layer, which makes
+    it easier and faster to train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In PyTorch, the upscaling step in sub-pixel convolution can be done by the `nn.PixelShuffle`
+    layer, which is essentially reshaping the input tensor. You can check out the
+    source code in C++ here, [pytorch/aten/src/ATen/native/PixelShuffle.cpp](https://github.com/pytorch/pytorch/blob/517c7c98610402e2746586c78987c64c28e024aa/aten/src/ATen/native/PixelShuffle.cpp),
+    to see how the reshaping is performed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: How do we check out the source code of a PyTorch operation? It is easy when
+    using VS Code. We can just keep repeatedly double-clicking the class name and
+    press *F12* until we reach the class definition inside the source tree of the `torch` module
+    under the Python environment. We then look for what other method is called inside
+    this class (normally, we can find it in `self.forward`), which will lead us to
+    its C++ implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are the steps to reach the C++ source code for implementation of `nn.PixelShuffle`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Double-click the name, `PixelShuffle`, and press *F12*. It leads us to this
+    line in `site-packages/torch/nn/modules/__init__.py`*:*
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: Double-clicking and pressing *F12* on `PixelShuffle` inside this line brings
+    us to the class definition of `PixelShuffle` in `site-packages/torch/nn/modules/pixelshuffle.py`.
+    Inside its `forward` method, we can see that `F.pixel_shuffle` is called.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Again, double-click and press *F12* on `pixel_shuffle`. We reach a snippet
+    like this in `site-packages/torch/nn/functional.py`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is where the C++ part of the code is registered as a Python object in
+    PyTorch. The C++ counterpart of a PyTorch operation is sometimes also called from
+    the `torch._C._nn` module. Hovering the mouse over `torch.pixel_shuffle` will
+    show us `pixel_shuffle(self: Tensor, upscale_factor: int) -> Tensor`, depending
+    on what extensions are used in VS Code. Unfortunately, we cannot find anything
+    useful by pressing *F12* on it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To find the C++ implementation of this `pixel_shuffle` function, we can simply
+    search for the `pixel_shuffle` keyword inside the PyTorch repository on GitHub.
+    If you have cloned the source code of PyTorch locally, you can type in the following
+    command in the Terminal to search for a keyword in the `*.cpp` files:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Hence, we can find the function definition, `Tensor pixel_shuffle(const Tensor&
+    self, int64_t upscale_factor)`, inside `pytorch/aten/src/ATen/native/PixelShuffle.cpp`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If you are interested in how PyTorch was made and how C++ and Python are working
+    together (on CPU and GPU) to deliver such a flexible and easy-to-use interface,
+    you can check out this lone essay written by one of the developers of PyTorch,
+    Edward Z. Yang: [http://blog.ezyang.com/2019/05/pytorch-internals](http://blog.ezyang.com/2019/05/pytorch-internals).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s take a look at the code for defining the generator network. Our
+    implementation of SRGAN is mostly based on this repository: [https://github.com/leftthomas/SRGAN](https://github.com/leftthomas/SRGAN).
+    The full working source code for PyTorch 1.3 is also available under the code
+    repository for this chapter. We''ll start by creating a new Python file. We''ll
+    call it `srgan.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define the residual block (after, of course, importing the necessary modules).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here,** Parametric ReLU** (**PReLU**) is used as an activation function. PReLU
+    is very similar to LeakyReLU, except that the slope factor for negative values
+    is a learnable parameter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Define the upsampling block:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we use one `nn.Conv2d` layer and one `nn.PixelShuffle` layer to perform
+    the sub-pixel convolution, for reshaping the low-resolution feature map to high-resolution.
+    It is a recommended method by the PyTorch official example: [https://github.com/pytorch/examples/blob/master/super_resolution/model.py](https://github.com/pytorch/examples/blob/master/super_resolution/model.py).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Define the generator network with the residual and upsampling blocks:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: Don't forget the long skip-connection at the end (`self.block8(block1 + block7)`).
+    Finally, the output of the generator network is scaled to [0,1] from the range
+    of [-1,1] by a tanh activation function. It is because the pixel values of the
+    training images lie within the range of [0,1] and we should make it comfortable
+    for the discriminator network to distinguish the differences between real and
+    fake images when we put their values in the same range.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We haven't talked about how we should watch out for the trap of value range
+    when training GANs. In the previous chapters, we pretty much always scale the
+    input images to [-1,1] with `transforms.Normalize((0.5,), (0.5,))` during the
+    pre-processing of training data. Since the output of `torch.tanh` is also [-1,1],
+    there's no need to rescale the generated samples before feeding them to the discriminator
+    network or loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating the discriminator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The architecture of the discriminator network is shown in the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/01f2476b-d501-4e74-9b1a-f3b6ded184da.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Discriminator architecture of SRGAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: The discriminator of SRGAN takes a VGG-like structure that gradually decreases
+    the sizes of feature maps and expands the depth channel, in the hope that each
+    layer contains a similar amount of information. Unlike in the vanilla VGG networks,
+    the discriminator uses a pooling layer to transform the last VGG's feature map
+    to 1 x 1\. The final output of the discriminator network is a single value, which
+    indicates whether the input image is high-resolution or low-resolution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, we give the definition code of the discriminator network of SRGAN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Defining training loss
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The loss of SRGAN consists of 4 parts. Here, we let ![](img/6cab3c8c-90a2-4b60-899e-3b63ac27047d.png) denote
+    the low-resolution (**LR**) image, ![](img/eff90a60-1fc9-4b54-a0ad-661704d6fd6d.png) denote
+    the super-resolution (**SR**) image given by the generator, and ![](img/962d1574-8041-4f04-9ddf-87bc2c41a8e8.png) denote
+    the real high-resolution (**HR**) image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adversarial loss ![](img/f14c42ee-3811-45da-9c6d-0191f7138677.png), as similar
+    to previous GAN models
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Pixel-wise content loss ![](img/44fab683-47ff-459e-b8cb-d3041cfbe389.png), which
+    is the MSE loss between the SR and HR images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: VGG loss ![](img/a052e9a9-9576-4702-a1bd-78d0be41095b.png), which is the MSE
+    loss between the last feature maps of a pre-trained VGG network from the SR and
+    HR images
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Regularization loss ![](img/ab9576be-b21c-418e-a2d4-3be8b7662689.png), which
+    is the sum of average L2-norm of pixel gradients in horizontal and vertical directions
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The final training loss is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ac5a827b-7e94-48fa-a3c3-31d0fe977824.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: It is called **perceptual loss**, which means that it takes both pixel-wise
+    similarities and high-level features into consideration when judging the quality
+    of the SR images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that the L2-norm regularization term in the perceptual loss will actually
+    make images blurry since it adds strong restraints to the pixel gradients. If
+    you feel puzzled by the assertion, imagine a normal distribution in your head,
+    in which the x axis represents the pixel gradient and the *y* axis tells us how
+    likely a pixel gradient value would appear in the image. In a normal distribution, ![](img/26c2a7f5-c88b-45d3-ab6a-28d043c2f699.png),
+    most of the elements are very close to the *y* axis, which means that most of
+    the pixels have very small gradients. It indicates that the changes between the
+    neighboring pixels are mostly smooth. Therefore, we don't want the regularization
+    term to dominate the final loss. In fact, the regularization term is deleted from
+    the updated version of the SRGAN paper. You can safely get rid of it as well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is the definition code of the perceptual `loss` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And the regularization term is calculated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we need to modify the existing `train.py` file to support our new functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: The training script provided by [https://github.com/leftthomas/SRGAN](https://github.com/leftthomas/SRGAN)
+    works fine with a few other minor fixes by replacing every `.data[0]` instance
+    with `.item()`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training SRGAN to generate high-resolution images
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Of course, we need to have some data to work with. We simply need to download
+    the training images from the links in the `README.md` file. You can always use
+    any image collection you like since the training of SRGAN only requires low-resolution
+    images (which can be easily acquired by resizing to smaller scales) besides the
+    original images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Create a folder named `data` and place the training images into a folder called
+    `DIV2K_train_HR` and the valid images into `DIV2K_valid_HR`. Next, create a folder
+    named `epochs` to hold the epoch data. Finally, create a folder named `training_results`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To train SRGAN, execute the following command in a Terminal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: The image collection provided by `leftthomas` is sampled from the VOC2012 dataset
+    and contains 16,700 images. With a batch size of 64, it takes about 6.6 hours
+    to train for 100 epochs on a GTX 1080Ti graphics card. The GPU memory usage is
+    about 6433 MB with a batch size of 88 and 7509 MB when the batch size is 96.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, during the training of SRGAN, the GPU usage lies below 10% most of
+    the time (observed via `nvtop`), which indicates that the loading and pre-processing
+    of data take up too much time. This issue can be solved by two different solutions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Putting the dataset on an SSD (preferably, via an NVMe interface)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using a data prefetcher to preload the data into GPU memory before the next
+    iteration begins
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Here, we will talk about how to carry out the second solution. The code for
+    a data prefetcher is borrowed from the ImageNet example of NVIDIA''s [apex](https://github.com/NVIDIA/apex)
+    project: [https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py](https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py).
+    Follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Define the data prefetcher somewhere in your source tree (for example, the `data_utils.py`
+    file in SRGAN):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Use the data `prefetcher` to load samples during training:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here, the `tqdm` module is for printing the progress bar in the Terminal during
+    training and can be treated as its original iterable object. In the training of
+    SRGAN, the data `prefetcher` makes a huge difference in GPU efficiency, as shown
+    here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/4a89ff61-0dc8-460e-8157-c23db2873be4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: GPU usage before and after using prefetcher to load images into GPU memory
+  prefs: []
+  type: TYPE_NORMAL
+- en: The data prefetcher can be adjusted to another form of data, which is also included
+    in the source code under the repository for this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some super-resolution results are shown in the following. We can see that SRGAN
+    is doing a good job sharpening the low-resolution images. But we can also notice
+    that it has its limits when dealing with sharp edges between large color blobs
+    (for example, the rocks in the first image and the trees in the third image):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/6c70cff2-7640-4692-afbf-cae3f13a02b6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Super-resolution results by SRGAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generative image inpainting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We know that GANs, if trained properly, are capable of learning the latent distribution
+    of data and using that information to create new samples. This extraordinary ability
+    of GANs makes them perfect for applications such as image inpainting, which is
+    filling the missing part in images with plausible pixels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will learn how to train a GAN model to perform image inpainting,
+    based on the work of Jiahui Yu, Zhe Lin, Jimei Yang, et. al. in their paper, *Generative
+    Image Inpainting with Contextual Attention*. Although an updated version of their
+    project has been published ([http://jiahuiyu.com/deepfill2](http://jiahuiyu.com/deepfill2)),
+    the source code is not yet open source at the time of writing. Therefore, we should
+    try to implement the model in PyTorch based on the source code of its previous
+    version for TensorFlow ([https://github.com/JiahuiYu/generative_inpainting](https://github.com/JiahuiYu/generative_inpainting)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before we starting working on addressing image inpainting with GANs, there are
+    a few fundamental concepts to understand as they are crucial to comprehend the
+    method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Efficient convolution – from im2col to nn.Unfold
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: If you have previously been curious enough to try implementing convolutional
+    neural networks on your own (either with Python or C/C++), you must know the most
+    painful part of work is the backpropagation of gradients, and the most time-consuming
+    part is the convolutions (assuming that you are implementing a plain CNN such
+    as LeNet).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several ways to perform the convolution in your code (apart from
+    directly using deep learning tools such as PyTorch):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Calculate the convolution directly as per definition, which is usually the slowest
+    way.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use **Fast Fourier Transform** (**FFT**), which is not ideal for CNNs, since
+    the sizes of kernels are often way too small compared to the images.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Treat the convolution as matrix multiplication (in other words, **General Matrix
+    Multiply** or **GeMM**) using **im2col**. This is the most common method used
+    by numerous software and tools and is a lot faster.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Use the **Winograd** method, which is faster than GeMM under certain circumstances.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In this section, we will only talk about the first three methods. If you want
+    to learn more about the Winograd method, feel free to check out this project, [https://github.com/andravin/wincnn](https://github.com/andravin/wincnn),
+    and this paper, *Fast Algorithms for Convolutional Neural Networks,* by Andrew
+    Lavin and Scott Gray. Here, we will give Python code for 2D convolution with different
+    methods.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before proceeding, make sure you have installed the prerequisites by typing
+    the following command in the Terminal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, let''s follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Directly calculate the convolution. Note that all of the following convolution
+    implementations have a stride size of `1` and a padding size of `0`, which means
+    that the output size is ![](img/96be635b-77a1-4776-ac2a-76adbed443f3.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we said before, directly calculating the convolution as per definition is
+    extremely slow. Here is the elapsed time when convolving a 512 x 512 image with
+    a 5 x 5 kernel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also need to compare its result against a baseline (for example, `scipy.signal.convolve2d`)
+    so that we''ll know the computation is correct:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now we know our calculation is correct, the problem is how to do it faster.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Calculate the convolution with FFT:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'According to this formula, we can get the result of convolution by performing
+    two Fourier transforms and one inverse Fourier transform:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/5bdfc020-1d58-4ed2-be5e-0ace6eb3951f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Since we are dealing with digital images, we need to perform a **Discrete Fourier
+    Transform** (**DFT**), which can be calculated extremely fast with a **Fast Fourier
+    Transform** (**FFT**) method provided by NumPy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here are the elapsed time and calculation error of an FFT-based convolution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: We can see that convolution by FFT is a lot faster than the direct approach
+    and costs almost the same amount of time as `scipy.signal.convolve2d`. Can we
+    do it even faster?
+  prefs: []
+  type: TYPE_NORMAL
+- en: Calculate the convolution with im2col.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Let's take a pause and think about the first 2 methods. The direct approach
+    involves 4 `for` loops and a lot of random access to the matrix elements. The
+    FFT approach turns convolution into matrix multiplication but it requires 2 FFTs
+    and 1 inverse FFT. We know low-level computational tools such as BLAS are very
+    good at matrix multiplication. How about we treat the original convolution as
+    matrix multiplication?
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Take the convolution between a 3 x 3 image and a 2 x 2 kernel, for example
+    (with a stride size of 1 and padding size of 0):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/92a2131f-b25c-4907-95e2-64ef1c12efbb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Convolution between image and 2 x 2 kernel
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can stretch the input image into a very long vector (1 x 9), and transform
+    the convolution kernel into a very big matrix (9 x 4) so that our output will
+    have the size of 1 x 4 as expected. Of course, we also need to arrange the elements
+    in the big matrix according to the computational process within the convolution
+    (for example, ![](img/3376f0ae-927c-4b6e-8b39-895aeb02cffc.png)), as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0bb7902b-7f1c-4709-9e81-7f68195cb15f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Convolution via sparse matrix multiplication
+  prefs: []
+  type: TYPE_NORMAL
+- en: This way, we need to calculate the matrix multiplication between a very long
+    vector and a large sparse matrix (in which many elements are zeros). Direct multiplication
+    can be very inefficient (both in terms of time and memory). Even though we can
+    speed up sparse matrix multiplication with some numerical algorithms, we won't
+    go into the details of this approach as there is a more efficient way to turn
+    the convolution into matrix multiplication.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparing sparse matrix multiplication to a fully-connected layer (`nn.Linear`)
+    with the same input and output dimensions (also with the same size weight matrix),
+    we can see that the convolution requires much fewer parameters than a fully connected
+    layer (because there are many zeros in the weight matrix and the elements are
+    mostly reusable). This makes CNNs easier to train and more robust to overfitting
+    than MLP, which is also one of the reasons why CNNs have become more popular in
+    recent years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Considering the size of the kernel is often much smaller than the image, we
+    will try stretching the kernel into a vector and rearranging the elements from
+    the input image to match the kernel vector''s dimensions, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/5bcb163f-2a30-48ae-af02-f158021d4d80.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Convolution via im2col
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, we can see that we only need to perform dense matrix multiplication with
+    much smaller dimensions. The transformation we perform on the input image is called
+    **im2col**. The result of im2col is easy to comprehend: the elements in one row
+    represent the elements of the input image needed to perform a convolution at a
+    given location (this is known as the **sliding window**) and the ![](img/5188407c-7ab5-49b5-800c-803653717f3e.png)^(th)
+    row corresponds to the ![](img/e453fb88-6f44-4e79-81cc-a039ee1ae3c3.png)^(th)
+    output element (![](img/c51ff68a-833c-4f38-8a94-d4df04ed42f1.png)).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here is the Python implementation of `im2col`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Here are the elapsed time and the calculation error:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Treating the convolution as matrix multiplication gains the fastest computational
+    speed among all three methods. It achieves a more than 260x speedup in calculation
+    time compared to the direct approach. Another advantage of im2col is that it is
+    completely compatible with CNNs. In CNNs, the convolutions are often performed
+    in channels, which means that we need to calculate the sum of a group of individual
+    convolutions. For example, say our input feature map has the size of ![](img/e3cc76c2-39b1-42ba-8862-9e8226738e85.png) and
+    the weight tensor is ![](img/11319710-4744-479e-ba7f-6e454293fb93.png). For each
+    neuron in the ![](img/9b613ad3-62bf-4e90-a1e7-e24db54f10a6.png) channels, it is
+    the sum of ![](img/9ef11c64-d2f1-4d0d-be06-2f933d34d3c9.png) times the convolution
+    operations between the image ![](img/5d62c5f4-0362-4056-a614-e1d205fa4e2f.png) and
+    kernel ![](img/ce4965b8-e86a-438a-bccb-46d81a8283f8.png). With im2col, the convolution
+    result of a sliding window at a given location is represented by the multiplication
+    of two vectors (because the convolution itself is the summation of element-wise
+    multiplication). We can apply this pattern by filling all elements inside the
+    same sliding window from all ![](img/107a2bc9-3f69-4c16-bf4e-c39ce6c8d217.png) channels
+    into one long vector so that the output pixel value in one of the ![](img/5b943155-3a29-48f3-be2b-f46718b744e8.png) channels
+    can be obtained via a single vector multiplication. If you wish to learn more
+    about how channel-wise convolution can be performed in Python, check out this
+    Stack Overflow post: [https://stackoverflow.com/q/30109068/3829845](https://stackoverflow.com/q/30109068/3829845).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Turning 4D tensor convolution into 3D tensor multiplication is where `nn.Unfold`
+    comes in handy. Here is a code snippet showing how to explicitly turning convolution
+    into matrix multiplication with PyTorch (based on the official document at [https://pytorch.org/docs/stable/nn.html?highlight=unfold#torch.nn.Unfold](https://pytorch.org/docs/stable/nn.html?highlight=unfold#torch.nn.Unfold)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output messages are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: It is delightful to see that our Python im2col implementation is even faster
+    than PyTorch. We hope this will encourage you to build your own deep learning
+    toolbox!
+  prefs: []
+  type: TYPE_NORMAL
+- en: WGAN – understanding the Wasserstein distance
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: GANs have been known to be hard to train, especially if you have tried to build
+    one from scratch. (Of course, we hope that, after reading this book, training
+    GANs can be a much easier job for you!) Over the past chapters, we have learned
+    several different model design and training techniques that come from many excellent
+    researchers' experience. In this section, we will talk about how to use a better
+    distance measure to improve the training of GANs, namely, the Wasserstein GAN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The **Wasserstein GAN** (**WGAN**) was proposed by Martin Arjovsky, Soumith
+    Chintala, and Léon Bottou in their paper, *Wasserstein GAN*. Martin Arjovsky and
+    Léon Bottou also laid the groundwork in an earlier paper, *Towards Principled
+    Methods for Training Generative Adversarial Networks*. To fully comprehend these
+    papers, you are expected to have fundamental mathematical knowledge in probability
+    theory, measure theory, and functional analysis. We will try our best to keep
+    the mathematical formulae to a minimum and help you to understand the concept
+    of WGAN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Analyzing the problems with vanilla GAN loss
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s go over the commonly used loss functions for GANs (which have already
+    appeared in previous chapters):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/52f2ad13-22c3-4712-a70a-da8eb1f517a3.png), which is the vanilla form
+    of GAN loss'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/22b30b86-c6a2-4074-a518-dcd903743882.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/cf42caa2-8878-411f-b1c6-4bb9d0df426a.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: 'The experimental results in previous chapters have already shown that these
+    loss functions work well in several applications. However, let''s dig deep into
+    these functions and see what could go wrong when they don''t work so well:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Step 1: **Problems with the first loss function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Assume that the generator network is trained and we need to find an optimal
+    discriminator network D. We have the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/bf59d642-7d90-4bd3-8154-63bc4616c575.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this formula, ![](img/fc3813e8-466e-4df5-910a-9f447a29a343.png) represents
+    the distribution of real data and ![](img/f1e2f683-c676-4904-b6ef-48dcb7f914d7.png) represents
+    the distribution of fake (generated) data. ![](img/16424b9a-9c6a-4b19-b478-91904b8a1d54.png) is
+    the real data when calculating ![](img/904c8fdb-9e94-4e7b-b4e2-bba4d7282bba.png) and
+    the fake data when calculating ![](img/a200b222-ed26-43e5-8245-1ea9d09e835e.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: We admit that the notation of ![](img/3f39680e-19c7-47a1-bb81-706542f02142.png) here
+    is a little bit confusing. However, if we consider that all kinds of data exists
+    in the same data space (for example, all possible 256 x 256 images with three
+    8-bit channels), and some part of the space belongs to the real data while some
+    part belonging to the generated data. The training of GANs is essentially making
+    the *fake* part overlap with the *real* part, hopefully, to become the same as
+    the *real* part.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To find the minimum of the formula, we let its derivatives regarding *D* to
+    be zero and get the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/528f1a1a-352f-4f82-aef0-3840bc58007b.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Therefore, the first loss function becomes (when D is optimal) as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e4d427ab-a2b3-4b3d-a8f8-d96d64432e2e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, ![](img/30baa216-3b31-460a-b017-87314a55ca54.png) is the** Jensen–Shannon
+    divergence** (**JS divergence**), which is the symmetric version of the **Kullback–Leibler
+    divergence** (**KL divergence**):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cf591939-e5e5-4731-a80d-7f0520c68671.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The Kullback–Leibler divergence is usually used to describe the distance between
+    two distributions. It equals the **cross entropy** of ![](img/5eadcab3-c338-471a-9abb-04e9f716d208.png) and
+    ![](img/3fed48e0-f327-4a28-baae-fb1edef2468b.png) minus the **entropy** of ![](img/7a5901b0-0b49-4116-88c0-2babbb749b24.png),
+    which is why KL divergence is also called **relative entropy**. Keep in mind that
+    KL divergence is not symmetric, because ![](img/3f81b8f7-6978-45ff-9842-54859dc1c28c.png) and
+    ![](img/21024c0c-5704-4fc9-8a66-b522d620a1dd.png) makes ![](img/5fc6767f-3065-4ba7-9c7e-64e9e6b5c8c4.png) but
+    ![](img/d2acf37c-455a-41e7-bfe6-9c838059e4dd.png) and ![](img/cac29847-b9df-423d-8625-3c1dde691a94.png) makes
+    ![](img/601f879d-e4eb-4179-ba9d-0b60517a6edc.png). Therefore, KL divergence is
+    strictly not a distance metric. However, the Jensen–Shannon divergence is symmetric
+    and can be used as a distance metric.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you have used TensorBoard to visualize the embedding space learned by a neural
+    network, you may have found a useful technique called **t-SNE** that can wonderfully
+    illustrate high-dimensional data in a 2- or 3-dimensional graph (in a much clearer
+    way than PCA). In t-SNE, a revised version of KL divergence is used to map the
+    high-dimension data to low-dimension. You may check out this blog to learn more
+    about t-SNE: [https://distill.pub/2016/misread-tsne](https://distill.pub/2016/misread-tsne).
+    Also, this Google Techtalk video can be very helpful to understand KL divergence
+    and t-SNE: [https://www.youtube.com/watch?v=RJVL80Gg3lA](https://www.youtube.com/watch?v=RJVL80Gg3lA).
+  prefs: []
+  type: TYPE_NORMAL
+- en: A problem with JS divergence is that when ![](img/d0c11a95-82c0-4d34-be8a-3197a0b3b3a4.png) and ![](img/5de18367-97c1-4207-893a-0e45f84da8a9.png) are
+    apart from each other (with no or little overlapping part), its value remains ![](img/b23d43ea-ff17-436a-8ff1-9fc0c23c5024.png) no
+    matter how far away ![](img/98127593-c0b8-4550-89e4-219ea61bfcc7.png) and ![](img/81bc279b-7b52-430c-80a6-78186a911420.png) are
+    from each other. It's rather reasonable to assume that ![](img/0378a6d1-cbb9-48e8-9196-2b1d39473fff.png) and ![](img/8382d783-08c9-4306-b399-22d02229f4f2.png) are
+    no way near each other at the beginning of training (since the generator is randomly
+    initialized and ![](img/98ddb0b2-65d2-44a8-b3ed-e058fa7d237a.png) could be anywhere
+    in the data space). A nearly constant loss is hardly giving useful information
+    to the derivatives when the discriminator is optimal. Therefore, when using the
+    first form of loss in GANs, a well-trained discriminator will stop the generator
+    from improving itself (**gradient vanishing**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: The gradient vanishing problem in GANs can sometimes be solved by adding annealing
+    noises to the inputs of the discriminator during training. But we will talk about
+    a more principled method later.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Step 2:** The problems with the other two loss functions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s take the third loss for example. It can be written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/63d3f953-fbc9-4a72-8a7c-63b4842b8ed8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this formula, the last two terms are irrelevant to the generator. The first
+    two terms are, however, aiming for totally opposite objectives (minimizing the
+    KL divergence while maximizing the JS divergence). This causes the training to
+    be very unstable. On the other hand, the employment of KL divergence can lead
+    to **mode collapse**. Failing to generate realistic samples is severely penalized
+    (![](img/36851d77-b8bf-400a-846b-3a8e2688945e.png) when ![](img/89ed9c93-32c3-45bf-8812-6a64a2f9ad7d.png) and
+    ![](img/012144d4-5761-4862-875b-cb1bf1e3e47d.png)) but generating only a few kinds
+    of realistic samples is not penalized (![](img/45c42b2b-3469-4c54-9268-1f09bfe047d7.png) when
+    ![](img/31903b68-5617-4344-b713-4ffb0b16e60f.png) and ![](img/9ce2fd9b-df3c-499b-8f6c-139c0c71b15a.png)).
+    This makes the generator more prone to generate samples with less variety.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The advantages of Wasserstein distance
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Wasserstein distance (also called **Earth Mover''s Distance** or **EMD**) is
+    defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3cab7073-2d57-4c28-a044-e06f1d2bd345.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Don''t worry about the preceding equation if you find it hard to understand.
+    It essentially describes the least distance between two variables sampled from
+    all possible joint distributions. In plain words, it is the minimum cost of moving
+    one pile of dirt (in a shape of certain distribution) to form a different pile
+    (another distribution), as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/04dbf900-a69e-42d4-98a9-808d2c8f1d01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The Wasserstein distance: optimal transportation between two piles (image retrieved
+    from https://vincentherrmann.github.io/blog/wasserstein)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Compared to JS divergence, the Wasserstein distance can properly describe the
+    distance between real data and fake data even when they are far apart from each
+    other. Therefore, the derivatives can be correctly calculated to update the generator
+    network when the discriminator is good.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To find the most suitable function, *f*, we can simply train a neural network
+    to estimate it (luckily, we are already training a discriminator network). An
+    important condition for the second line of the equation to hold is that all functions, *f*, are **Lipschitz
+    continuous**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f80f94be-bdbf-4083-90d7-e232f219ffd8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Lipschitz continuity is easy to achieve in neural networks by clipping any gradient
+    value that's larger than *K* to be *K* (**gradient clipping**), or simply clipping
+    the weight values to a constant value (**weight clipping**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Remember the simple GAN written in Python in [Chapter 1](66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml),
+    *Generative Adversarial Networks Fundamentals*? We applied both gradient clipping
+    and weight clipping to ensure stable training. If anyone asks why are you clipping
+    (clamping) the tensors in your GANs, you can give a better answer than *gradient
+    explosion* now.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, the Wasserstein loss is written as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dd4107f0-5c0d-427a-b250-4f83ab6b8bf0.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'However, there are also some issues with gradient clipping when training a
+    very deep neural network. First, if the gradients/weights are clamped to [-c,
+    c] too often, they tend to stick with -c or c by the end of training while only
+    a few parameters have values between the two ends. Second, clamping the gradients
+    to a larger or smaller range could cause "invisible" gradient vanishing or explosion.
+    We call it "invisible" because even though the gradient values are extremely large,
+    they are eventually clamped to [-c, c]. But it will be a complete waste of computational
+    resources. Therefore, Ishaan Gulrajani, Faruk Ahmed, Martin Arjovsky, et. al.
+    proposed to add a penalty term to the discriminator loss, namely, **gradient penalty**,
+    in their paper, *Improved Training of Wasserstein GANs*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/5d40bb64-e05e-4b6c-b766-fef866757e64.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The penalty gradient is calculated with regards to a random interpolation between
+    a pair of real data and fake data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In a nutshell, to use Wasserstein loss, you''ll need to do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Get rid of the `Sigmoid` function at the last layer of the discriminator network.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Don't apply the `log` function to the results when calculating the loss.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the gradient penalty (or simply clip the weights in shallow neural networks).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use RMSprop instead of Momentum or Adam to train your networks.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training GAN for image inpainting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now, it's finally time to train a new GAN model for image inpainting. You can
+    get the code for the original PyTorch implementation that comes from [https://github.com/DAA233/generative-inpainting-pytorch](https://github.com/DAA233/generative-inpainting-pytorch).
+    This will be a challenge for you to modify the original code to implement your
+    own. Since you already have the `CelebA` dataset, use it as a training dataset
+    for the experiment in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model design for image inpainting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The GAN model for image inpainting consists of two generator networks (a coarse
+    generator and a refinement generator) and two discriminator networks (a local
+    discriminator and a global discriminator), as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d99696e9-4708-4efc-a8e5-705eaa9e1db1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'GAN model for image inpainting: Image x represents the input image; x[1] and x[2]
+    represent generated images by coarse and refinement generators, respectively; x[r ]represents
+    the original complete image; and m represents the mask for missing part in the
+    image.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The generator model uses two-stage coarse-to-fine architecture. The coarse generator
+    is a 17-layer encoder-decoder CNN and dilated convolutions are used in the middle
+    to expand the receptive fields. Assume that the size of the input image (*x*)
+    is 3 x2 56 x 256, then the output (*x[1]*) of the coarse generator is also 3 x
+    256 x 256.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The refinement generator has two branches. One is a 10-layer CNN and the other
+    is called a **Contextual Attention** branch, which is responsible for finding
+    proper reference location in another part of the image to generate the correct
+    pixels for filling the hole. The initial input image, *x*; the coarse output, *x[1]*;
+    and the binary mask that marks which pixels are missing in *x* are fed into the
+    refinement generator together and mapped to a [128, 64, 64] tensor (through 6
+    convolution layers) before entering the Contextual Attention branch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The calculation process within the Contextual Attention branch is shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/eacf6e76-16cc-41f1-9f44-a7a0a45beed3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The calculation of Contextual Attention: Image b is the background, f is the
+    foreground, and m is the mask.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We are not going into details about Contextual Attention due to the limited
+    length of content. The important steps are as illustrated in previous diagram.
+    Since we need to find the most relevant parts between the foreground (the pixels
+    to be filled) and the background (the remaining pixels outside the masked hole),
+    a pixel-wise similarity between every pair of image patches from the foreground
+    and background images is calculated. Calculating all possible pairs one-by-one
+    is apparently inefficient. Therefore, `nn.Unfold` is used to create a sliding-window
+    (with a window size of 3 x 3) versions of the foreground and background images
+    (*x[i]* and *w[i]*). To reduce the GPU memory costs, the images are resized to
+    [128,32,32]. Therefore, there are *32*32=1,024* sliding windows in both images,
+    and the convolution between *x**[i]* and *w**[i]* will tell us the pixel similarity
+    in each pair of image patches. The location pair with the highest similarity indicates
+    where the attention is focused when reconstructing the foreground patch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To ensure the robustness against slight shifts of attention, the attention
+    value of each pixel is averaged along horizontal and vertical axes, which is why
+    *y[i]* is convolved with identity matrices twice. The attention scores are calculated
+    via a scaled softmax function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f15d378f-e45d-46cb-b243-2ff434be0eb7.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Finally, a transposed convolution is performed on *y[i]* with the unfold form
+    of the original background as kernel to reconstruct the missing pixels.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both of the outputs of the CNN branch and CA branch have a size of [128,64,64],
+    which are concatenated into one wide tensor of [256,64,64]. And another 7 convolution
+    layers are used to gradually map the reconstructed feature maps to the [3,256,256]
+    image.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The pixels values in the output images from both coarse and refinement generators
+    are clamped to [-1,1] to suit the discriminator networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two discriminator networks (local discriminator and global discriminator) with
+    similar structures are used to evaluate the quality of generated images. They
+    both have 4 convolution layers and 1 fully-connected layer. The only difference
+    is that the local discriminator is used to evaluate the cropped image patches
+    (in other words, the missing pixels in the original images, with a size of 3 x
+    128 x 128) and the global discriminator is used to evaluate the whole images (3
+    x 256 x 256).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation of Wasserstein loss
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here, we let  ![](img/dc14ad97-5552-4f01-9340-8e8075f7fae8.png) and ![](img/0c63a321-e277-4d4f-8867-65223199e7e2.png) (outputs
+    of local discriminator) represent the fidelity confidence of the cropped images ![](img/3a0998c5-91fb-4991-84d2-a900ffcb29c3.png) and
+    ![](img/1150b1d1-c918-4418-b4e3-0d5615c53361.png), respectively. We let ![](img/4dc1ae97-893c-45f6-b786-81f01a41edfb.png) and
+    ![](img/636512fe-b458-4fb3-9313-25a12e31c261.png)(outputs of global discriminator) represent
+    the fidelity confidence of whole images ![](img/f57afb66-578d-46b8-8102-1b236a062c3c.png) and
+    ![](img/6ef0df8f-9696-4fbc-a390-a4c7e8cad28e.png), respectively. Then, the discriminator''s Wasserstein
+    loss is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/094b69de-2fb7-471f-a887-f92455e13dd9.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The gradient penalty term for the discriminator is given as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/abf3027d-9c6f-4a78-afca-22e07d6284fc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The generator''s Wasserstein loss is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ba2610ff-05a1-41b7-b56f-3b5bf23db3a1.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The L1 reconstruction loss for the missing pixels is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/020acbfc-bafb-4a26-95bb-a44671373184.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The L1 reconstruction loss for the remaining pixels is as follows (apparently,
+    we don''t want to change these pixels):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2f63ae6d-3b03-45af-bccd-e6c5cb0728a0.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, the discriminator loss is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7a6c1484-f311-4560-87ee-2e00edef0635.png).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The generator loss is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/61261909-dd9c-4a93-98d4-b34fc9843c7c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: With a batch size of 24, the training of the inpainting GAN consumes about 10,097
+    MB GPU memory and costs about 64 hours of training (180k iterations) before generating
+    some decent results. Here are some of the inpainting results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b3cebe1c-228b-432d-bc6b-2c7c6f2ab2b2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Image inpainting results by GAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, we have pretty much learned most of the stuff we need to generate images
+    with GANs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We've gotten a tremendous amount of practical and theoretical knowledge in this
+    chapter, from learning about image deblurring and image resolution enhancement,
+    and from FFA algorithms to implementing the Wasserstein loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will work on training our GANs to break other models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Useful reading list and references
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Ledig C, Theis L, Huszar F, et. al. (2017). *Photo-Realistic Single Image Super-Resolution
+    Using a Generative Adversarial Network*. CVPR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Shi W, Caballero J, Huszár F, et. al. (2016). *Real-Time Single Image and Video
+    Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network*. CVPR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Yang E. (May, 2019). *PyTorch internals*. Retrieved from [http://blog.ezyang.com/2019/05/pytorch-internals](http://blog.ezyang.com/2019/05/pytorch-internals).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Yu J, Lin Z, Yang J, et, al.. (2018). *Generative Image Inpainting with Contextual
+    Attention*. CVPR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Lavin A, Gray S. (2016). *Fast Algorithms for Convolutional Neural Networks*.
+    CVPR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Warden P. (April 20, 2015). *Why GEMM is at the heart of deep learning*. Retrieved
+    from [https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning](https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Arjovsky M, Bottou L. (2017). *Towards Principled Methods for Training Generative
+    Adversarial Networks*. ICLR.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Arjovsky M, Chintala S, Bottou L. (2017). *Wasserstein GAN*. ICML.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Distill. (2016). *How to Use t-SNE Effectively*. Retrieved from [https://distill.pub/2016/misread-tsne](https://distill.pub/2016/misread-tsne).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Hui J. (Jun 22, 2018). *GAN — Why it is so hard to train Generative Adversarial
+    Networks!*. Retrieved from [https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b](https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Weng L. (Aug 20, 2017). *From GAN to WGAN*. Retrieved from [https://lilianweng.github.io/lil-log/2017/08/20/from-GAN-to-WGAN.html](https://lilianweng.github.io/lil-log/2017/08/20/from-GAN-to-WGAN.html).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Herrmann V. (Feb 24, 2017). *Wasserstein GAN and the Kantorovich-Rubinstein
+    Duality*. Retrieved from [https://vincentherrmann.github.io/blog/wasserstein](https://vincentherrmann.github.io/blog/wasserstein).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gulrajani I, Ahmed F, Arjovsky M, et. al. (2017). *Improved Training of Wasserstein
+    GANs*. NIPS.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

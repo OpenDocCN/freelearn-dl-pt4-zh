@@ -1,0 +1,735 @@
+- en: Creating a Spanish-to-English Translator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter will push your neural network knowledge even further by introducing
+    state-of-the-art concepts at the core of today's most powerful language translation
+    systems. You will build a simple version of a Spanish-to-English translator, which
+    accepts a sentence in Spanish and outputs its English equivalent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This chapter includes the following sections:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Understanding the translation model**: This section is entirely focused on
+    the theory behind this system.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**What an LSTM network is**: We''ll be understanding what sits behind this
+    advanced version of recurrent neural networks.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Understanding sequence-to-sequence network with attention**: You will grasp
+    the theory behind this powerful model, get to know what it actually does, and
+    why it is so widely used for different problems.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Building the Spanish-to-English translator**: This section is entirely focused
+    on implementing the knowledge acquired up to this point in a working program.
+    It includes the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Training the model
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Predicting English translations
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Evaluating the accuracy of the model
+  prefs:
+  - PREF_IND
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding the translation model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Machine translation is often done using so-called **s****tatistical machine
+    translation**, based on statistical models. This approach works very well, but
+    a key issue is that, for every pair of languages, we need to rebuild the architecture.
+    Thankfully, in 2014, Cho *et al.* ([https://arxiv.org/pdf/1406.1078.pdf](https://arxiv.org/pdf/1406.1078.pdf))came
+    out with a paper that aims to solve this, and other problems, using the increasingly
+    popular recurrent neural networks. The model is called sequence-to-sequence, and
+    has the ability to be trained on any pair of languages by just providing the right
+    amount of data. In addition,its power lies in its ability to match sequences of
+    different lengths, such as in machine translation, where a sentence in English
+    may have a different size when compared to a sentence in Spanish. Let's examine
+    how these tasks are achieved.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we will introduce the following diagram and explain what it consists
+    of:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/981ef83f-adec-4c07-9927-b41712890193.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The architecture has three major parts: the **encoder** RNN network (on the
+    left side), the intermediate state (marked by the middle arrow), and the **decoder**
+    RNN network (on the right side). The flow of actions for translating the sentence
+    **Como te llamas?** (Spanish) into **What is your name?** (English) is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Encode the Spanish sentence, using the encoder RNN, into the intermediate state
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Using that state and the decoder RNN, generate the output sentence in English
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This simple approach works with short and simple sentences, but, in practice,
+    the true use of translation models lies in longer and more complicated sequences.
+    That is why we are going to extend our basic approach using the powerful LSTM
+    network and an attention mechanism. Let's explore these techniques in the following
+    sections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What is an LSTM network?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '**LSTM** (**long short-term memory**) network is an advanced RNN network that
+    aims to solve the vanishing gradient problem and yield excellent results on longer
+    sequences. In the previous chapter, we introduced the GRU network, which is a
+    simpler version of LSTM. Both include memory states that determine what information
+    should be propagated further at each timestep. The LSTM cell looks as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2f02d3d2-2e2a-4177-9787-45d5e99c23ba.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let''s introduce the main equations that will clarify the preceding diagram.
+    They are similar to the ones for gated recurrent units (see Chapter 3, *Generating
+    Your Own Book Chapter*). Here is what happens at every given timestep, *t*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/eeb8f477-3a8f-418c-a545-825e7c96e300.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/f4ce6068-3740-40a2-9081-bc7f0746839f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/1047d7e8-d38d-4fbb-8591-b8be9e8cb6eb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/c39b96fc-5442-468d-93b6-33812680f2d9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/fb3c19d6-f261-4bbe-8f5d-44ed6b423c95.png) is the **output gate**, which determines
+    what exactly is important for the current prediction and what information should
+    be kept around for the future. ![](img/71bed47a-6af5-4de0-b6d6-cb66d91d5f71.png) is
+    called the **input gate**,and determines how much we concern ourselves about the
+    current vector (cell). ![](img/47e80fed-2cd6-4481-8026-85b010ad2923.png) is the
+    value for the new memory cell. ![](img/620e6cb2-41f7-47e9-a74d-8310ddbe0434.png) is
+    the **forget gate**, which determines how much to forget from the current vector
+    (if the forget gate is 0, we are entirely forgetting the past). All four, ![](img/5a99b695-5381-4fe9-a35b-6b8a13e62382.png), have
+    the same equation insight (with its corresponding weights), but ![](img/8ca58d2c-6eb8-4453-a095-c854fd500779.png) uses
+    tanh and the others use sigmoid.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we have the final memory cell ![](img/9746266a-3ec5-4578-a4ab-3bd7afd9212d.png) and
+    final hidden state ![](img/6eb5c720-0596-4ce1-b080-53203eb34616.png) :'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b1c7944b-3570-49b1-a2e5-2ee45c1b1044.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The final memory cell separates the input and forget gate, and decides how
+    much of the previous output ![](img/6d088790-6135-49a9-ab92-2791362fee23.png) should
+    be kept and how much of the current output ![](img/30fc84a3-1fb1-4717-ab07-fb6220f19c01.png) should
+    be propagated forward (in simple terms, this means: *forget the past or not, take
+    the input or not*). The *dot* sign is called the Hadamard product—if `x = [1,
+    2, 3]` and `y = [4, 5, 6]`, then `x dot y = [1*4, 2*5, 3*6] = [4, 10, 18]`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final hidden state is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/79f2f536-370c-4a5d-86a2-02a4b0e0756c.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: It decides whether to expose the content of the cell at this particular timestep.
+    Since some of the information ![](img/5b11a50f-f52d-4ec5-a98c-816ab2cbc644.png) from
+    the current cell may be omitted in ![](img/a48ef98c-e704-4c47-84f9-d5fa7d16e68b.png),
+    we are passing ![](img/45f013f4-0b4a-4eea-96f8-09c281f006fb.png) forward to be
+    used in the next timesteps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This same system is repeated multiple times through the neural network. Often,
+    it is the case that several LSTM cells are stacked together and use shared weights
+    and biases.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Two great sources for enhancing your knowledge on LSTMs are Colah's article
+    *Understanding LSTM Network* ([http://colah.github.io/posts/2015-08-Understanding-LSTMs/](http://colah.github.io/posts/2015-08-Understanding-LSTMs/))and
+    the Stanford University lecture on LSTM ([https://www.youtube.com/watch?v=QuELiw8tbx8](https://www.youtube.com/watch?v=QuELiw8tbx8))
+    by Richard Socher.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the sequence-to-sequence network with attention
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Since you have already understood how the LSTM network works, let's take a step
+    back and look at the full network architecture. As we said before, we are using
+    a sequence-to-sequence model with an attention mechanism. This model consists
+    of LSTM units grouped together, forming the encoder and decoder parts of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In a simple sequence-to-sequence model, we input a sentence of a given length
+    and create a vector that captures all the information in that particular sentence.
+    After that, we use the vector to predict the translation. You can read more about
+    how this works in a wonderful Google paper ([https://arxiv.org/pdf/1409.3215.pdf](https://arxiv.org/pdf/1409.3215.pdf)) in
+    the *External links* section at the end of this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: That approach is fine, but, as in every situation, we can and must do better.
+    In that case, a better approach would be to use an attention mechanism. This is
+    motivated by the way a person does language translation. A person doesn't read
+    the input sentence, then hide the text while they try to write down the output
+    sentence. They are continuously keeping track of the original sentence while making
+    the translation. This is how the attention mechanism works. At every timestep
+    of the decoder, the network decides what and how many of the encoder inputs to
+    use. To make that decision, special weights are attached to every encoder word.
+    In practice, the attention mechanism tries to solve a fundamental problem with
+    recurrent neural networks—the ability to remember long-term dependencies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A good illustration of the attention mechanism can be seen here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/289240d8-82af-410f-85b0-e22669837ed6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/b1d42841-3e87-4dc1-909a-d0310e15516b.png) are the inputs and ![](img/f54afd71-65ef-4d8d-9072-191e1b8cc407.png) are
+    the predicted outputs. You can see the attention weights represented as ![](img/a7d1e9fe-65a0-4df6-adb4-851fa68bc28e.png), each
+    one attached to its corresponding input. These weights are learned during training
+    and they decide the influence of a particular input on the final output. This
+    makes every output ![](img/ce6d88ba-ffb0-47cc-9dba-ac31d4c71d8d.png) dependent
+    on a weighted combination of all the input states.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unfortunately, the attention mechanism comes with a cost. Consider the following,
+    from a WildML article ([http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/](http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/)):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If we look a bit more closely at the equation for attention, we can see that
+    attention comes at a cost. We need to calculate an attention value for each combination
+    of input and output word. If you have a 50-word input sequence and generate a
+    50-word output sequence, that would be 2500 attention values. That's not too bad,
+    but if you do character-level computations and deal with sequences consisting
+    of hundreds of tokens, the above attention mechanisms can become prohibitively
+    expensive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Despite this, the attention mechanism remains a state-of-the-art model for machine
+    translation that produces excellent results. The preceding statement only shows
+    that there is plenty of room for improvement, so we should try to contribute to
+    its development as much as possible.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building the Spanish-to-English translator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: I hope the previous sections left you with a good understanding of the model
+    we are about to build. Now, we are going to get practical and write the code behind
+    our translation system. We should end up with a trained network capable of predicting
+    the English version of any sentence in Spanish. Let's dive into programming.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The first step, as always, is to collect the needed data and prepare it for
+    training. The more complicated our systems become, the more complex it is to massage
+    the data and reform it into the right shape. We are going to use Spanish-to-English
+    phrases from the OpenSubtitles free data source ([http://opus.nlpl.eu/OpenSubtitles.php](http://opus.nlpl.eu/OpenSubtitles.php)).
+    We will accomplish that task using the `data_utils.py` script, which you can find
+    on the provided GitHub repo ([https://github.com/simonnoff/Recurrent-Neural-Networks-with-Python-Quick-Start-Guide](https://github.com/simonnoff/Recurrent-Neural-Networks-with-Python-Quick-Start-Guide)).
+    There you can also find more details on which datasets to download from OpenSubtitles.
+    The file calculates the following properties, which could be used further in our
+    model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`spanish_vocab`: A collection of all words in the Spanish training set, ordered
+    by frequency'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`english_vocab`: A collection of all words in the English training set, ordered
+    by frequency'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spanish_idx2word`: A dictionary of key and word, where the key is the order
+    of the word in `spanish_vocab`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`spanish_word2idx`: A reversed version of `spanish_idx2word`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`english_idx2word`: A dictionary of key and word, where the key is the order
+    of the word in `english_vocab`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`english_word2idx`: A reversed version of the `english_idx2word`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`X`: An array of arrays of numbers. We produce that array by first reading
+    the Spanish text file line by line, and storing these lines of words in separate
+    arrays. Then, we encode each array of a sentence into an array of numbers where
+    each word in the sentence is replaced with its index, based on `spanish_word2idx`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`Y`: An array of arrays of numbers. We produce that array by first reading
+    the English text file line by line and storing these lines of words in separate
+    arrays. Then, we encode each array of a sentence into an array of numbers where
+    each word in the sentence is replaced with its index, based on `english_word2idx`'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You will see, in the following sections, how these collections are used during
+    the training and testing of the model. The next step is to construct the TensorFlow
+    graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Constructing the TensorFlow graph
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As an initial step, we import the required Python libraries (you can see this
+    in the `neural_machine_translation.py` file):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`tensorflow` and `numpy` should already be familiar to you. `matplotlib` is
+    a handy python library used for visualizing data (you will see how we use it shortly).
+    Then, we use the `train_test_split` function of `sklearn` to split the data into
+    random train and test arrays.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We also import `data_utils`, which is used to access the data collections mentioned
+    in the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'An important modification to do before splitting the data is making sure each
+    of the arrays in *X* and *Y* is padded to indicate the start of a new sequence:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we split the data as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, it is time to define the actual TensorFlow graph. We start with the variables
+    that determine the input and output sequence length:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we calculate the size of each vocabulary:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The `<pad>` symbol is used to align the time steps, `<go>` is used to indicate
+    beginning of decoder sequence, and `<eos>` indicates empty spaces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After that, we initialize our TensorFlow placeholders:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`encoder_inputs`: This holds values for the Spanish training input words.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`decoder_inputs`: This holds values for the English training input words.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`target`: This holds the real values of the English predictions. It has the
+    same length as the `decoder_inputs`, where every word is the next predicted.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`target_weights`: This is a tensor that gives weights to all predictions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The final two steps of building the graph are generating the outputs and optimizing
+    the weights and biases of the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The former uses the handy TensorFlow function, `tf.contrib.legacy_seq2seq.embedding_attention_seq2seq` ([https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq](https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq)), which
+    builds a sequence-to-sequence network with attention mechanism and returns the
+    generated outputs from the decoder network. The implementation is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s discuss the function''s parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`encoder_inputs` and `decoder_inputs` contain values for each training pair
+    of Spanish and English sentences.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.contrib.rnn.BasicLSTMCell(size)` is the RNN cell used for the sequence
+    model. This is an LSTM cell with `size` (`=512`) number of hidden units.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`num_encoder_symbols` and `num_decoder_symbols` are the Spanish and English
+    dictionaries for the model.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`embedding_size` represents the length of the embedding vector for each word.
+    This vector can be obtained using the `word2vec` algorithm and helps the network
+    in learning during backpropagation.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`feed_previous` is a Boolean value that indicates whether or not to use the
+    previous output at a certain timestep as the next decoder input.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`output_projection` contains a pair of the network''s weights and biases. As
+    you can see from the preceding code block, the weights have the `[english_vocab_size,
+    size]` shape and the biases have the `[english_vocab_size]` shape.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'After computing the outputs, we need to optimize these weights and biases by
+    minimizing the loss function of that model. For that purpose, we will be using
+    the `tf.contrib.legacy_seq2seq.sequence_loss` TensorFlow function, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: We supply the predicted `outputs`, along with the actual values, `targets`,
+    of the network. In addition, we provide a slight modification of the standard
+    softmax loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, we define the optimizer that aims to minimize the loss function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To clarify the confusion around the `sample_loss` variable, we will give its
+    definition as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: This `softmax` function is used only for training. You can learn more about
+    it through the TensorFlow documentation ([https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss](https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss)[).](https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss)
+  prefs: []
+  type: TYPE_NORMAL
+- en: These equations result in a fully functional TensorFlow graph for our sequence-to-sequence
+    model with attention mechanism. Once again, you may be amazed how little code
+    is required to build a powerful neural network that yields excellent results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Next, we will plug the data collections into this graph and actually train the
+    model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Training the neural network is accomplished using the same pattern as before:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The interesting part from the preceding implementation is the `feed_dictionary_values`
+    function, which forms the placeholders from the `X_train` and `Y_train`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Let's break down the above function line by line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It needs to return a dictionary with the values of all placeholders. Recall
+    that their names are:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`indices_x` is an array of 64 (`batch_size`) randomly selected indices in the
+    range of `0` and `len(X_train)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`indices_y` is an array of 64 (`batch_size`) randomly selected indices in the
+    range of `0` and `len(Y_train)`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `"encoder-"` values are obtained by finding the array at each index from
+    `indices_x` and collecting the values for the specific encoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Similarly, the `"decoder-"` values are obtained by finding the array at each
+    index from `indices_y` and collecting the values for the specific decoder.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Consider the following example: Let''s say our `X_train` is `[[x11, x12, ...],
+    [x21, x22, ...], ...], indices_x` is `[1, 0, ...]`, then `"encoder0"` will be
+    `[x21, x11, ...]` and will contain the 0-th element of all arrays from `X_train`
+    that have their index stored in `indices_x`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The value of `last_output` is an array of the `batch_size` size filled only
+    with the number 3 (the associated index of the symbol `"<pad>"`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, the `"target_w-"` elements are arrays of 1''s and 0''s of the `batch_size` size. These
+    arrays contain 0 at the indices of `"<pad>"` values from the decoder arrays. Let''s
+    illustrate this statement with the example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the value of `"decoder0"` is `[10, 8, 3, ...]` where 3 is the index of `"<pad>"`
+    from the `en_idx2word` array, our `"target0"` would be `[1, 1, 0, ...]`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The last `"target15"` is an array with only 0's.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having the preceding calculations in mind, we can start training our network.
+    The process will take some time, since we need to iterate over 1,000 steps. Meanwhile,
+    we will be storing the trained parameters at every 20 steps, so we can use them
+    later for prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predicting the translation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'After we have trained the model, we will use its parameters to translate some
+    sentences from Spanish to English. Let''s create a new file called `predict.py`
+    and write our prediction code there. The logic will work as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Define exactly the same sequence-to-sequence model architecture as used during
+    training
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Use the already trained weights and biases to produce an output
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Encode a set of Spanish sentences, ready for translation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Predict the final results and print the equivalent English sentences
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'As you can see, this flow is pretty straightforward:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To implement it, we first import two Python libraries together with the `neural_machine_translation.py`
+    file (used for training):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we define the model with the associated placeholders:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Using the outputs from the TensorFlow function, we calculate the final translations
+    as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next step is to define the input sentences and encode them using the encoding
+    dictionary:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, we are also padding the input sentences so they match the length
+    of the placeholder (`nmt.input_sequence_length`).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we will be using `spanish_sentences_encoded` with the preceding TensorFlow
+    model to calculate the value of `outputs_proj` and yield our results:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we define the `decode_output` function, together with a detailed explanation
+    of its functionality:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: We prepare the feed dictionary in the same way as using the placeholders' names.
+    For `encoder_inputs`, we use values from `spanish_sentences_encoded`. For `decoder_inputs`,
+    we use the values saved in our model's checkpoint folder.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Using the preceding data, our model calculates the `output_sentences`.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, we use the `decode_output` function to convert the predicted `output_sentences`
+    matrix into an actual sentence. For that, we use the `english_idx2word` dictionary.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'After running the preceding code, you should see the original sentence in Spanish,
+    together with its translation in English. The correct output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next, we will see how to evaluate our results and identify how well our translation
+    model has performed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Evaluating the final results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Translation models are typically evaluated using the so-called BLEU score ([https://www.youtube.com/watch?v=DejHQYAGb7Q](https://www.youtube.com/watch?v=DejHQYAGb7Q)).
+    This is an automatically generated score that compares a human-generated translation
+    with the prediction. It looks for the presence and absence of particular words,
+    their ordering, and any distortion—that is, how much they are separated in the
+    output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A BLEU score varies between `0` and `1`, where `0` is produced if there are
+    no matching words between the prediction and the human-generated sentence, and
+    1 when both sentences match perfectly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, this score can be sensitive about word breaks. If the word breaks
+    are positioned differently, the score may be completely off.
+  prefs: []
+  type: TYPE_NORMAL
+- en: A good machine translation model, such as Google's Multilingual Neural Machine
+    Translation System, achieves score of around `38.0 (0.38*100)` on Spanish-to-English
+    translation. This is an example of an exceptionally performing model. The result
+    is pretty remarkable but, as you can see, there is a lot of room for improvement.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter walked you through building a fairly sophisticated neural network
+    model using the sequence-to-sequence model implemented with the TensorFlow library.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, you went through the theoretical part, gain an understanding of how the
+    model works under the hood and why its application has resulted in remarkable
+    achievements. In addition, you learned how an LSTM network works and why it is
+    easily considered the best RNN model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Second, you saw how you can put the knowledge acquired here into practice using
+    just several lines of code. In addition, you gain an understanding of how to prepare
+    your data to fit the sequence-to-sequence model. Finally, you were able to successfully
+    translate Spanish sentences into English.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I really hope this chapter left you more confident in your deep learning knowledge
+    and armed you with new skills that you can apply to future applications.
+  prefs: []
+  type: TYPE_NORMAL
+- en: External links
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Sequence to Sequence model (Cho et al. 2014): [https://arxiv.org/pdf/1406.1078.pdf](https://arxiv.org/pdf/1406.1078.pdf)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Understanding LSTM Network: [http://colah.github.io/posts/2015-08-Understanding-LSTMs/](http://colah.github.io/posts/2015-08-Understanding-LSTMs/)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Stanford University lecture on LSTM: [https://www.youtube.com/watch?v=QuELiw8tbx8](https://www.youtube.com/watch?v=QuELiw8tbx8)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sequence to sequence learning using Neural Network: [https://arxiv.org/pdf/1409.3215.pdf](https://arxiv.org/pdf/1409.3215.pdf)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: WildML article on *Attention and Memory in Deep Learning and NLP*: [http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/](http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: OpenSubtitles: [http://opus.nlpl.eu/OpenSubtitles.php](http://opus.nlpl.eu/OpenSubtitles.php)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.contrib.legacy_seq2seq.embedding_attention_seq2seq`: [https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq](https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tf.nn.sampled_softmax_loss`: [https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss](https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'BLEU score: [https://www.youtube.com/watch?v=DejHQYAGb7Q](https://www.youtube.com/watch?v=DejHQYAGb7Q)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

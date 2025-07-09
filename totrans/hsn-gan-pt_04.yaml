@@ -1,0 +1,783 @@
+- en: Best Practices for Model Design and Training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we'll take what we've learned so far and provide some basic
+    information on it to help you move forward. We will look into the overall design
+    of the model architecture and the steps we need to follow when choosing which
+    convolution operation is needed. We will also learn how to adjust and tweak the
+    loss function and learning rate.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model design cheat sheet
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Model training cheat sheet
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Efficient coding in Python
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Advice for deep learning beginners
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Model design cheat sheet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we will provide you with an overview of the various choices
+    you can make when it comes to designing the architecture of GAN models, and even
+    deep learning models in general. It is always okay to directly borrow the model
+    architectures you see in papers. It is also imperative to know how to adjust a
+    model and create a brand new model from scratch, according to the practical problems
+    at hand. Other factors, such as GPU memory capacity and expected training time,
+    should also be considered when we design our models. We will talk about the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall model architecture design
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Choosing a convolution operation method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Choosing a downsampling operation method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Overall model architecture design
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are mainly two different design processes for deep learning models. They
+    are fit for different scenarios and you should get comfortable with both processes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Design the whole network directly, especially for shallow networks. You can
+    add/remove any layer in your network with ease. With this approach, you can easily
+    notice any bottlenecks in your network (for example, which layer needs more/fewer
+    neurons), which is extremely important when you are designing models that will
+    run on mobile devices.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Design a small block/cell (containing several layers or operations) and repeat
+    the blocks several times to form the whole network. This process is very popular
+    in very deep networks, especially in **network architecture search** (**NAS**).
+    It is a bit harder to spot the weak spot in your model because all you can do
+    is adjust the block, train the whole network for hours, and see if your adjustments
+    lead to higher performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In some of the chapters in this book, U-Net-shaped (for example, pix2pixm,
+    which we will cover in [Chapter 5](209b2357-05d7-48d4-9c91-e061eccf8344.xhtml),
+    *Image-to-Image Translation and Its Applications*) and ResNet-shaped (for example,
+    SRGAN, which we will cover in [Chapter 7](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml),
+    *Image Restoration with GANs*) networks will be used. Both architectures are designed
+    via a block-based approach and use skip connections to connect non-adjacent layers.
+    There are two different forms of data flow in neural networks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Plain network**: Any layer within the network only has at most one input
+    and one output direction.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Branching network**: At least one of the layers is connected to more than
+    two other layers, such as ResNet and DenseNet.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You may have noticed that, in this book, plain networks are often used in discriminators
+    and branching architectures are often used in generators. This is because generator
+    networks are, in general, more difficult to train than discriminators and the
+    branches (for example, skip connections) pass low-level details to deeper layers
+    in the forward pass and help gradients flow better in the backward pass.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When we deal with branches in a network, how several branches are merged (so
+    that the tensors can be passed to another block/cell in the uniform size) also
+    has a great impact on the network''s performance. Here are the recommended approaches:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Concatenate all the tensors into a list and create another convolution layer
+    to map this list to a smaller tensor. This way, information from all the input
+    branches is reserved and the relationship between them is learned by the convolution
+    layer. However, be careful with this approach when it comes to very deep networks
+    since it costs more memory and more parameters means it's more vulnerable to overfitting.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Directly sum the overall input tensors. This is easy to implement but may not
+    perform well when there are too many input branches.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Assign trainable weight factors to the branches before summing them up. Here,
+    the merged tensor would be the weighted sum of the input tensors. It allows the
+    network to figure out which inputs it should reply to and gives you a chance to
+    remove unnecessary branches if their trained weight factors are too close to 0.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In general, if you are dealing with complex data, try using the classic models
+    we have learned about in this book. If the classic models don't serve you well,
+    try building a basic block (such as a residual block) and building a deep network
+    with it. Deeper networks come with more surprises and, of course, take a longer
+    time to train.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing a convolution operation method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are various types of convolution operations we can choose from, and different
+    configurations in the same convolution layer lead to different results. Here,
+    we will summarize the commonly used convolution operations and talk about their
+    strengths and weaknesses:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Vanilla convolution**: This is the most common convolution operation in CNNs.
+    A convolution takes fewer parameters than a fully connected layer (`nn.Linear`)
+    with the same input/output size and can be calculated pretty fast with im2col
+    (see [Chapter 7](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml), *Image Restoration
+    with GANs*, for more details). You can use the following snippet to create a ReLu-Conv-BN
+    group (of course, feel free to change the order of the three functions):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Grouped convolution**: Here, the connections between the input/output neurons
+    are separated into groups. You can create a grouped convolution by calling `nn.Conv2d`
+    when assigning the `groups` argument to an integer larger than 1\. It is often
+    followed by another convolution layer with a kernel size of 1 so that the information
+    from different groups can be mixed together. The GroupConv-1x1Conv combination always
+    contains fewer parameters than a vanilla convolution as long as the kernel size
+    is larger than 1.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '**Depthwise separable convolution**: This is a grouped convolution where the
+    group size equals the input channels, followed by a 1 x 1 convolution. It always
+    contains fewer parameters than a vanilla convolution as long as the kernel size
+    is larger than 1\. Depthwise separable convolution is extremely popular among
+    tiny networks for mobile devices and NAS (where people try to reach the highest
+    performance under limited hardware resources). It is often used to see whether
+    two depthwise separable convolutions appear together and result in better performance.
+    You can use the following snippet to create a two-layer depthwise separable convolution
+    operation:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Dilation convolution**: This has a larger reception field compared to vanilla
+    convolution. For example, a ![](img/c0c5d15e-1d94-44c6-ae74-b370aa773be8.png) vanilla
+    convolution has a ![](img/27e72105-f44e-419d-aa0c-27f5d6fe5fcd.png) sliding window,
+    but a ![](img/a4052c0c-f467-46ee-8669-5a566c600cfd.png) dilation convolution has
+    a ![](img/a278791c-2919-4deb-9da7-2a32ba12377b.png) sliding window, in which input
+    pixels are samples – one for every two adjacent steps. However, it is not recommended
+    to use dilation convolution with other types of convolutions (for example, depthwise
+    separable convolution) in the same network. This is because dilation convolutions
+    normally need much smaller learning steps to train, which will dramatically slow
+    down your training process. You can use the following snippet to create a dilation
+    convolution operation:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Normally, vanilla convolutions are already good enough. If your memory capacity
+    is extremely limited, depthwise separable convolution would definitely be your
+    best choice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing a downsampling operation method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It is often inevitable to increase or decrease the size of tensors (feature
+    maps) in a network. The process of decreasing a tensor's size is called **downsampling**
+    and the process of increasing a tensor's size is called **upsampling**. Downsampling
+    is often trickier than upsampling since we don't want to lose too much useful
+    information in the smaller tensors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several ways to perform downsampling in neural networks, especially
+    in CNNs. You may choose the most suitable one based on your needs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Max-pooling** (for example, `nn.MaxPool2d`), which is where you select the
+    maximum value in the sliding window. It is quite popular in the early shallow
+    networks, such as LeNet-5\. However, the maximum value is not necessarily the
+    most significant feature in a feature map. For example, what happens to the minimum
+    values? Apparently, the minimum value (![](img/b0165383-5175-4b19-b252-4b94e6713e76.png))
+    in the ![](img/d949fbee-fc72-4ce7-a495-1ad11194614c.png) tensor gives us more
+    information than the maximum value (![](img/d2cb2d38-9aef-4168-be6b-ab54a53c6404.png))
+    about what kind of pattern this tensor contains.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Average-pooling** (for example, `nn.AvgPool2d` or `nn.AdaptiveAvgPool2d`),
+    which is where you take the average value over the sliding window. It is becoming
+    more popular than max-pooling. You should certainly choose average-pooling over
+    max-pooling if you want to perform fast downsampling.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Strided convolution**, which is a convolution with a stride size larger than
+    1\. This is actually what most of the models in this book use to perform downsampling
+    since this approach can extract features and decrease the tensor size at the same
+    time. It is worth pointing out that there can be a huge amount of information
+    loss in this approach because the sliding window skips a lot of pixels while it''s
+    calculating. A decrease in the feature map size is often accompanied by an increase
+    in the channel size. For example, a mini-batch tensor ![](img/67c71855-d45e-4a97-a1f0-a09c8ca3d4a9.png) (the
+    four dimensions denote batch size, channel size, feature map height, and feature
+    map width) is often downsampled to ![](img/2b61def8-335f-49ff-93fc-5eaa22e4cf8c.png) so
+    that the output tensor contains a similar amount of information to the input tensor.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Factorized reduction**, which is to perform two strided convolutions with
+    a slight shift. In this approach, the second convolution covers the skipped pixels
+    by the first convolution. Therefore, more information is reserved. It contains
+    more parameters and so takes a longer time to train. You can use the following
+    snippet to perform factorized reduction:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you have more than enough GPU memory to spare, use factorized reduction in
+    your model. If not, using the strided convolution would save you a lot of memory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: More on model design
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Feel free to check out PyTorch's official document at `torch.nn` to find out
+    more about the various layers and operations that are available: [https://pytorch.org/docs/stable/nn.html](https://pytorch.org/docs/stable/nn.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Model training cheat sheet
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Designing a training strategy is just as important – if not more – than model
+    design. Sometimes, a good training strategy can make a poorly designed model shine.
+    Here, we will talk about the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Parameter initialization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adjusting the loss function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Choosing an optimization method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Adjusting the learning rate
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Gradient clipping, weight clipping, and more
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Parameter initialization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Sometimes, one of the most frustrating things about learning about an optimization
+    method from a book/paper and implementing it with code is that the initial state
+    of the machine learning system (initial values of the parameters) can have a great
+    impact on the model''s final performance. It is important to have knowledge of
+    parameter initialization, especially while you''re dealing with deep networks.
+    A good parameter initialization also means that you won''t always rely on Batch
+    Normalization to keep your parameters in line during training. To quote from the
+    PyTorch documentation, <q>"A PyTorch Tensor is basically the same as a numpy array:
+    it does not know anything about deep learning or computational graphs or gradients
+    and is just a generic n-dimensional array to be used for arbitrary numeric computation." </q>This
+    is why there can be so many methods, and there will probably be more in the future.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are several popular parameter initialization methods. We won''t go into
+    great detail about some of the methods since they are rather self-explanatory.
+    Note that the uniform distributions are often used for fully-connected layers
+    and normal distributions are often used for convolution layers. Let''s go over
+    some of these now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Uniform** (`nn.init.uniform_(tensor, a, b)`): It initializes `tensor` with
+    uniform distribution ![](img/a1d9b168-6637-4d69-939a-080b4a682b7d.png).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Normal** (`nn.init.normal_(tensor, a, b)`): It initializes `tensor` with
+    normal distribution ![](img/5182f483-c3db-4fbe-b93b-38a492d61d29.png).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Xavier-uniform** (`nn.init.xavier_uniform_(tensor)`): It initializes `tensor`
+    with uniform distribution ![](img/a437bc40-4715-4245-91d3-274727b03efc.png), where
+    we have the following equation:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/c3254720-9876-4b51-a55a-8296537fa33d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Xavier-normal** (`nn.init.xavier_normal_(tensor)`): It initializes `tensor`
+    with normal distribution ![](img/bedac49b-9219-464a-9e7a-8f4daea194ea.png), where
+    we have the following equation:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/ebbdb2ac-1ca6-400c-9834-e384b0dabdfa.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**He-uniform** (that is, Kaiming-uniform or MSRA-uniform, `nn.init.kaiming_uniform_(tensor)`): It
+    initializes `tensor` with uniform distribution ![](img/abb3b28b-b777-4498-ae15-ee5a8c913d40.png),
+    where we have the following equation:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/2a3dccd9-1f8c-4e3e-bf9e-a17f3a5cd8af.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**He-normal** (that is, Kaiming-normal or MSRA-normal, `nn.init.kaiming_normal_(tensor)`): It
+    initializes `tensor` with normal distribution ![](img/ce9eeef0-e4de-4066-8df2-c9aa1440d577.png),
+    where we have the following equation:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/9af6ad08-48b9-4ebe-af0a-d5a3500fb822.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Truncated normal**: In this method, all the values that are larger (or smaller)
+    than twice the standard deviation (or negative twice the standard deviation) are
+    discarded and regenerated.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Besides using `torch.nn.init` to initialize your parameters, you can always
+    create your own custom initializer. For example, here is an initializer that we
+    can use for a convolution layer using `numpy` and `scipy.stats`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are times when different initialization methods don't make too much of
+    a difference when it comes to the model's final performance, as long as the parameters'
+    magnitudes are kept at a similar level. In those cases, we suggest you try different
+    initialization methods when even the slightest improvement matters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adjusting the loss function
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The loss function describes the objective of the training process. We have
+    seen many forms of loss functions in different GAN models, depending on their
+    different goals. Designing the right loss function is crucial for the success
+    of your model''s training. Typically, a GAN model comes with two loss functions:
+    one generator loss function and one discriminator loss function. Of course, if
+    there are more than two networks in your model, there can be more loss functions
+    to deal with. Each loss function can have one or more regularization term. The
+    three most common forms are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dc109b95-8583-44db-a503-760876ae014d.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/119d6d05-eac9-43cc-8c19-7b49a8e4f00b.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: '![](img/a2085b18-6817-4532-9829-03ce24aa10c1.png)'
+  prefs:
+  - PREF_UL
+  type: TYPE_IMG
+- en: In [Chapter 7](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml), *Image Restoration
+    with GANs*, we will discuss different forms of loss functions in GANs at great
+    length. Check it out to find out more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The two most commonly used regularization terms are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: L1-loss, ![](img/bc322e9e-09c8-4b6b-a7f2-30011ccaee06.png)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: L2-loss, ![](img/5cad3b3e-13ac-463e-bbb7-d3445735fccd.png)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In L1-loss and L2-loss, ![](img/256f5683-002c-4645-8c7d-9d42cd57151a.png) can
+    be many things, for example, the distance between two images or the gradients
+    of an image. L2-loss tends to produce more dense results (where most values are
+    closer to 0) and L1-loss produces more sparse results (where a few outliers with
+    values larger than 0 are tolerated).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'It is worth mentioning that L2-regularization (**L2-penalty**) on the parameters
+    is essentially the same as **weight decay**. Here''s why:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/71efea1e-cc65-425f-9385-650162410bb6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The second term in the first equation is L2-penalty and the second term in the
+    second equation is weight decay. Taking derivatives on both sides of the first
+    equation gives us the second equation. Therefore, L2-penalty and weight decay
+    in neural networks are essentially the same thing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The loss function is also where you bring your algorithm's design to life. For
+    example, if you have extra label information for your dataset, add it to your
+    loss function. If you want your results to be as similar to something as possible,
+    add their distance to your regularization term. If you want the generated images
+    to be smooth, add their gradients to the regularization term.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Choosing an optimization method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Here, we will only discuss gradient-based optimization methods, which are most
+    commonly used in GANs. Different gradient methods have their own strengths and
+    weaknesses. There isn''t a universal optimization method that can solve every
+    problem. Therefore, we should choose them wisely when it comes to different practical
+    problems. Let''s have a look at some now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**SGD** (calling `optim.SGD` with `momentum=0` and `nesterov=False`): It works
+    fast and well for shallow networks. However, it can be very slow for deeper networks,
+    and may not even converge for deep networks:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/39953f57-67a5-4361-9607-748c4f572db6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this equation, ![](img/d5adb9ca-98b7-404d-9e65-0e9061eeefcf.png) is the parameters
+    at iteration step ![](img/58bcd772-86a0-4daf-86d1-1dc8ce67a0e0.png), ![](img/b3f70bb8-6957-4caa-823a-6341adea1a3e.png) is
+    the learning rate, and ![](img/e96cb8f9-3813-4ed4-95e8-2df92711e335.png) is the
+    gradient of the objective function, ![](img/adac4014-f788-4884-9b17-495d65b25b74.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Momentm** (calling `optim.SGD` with the `momentum` argument when it''s larger
+    than 0 and `nestrov=False`): It is one of the most commonly used optimization
+    methods. This method combines the updates of the previous step with the gradient
+    at the current step so that it takes a smoother trajectory than SGD. The training
+    speed of Momentum is often faster than SGD and it generally works well for both
+    shallow and deep networks:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/eedf5ead-b9dc-4682-8ea9-2e2accbe93d4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this equation, ![](img/2283a896-1c74-4f0b-bb9b-67b63e538597.png) is called
+    the **momentum term**, which is usually set to a float value between 0.5~0.9.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Nesterov** (calling `optim.SGD` with the `momentum` argument when it''s larger
+    than 0 and `nestrov=True`); This is a variant of the Momentum method. It calculates
+    a "predicted" gradient of the objective function at iteration step ![](img/4cba62a2-742b-46c6-a646-923d2dfec5ce.png)when
+    combining the momentum vector and the gradient vector. In theory, it has a faster
+    convergence speed than Momentum. When your model is having trouble converging
+    with Momentum, you should definitely give Nesterov a try:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/d41cb8f2-9c0d-475b-a2c7-e91008105bae.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**AdaGrad** (`optim.Adagrad`): This method updates parameters that are updated
+    more frequently with a smaller learning rate and updates the less frequently updated
+    parameters with a larger learning rate. It was used by Google''s DistBelief in
+    2012\. However, AdaGrad isn''t widely used today because the learning rate keeps
+    getting smaller, which is bad for long-term training in deep models:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/24eecafb-1f9e-40a8-af1e-554c7a23b533.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this equation, ![](img/21a28bf7-ca7b-42c2-bdbe-54d2c68ac9cc.png) is the total
+    sum of the square of gradients starting from iteration step ![](img/ce6f0af8-a100-4cd0-95b4-4beeb1906a7e.png)
+    to ![](img/5d122fc6-f4a2-4233-b956-8745d1d0b82a.png), which increases over time
+    and decreases the learning rate, while ![](img/777b4eb8-7684-46ea-9832-c4b4b78bda66.png) is
+    a very small value.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**RMSprop** (`optim.RMSprop`): This method is similar to AdaGrad, except that
+    the moving average of squared gradients is taken instead of their sum. This method
+    isn''t very common among the various deep learning models. In [Chapter 7](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml),
+    *Image Restoration with GANs*, we explicitly point out that RMSprop should be
+    used in Wasserstein GAN:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/aed919dc-a392-48da-bae6-5ed6a75702ed.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this equation, ![](img/d7a67373-1b4a-4ef3-bb93-f1b6adf104ee.png) is the moving
+    average of ![](img/86d957a7-1720-40ae-85c3-33cd7d01c993.png) until iteration step ![](img/7d356d72-55bc-46aa-9fb2-5286a9760c74.png),
+    while ![](img/29f55b16-b928-41b8-938a-9a18d8e2922c.png) is the smoothing term,
+    which is usually set to a value very close to 1; for example, 0.99 or 0.999.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Adam** (`optim.Adam`): This method, in a sense, combines Momentum and RMSprop
+    via two moment terms. It is one of the most popular and effective optimization
+    methods in deep models. If all of the previous methods don''t perform well in
+    your model, Adam is your best chance, especially when your model is very deep
+    and the relationships between the parameters are very complex (for example, you
+    have multiple branching structures in your model):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![](img/a1de511c-546c-442b-ad43-9e245f69c358.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In this equation, the moment coefficients (![](img/a73535fa-e377-4ba8-baf9-24d19639b573.png) and
+    ![](img/985c7a0f-ab2d-49e8-99ed-cb053fc1b4c6.png)) are normally set to values
+    very close to 1, for example, ![](img/18e09dee-dcc6-4326-bd05-7d6c10b85c95.png) and
+    ![](img/d2bc4997-2449-47af-a539-e1aa9f51749f.png). The third line of the equation
+    exists because we don't want the moment terms to be close to 0 at the beginning
+    of the training, especially when they are normally initialized with zeros at ![](img/938da320-c2b0-4745-ae19-7eb31937618d.png).
+    Note that the learning rate for Adam should be dramatically smaller than other
+    methods (such as Momentum).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In summary, you should try using Momentum when you're trying out your training
+    strategy for a new model since it has fewer adjustable hyperparameters and is
+    faster to train. When you feel happy with the model's performance, it is always
+    worth trying Adam to exploit its potential even more.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Adjusting the learning rate
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that you have selected an optimization method, you need to set the proper
+    learning rate for the gradient method and start training. Normally, the updates
+    for the parameters are significant enough to be noticeable at the beginning of
+    the training step. After training for a long time, the relations between the parameters
+    are determined and it's time to adjust the parameters subtly with a smaller learning
+    rate. We cannot simply rely on an optimization method (such as RMSprop or Adam)
+    to gradually decrease the learning rate for us. It is far more efficient when
+    we actively decrease the learning rate periodically during training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You can use `optim.lr_scheduler` to set up a `scheduler` and call `scheduler.step()`
+    after each epoch, as shown in the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also create your own custom scheduler, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This is an implementation of the cosine schedule with warm restarts. To use
+    it in your training, simply call it, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: The learning rate will decrease from 0.025 to 0.001 in the first 10 epochs,
+    restart at 0.025 and decrease to 0.001 in the next 10 epochs, then restart back
+    at 0.025 and decrease to 0.001 in the next 40 epochs, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You can check out PyTorch's official documentation to find out more about other
+    types of schedulers: [https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate](https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Gradient clipping, weight clipping, and more
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the very first chapter of this book, [Chapter 1](66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml),
+    *Generative Adversarial Networks Fundamentals*, we created a simple GAN with NumPy
+    to generate sine signals using gradient clipping and weight clipping to make sure
+    the training converged. Let''s go over why these tricks can be useful for your
+    models:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Gradient clipping**: The gradient basically tells us how to update our parameters.
+    Normally, larger gradients lead to bigger changes being applied to our parameters.
+    If, by chance, the loss surface around our search location is steep, large gradient
+    values could mean that we will jump far away from this region at the next iteration
+    step and we''ll have to start looking for optimal solutions in a new region. Therefore,
+    clipping gradients and setting limitations on their maximum/minimum values can
+    make sure that we don''t jeopardize our previous search results while spending
+    a long time training. You can use `nn.utils.clip_grad_norm_` to perform gradient
+    clipping.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Vanishing Gradients**: When the change in the gradients is too small, this
+    can cause problems as well. Often, this is because the inputs are simply too compressed
+    to allow the system to learn correctly. If this seems to be happening, consider
+    using **ReLU** or Leaky ReLU, which we introduced in [Chapter 1](66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml), *Generative
+    Adversarial Networks Fundamentals*.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Weight clipping**: This is not a widely used technique, besides its application
+    in the Wasserstein GAN ([Chapter 7,](c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml)
+    *Image Restoration with GANs*). It is an indirect way to perform gradient clipping.
+    Therefore, it is not necessary to use both techniques in the same model. We only
+    used both in the example in [Chapter 1](66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml),
+    *Generative Adversarial Networks Fundamentals*, to make sure that nothing went
+    wrong in our model.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Efficient coding in Python
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Most of the code you will see in this book is written in Python. Almost all
+    of the popular deep learning tools (PyTorch, TensorFlow, Keras, MXNet, and so
+    on) are also written in Python. Python is easy to learn and easy to use, especially
+    compared to other **object-oriented programming** (**OOP**) languages such as
+    C++ and Java. However, using Python does not excuse us from lazy coding. We should
+    never settle with *it works*. In deep learning, efficient code may save us hours
+    of training time. In this section, we will give you some tips and advice on writing
+    efficient Python projects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Reinventing the wheel wisely
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Innovative developers are not enthusiastic about reinventing the wheel, that
+    is, implementing every tiny component in the project that can be easily grabbed
+    from GitHub or third-party libraries. Deep learning relies on being open source
+    and anyone in the world can learn and do cool things with it. We encourage you
+    to take advantage of any available tool you can find to solve your practical problems,
+    as long as it saves your invaluable time. Some of the model implementations in
+    this book come from other people's projects on GitHub. Imagine how long it would
+    take us to figure out all the implementation details based on the papers that
+    have already been published!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here are some websites that may come in handy when you are looking for specific
+    tools or code snippets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[https://github.com](https://github.com)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://stackoverflow.com](https://stackoverflow.com)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://stats.stackexchange.com](https://stats.stackexchange.com)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://discuss.pytorch.org](https://discuss.pytorch.org)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://www.reddit.com/r/MachineLearning](https://www.reddit.com/r/MachineLearning)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[https://www.kaggle.com/kernels](https://www.kaggle.com/kernels)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, the most important one: [https://www.google.com](https://www.google.com)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Advice for beginners in deep learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following is some advice that beginners in deep learning should definitely
+    follow:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Set reasonable but solid goals and deadlines**:Give yourself plenty of time
+    to research, learn, and experiment with a subject. Start with the goal and then
+    create a series of steps that will achieve that goal. Keep a log of your progress.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Search the web to find information on the project you are working on**: The
+    internet is often the fastest way to gather information about a particular subject.
+    Start with simple but direct search text and then refine your searches to obtain
+    the best resources.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Small steps are better than huge leaps**: As you read an article or chapter
+    on your subject of choice, copy the code into your IDE and run the project. Don''t
+    move on until you understand the inputs, outputs, and the code that produces them.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Try to find pretrained models**: Once you have the basic information and
+    understand the model process, use pretrained models to save time and hardware
+    resources. Again, keep the results in your log.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Take the results from your searches and experiment on your own**: It''s likely
+    that you will gather ideas about the subject as you do your research and testing.
+    Jot them down and test your ideas against what you have learned.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Get the best hardware that you can afford without breaking the bank**: This
+    is probably the most important tip. A good computer with a good graphics card
+    and GPU with as much memory as possible will potentially cut hours off your process.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we looked at the overall design of the model architecture and
+    the steps that are required when it comes to choosing the best convolution operation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will introduce a classic performant GAN model called
+    DCGAN, which is used for generating 2D images.
+  prefs: []
+  type: TYPE_NORMAL

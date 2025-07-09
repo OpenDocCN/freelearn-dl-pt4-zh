@@ -1,0 +1,822 @@
+- en: Generating a Deep Learning Image Classifier
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Over the past decade, deep learning has made a name for itself by producing
+    state-of-the-heart results across computer vision, natural language processing,
+    speech recognition, and many more such applications. Some of the models that human
+    researchers have designed and engineered have also gained popularity, including
+    AlexNet, Inception, VGGNet, ResNet, and DenseNet; some of them are now the go-to
+    standard for their respective tasks. However, it seems that the better the model
+    gets, the more complex the architecture becomes, especially with the introduction
+    of residual connections between convolutional layers. The task of designing a
+    high-performance neural network has thus become a very arduous one. Hence the
+    question arises: is it possible for an algorithm to learn how to generate neural network
+    architectures?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the title of this chapter suggests, it is indeed possible to train a neural
+    network to generate neural networks that perform well on a given task. In this
+    chapter, we will examine **Neural Architecture Search** (referred to as **NAS**
+    henceforth), a novel framework developed by Barret Zoph and Quoc V. Le from the
+    Google Brain team that uses deep reinforcement learning to train a Controller
+    to produce child networks that learn to accomplish tasks. We will learn how policy
+    gradient methods (REINFORCE in particular) can train such a Controller. We will
+    then implement a Controller that uses NAS to generate child networks that train
+    on `CIFAR-10` data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding NAS and how it learns to generate other neural networks
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing a simple NAS framework that generates neural networks for training
+    on `CIFAR-10` data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You can find the original sources of the ensuing topics from the following
+    sources:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Zoph, B., and Le, Q. V. (2016). *Neural Architecture Search with reinforcement
+    learning*. arXiv preprint arXiv:1611.01578.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Pham, H., Guan, M. Y., Zoph, B., Le, Q. V., and Dean, J. (2018). *Efficient
+    Neural Architecture Search via Parameter Sharing*. arXiv preprint arXiv:1802.03268.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Neural Architecture Search
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The next few sections will describe the NAS framework. You will learn about
+    how the framework learns to generate other neural networks to complete tasks using
+    a popular reinforcement learning scheme called **REINFORCE**, which is a type
+    of policy gradient algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating and training child networks
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Research on algorithms that generate neural architectures has been around since
+    the 1970''s. What sets NAS apart from previous works is its ability to cater to
+    large-scale deep learning algorithms and its formulation of the task as a reinforcement
+    learning problem. More specifically, the agent, which we will refer to as the
+    Controller, is a recurrent neural network that generates a sequence of values.
+    You can think of these values as a sort of genetic code of the child network that defines
+    its architecture; it sets the sizes of each convolutional kernel, the length of
+    each kernel, the number of filters in each layer, and so on. In more advanced
+    frameworks, the values also determine the connections between layers to generate
+    residual layers:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/4274f1d4-9a06-4333-a570-03141a930279.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 1: Overview of the NAS framework'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Moreover, each value of the genetic code that the Controller outputs counts
+    as an action, *a*, that is sampled with probability, *p*. Because the Controller
+    is a recurrent neural network, we can represent the *t*^(th) action as ![](img/faa90a7b-db39-49c1-a47e-2c17ba041851.png). Once
+    we have a list of actions, ![](img/7239d03a-caa1-49ca-b868-d135bc3cc4e6.png)—where *T*
+    is some predefined parameter that sets the maximum size of the genetic code—we
+    can generate the child network with the specified architecture, *A*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/09c0b341-1338-4af2-86dd-6e5bda00cb79.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 2: The architecture of the Controller'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once the Controller generates a child network, we train it on a given task
+    until either some termination criteria is met (for example, after a specified
+    number of epochs). We then evaluate the child network on the validation set to
+    produce some validation accuracy, *R*. The validation accuracy acts as the reward
+    signal for the Controller. So, the objective of the Controller is to maximize
+    the expected reward:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d92c3151-95a1-42bc-902f-49620b4c81ac.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here, *J* is the reward function (also referred to as the fit function), ![](img/16d467a8-67e3-48f5-a55b-930031763723.png) is
+    the parameters of the Controller, and the right-hand side of the equation is the
+    expectation of the reward given a child network architecture, *A*. In practice,
+    this expectation is calculated by averaging the rewards over *m* child network
+    models that the Controller produces in one batch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/52c89b3d-40e1-46ad-93c5-e76d80ccf368.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Training the Controller
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'How do we use this reward signal to update the Controller? Remember, this reward
+    signal is not differentiable like a loss function in supervised learning; we may
+    not backpropagate this through the Controller on its own. Instead, we employ a
+    policy gradient method called **REINFORCE** to iteratively update the Controller
+    parameters, ![](img/ea43e406-8138-401c-bdba-9a1432dd38eb.png). In REINFORCE, the
+    gradient of the reward function, *J*, with respect to the parameters of the Controller, ![](img/3ad033be-2d52-421a-9c2d-b6da56710c63.png),
+    is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/6f285d1b-2866-481f-a3c8-fb2b5f803772.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: You may recall seeing a similar expression in [Chapter 6](857fa187-2524-4682-ae75-ab6b15e00a50.xhtml),
+    *Learning to Play Go*. Indeed, this is the policy gradient method that AlphaGo
+    and AlphaGo Zero use to update the weights of their reinforcement learning policy
+    networks. We briefly introduced the method then, but we will go a bit more in-depth
+    here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's break the preceding equation down. On the right-hand side, we would like
+    to represent the probability of choosing some architecture, *A*. In particular,
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/394dfe7f-478c-47e2-a4d5-e51996fe112a.png) represents the probability
+    that the Controller takes action ![](img/5ed6092d-17db-4ea7-a4b5-1bd2fa971fa4.png) given
+    all the previous actions, ![](img/af6f66a3-0c6d-448d-a13d-0126e02d4ec3.png), and
+    the parameters of the Controller, ![](img/8a4e3cb6-38fe-423c-a588-3c6fb67dd95b.png).
+    Again, action ![](img/78832ef5-12c9-48db-9d8d-82b8853fc29a.png) corresponds to
+    the *t*^(th) value in the genetic sequence that represents the child network''s
+    architecture. The joint probability of choosing all actions, ![](img/50724bbb-cc31-45ee-9c44-2157a323b752.png),
+    can be formulated as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c15a89ea-f4d1-4c47-a9cf-316fdb643460.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'By transforming this joint probability to the log space, we can turn the product
+    into a sum of probabilities:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/457a0dfc-e99d-4030-a2cb-e5a9c7253058.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In general, we want to maximize this log conditional probability for taking
+    some action. In other words, we want to increase the likelihood of the Controller
+    generating a particular sequence of genetic codes. Hence we perform gradient ascent
+    on this objective with respect to the Controller''s parameters by taking the derivative
+    of the log probability of sampling architecture *A*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7ca47ff5-b4b3-493d-8ece-9c37fb92dfb8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: But how do we update the Controller parameters so that better architectures
+    are generated? This is where we make use of the reward signal, *R*. By multiplying
+    the preceding with the reward signal, we can control the size of the policy gradient.
+    In other words, if a particular architecture achieved high validation accuracy
+    (with the highest possible being 1.0), the gradients for that policy will be relatively
+    strong and the Controller will learn to produce similar architectures. On the
+    other hand, smaller validation accuracies will mean smaller gradients, which helps
+    the Controller ignore those architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'One problem with the REINFORCE algorithm is that the reward signal *R* can
+    have high variance, which can lead to unstable training curves. To reduce the
+    variance, it is common to subtract the reward with some value, *b*, which we refer
+    to as the baseline function. In Zoph et al., the baseline function is defined
+    as the exponential moving average of the past rewards. Hence our REINFORCE policy
+    gradient is now defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/1246a433-5328-47f6-9b1d-bce44939749d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Once we have this gradient, we apply the usual backpropagation algorithm to
+    update the Controller parameters, ![](img/c0938788-435b-4258-aed5-1c8beaf53289.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The training steps for the Controller is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For each episode, do the following:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generate *m* child network architectures
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Train child networks on given task and obtain *m* validation accuracies
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Calculate ![](img/3a57d7b6-c858-459b-9343-a2ce6a8734c7.png)
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Update ![](img/e842e22d-55cd-44ef-97fe-4ab452664d09.png)
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In Zoph et al., the training procedure is done with several copies of the Controller.
+    Each Controller is parameterized by ![](img/e842e22d-55cd-44ef-97fe-4ab452664d09.png), which
+    itself is stored in a distributed manner among multiple servers, which we call
+    parameter servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In each episode of training, the Controller creates several child architectures
+    and trains them independently. The policy gradient calculated as a result is then
+    sent to the parameter servers to update the Controller''s parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a144e3eb-57ca-4d76-a1da-e99221b0a29e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 3: The training architecture'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Controller's parameters are shared among a number of parameter servers.
+    Moreover, multiple copies of the Controller are trained in parallel, each one
+    calculating rewards and gradients for its respective batches of child network
+    architectures.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This architecture allows the Controller to be trained quickly given enough resources.
+    For our purposes, however, we will stick to one Controller that generates *m*
+    child network architectures. Once we have trained the Controller for a specified
+    number of episodes, we calculate the test accuracy by choosing the child network
+    architecture that had the best validation accuracy and measuring its performance
+    on the test set.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing NAS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will implement NAS. In particular, our Controller is tasked
+    with generating child network architectures that learn to classify images from
+    the `CIFAR-10` dataset. The architecture of the child network will be represented
+    by a list of numbers. Every four values in this list represent a convolutional
+    layer in the child network, each describing the kernel size, stride length, number
+    of filters, and the pooling window size in the subsequent pooling layer. Moreover,
+    we specify the number of layers in a child network as a hyper-parameters. For
+    example, if our child network has three layers, its architecture is represented
+    as a vector of length 12\. If we have an architecture represented as `[3, 1, 12,
+    2, 5, 1, 24, 2]`, then the child network is a two-layer network where the first
+    layer has kernel size of 3, stride length of 1, 12 filters, and a max-pooling
+    window size of 2, and the second layer has kernel size of 5, stride length of
+    1, 24 filters, and max-pooling window size of 2\. We set the activation function
+    between each layer as ReLU. The final layer involves flattening the last convolutional
+    layer output and applying a linear layer with the number of classes as its width,
+    followed by a Softmax activation. The following sections will walk you through
+    the implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: child_network.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will first implement our child network module. This module contains a class
+    called `ChildCNN`, which constructs a child network given some architecture configuration,
+    which we call `cnn_dna`. As mentioned previously, `cnn_dna` is simply a list of
+    numbers, with each value representing a parameter of its respective convolutional
+    layer. In our `config.py`, we specify the max number of layers a child network
+    can have. For our implementation, each convolutional layer is represented by four
+    parameters, where each corresponds to the kernel size, stride length, number of
+    filters, and subsequent max-pooling window size.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Our `ChildCNN` is a class that takes the following parameters in its constructor:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`cnn_dna`: The network architecture'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`child_id`: A string that simply identifies the child network architecture'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`beta`: Weight parameter for L2 regularization'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`drop_rate`: Dropout rate'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We also implement a helper function called `proces_raw_controller_output()`,
+    which parses `cnn_dna` that the Controller outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we include the `build` method, which builds our child network using
+    the given `cnn_dna`. You will notice that, although we are letting the Controller
+    decide the architecture of our child network, we are still hardcoding several
+    things, such as the activation function, `tf.nn.relu`, and the way we initialize
+    the kernels. The fact that we are adding a max-pooling layer after each convolutional
+    layer is also hardcoded. A more sophisticated NAS framework would also let the
+    Controller decide these components of the architecture as well, with the trade
+    off being longer training time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Each convolutional layer is followed by a max-pooling layer and a dropout layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, after several blocks of convolutional, pooling, and dropout layers,
+    we flatten the output volume and a fully connected layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The argument to our `build` method is an input tensor, which has by default
+    a shape of (32, 32, 3), which is the `CIFAR-10` data shape. The reader is free
+    to tweak the architecture of this network, including adding a few more fully connected
+    layers or inserting batch normalization layers in between convolutions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: cifar10_processor.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This module contains code for processing `CIFAR-10` data, which we use to train
+    our child networks. In particular, we construct an input data pipeline using TensorFlow's
+    native `tf.data.Dataset` API. Those who have used TensorFlow for some time may
+    be more familiar with creating `tf.placeholder` tensors and feeding data via `sess.run(...,
+    feed_dict={...})`. However, this is no longer the preferred way of feeding data
+    into the network; in fact, it is the slowest way to train a network, for the repetitive
+    conversions from data in `numpy` format to a native TensorFlow format cause significant
+    computational overhead. `tf.data.Dataset` alleviates this problem by turning the
+    input pipeline into TensorFlow operations that are part of the symbolic graph.
+    In other words, the data is converted into tensors right from the get-go. This
+    allows for a much smoother input pipeline that can speed up training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Refer to this official tutorial ([https://www.tensorflow.org/guide/datasets_for_estimators](https://www.tensorflow.org/guide/datasets_for_estimators))
+    for more information on the `tf.data.Dataset` API.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `cifar10_processor.py` contains a single method to create `CIFAR-10` data
+    into tensors. We first implement a helper function for creating a `tf.data.Dataset`
+    object:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the main data processor function, we first load `CIFAR-10` data. We use
+    the `keras.datasets` API to do this (run `pip install keras` in your Terminal
+    if you don''t have Keras):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then turn these NumPy arrays into TensorFlow tensors, which we can feed
+    directly to our network. What actually happens in our `_create_tf_dataset `helper
+    function? We use the `tf.dataset.Dataset.from_tensor_slices()` function to turn
+    the data and the labels, both of which are NumPy arrays, into TensorFlow tensors.
+    We then create the native dataset by zipping these tensors. The `shuffle`, `repeat`,
+    and `batch` functions after zipping the data and labels define how we want the
+    input pipeline to work. In our case, we are shuffling the input data, repeating
+    the dataset once we reach the end, and batching the data with a given batch size.
+    We also calculate the number of batches that each dataset has and return them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: And with that, we have an optimized input data pipeline that is much faster
+    than using `feed_dict`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: controller.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The `controller.py` module is where everything comes together. We will implement
+    the Controller, which handles training each child network as well as its own parameter
+    updates. We first implement a helper function that calculates an exponential moving
+    average of a list of numbers. We use this as the baseline function for our REINFORCE
+    gradient calculation, as mentioned previously, to calculate the exponential moving
+    average of the past rewards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we define our `Controller` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: There are several attributes to note: `self.num_cell_outputs` refers to the
+    number of values that our **recurrent neural network** (**RNN**) should output
+    and corresponds to the length of the child network architecture configuration. `self.reward_history`
+    and `self.ar chitecture_history` are simply buffers that allow us to keep track
+    of rewards and child network architectures that the RNN generated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Method for generating the Controller
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We next implement a method for generating the Controller, which we call `build_controller`.
+    The first step in constructing our Controller is defining the input placeholders.
+    We create two of these—one is for the child network DNA, which is fed as input
+    to the RNN for generating a new child network DNA, and the second is a list for
+    storing discounted rewards when calculating the gradients for REINFORCE:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define the output tensors of our RNN (to be implemented here). Note
+    that the outputs of the RNN are small, in the range of (-1, 1). So, we multiply
+    the output by 10 in order to create the child network DNA:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define the loss function and optimizer. We use `RMSPropOptimizer` as
+    our backpropagation algorithm, where the learning rate decays exponentially. Rather
+    than calling `optimizer.minimize(loss)` as is usually done with other neural network
+    models, we call the `compute_gradients` method to obtain gradients for calculating
+    REINFORCE gradients:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we apply the REINFORCE gradients on the Controller parameters:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The actual Controller network is created via the `network_generator` function.
+    As mentioned, the Controller is a recurrent neural network with a special kind
+    of cell. However, we don''t have to implement this from scratch, as the developers
+    behind TensorFlow have already implemented a custom `tf.contrib.rnn.NASCell`.
+    We simply need to use this to construct our recurrent neural network and obtain
+    the outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: Generating a child network using the Controller
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now, we implement a method that generates a child network using the Controller:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we generate our child network, we call the `train_child_network` function
+    to train it. This function takes `child_dna` and `child_id` and returns the validation
+    accuracy that the child network achieves. First, we instantiate a new `tf.Graph()`
+    and a new `tf.Session()` so that the child network is separated from the Controller''s
+    graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then define the input data pipeline, which uses the `tf.data.Dataset` creator
+    we implemented here. In particular, we use `tf.data.Iterator` to create a generator
+    that yields a batch of input tensors every time we call `iterator.get_next()`.
+    We initialize an iterator for the training and validation datasets respectively.
+    The batch of input tensors contains the `CIFAR-10` images and the corresponding
+    labels, which we unpack at the end:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `input_tensor` becomes the argument to the child network''s `build` method.
+    We then define all the TensorFlow operations needed for training, including the
+    prediction, loss, optimizer, and accuracy operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then train the child network. Notice that when calling `sess.run(...)`,
+    we are no longer passing an argument for the `feed_dict` parameter. Instead, we
+    are simply calling the operations we want to run (`loss_ops`, `train_ops`, and `accuracy_ops`). This
+    is because the inputs are already represented as tensors in the child network''s
+    graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once training finishes, we calculate the validation accuracy and return it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Finally, we implement a method for training the Controller. Due to computational
+    resource constraints, we will not parallelize the training procedure (that is, *m*
+    child networks trained in parallel per Controller epoch). Instead, we will sequentially
+    generate these child networks and keep track of the mean validation accuracy among
+    them.
+  prefs: []
+  type: TYPE_NORMAL
+- en: train_controller method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The `train_controller` method is called after we build the Controller. The
+    first step is thus to initialize all the variables and the first state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The first `child_network_architecture` is a list that resembles an architecture
+    configuration and will be the argument to `NASCell`, which would output the first
+    child DNA.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training procedure consists of two `for` loops: one for the number of epochs
+    for the Controller, and another for each child network the Controller generates
+    per epoch. In the inner `for` loop, we generate a new `child_network_architecture` using
+    `NASCell` and train a child network based on it to obtain a validation accuracy:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'After we obtain *m* validation accuracies, we update our Controller using the
+    mean reward and the gradients computed with respect to the last child network''s
+    DNA. We also keep track of past mean rewards. Using the `ema` method implemented
+    previously, we calculate the baseline, which we then subtract from the latest
+    mean reward. We then call `self.sess.run([self.train_op, self.total_loss]...)`
+    to update the Controller and calculate the Controller''s loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: And that's it! You can find the full implementation of `controller.py` in the
+    main GitHub repository.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing ChildCNN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we have implemented both `child_network` and `controller`, it would
+    be great to test the training of `ChildCNN` via our `Controller` with custom child
+    network configurations. We would like to make sure that, with a sensible architecture,
+    `ChildCNN` can learn sufficiently.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To do this, first open up your favorite Terminal and start a Jupyter console:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We first configure our logger so we can see the outputs on the Terminal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we import the `Controller` class from `controller.py`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then handcraft some child network architecture to be passed to the Controller''s `train_child_network`
+    function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we instantiate our `Controller` and call the `train_child_network`
+    method:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If successful, you should be seeing decent accuracy scores after several epochs
+    of training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: config.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The `config.py` module includes configurations used by the Controller and the
+    child networks. Here, you can adjust several training parameters, such as the
+    number of episodes, the learning rate, and the number of child networks generated
+    by the Controller per epoch. You can also experiment with child network sizes,
+    but do note that the larger the child network, the longer training takes for both
+    the Controller and the child network:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Some of these numbers (such as `max_episodes`) are arbitrarily chosen. We encourage
+    the reader to tweak these numbers to understand how they affect the training of
+    both the Controller and the child networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: train.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This `train.py` module acts as our top-level entry to training the Controller:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'And there we have it; a neural network that generates other neural networks!
+    Make sure your implementation has the following directory structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To execute training, simply run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If all works well, you should be seeing output like the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: You should see logging statements for each child network architecture its CIFAR-10
+    training logs. During CIFAR-10 training, we print the loss and accuracy for each
+    epoch as well as the validation accuracy which we return to the Controller.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Additional exercises
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this section, we have implemented the NAS framework for `CIFAR-10` data.
+    While this is a great start, there are additional features one can implement,
+    which we will leave to the reader as exercises:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: How can we make the Controller create child networks that solve problems in
+    other domains, such as text and speech recognition?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How can we make the Controller train multiple child networks in parallel in
+    order to speed up the training process?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How can we visualize the training process using TensorBoard?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: How can we make the Controller design child networks that include residual connections?
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Some of these exercises may require significant changes in the code base but
+    are beneficial for deepening your understanding of NAS. We definitely recommend
+    giving these a try!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Advantages of NAS
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The biggest advantage of NAS is that one does not need to spend copious amounts
+    of time designing a neural network for a particular problem. This also means that
+    those who are not data scientists can also create machine learning agents as long
+    as they can prepare data. In fact, Google has already productized this framework
+    as Cloud AutoML, which allows anyone to train customized machine learning models
+    with minimum effort. According to Google, Cloud AutoML provides the following
+    benefits:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Users only need to interact with a simple GUI to create machine learning models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Users can have Cloud AutoML annotate their own datasets if they are not labeled
+    already. This is similar to Amazon's Mechanical Turk service.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Models generated by Cloud AutoML are guaranteed to have high accuracy and fast
+    performance.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Easy end-to-end pipeline for uploading data, training and validating the model,
+    deploying the model, and creating a REST endpoint for fetching predictions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Currently, Cloud AutoML can be used for image classification/detection, natural
+    language processing (text classification), and translation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For more information on Cloud AutoML, check out their official page here: [https://cloud.google.com/automl/](https://cloud.google.com/automl/)
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another advantage that NAS provides is the ability to generate more compact
+    models than those designed by humans. According to *Efficient Neural Architecture
+    Search via Parameter Sharing* by Hieu Pham et. al., whereas the most recent state-of-the-art
+    neural network for `CIFAR-10` classification had 26.2 million parameters, a NAS-generated
+    neural network that achieved comparable test accuracy (97.44% for human-designed
+    network versus 97.35% for the NAS-generated network) only had 3.3 million parameters.
+    Note that older, less-accurate models such as VGG16, ResNet50, and InceptionV3
+    have 138 million, 25 million, and 23 million parameters respectively. The vast
+    reduction in parameter size allows for more efficient inference time and model
+    storage, both of which are important aspects when deploying models into production.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we have implemented NAS, a framework where a reinforcement
+    learning agent (the Controller) generates child neural networks to complete a
+    certain task. We studied the theory behind how the Controller learns to generate
+    better child network architectures via policy gradient methods. We then implemented
+    a simplified version of NAS that generates child networks that learn to classify
+    `CIFAR-10` images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For more information on related topics, refer to the following list of links:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: NAS with reinforcement learning: [https://arxiv.org/abs/1611.01578](https://arxiv.org/abs/1611.01578)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Efficient NAS via parameter sharing: [https://arxiv.org/pdf/1802.03268](https://arxiv.org/pdf/1802.03268)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Google Cloud AutoML: [https://cloud.google.com/automl/](https://cloud.google.com/automl/)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Awesome Architecture Search—a curated list of papers related to generating neural
+    networks: [https://github.com/markdtw/awesome-architecture-search](https://github.com/markdtw/awesome-architecture-search)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The NAS framework marks an exciting development in the deep learning field,
+    for we have figured out how to automatically design neural network architectures,
+    a decision previously made by humans. There are now improved versions of NAS and
+    other kinds of algorithms that generate neural networks automatically, which we
+    encourage the reader to look into as well.
+  prefs: []
+  type: TYPE_NORMAL

@@ -1,0 +1,970 @@
+- en: '17'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Building a Recommender System Using LightGCN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Recommender systems have become an integral part of modern online platforms,
+    with the goal of providing personalized recommendations to users based on their
+    interests and past interactions. These systems can be found in a variety of applications,
+    including suggesting products to purchase on e-commerce websites, recommending
+    content to watch on streaming services, and suggesting connections to make on
+    social media platforms.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Recommendation systems are one of the main applications of GNNs. Indeed, they
+    can effectively incorporate the complex relationships between users, items, and
+    their interactions into a unified model. In addition, the graph structure allows
+    for the incorporation of side information, such as user and item metadata, into
+    the recommendation process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will introduce a new GNN architecture called `Book-Crossing`
+    dataset, which contains users, books, and over a million ratings. Using this dataset,
+    we will build a book recommender system with collaborative filtering and apply
+    it to get recommendations for a specific user. Through this process, we will demonstrate
+    how to use the LightGCN architecture to build a practical recommendation system.
+  prefs: []
+  type: TYPE_NORMAL
+- en: By the end of this chapter, you will be able to create your own recommender
+    system using LightGCN. You will learn how to process any dataset with users, items,
+    and scores for a collaborative filtering approach. Finally, you will learn how
+    to implement and evaluate this architecture and get recommendations for individual
+    users.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will cover the following main topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploring the Book-Crossing dataset
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Preprocessing the Book-Crossing dataset
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementing the LightGCN architecture
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Technical requirements
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: All the code examples from this chapter can be found on GitHub at [https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter17](https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter17).
+    The installation steps required to run the code on your local machine can be found
+    in the *Preface* of this book.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter requires a large amount of GPU. You can lower it by decreasing
+    the size of the training set in the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Exploring the Book-Crossing dataset
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will perform exploratory data analysis on a new dataset
+    and visualize its main characteristics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `Book-Crossing` dataset [1] is a collection of book ratings provided by
+    278,858 users in the *BookCrossing community* ([www.bookcrossing.com](http://www.bookcrossing.com)).
+    The ratings, which are both explicit (rating between 1 and 10) and implicit (users
+    interacted with the book), total 1,149,780 and pertain to 271,379 books. The dataset
+    was collected by Cai-Nicolas Ziegler during a four-week crawl in August and September
+    2004\. We will use the `Book-Crossing` dataset to build a book recommender system
+    in this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s download the dataset and unzip it with the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will unzip three files:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `BX-Users.csv` file contains data on individual BookCrossing users. User
+    IDs have been anonymized and are represented as integers. Demographic information,
+    such as location and age, is also included for some users. If this information
+    is not available, the corresponding fields contain `NULL` values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `BX-Books.csv` file contains data on the books included in the dataset,
+    identified by their ISBN. Invalid ISBNs have been removed from the dataset. In
+    addition to content-based information, such as the book title, author, year of
+    publication, and publisher. This file also includes URLs linking to cover images
+    of the books of three different sizes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `BX-Book-Ratings.csv` file includes information on the ratings given to
+    books in the dataset. Ratings are either explicit, given on a scale from 1-10
+    with higher values indicating a greater appreciation, or implicit, indicated by
+    a rating of 0.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The following figure is a graph representation made with Gephi using a subsample
+    of this dataset.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 17.1 – Graph representation of the Book-Crossing dataset, with books
+    represented as blue nodes and users represented as red nodes](img/B19153_17_001.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.1 – Graph representation of the Book-Crossing dataset, with books
+    represented as blue nodes and users represented as red nodes
+  prefs: []
+  type: TYPE_NORMAL
+- en: The size of the nodes is proportional to the number of connections (degree)
+    in the graph. We can see popular books such as **The Da Vinci Code** that act
+    like hubs thanks to their high number of connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let’s explore the dataset to get more insight:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import `pandas` and load every file with the `;` separator and the `latin-1`
+    encoding for compatibility issues. `BX-Books.csv` also requires the `error_bad_lines`
+    parameter:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s print these DataFrames to see the columns and the number of rows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s repeat the process with the `users` DataFrame:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, the `books` DataFrame has too many columns to be printed like the
+    two others. Let’s print the column names instead:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `ratings` DataFrame links the `users` and `books` DataFrames using `User-ID`
+    and `ISBN` information and includes a rating, which could be considered a weight.
+    The `users` DataFrame includes demographic information, such as location and age,
+    for each user when available. The `books` DataFrame includes content-related information
+    about the books, such as the title, author, year of publication, publisher, and
+    URLs linking to cover images of three different sizes.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s visualize the rating distribution to see whether we can use this information.
+    We can plot it using `matplotlib` and `seaborn` as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following plot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 17.2 – Rating distribution (interaction with a book is represented
+    as a rating of zero, while ratings between 1 and 10 are real ratings)](img/B19153_17_002.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.2 – Rating distribution (interaction with a book is represented as
+    a rating of zero, while ratings between 1 and 10 are real ratings)
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Do these ratings correspond to the data we have in the `books` and `users`
+    DataFrames? We can compare the number of unique `User-ID` and `ISBN` entries in
+    `ratings` to the number of rows in these DataFrames as a quick check:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: Interestingly, there are fewer unique users in `ratings` compared to `users`
+    (105,283 versus 278,858) but more unique ISBNs compared to `books` (340,556 versus
+    271,379). This means that our database is missing a lot of values, so we will
+    need to be careful when joining tables.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let’s finish by plotting the number of books that have been rated only once,
+    twice, and so on. First, we calculate the number of times each ISBN appears in
+    the `ratings` DataFrame using the `groupby()` and `size()` functions:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: This creates a new DataFrame, `isbn_counts`, which contains the count of each
+    unique ISBN in the `ratings` DataFrame.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We calculate the number of occurrences of each count value using the `value_counts()`
+    function. This new DataFrame will contain the count of occurrences of each count
+    value in `isbn_counts`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, we can plot the distribution using `pandas`’ `.plot()` method. In
+    this case, we will only plot the first 15 values:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain the following plot:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 17.3 – Distribution of the number of times each book (ISBN) appears
+    in ratings (15 first values)](img/B19153_17_003.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.3 – Distribution of the number of times each book (ISBN) appears in
+    ratings (15 first values)
+  prefs: []
+  type: TYPE_NORMAL
+- en: We see that a lot of books have only been rated once or twice. It is very rare
+    to see books with a lot of ratings, which makes things more difficult for us since
+    we rely on these connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We repeat the same process to obtain the distribution of the number of times
+    each user (`User-ID`) appears in `ratings`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We obtain a similar distribution:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '![Figure 17.4 – Distribution of the number of times each user (User-ID) appears
+    in ratings (15 first values)](img/B19153_17_004.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.4 – Distribution of the number of times each user (User-ID) appears
+    in ratings (15 first values)
+  prefs: []
+  type: TYPE_NORMAL
+- en: This also means that most users only rate one or two books, but a few of them
+    rate a lot of books.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There are different issues with this dataset, such as mistakes in the year of
+    publication or the name of the publishers, and other missing or incorrect values.
+    However, we will not directly use metadata from the `books` and `users` DataFrames
+    in this chapter. We will rely on the connections between `User-ID` and `ISBN`
+    values, which is why we don’t need to clean the dataset here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next section, we will see how to process the dataset to prepare it before
+    feeding it to the LightGCN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preprocessing the Book-Crossing dataset
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We want to process the dataset for a particular task: recommending items, and
+    more specifically using a **collaborative filtering** approach. Collaborative
+    filtering is a technique used to make personalized recommendations to users. It
+    is based on the idea that users who have similar preferences or behaviors are
+    more likely to have similar interests. Collaborative filtering algorithms use
+    this information to identify patterns and make recommendations to users based
+    on the preferences of similar users.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is different from content-based filtering, which is a recommendation approach
+    that relies on the features of the items being recommended. It generates recommendations
+    by identifying the characteristics of an item and matching them to the characteristics
+    of other items that have been liked by the user in the past. **Content-based filtering**
+    approaches are typically based on the idea that if a user likes an item with certain
+    characteristics, they will also like items with similar characteristics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will focus on collaborative filtering. Our objective is
+    to determine which book to recommend to a user based on the preferences of other
+    users. This problem can be represented as a bipartite graph as in the following
+    figure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 17.5 – Example of a user-item bipartite graph](img/B19153_17_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.5 – Example of a user-item bipartite graph
+  prefs: []
+  type: TYPE_NORMAL
+- en: Knowing that user **1** liked items **A** and **B**, and user **3** liked items
+    **B** and **D**, we should probably recommend item **B** to user **2**, who also
+    enjoyed items **A** and **D**.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This is the type of graph we want to build from the `Book-Crossing` dataset.
+    More precisely, we also want to include negative samples. In this context, negative
+    samples refer to items that have not been rated by a given user. Items that have
+    been rated by a particular user are also referred to as positive items. We will
+    explain why we use this negative sampling technique when we implement the `loss`
+    function.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the rest of the chapter, the `LightGCN` code is mostly based on the official
+    implementation and the excellent work of Hotta and Zhou [2] and Li et al. [3]
+    on a different dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We import the following libraries:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We re-load the datasets:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We only keep rows where `ISBN` information can be found in the `books` DataFrame
+    and `User-ID` information can be found in the `users` DataFrame:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We only keep high ratings (>= 8/10) so the connections we create correspond
+    to books that were liked by users. Then, we filter out even more samples and keep
+    a limited number of rows (100,000) to speed up training:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create mappings from `user` and `item` identifiers to integer indices:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We count the number of users, items, and total entities in the dataset:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a tensor of `user` and `item` indices based on the user ratings in
+    the dataset. The `edge_index` tensor is created by stacking these two tensors:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We split `edge_index` into training, validation, and test sets using the `train_test_split()`
+    function from `scikit-learn`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We generate a batch of random indices using the `np.random.choice()` function.
+    This generates `BATCH_SIZE` random indices from a range of `0` to `edge_index.shape[1]-1`.
+    These indices will be used to select rows from the `edge_index` tensor:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We generate negative samples using the `structured_negative_sampling()` function
+    from PyTorch Geometric. Negative samples are items with which the corresponding
+    user has not interacted. We use the `torch.stack()` function to add a dimension
+    at the beginning:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We select the user, positive item, and negative item indices for the batch
+    using the `index` array and the `edge_index` tensor:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: The `user_index` tensor contains the user indices for the batch, the `pos_item_index`
+    tensor contains the positive item indices for the batch, and the `neg_item_index`
+    tensor contains the negative item indices for the batch.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We now have three sets and a function to return mini-batches. The next step
+    is to understand and implement the LightGCN architecture.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementing the LightGCN architecture
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The LightGCN [4] architecture aims to learn representations for nodes by smoothing
+    features over the graph. It iteratively performs graph convolution, where neighboring
+    nodes’ features are aggregated as the new representation of a target node. The
+    entire architecture is summarized in *Figure 17**.6*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![Figure 17.6 – LightGCN model architecture with convolution and layer combination](img/B19153_17_006.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 17.6 – LightGCN model architecture with convolution and layer combination
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, `LightGCN` adopts a simple weighted sum aggregator rather than using
+    feature transformation or nonlinear activation as seen in other models such as
+    the GCN or GAT. The light graph convolution operation calculates the ![](img/Formula_B19153_17_001.png)-th
+    user and item embedding ![](img/Formula_B19153_17_002.png) and ![](img/Formula_B19153_17_003.png)
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_17_004.jpg)![](img/Formula_B19153_17_005.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: The symmetric normalization term ensures that the scale of embeddings does not
+    increase with graph convolution operations. In contrast to other models, `LightGCN`
+    only aggregates the connected neighbors and does not include self-connections.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Indeed, it achieves the same effect by using a layer combination operation.
+    This mechanism consists of a weighted sum using user and item embeddings at each
+    layer. It produces the final embeddings ![](img/Formula_B19153_17_006.png) and
+    ![](img/Formula_B19153_17_007.png) with the following equations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_17_008.jpg)![](img/Formula_B19153_17_009.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, the contribution of ![](img/Formula_B19153_17_010.png)-th layer is weighted
+    by the variable ![](img/Formula_B19153_17_011.png). The authors of `LightGCN`
+    recommend setting it to ![](img/Formula_B19153_17_012.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The prediction shown in *Figure 17**.6* corresponds to ratings or ranking scores.
+    It is obtained using the inner product of user and item final representations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_17_013.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Let’s now implement this architecture in PyTorch Geometric:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create a `LightGCN` class with four arguments: `num_users`, `num_items`,
+    `num_layers`, and `dim_h`. The `num_users` and `num_items` arguments specify the
+    number of users and items in the dataset, respectively. `num_layers` indicates
+    the number of `LightGCN` layers that will be used, and the `dim_h` argument specifies
+    the size of the embedding vectors (for the users and items):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We store the number of users and items and create user and item embedding layers.
+    The shape of the `emb_users` or ![](img/Formula_B19153_17_014.png) is ![](img/Formula_B19153_17_015.png)
+    and the shape of the `emb_items` or ![](img/Formula_B19153_17_016.png) is ![](img/Formula_B19153_17_017.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create a list of `num_layers` (previously called ![](img/Formula_B19153_17_018.png))
+    `LightGCN` layers using PyTorch Geometric’s `LGConv()`. This will be used to perform
+    the light graph convolution operations:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We initialize the user and item embedding layers with normal distributions
+    with a standard deviation of `0.01`. This helps to prevent the model from getting
+    stuck in poor local optima when it is trained:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The `forward()` method takes in an edge index tensor and returns the final
+    user and item embedding vectors, ![](img/Formula_B19153_17_019.png) and ![](img/Formula_B19153_17_020.png).
+    It starts by concatenating the user and item embedding layers and storing the
+    result in the `emb` tensor. It then creates a list, `embs`, with `emb` as its
+    first element:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We then apply the `LightGCN` layers in a loop and store the output of each
+    layer in the `embs` list:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We perform layer combination by calculating the final embedding vectors by
+    taking the mean of the tensors in the `embs` list along the second dimension:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We split `emb_final` into user and item embedding vectors (![](img/Formula_B19153_17_021.png)
+    and ![](img/Formula_B19153_17_022.png)) and return them along with ![](img/Formula_B19153_17_023.png)
+    and ![](img/Formula_B19153_17_024.png):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Finally, the model is created by calling the `LightGCN()` class with the appropriate
+    arguments:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Before we can train the model, we need a loss function. The `LightGCN` architecture
+    employs **Bayesian Personalized Ranking** (**BPR**) loss, which optimizes the
+    model’s ability to rank positive items higher than negative items for a given
+    user. It is implemented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_17_025.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, ![](img/Formula_B19153_17_026.png) is the ![](img/Formula_B19153_17_027.png)th-layer
+    embedding matrix (concatenation of the initial user and item embeddings), ![](img/Formula_B19153_17_030.png)
+    weighs the regularization strength, ![](img/Formula_B19153_17_028.png) corresponds
+    to the predicted rating of a positive item, and ![](img/Formula_B19153_17_029.png)
+    represents the predicted rating of a negative item.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We implement it in PyTorch with the following function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We calculate the regularization loss based on the embeddings that are stored
+    in the `LightGCN` model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We calculate the ratings for the positive and negative items as the dot product
+    between the user and item embeddings:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Unlike the log sigmoid in the previous equation, we calculate the BPR loss
+    as the mean of the `softplus` function applied to the difference between the positive
+    and negative scores. This variant was chosen because it gave better experimental
+    results:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We return the BPR loss and the regularization loss as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'On top of the BPR loss, we use two metrics to evaluate the performance of our
+    model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Recall@k** is the proportion of relevant recommended items in top *k* among
+    all possible relevant items. However, this metric does not consider the order
+    of relevant items in top *k*:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/Formula_B19153_17_031.jpg)'
+  prefs: []
+  type: TYPE_IMG
+- en: '**Normalized Discounted Cumulative Gain** (**NDGC**) measures the effectiveness
+    of the system’s ranking of the recommendations, taking into account the relevance
+    of the items, where relevance is usually represented by a score or a binary relevance
+    (relevant or not).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The implementation is not included in this chapter for improved readability.
+    However, it can be found in the GitHub repository along with the rest of the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now create a training loop and start training the `LightGCN` model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We define the following constants. They can be tuned as hyperparameters to
+    improve the performance of the model:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We try to select a GPU if one is available. Otherwise, we use a CPU instead.
+    The model and data are moved to this device:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create an `Adam` optimizer with a learning rate of `0.001`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s start the training loop. First, we calculate `num_batch`, the number
+    of `BATCH_SIZE` batches in an epoch. Then, we create two loops: one of 31 epochs,
+    and a second one the length of `num_batch`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The model is run on the training data and returns the initial and final user
+    and item embeddings:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE39]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The training data is then sampled in mini-batches using the `sample_mini_batch()`
+    function, which returns the indices of the sampled user, positive item, and negative
+    item embeddings:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE40]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The embeddings for the sampled users, positive items, and negative items are
+    then retrieved:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE41]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The loss is then computed using the `bpr_loss()` function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE42]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The optimizer is then used to perform the backward pass and update the model
+    parameters:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE43]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'The model’s performance is evaluated every 250 epochs on the validation set
+    using the `test()` function. The evaluation metrics are printed:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE44]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This gives us the following output:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE45]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We evaluate the model’s performance on the test set as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE46]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We obtain a `recall@20` value of `0.01936` and an `ndcg@20` value of `0.01119`,
+    which is close to the results obtained by the authors of `LightGCN` on other datasets.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now that the model is trained, we want to get recommendations for a given user.
+    The recommendation function we want to create has two components:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we want to retrieve a list of books the user liked. This will help us
+    to contextualize the recommendations for our own understanding.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Secondly, we want to generate a list of recommendations. These recommendations
+    cannot be books the user has already rated (it cannot be a positive item).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Let’s write this function step by step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We create a function called `recommend` that takes in two arguments: `user_id`
+    (the identifier for a user), and `num_recs` (the number of recommendations we
+    want to generate):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE47]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We create the `user` variable by looking up the user’s identifier in the `user_mapping`
+    dictionary, which maps user IDs to integer indices:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE48]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We retrieve the `dim_h` dim vector learned by the `LightGCN` model for this
+    particular user:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE49]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can use it to calculate the corresponding ratings. As seen previously, we
+    use the dot product of the embeddings for all items stored in the `LightGCN`’s
+    `emb_items` attribute and the `emb_user` variable:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE50]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We apply the `topk()` function to the `ratings` tensor, which returns the top
+    100 values (scores calculated by the model) and their corresponding indices:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE51]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s get a list of this user’s favorite books. We create a new list of indices
+    by filtering the `indices` list to only include those that are present in the
+    `user_items` dictionary for the given user. In other words, we only keep books
+    that this user rated. This list is then sliced to keep the first `num_recs` items:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE52]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We convert these book IDs into ISBNs:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE53]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We can now use these ISBNs to retrieve more information about the books. Here,
+    we want to obtain the titles and the authors so that we can print them:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE54]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We print this information as follows:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE55]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'We repeat this process, but with IDs of books that were not rated by the user
+    (`not` `in user_pos_items[user]`):'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE56]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'Let’s get `5` recommendations for a user in our database. Let’s use `277427`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE57]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: 'This is the output we obtain:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE58]'
+  prefs:
+  - PREF_IND
+  type: TYPE_PRE
+- en: We can now generate recommendations for any user from the original `df` DataFrame.
+    You can test other IDs and explore how that changes the recommendations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter presented a detailed exploration of using `LightGCN` for book recommendation
+    tasks. We used the `Book-Crossing` dataset, preprocessed it to form a bipartite
+    graph, and implemented a `LightGCN` model with BPR loss. We trained the model
+    and evaluated it using the `recall@20` and `ndcg@20` metrics. We demonstrated
+    the effectiveness of the model by generating recommendations for a given user.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Overall, this chapter has provided valuable insight into the usage of `LightGCN`
+    models in recommendation tasks. It is a state-of-the-art architecture that performs
+    better than more complex models. You can expand this project by trying other techniques
+    we discussed in previous chapters, such as matrix factorization and `node2vec`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[1] C.-N. Ziegler, S. M. McNee, J. A. Konstan, and G. Lausen, *Improving Recommendation
+    Lists through Topic Diversification*, in *Proceedings of the 14th International
+    Conference on World Wide Web*, 2005, pp. 22–32\. doi: 10.1145/1060745.1060754\.
+    Available: [https://dl.acm.org/doi/10.1145/1060745.1060754](https://dl.acm.org/doi/10.1145/1060745.1060754)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[2] D. Li, P. Maldonado, A. Sbaih, *Recommender Systems with GNNs in PyG*,
+    *Stanford CS224W GraphML Tutorials*, 2022\. Available: [https://medium.com/stanford-cs224w/recommender-systems-with-gnns-in-pyg-d8301178e377](https://medium.com/stanford-cs224w/recommender-systems-with-gnns-in-pyg-d8301178e377)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[3] X. He, K. Deng, X. Wang, Y. Li, Y. Zhang, and M. Wang, *LightGCN: Simplifying
+    and Powering Graph Convolution Network for Recommendation*. arXiv, 2020\. doi:
+    10.48550/ARXIV.2002.02126\. Available: [https://arxiv.org/abs/2002.02126](https://arxiv.org/abs/2002.02126)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[4] H. Hotta and A. Zhou, *LightGCN with PyTorch Geometric*. *Stanford CS224W
+    GraphML Tutorials*, 2022\. Available: [https://medium.com/stanford-cs224w/lightgcn-with-pytorch-geometric-91bab836471e](https://medium.com/stanford-cs224w/lightgcn-with-pytorch-geometric-91bab836471e)'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

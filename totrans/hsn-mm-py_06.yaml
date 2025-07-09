@@ -1,0 +1,253 @@
+- en: Time Series Predicting
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapters, we discussed **Hidden Markov Models** (**HMMs**) and
+    various algorithms associated with inference in great theoretical detail. From
+    this chapter onward, we will be discussing the use of HMMs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: HMMs are capable of predicting and analyzing time-based phenomena. Because of
+    this, they can be used in fields such as speech recognition, natural language
+    processing, and financial market prediction. In this chapter, we will be looking
+    into applications of HMMs in the field of financial market analysis, mainly stock
+    price prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Stock price prediction using HMM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Stock market prediction has been one of the more active research areas in the
+    past, given the obvious interest of a lot of major companies. Historically, various
+    machine learning algorithms have been applied with varying degrees of success.
+    However, stock forecasting is still severely limited due to its non-stationary,
+    seasonal, and unpredictable nature. Predicting forecasts from just the previous
+    stock data is an even more challenging task since it ignores several outlying
+    factors.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As seen previously, HMMs are capable of modeling hidden state transitions from
+    the sequential observed data. The problem of stock prediction can also be thought
+    as following the same pattern. The price of the stock depends upon a multitude
+    of factors which generally remain invisible to the investor (hidden variables).
+    The transition between the underlaying factors change based on company policy
+    and decisions, its financial conditions, and management decisions, and these affect
+    the price of the stock (observed data). So HMMs are a natural fit to the problem
+    of price prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will try to predict the stock prices for Alphabet Inc. (GOOGL),
+    **Facebook** (**FB**), and **Apple Inc.** (**AAPL**).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Collecting stock price data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will use pystock data ([http://data.pystock.com](http://data.pystock.com))
+    to get the historical stock prices data. Every day, before the US stock exchanges
+    open at 9:30 EST/EDT, the pystock crawler collects the stock prices and financial
+    reports, and pushes the data, such as the previous day's opening price, closing
+    price, highest price, and lowest price for a given stock, to the repository. This
+    data is day-based, meaning we won't be having any hour or minute-level data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s try to download the `pystock` data for a given year. As the dataset
+    is large, we will create a Python script to download the data for a given year
+    and we can run the program simultaneously for three different years to download
+    all the data in parallel:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Run the following scripts simultaneously for three different years:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once the data is downloaded, let''s try to get all the data for each of the
+    preceding stated stocks by combining data corresponding to all the years:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Run the following scripts to create a `.csv` file containing all the historical
+    data for the `GOOGL`, `FB`, and `AAPL` stocks:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Features for stock price prediction
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Once we have the data for each of the stock prices, we want to predict the price
+    of the stock. As we mentioned earlier, we have very limited features for each
+    day, namely the opening price of stock for that day, closing price, highest price
+    of stock, and lowest price of stock. So we are going to use them to compute the
+    stock prices. Generally, we want to compute the closing stock price for a day,
+    given the opening stock price for that day, and previous some *d* days data. Our
+    predictor would have a latency of *d* days.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's create a predictor called `StockPredictor`, which will contain all the
+    logic to predict the stock price for a given company during a given day.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Instead of directly using the opening, closing, low, and high prices of a stock,
+    let''s try to extract the fractional changes in each of them that would be used
+    to train our HMM. As we move further, the reason for choosing these features will
+    become clearer. We could define three parameters as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/1d89e031-07e8-42b2-87a5-e2fc32b9878e.png)![](img/d68767ff-b9f5-4035-950b-d4c4ed216795.png)![](img/e4f4c3df-861b-4997-83ac-96eb04e46704.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'So, for the stock price predictor HMM, we can represent a single observation
+    as a vector these parameters, namely *X[t] = < frac[change], frac[high], frac[low]
+    >*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Predicting price using HMM
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Once we extract the features from the data, we can now move on to predicting
+    the price of the stock. We want to predict the closing price of a stock on a particular
+    day, given the opening price of the stock on that day and stock prices of previous
+    days.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first step would be to train an HMM to compute the parameters from the given
+    sequence of observations that we computed earlier. As the observations are a vector
+    of continuous random variables, we have to assume that the emission probability
+    distribution is continuous. For simplicity, let's assume that it is a multinomial
+    Gaussian distribution with parameters (*μ* and *Σ*). So we have to determine the
+    following parameters for the transition matrix, *A*, prior probabilities, *π*,
+    along with *μ* and *Σ* which represent the multinomial Gaussian distribution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For now, let''s assume that we have four hidden states. In the coming sections,
+    we will look into ways of finding the optimal number of hidden states. We will
+    use the `GaussianHMM` class provided by the `hmmlearn` package as our HMM, and
+    we will try to perform parameter estimation using the `fit()` method provided
+    by it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In machine learning, we divide the entire dataset into two categories. The
+    first set, the training dataset, is used to train the model. The second set, the
+    test dataset, is used to provide an unbiased evaluation of a final model fit on
+    the training dataset. Separating the training dataset from the test dataset prevents
+    us from overfitting the data to the model. So, in our case, we would also split
+    the dataset into two categories, `train_data` for training the model and `test_data`
+    for evaluating the model. To do so, we will use the `train_test_split` method
+    provided by the `sklearn.model_selection` module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`train_test_split` can split arrays or matrices into random train and test
+    subsets. As we are training our HMM with sequential data, we do not want to randomly
+    split the data. To prevent random splitting of the test and train data, pass `shuffle=False`
+    as the argument.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once your model is trained, we need to predict the stock closing price. As
+    we mentioned earlier, we want to predict the stock closing price for a day given
+    that we know the opening price. This means that if we are able to predict *frac[change]* for
+    a given day, we can compute the closing price as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c2bdedc6-f140-4774-a837-75e59d9f45a3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Thus our problem boils down to computing the *X[t+1] = < frac[change], frac[high],
+    frac[low] >* observation vector for a day given the observation data for *t* days, *x[1],...,x[t]*,
+    and the parameters of the HMM ![](img/fb2a521e-09bf-4fc6-985d-87900072e99f.png),
+    which is finding the value of *X[t+1]* that maximizes the posterior probability
+    *P(X[t+1]|X[1],...,X[t],θ)*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/29e89e8c-b429-4529-a14e-3c1f8e0c6f31.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see, once you remove all the parameters that are independent of *X[t+1]* from
+    the maximization equation, we are left with the problem of finding the value of
+    *X[t+1]*, which optimizes the probability of *P(X[1],...,X[t+1]|θ)*. We came across
+    this problem in [Chapter 4](8d06a68a-e427-4f7d-9472-9be25b5351c0.xhtml), *Parameter
+    Learning using Maximum Likelihood*, while evaluating the probability of a sequence
+    given the model parameters. It can be computed efficiently using the forward-backward
+    algorithm.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'If we assume *frac[change ]*is a continuous variable, the optimization of the
+    problem would be computationally difficult. So we can divide these fractional
+    changes into some discrete values ranging between two finite variables (as stated
+    in the following table) and try to find a set of fractional changes, *< frac[change],
+    frac[high], frac[low] >*, that would maximize the probability, *P(X[1],...,X[t+1]|θ)*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Observation** | **Minimum value** | **Maximum value** | **Number of points**
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| *frac[change]* | -0.1 | 0.1 | 20 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| *frac[high]* | 0 | 0.1 | 10 |'
+  prefs: []
+  type: TYPE_TB
+- en: '| *frac[low]* | 0 | 0.1 | 10 |'
+  prefs: []
+  type: TYPE_TB
+- en: 'So, with the preceding discrete set of values, we need to run (20 x 10 x 10
+    =) 2,000 operations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now we can implement the method to predict the closing price, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s try to predict the closing price for a some days and plot both the curves:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/190f7477-da9b-4be8-9916-3f263cc2cbb8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we predicted the price of stocks using HMM. We applied the
+    parameter-estimation and evaluation-of-model methods to determine the closing
+    price of a stocks. Using HMM in stock market analysis is just another example
+    of the application of HMM in analyzing time series data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will look at an interesting application of HMM in the
+    field of natural language processing.
+  prefs: []
+  type: TYPE_NORMAL

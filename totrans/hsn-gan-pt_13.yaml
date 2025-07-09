@@ -1,0 +1,428 @@
+- en: Reconstructing 3D models with GANs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So far, we've learned how to synthesize images, text, and audio with GANs. Now,
+    it's time to explore the 3D world and learn how to use GANs to create convincing
+    3D models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, you will learn how 3D objects are represented in **computer
+    graphics** (**CG**). We will also look into the fundamental concepts of CG, including
+    camera and projection matrices. By the end of this chapter, you will have learned
+    how to create and train 3D_GAN to generate a point cloud of 3D objects, such as
+    chairs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will know the fundamental knowledge of the representation of 3D objects
+    and the basic concept of 3D convolution. Then, you will learn to construct a 3D-GAN
+    model by 3D convolutions and train it to generate 3D objects. You will also get
+    familiar with PrGAN, a model that generates 3D objects based on their black-and-white
+    2D views.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Fundamental concepts in computer graphics
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Designing GANs for 3D data synthesis
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Fundamental concepts in computer graphics
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the previous chapters, we learned about various GAN models for image, text,
+    and audio. Generally, we have been solely dealing with 1D and 2D data. In this
+    chapter, we will expand on our knowledge of the GAN world by looking at the 3D
+    domain. By the end of this chapter, you will have learned how to create your own
+    3D objects with GANs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Representation of 3D objects
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It is essential to understand how 3D objects are represented in a computer before
+    we dive into the details of the GAN model for 3D data synthesis. The creation
+    and rendering of 3D objects, environments, and animations is called **computer
+    graphics** (**CG**), which two of the major entertainment industries, that is
+    video games and movies, heavily rely on. The most important task in CG is figuring
+    out how to efficiently render the most convincing images on the screen. Thanks
+    to the hard work of people in the CG field, we are now getting better visual effects
+    in video games and movies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Attributes of a 3D object
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The most basic attributes a 3D object has are its shape and color. The color
+    of each pixel we can see on a screen is affected by many factors, such as the
+    color of its own texture, the light source, and even the other objects in the
+    scene. This is also affected by the relative directions of the light source and
+    our viewpoint to the pixel''s own surface, which are determined by the shape,
+    position, and orientation of the object and the position of the camera. When it
+    comes to shape, a 3D model basically consists of points, lines, and surfaces.
+    An example of the creation of the shape and color of a 3D sports car can be seen
+    in the following image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a2aa33c9-fac3-4267-b444-ab0eca87a4c4.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The creation of a sports car in Autodesk Maya shows how lines form surfaces
+    and how textures provide colors in 3D models
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A surface, either flat or curved, is mostly formed with triangles and quadrangles
+    (which are generally called **polygons**). A polygon mesh (also called a **wireframe**)
+    is defined by a set of 3D points and a set of segments connecting those points.
+    Normally, having more polygons means that there will be more details in the 3D
+    models. This can be seen in the following image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/224ddaca-470d-440c-ae18-be82840e4450.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: More polygons means more details in 3D models. Images captured in Autodesk Maya.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Sometimes, a set of points (also known as a **point cloud** in some applications)
+    is all we need to create 3D objects since there are several widely used methods
+    for automatically creating segments in order to generate a polygon mesh (for example,
+    the Delaunay triangulation method). Point clouds are often used to represent the
+    results that are collected by 3D scanners. A point cloud is a set of three-dimensional
+    vectors representing the spatial coordinates of each point. In this chapter, we
+    are only interested in the generation of the point clouds of certain objects with
+    GANs. A few examples of the point clouds of chairs can be seen in the following
+    image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c9de716c-bf8f-4b09-a65b-d85fc7894e2b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Point clouds of chairs
+  prefs: []
+  type: TYPE_NORMAL
+- en: Camera and projection
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Once the shape and color of the 3D objects have been defined, there''s still
+    a major factor that will affect the way they look on the screen: the **camera**.
+    The camera is responsible for mapping the 3D points, lines, and surfaces to the
+    2D image plane, which is usually our screen. If the camera isn''t configured correctly,
+    we may not see our objects at all. The process of mapping from the 3D world to
+    the 2D image plane is called **projection**.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are two different commonly used projection methods in the field of CG: orthographic
+    projection and perspective projection. Let''s go over them now:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Orthographic projection** is a process that maps everything in a cuboid (that
+    is, a rectangular volume) to a standard cube. For more information about orthographic
+    and perspective projection, please refer to [http://www.songho.ca/opengl/gl_projectionmatrix.html](http://www.songho.ca/opengl/gl_projectionmatrix.html).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In orthographic projection, all the parallel lines in the 3D space are still
+    parallel in the 2D plane, except they have different lengths and orientations.
+    More importantly, the size of the projected image of the same object is always
+    the same, no matter how far away it is from the camera. However, this is not the
+    way our eyes and most cameras capture images of the 3D world. Therefore, orthographic
+    projection is mainly used in **Computer-Aided Design** (**CAD**) and other engineering
+    applications, where the actual size of the components needs to be rendered correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Perspective projection** is a process that maps everything in a frustum (that
+    is, a pyramid without its tip) to a standard cube, as shown in the preceding image.
+    In perspective projection, objects that are closer to the camera look bigger than
+    those far away from the camera. Therefore, parallel lines in the 3D space are
+    not necessarily parallel in the 2D space. This is also how our eyes perceive the
+    surrounding environment. Therefore, this type of projection gives us more realistic
+    images and is often used for rendering visual effects in video games and movies.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Orthographic and perspective projections are used together in some forms of
+    CG software, such as Autodesk Maya, as shown in the following screenshots:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a36d37b6-e3d4-49ab-8ce4-5bad2a50d2e3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the user interface of Autodesk Maya, orthographic projection is used to show
+    the top, side, and front views (top left, bottom left, and bottom right), while
+    perspective projection is used to preview the 3D models (top right). Image retrieved
+    from https://knowledge.autodesk.com/support/maya/learn-explore/caas/simplecontent/content/maya-tutorials.html
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will only take a closer look at perspective projection.
+    In computer graphics, **homogeneous coordinates** are often used, which can conveniently
+    represent infinite distance and turn translation, scaling, and rotation using
+    simple matrix multiplication. For a set of homogeneous coordinates ![](img/9e97bf11-0927-4500-9838-1860b8b9342a.png),
+    the corresponding Cartesian counterpart would be ![](img/2e2861a5-90fc-49d2-9116-a945f3f63e79.png).
+    The mapping from the frustum in the 3D space to the ![](img/c78ba0be-6e60-4e82-abc2-07a553beff6e.png) cube
+    is defined by the **projection matrix**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/f7bf133f-63c5-464a-9c04-6da213df7c16.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: In the projection matrix, ![](img/45548185-0989-4de4-8e79-e7a5520f9a91.png) is
+    the near clipping plane and ![](img/709f4f14-d677-4e86-9199-5c129d46016f.png) is
+    the far clipping plane. Also, ![](img/80102840-6f09-4b4f-baa4-3a4bf67d5474.png), ![](img/c4629faf-3a38-45e5-b2d2-62f0a0ae3d05.png), ![](img/d2b7a153-039a-495d-bff3-2544fabf45c4.png), and ![](img/7b1108b0-ae34-4483-9fba-292c452d7828.png) denote
+    the top, bottom, left, and right boundaries of the near clipping plane, respectively.
+    The multiplication between the projection matrix and the homogeneous coordinates
+    gives us the corresponding coordinates where the projected points should be. If
+    you are interested in the derivation of the projection matrix, feel free to check
+    out the following article: [http://www.songho.ca/opengl/gl_projectionmatrix.html](http://www.songho.ca/opengl/gl_projectionmatrix.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Designing GANs for 3D data synthesis
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 3D-GAN, which was proposed by Jiajun Wu, Chengkai Zhang, and Tianfan Xue, et.
+    al. in their paper, *Learning a Probabilistic Latent Space of Object Shapes via
+    3D Generative-Adversarial Modeling*, was designed to generate a 3D point cloud
+    of certain types of objects. The design and training process of 3D-GAN is very
+    similar to the vanilla GAN, except that the input and output tensors of the 3D-GAN
+    are five-dimensional, rather than four-dimensional.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generators and discriminators in 3D-GAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The architecture of the generator network of 3D-GAN is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/003fb212-8b6a-4876-9672-d89b03434961.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Architecture of the generator network in 3D-GAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: The generator network consists of five transposed convolution layers (`nn.ConvTranspose3d`),
+    in which the first four layers are followed by the Batch Normalization layer (`nn.BatchNorm3d`)
+    and ReLU activation function, and the last layer is followed by a Sigmoid activation
+    function. The kernel size, stride size, and padding size are set to 4, 2 and 1
+    in all the transposed convolution layers, respectively. Here, the input latent
+    vector can be gradually expanded to a ![](img/4d4d6b88-58ab-4d09-b2aa-5c0e597be316.png) cube,
+    which can be considered as a 1-channel 3D "image". In this 3D image, the "pixel"
+    value is actually the possibility of whether a point exists at these ![](img/b444fc1b-f235-492c-930e-2e383c030969.png) grid
+    locations. Normally, we reserve all the points with values higher than 0.5 to
+    form the final point cloud.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In our case, the "pixels" in the 3D image are actually called **voxels**
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'since the points in our point cloud are located at grid points in the ![](img/b444fc1b-f235-492c-930e-2e383c030969.png) cube.
+    There are four attributes in a voxel: the x, y, and z coordinates and whether
+    the voxel exists at (x, y, z). Unlike in 2D image synthesizing tasks, such as
+    MNIST, where pixels with values between 0 and 1 (or between 0 and 255, if you
+    prefer) are allowed (for example, at the edge of the digits), the existence of
+    the voxel is a binary decision. Therefore, the tensor of our point cloud is, in
+    fact, a sparse with many zeros and a few ones.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this section, we will provide the full source code for 3D-GAN. The code files
+    have been organized in the same way as they were in the previous chapters. The
+    networks have been defined in a `model_3dgan.py` file (be sure to avoid starting
+    your module name with numbers).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code is the definition of `Generator`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The architecture of the discriminator network of 3D-GAN is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/645b8202-29c0-4f0d-b943-48d94a641af1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Architecture of the discriminator network in 3D-GAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: The discriminator network consists of five convolution layers (`nn.Conv3d`),
+    in which the first four layers are followed by a Batch Normalization layer and
+    a Leaky-ReLU (`nn.LeakyReLU`) activation function, and the last layer is followed
+    by a Sigmoid activation function. The kernel size, stride size, and padding size
+    are set to 4, 2 and 1 in all the convolution layers, respectively. The ![](img/4d4d6b88-58ab-4d09-b2aa-5c0e597be316.png) cube
+    of the 3D point cloud is mapped by the discriminator network to a single value,
+    which specifies whether the confidence of the input object is authentic.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Imagine what would happen if the dimension of the point cloud was set to ![](img/3b032dab-8b8e-4f7c-a7b6-25c798b10c2f.png). Can
+    you create colorized 3D point clouds, such as fire, smoke, or clouds? Feel free
+    to find or even create your own dataset and try this out!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code is the definition of `Discriminator` (this can also be found
+    in the `model_3dgan.py` file):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training 3D-GAN
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The training process for 3D-GAN is similar to the process for the vanilla GAN.
+    This can be seen in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ac7d1541-e561-4162-9665-ff7d2d8e8cbb.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The training process of 3D-GAN. Here, x* denotes real data, x denotes fake data,
+    and z denotes the latent vector. The networks whose parameters are updated are
+    marked with red boundaries.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, the discriminator network is trained to recognize the real 3D point cloud
+    as true data and the synthesized point cloud that's generated by the generator
+    network as fake data. BCE loss (`nn.BCELoss`) is used as the loss function for
+    the discriminator network. Then, the generator network is trained by forcing the
+    discriminator to recognize the synthesized 3D point cloud as true data so that
+    it can learn to get better at fooling the discriminator in the future. BCE loss
+    is used for training the generator network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is part of the source code for 3D-GAN training. Create a `build_gan.py`
+    file and paste the following code into this file. Some of the training tricks
+    have been borrowed from [https://github.com/rimchang/3DGAN-Pytorch](https://github.com/rimchang/3DGAN-Pytorch),
+    which we will discuss later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: You may have noticed that `real_label` and `fake_label` aren't set to 1 and
+    0 like they usually are. Instead, randomly initialized labels (`uniform_(0.7,
+    1.2)` and `uniform_(0, 0.3)`) are used. This technique is very similar to **soft
+    targets**, which use the softmax output of a larger network as labels (instead
+    of "hard" 0 or 1 labels) to train a smaller, yet identical, network in terms of
+    input-output mappings (which is called **Knowledge Distillation**). This trick
+    generates a smoother loss function over time since it introduces an assumption
+    that the labels are random variables. You can always initialize `real_label` randomly
+    and let `fake_label` be equal to `1-real_label`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We already know that the desired output tensor is sparse and that it should
+    be very easy to fully train the discriminator. Actually, the discriminator will
+    overfit long before the generator is trained properly. Therefore, we only train
+    the discriminator when its training accuracy is not higher than `d_loss_thresh`.
+    Note that learning rate decay is used to optimize the generator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding code, we visualized and exported the generated point cloud
+    for every `export_interval` epochs. The code for rendering the point cloud is
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: The next step is to prepare the training dataset for 3D-GAN. You can download
+    the point clouds of 40 different types of objects from [http://3dshapenets.cs.princeton.edu/3DShapeNetsCode.zip](http://3dshapenets.cs.princeton.edu/3DShapeNetsCode.zip).
+    After downloading and extracting the `zip` file, move the `volumetric_data` folder
+    to any location you like (for example, `/media/john/DataAsgard/3d_models/volumetric_data`)
+    and choose a category for model training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for loading the training point cloud files is as follows (create a
+    `datasets.py` file and paste the following code into it):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, here is the code for the `main.py` file, which initializes and trains
+    3D-GAN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We used code similar to this to create the command-line parser back in [Chapter
+    5](685b2621-6dbb-4157-a258-f3cf2825728c.xhtml), *Generating Images Based on Label
+    Information*. We''ll use the same idea here and add a few options into the mix:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, we can run the program by using the following command line. Be sure to
+    provide your proper data directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, we used the chair category example. It takes about 4 hours to finish 1,000
+    epochs of training and costs about 1,023 MB GPU memory on a single NVIDIA GTX
+    1080Ti graphics card. Note that, even though our implementation is heavily based
+    on [https://github.com/rimchang/3DGAN-Pytorch](https://github.com/rimchang/3DGAN-Pytorch),
+    the original code costs about 14 hours and 1,499 MB GPU memory to complete the
+    same task.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are some of the 3D chair models that were generated by 3D-GAN.
+    As we can see, despite a few outliers and the misplacement of voxels, the models
+    look convincing in general. You can also check out the 3D-GAN website that was
+    created by the authors of the paper, where an interactive showcase of generated
+    chairs has been provided: [https://meetshah1995.github.io/gan/deep-learning/tensorflow/visdom/2017/04/01/3d-generative-adverserial-networks-for-volume-classification-and-generation.html](https://meetshah1995.github.io/gan/deep-learning/tensorflow/visdom/2017/04/01/3d-generative-adverserial-networks-for-volume-classification-and-generation.html):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/48b45e16-c9ea-4238-bbe8-6a4fe321ce7d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Chair models generated by 3D-GAN
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feel free to select a different object category or even give other datasets
+    a try. Here is a list of point cloud datasets: [http://yulanguo.me/dataset.html](http://yulanguo.me/dataset.html).
+    Here is a list of papers on 3D point cloud from the past years (at the time of
+    writing): [https://github.com/Yochengliu/awesome-point-cloud-analysis](https://github.com/Yochengliu/awesome-point-cloud-analysis).
+    I hope you can discover new applications with GANs and 3D point clouds!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we learned about the fundamental concepts of computer graphics
+    and how to train 3D-GAN to generate 3D objects.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will take a look back at all the useful tricks we have
+    used in various GAN models and introduce more practical techniques that will assist
+    you with model design and training GANs in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further reading
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Ahn S H. (2019). *OpenGL Projection Matrix*. Retrieved from [http://www.songho.ca/opengl/gl_projectionmatrix.html](http://www.songho.ca/opengl/gl_projectionmatrix.html).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Wu J, Zhang C, Xue T. (2016). *Learning a Probabilistic Latent Space of Object
+    Shapes via 3D Generative-Adversarial Modeling*. NIPS.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL

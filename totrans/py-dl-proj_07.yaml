@@ -1,0 +1,676 @@
+- en: Building Speech Recognition with DeepSpeech2
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: It's been a great journey, building awesome deep learning projects in Python
+    using image, text, and sound data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We've been working quite heavily on language models in building chatbots in
+    our previous chapters. Chatbots are a powerful tool for customer engagement and
+    the automation of a wide range of business processes from customer service to
+    sales. Chatbots enable the automation of repetitive and/or redundant interactions
+    such as frequently asked questions or product-ordering workflows. This automation
+    saves time and money for businesses and enterprises. If we've done our job well
+    as deep-learning engineers, it also means that the consumers are receiving a much-improved
+    **user experience** (**UX**) as a result.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The new interaction between a business and its customers via a chatbot is very
+    effective in each party receiving value. Let's look at the interaction scenario
+    and see if we can identify any constraints that should be the focus of our next
+    project. Up until now, all of our chat interactions have been through text. Let's
+    think about what this means for the consumer. Text interactions are often (but
+    not exclusively) initiated via mobile devices. Secondly, chatbots open up a new
+    **user interaction** (**UI**)—for conversational UI. Part of the power of conversational
+    UI is that it can remove the constraint of the physical keyboard and open the
+    range of locations and devices that are now possible for this interaction to take
+    place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Conversational UI is made possible by speech recognition systems working through
+    popular devices, such as your smartphone with Apple's Siri, Amazon's Echo, and
+    Google Home. It's very cool technology, consumers love it, and businesses that
+    adopt this technology gain an advantage over those in their industry that do not
+    keep up with the times.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will build a system that recognizes English speech, using
+    the **DeepSpeech2** (**DS2**) model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You will learn the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To work with speech and spectrograms
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To build an end-to-end speech recognition system
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The **Connectionist Temporal Classification** (**CTC**) loss function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Batch normalization and SortaGrad for **recurrent neural networks** (**RNNs**)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let's get started and deep dive into the speech data, learn to feature engineer
+    the speech data, extract various kinds of features from it, and then build a speech
+    recognition system that can detect your or a registered user's voice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Define the goal**: The goal of this project is to build and train an **automatic
+    speech recognition** (**ASR**) system to take in and convert an audio call to
+    text that could then be used as input for a text-based chatbot that could understand
+    and respond.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data preprocessing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this project, we will use *LibriSpeech ASR corpus* ([http://www.openslr.org/12/](http://www.openslr.org/12/)),
+    which is 1,000 hours of 16 kHz-read English speech.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s use the following commands to download the corpus and unpack the LibriSpeech
+    data:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This will take a while and once the process is completed, we will have the
+    `data` folder structure, as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/6808431a-97af-4fd3-ba24-a023f5ad024a.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: We now have three folders named as `train-clean-100`, `dev-clean`, and `test-clean`.
+    Each folder will have subfolders that are the associated IDs used for mapping
+    the small segment of the transcript and the audio. All the audio files are in
+    the `.flac` extension, and all the folders will have one `.txt` file, which is
+    the transcript for the audio files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Corpus exploration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s explore the dataset in detail. First, let''s look into the audio file
+    by reading it from the file and plotting it. To read the audio file, we will use
+    the `pysoundfile` package with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we will import the modules, read the audio files, and plot them with
+    the following code block:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following is the frequency representation of each segment of speech:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3b80d1ea-0131-486a-9078-b725e20bcfe2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The raw audio signal plot from the audio MIDI file
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let''s look into the content of the transcript text file. It''s a clean
+    version of the text with the audio file IDs in the beginning and the associated
+    text following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9f89089e-8ebc-49c0-adcb-2439d9151ad6.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/2f46caaa-5309-4215-a84d-e86145b25560.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The transcript data is stored a specific format. Left numbers are the midi file
+    name and the right part is the actually transcript. This helps in building the
+    mapping between the midi file and its respective transcript.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What we see is that each audio file is the narration of the transcript contained
+    in the file. Our model will try to learn this sequence pattern. But before we
+    work on the model, we need to extract some features from the audio file and convert
+    the text into one-hot encoding format.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feature engineering
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: So, before we feed the raw audio data into our model, we need to transform the
+    data into numerical representations that are features. In this section, we will
+    explore various techniques to extract features from the speech data that we can
+    use to feed into the model. The accuracy and performance of the model vary based
+    on the type of features we use. As an inquisitive deep-learning engineer, it's
+    your opportunity to explore and learn the features with these techniques and use
+    the best one for the use case at hand.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following table gives us a list of techniques and their properties:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Techniques** | **Properties** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| **Principal component analysis** (**PCA**) |'
+  prefs: []
+  type: TYPE_TB
+- en: Eigenvector-based method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Non-linear feature extraction method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supported to linear map
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Faster than other techniques
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Good for Gaussian data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Linear discriminate analysis** (**LDA**) |'
+  prefs: []
+  type: TYPE_TB
+- en: Linear feature extraction method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Supported to the supervised linear map
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Faster than other techniques
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Better than PCA for classification
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Independent component analysis** (**ICA**) |'
+  prefs: []
+  type: TYPE_TB
+- en: Blind course separation method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Support to linear map
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Iterative in nature
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Good for non-Gaussian data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Cepstral analysis |'
+  prefs: []
+  type: TYPE_TB
+- en: Static feature extraction method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Power spectrum method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Used to represent spectral envelope
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Mel-frequency scale analysis |'
+  prefs: []
+  type: TYPE_TB
+- en: Static feature extraction method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Spectral analysis method
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Mel scale is calculated
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Mel-frequency cepstral coefficient** (**MFFCs**) |'
+  prefs: []
+  type: TYPE_TB
+- en: Power spectrum is computed by performing Fourier Analysis
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Robust and dynamic method for speech feature extraction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Wavelet technique |'
+  prefs: []
+  type: TYPE_TB
+- en: Better time resolution than Fourier transform
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Real-time factor is minimum
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '|'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The MFCC technique is the most efficient and is often used for the extraction
+    of speech features for speech recognition. The MFCC is based on the known variation
+    of the human ear''s critical bandwidth frequencies, with filters spaced linearly
+    at low frequencies. The process of MFCC is shown in the following diagram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/0d01cbae-4f9a-4440-b02d-f7d41ce7de6d.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Block diagram of MFCC process
+  prefs: []
+  type: TYPE_NORMAL
+- en: For our implementation purposes, we are not going to perform each step; instead,
+    we will use a Python package called `python_speech_features` that provides common
+    speech features for ASR, including MFCCs and filterbank energies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s `pip install` the package with the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'So, let''s define a function that will normalize the audio time series data
+    and extract the MFCC features:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s plot the audio and MFCC features and visualize them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The following is the output of the spectrogram:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ed8d2416-9bc1-41d2-89dc-4e54c4bc9f39.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Data transformation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Once we have all the features that we need to feed into the model, we will transform
+    the raw NumPy tensors into the TensorFlow specific format called `TFRecords`*. *
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following code snippet, we are creating the folders to store all the
+    processed records. The `make_example()` function creates the sequence example
+    for a single utterance given the sequence length, MFCC features, and corresponding
+    transcript. Multiple sequence records are then written into TFRecord files using
+    the `tf.python_io.TFRecordWriter()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'All the data-processing code is written in the `preprocess_LibriSpeech.py`
+    file, which will perform all the previously mentioned data manipulation part,
+    and once the operation is complete, the resulting processed data gets stored at
+    the `data/librispeech/processed/` location. Use the following command to run the
+    file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: DS2 model description and intuition
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'DS2 architecture is composed of many layers of recurrent connections, convolutional
+    filters, and non-linearities, as well as the impact of a specific instance of
+    batch normalization, applied to RNNs, as shown here:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/67764589-524c-4e06-b44b-8b70180284fc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: To learn from datasets with a large amount of data, DS2 model's capacity is
+    increased by adding more depth. The architectures are made up to 11 layers of
+    many bidirectional recurrent layers and convolutional layers. To optimize these
+    models successfully, batch normalization for RNNs and a novel optimization curriculum
+    called SortaGrad were used.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The training data is a combination of input sequence `x(i)` and the transcript
+    `y(i)`, whereas the goal of the RNN layers is to learn the features between `x(i)`
+    and `y(i)`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: The spectrogram of power normalized audio clips are used as the features to
+    the system and the outputs of the network are the graphemes of each language.
+    In terms of adding non-linearity, the clipped **rectified linear unit** (**ReLU**)
+    function *σ(x) = min{max{x, 0}, 20}* was used. After the bidirectional recurrent
+    layers, one or more fully connected layers are placed and the output layer *L*
+    is a softmax, computing a probability distribution over characters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let's look into the implementation of the DS2 architecture. You can find
+    the full code [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter07](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter07).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following is what the model looks like in TensorBoard:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/aa7975fa-5aa0-439f-b254-8d78dcde3663.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: For the convolution layers, we have the kernel of size `[11, input_seq_length,
+    number_of_filter]` followed by the 2D convolution operation on the input sequence,
+    and then `dropout` is applied to prevent overfitting.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code segment executes these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, we next have the recurrent layer, where we reshape the output of the convolution
+    layer to fit the data into the RNN layer. Then, the custom RNN cells are created
+    based on the hyperparameter called `rnn_type`, which can be of two types, uni-directional
+    or bi-directional, followed by the dropout cells.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following code block creates the RNN part of the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Further more, the linear layer is created to perform the CTC loss function
+    and output from the softmax layer:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: '**Production scale tip**: Training a single model at these scales requires
+    tens of exaFLOPs that would take three to six weeks to execute on a single GPU.
+    This makes model exploration a very time-consuming exercise, so the developers
+    of DeepSpeech have built a highly optimized training system that uses eight or
+    16 GPUs to train one model, as well as synchronous **stochastic gradient descent**
+    (**SGD**), which is easier to debug while testing new ideas, and also converges
+    faster for the same degree of data parallelism.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we understand the data that we are using and the DeepSpeech model architecture,
+    let's set up the environment to train the model. There are some preliminary steps
+    to create a virtual environment for the project that are optional, but always
+    recommended to use. Also, it's recommended to use GPUs to train these models.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Along with Python Version 3.5 and TensorFlow version 1.7+, the following are
+    some of the prerequisites:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`python-Levenshtein`: To compute **character error rate** (**CER**), basically
+    the distance'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`python_speech_features`: To extract MFCC features from raw data'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`pysoundfile`: To read FLAC files'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`scipy`: Helper functions for windowing'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`tqdm`: For displaying a progress bar'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let''s create the virtual environment and install all the dependencies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Install the following dependencies:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Install TensorFlow with GPU support:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'If you see a `sndfile` error, use the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you will need to clone the repository that contains all the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s move the TFRecord files that we created in the *Data transformation*
+    section. The computed MFCC features are stored inside the `data/librispeech/processed/` directory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we have all the data files in place, it''s time to train the model. We
+    are defining four hyperparameters as `num_rnn_layers` set to `3`, `rnn_type` set
+    to `bi-dir`, `max_steps` is set to `30000`, and `initial_lr` is set to `3e-4`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Also, if you want to resume the training using the pre-trained models from
+    [https://drive.google.com/file/d/1E65g4HlQU666RhgY712Sn6FuU2wvZTnQ/view](https://drive.google.com/file/d/1E65g4HlQU666RhgY712Sn6FuU2wvZTnQ/view),
+    you can download and unzip them to the `logs` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`(SpeechRecog)$python deepSpeech_train.py --checkpoint_dir ./logs/ --max_steps
+    40000`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Note that during the first epoch, the cost will increase and it will take longer
+    to train on later steps because the utterances are presented in a sorted order
+    to the network.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following are the steps involved during the training process:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'While the training process happens, we can see significant improvements, as
+    shown in the following plots. Following graph shows the accuracy of the plot after
+    50k steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/b30c4288-74b4-44ab-8445-3713db09822e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Here are the loss plots over 50k steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/df80ad19-b089-4b41-b243-14b2d50b00fc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The learning rate is slowing down over the period of time:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/58d9769f-6c43-4ede-834a-b32a644cbef8.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Testing and evaluating the model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Once the model is trained, you can perform the following command to execute
+    the `test` steps using the `test` dataset:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We evaluate its performance by testing it on previously unseen utterances from
+    a `test` set. The model generates sequences of probability vectors as outputs,
+    so we need to build a decoder to transform the model''s output into word sequences. Despite
+    being trained on character sequences, DS2 models are still able to learn an implicit
+    language model and are already quite adept at spelling out words phonetically,
+    as shown in the following table. The model''s spelling performance is typically
+    measured using CERs calculated using the Levenshtein distance ([https://en.wikipedia.org/wiki/Levenshtein_distance](https://en.wikipedia.org/wiki/Levenshtein_distance)) at
+    the character level:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Ground truth | Model output |'
+  prefs: []
+  type: TYPE_TB
+- en: '| --- | --- |'
+  prefs: []
+  type: TYPE_TB
+- en: '| This had some effect in calming him | This had some offectind calming him
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| He went in and examined his letters but there was nothing from carrier |
+    He went in an examined his letters but there was nothing from carry |'
+  prefs: []
+  type: TYPE_TB
+- en: '| The design was different but the thing was clearly the same | The design
+    was differampat that thing was clarly the same |'
+  prefs: []
+  type: TYPE_TB
+- en: Although the model exhibit excellent CERs, their tendency to spell out words
+    phonetically results in relatively high word-error rates. You can improve the
+    model's performance **word-error rate** (**WER**) by allowing the decoder to incorporate
+    constraints from an external lexicon and language model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We have observed that many of the errors in the model's predictions occur in
+    words that do not appear in the training set. It is thus reasonable to expect
+    that the overall CER would continue to improve as we increased the size of the
+    training set and training steps. It achieved 15% CERs after 30k steps or training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We dove right into this deep-learning project in Python, creating and training
+    an ASR model that understands speech data. We learned to feature engineer the
+    speech data to extract various kinds of features from it and then build a speech
+    recognition system that could detect a user's voice.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We're happy to have achieved our stated goal!
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we built a system that recognizes English speech, using the
+    DS2 model.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You learned following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To work with speech and spectrograms
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To build an end-to-end speech recognition system
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The CTC loss function
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Batch normalization and SortaGrad for RNNs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: This caps off a major section of the deep-learning projects in this Python book
+    that explores chatbots, NLP, and speech recognition with RNNs (uni and bi-directional,
+    with and without LSTM components), and CNNs. We've seen the power of these technologies
+    to provide intelligence to existing business processes and to create entirely
+    new and smart systems. This is exciting work at the cutting edge of applied AI
+    using deep learning! In the remaining half of the book, we'll explore deep-learning
+    projects in Python that are generally grouped into computer vision technologies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's turn the page and get started!
+  prefs: []
+  type: TYPE_NORMAL

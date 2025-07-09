@@ -1,0 +1,686 @@
+- en: Generating Your Own Book Chapter
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will take a step further into exploring the TensorFlow library
+    and how it can be leveraged to solve complex tasks. In particular, you will build
+    a neural network that generates a new (non-existing) chapter of a book by learning
+    patterns from the existing chapters. In addition, you will grasp more of the TensorFlow
+    functionalities, such as saving/restoring a model, and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will also introduce a new and more powerful recurrent neural network
+    model called the **gated recurrent unit** (**GRU**). You will learn how it works
+    and why we are choosing it over the simple RNN.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In summary, the topics of the chapter include the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why use the GRU network? You will learn how the GRU network works, what problems
+    it solves, and what its benefits are.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Generating your book chapter—you will go step by step over the process of generating
+    a book chapter. This includes collecting and formatting the training data, building
+    the TensorFlow graph of the GRU model, training the network and, finally, generating
+    the text word by word.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By the end of the chapter, you should have gained both a theoretical and a practical
+    knowledge that will give you the freedom to experiment with any problems of medium
+    difficulty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why use the GRU network?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In recent years, the recurrent neural network model has presented fascinating
+    results which can even be seen in real-life applications like language translation,
+    speech synthesis and more. A phenomenal application of GRUs happens to be text
+    generation. With the current state-of-the-art models, we can see results which,
+    a decade ago, were just a dream. If you want to truly appreciate these results,
+    I strongly recommend you read Andrej Karpathy's article on *The* *Unreasonable
+    Effectiveness of Recurrent Neural Networks* ([http://karpathy.github.io/2015/05/21/rnn-effectiveness/](http://karpathy.github.io/2015/05/21/rnn-effectiveness/)).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Having said that, we can introduce the **Gated Recurrent Unit (GRU)** as a model
+    which sits behind these exceptional outcomes. Another model of that kind is the
+    **Long Short-Term Memory** (**LSTM**) which is slightly more advanced. Both architectures
+    aim to solve the vanishing gradient problem—a major issue with the simple RNN
+    model. If you recall from [Chapter 1](d6266376-9b8b-4d69-925b-a4e56307951b.xhtml), *Introducing
+    Recurrent Neural Networks*, the problem represents the network's inability to
+    learn long-distance dependencies and, thus, it cannot make accurate predictions
+    on complex tasks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Both the GRU and LSTM deal with that problem using, so-called, gates. These
+    gates decide what information to erase or propagate towards the prediction.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will first focus on the GRU model since it is simpler and easier to understand
+    and, then, you will have the chance to explore the LSTM model in the upcoming
+    chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As mentioned above, the GRU''s main objective is to yield excellent results
+    on long sequences. It achieves this by modifying the standard RNN cell with the
+    introduction of update and reset gates. This network works the same way as a normal
+    RNN model in terms of inputs, memory states and outputs. The key difference lies
+    in the specifics of the cell at each time step. You will understand that better
+    by using the following graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/34bf213e-0f04-4a82-8680-d019e77a8248.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'These are the notations for the preceding graph:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3367b79b-0983-499a-bd31-dcf67a4b1300.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The illustration presents a single GRU cell. The cell accepts ![](img/376c7374-119e-4882-8e0e-e6edde065f0d.png) and ![](img/58fd635b-13c4-4f8c-8847-f8d078355acd.png) as
+    inputs where ![](img/ea13db01-634b-4c38-8897-72dda90f8db7.png) is a vector representation
+    of the input word at time step, ![](img/a633c7ef-850b-49e5-9f1e-c34302133b36.png) and ![](img/dea74485-61fb-4fe2-ab27-d5404c1f9936.png) is
+    the memory state from the previous step *t-1*. Furthermore, the cell outputs the
+    calculated memory state of the current step t. If you recall from before, the
+    aim of this intermediate memory state is to pass information through all time
+    steps and keep or discard knowledge. The preceding process should already be familiar
+    to you from the RNN explanation in [Chapter 1](d6266376-9b8b-4d69-925b-a4e56307951b.xhtml),
+    *Introducing Recurrent Neural Networks*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The new and interesting thing is what happens inside this GRU cell. The calculations
+    aim to decide what information from ![](img/376c7374-119e-4882-8e0e-e6edde065f0d.png) and ![](img/58fd635b-13c4-4f8c-8847-f8d078355acd.png) should
+    be passed forward or eliminated. That decision-making process is handled by the
+    following set of equations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/574c4ece-0b28-4c0b-bb8d-8cdda14722ee.png)![](img/5732ef56-46ed-4801-bf9f-72e1625a47be.png)![](img/04af8703-339a-4251-b772-b6834530e305.png)![](img/f705c042-f50c-4db3-b991-888eb786689f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The first equation presents the update gate. Its purpose is to determine how
+    much of the past information should be propagated in the future. To do that, first
+    we multiple the input ![](img/727a3c6c-9f10-4487-8068-c6616e116751.png) with its
+    own weight ![](img/5df3e75c-160a-493a-969b-a8e051e64588.png) and then sum the
+    result with the other multiplication between the memory state from the last step
+    ![](img/8343eb22-4e2c-4f1c-8afc-02d384a7635b.png) and its weight ![](img/300602e0-d0f3-47ab-9aa6-6cb1cd548489.png).
+    The exact values of these weights are determined during training. This is shown
+    in the following screenshot:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/4b067bd3-8ad5-4fbc-902f-37413a26239b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The second equation presents the reset gate. As the name states, this gate
+    is used to decide how much of the past information should be omitted. Again, using 
+     ![](img/be09906d-c9b4-49df-8dfe-4c378ca26248.png)  and  ![](img/ca4e3868-54fe-4ed0-8c05-d8d5df3b458e.png) 
+    we calculate its value. The difference is that instead of using the same weights,
+    our network learns a different set of weights—![](img/2bbec3e4-f7cb-4176-b093-8a9aa1ce2203.png) 
+    and   ![](img/bb7dc14b-2f49-4a2c-a580-a37ec718e6b2.png). This is shown in the
+    following screenshot:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '![](img/f9b70fa5-9fe4-4e28-a940-3e5bdc7d1a57.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Both the update and reset gate us the sigmoid as a final step when producing
+    the value. If you recall from [Chapter 1](d6266376-9b8b-4d69-925b-a4e56307951b.xhtml), *Introducing
+    Recurrent Neural Networks*, the sigmoid ([https://www.youtube.com/watch?v=WcDtwxi7Ick&t=3s](https://www.youtube.com/watch?v=WcDtwxi7Ick&t=3s))
+    is a type of activation function which squashes the input between `0` and `1`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The third equation is a temporary internal memory state which uses the input ![](img/60f41a34-e946-43d1-94b4-82ee799159a1.png) and
+    the reset gate ![](img/d5b59ad5-b909-4204-ba05-d16c4cddb85b.png) to store the
+    relevant information from the past. Here we use a *tanh* activation function which
+    is similar to a sigmoid, but instead squashes the output between `-1` and `1`.
+    Here ([https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function](https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function))
+    is a good explanation of the difference between both activations. As you can see,
+    we use a different notation ![](img/9b13810b-264c-4404-b677-1eb4d81018d6.png) called
+    element-wise or Hadamard multiplication ([https://www.youtube.com/watch?v=2GPZlRVhQWY](https://www.youtube.com/watch?v=2GPZlRVhQWY)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'If you have the vectors `[1, 2, 3]` and `[0, -1, 4]` the Hadamard product will
+    be `[1*0, 2*(-1), 3*4] = [0, -2, 12]`. This is shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/135941cc-6c9a-490d-b046-afa3d9258010.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The final equation calculates memory state  ![](img/5784b329-ace9-438e-ac39-d9393cc0306b.png) at
+    the current time step t. To do this, we use the temporary internal memory state ![](img/648f9972-eec8-444f-a618-5e19d4321085.png) ,
+    the previous memory state  ![](img/d87bf251-5cbd-4639-8587-ecfb7db7213a.png) and
+    the update gate ![](img/2ea4af13-4ae7-4f8a-8d65-b43dce7c5b3b.png). Again, we are
+    using the element-wise multiplication which makes the update gate decide how much
+    information to propagate forward. Let''s illustrate this with an example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Imagine you want to do sentiment analysis on a book review to determine how
+    people feel about a certain book. Let''s say that the review starts like this:
+    *The book was super exciting and I liked it a lot. It reveals the story of a young
+    woman...*. Here we want to keep the first part of the review until the end, so
+    that we make an accurate prediction. In that case, the network will learn to make ![](img/8797dd6d-8b8f-4a0d-934c-a577a9082175.png) close
+    to 1, so that ![](img/be8b30c1-a821-4e1a-80ad-d5934acd0632.png) is close to 0\.
+    This way all future memory states will hold mostly information about this first
+    part (*The book was super exciting and I liked it a lot.*) and won''t take into
+    account any irrelevant information that comes next.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Combining the above equations results in a powerful model, which can learn to
+    keep full or partial information at any step, and enhance the final prediction.
+    You can easily see how this solution solves the vanishing gradient problem by
+    letting the network (based on the weights) decide what should influence the predictions.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating your book chapter
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'After going through the theoretical part of this chapter, we are ready to dive
+    into coding. I hope you grasp the fundamental behind the GRU model and will feel
+    comfortable seeing the notations in the TensorFlow program. It consists of five
+    parts, most of which may be familiar to you from [Chapter 2](c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml),
+    *Building Your First RNN with TensorFlow*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Obtaining the book text**: this one is really straightforward. Your task
+    is to assure a lot of plain text is ready for training.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Encoding the text**: this one can be challenging, since we need to accommodate
+    the encoding with the proper dimensions. Sometimes, this operation can take more
+    time than expected but it is a requirement for compiling the program flawlessly.
+    There are different types of encoding algorithms and we will choose a fairly simple
+    one so you fully understand its true essence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Building the TensorFlow graph**: this operation should be familiar to you
+    from [Chapter 2](c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml), *Building Your First
+    RNN with TensorFlo*w. We will use similar steps with the difference that now the
+    operational cell is a GRU instead of a normal RNN.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Training the network**: this step should also be familiar to you from [Chapter
+    2](c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml), *Building Your First RNN with
+    TensorFlow*. We will again use batches to make our training faster and occupy
+    less memory.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '**Generating your new text**: this is the new and unique step in our program.
+    We will use the already trained weights and biases to predict the sequences of
+    words. Using appropriate hyperparameters with a large set of data can yield understandable
+    paragraphs which one can easily assume are real.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'You will be writing the code in a new file called `ch3_task.py`. First, install
+    the Python libraries using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, open `ch3_task.py` and import the preceding libraries, as shown in the
+    following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: Now it is time to explore the steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Obtaining the book text
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The first step in building any machine learning task is to obtain the data.
+    In a professional environment you would divide it into training, validation and
+    testing data. Normally the distribution is 60%, 20%, 20% People often confuse
+    validation with test data or even omit using the former. The validation data is
+    used to evaluate the model while tuning the hyperparameters. In contrast, the
+    test data is used only to give an overall evaluation of the model. You SHOULD
+    NOT use the test data to make changes on your model. Since the task is to generate
+    text, our data will be used only for training. Then, we can leverage the model
+    to guess words one by one.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our aim is to yield a meaningful new chapter based on the *The Hunger Games*
+    books. We should store the text in a new file called `the_hunger_games.txt`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we need to build our dictionary using that file. This will happen using
+    the two functions called `get_words(file_name)` and `build_dictionary(words)`as
+    shown in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The previous function aims to create a list of all the words in `the_hunger_games.txt`.
+    Now let''s build the actual dictionary using the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we use the Python built-in library collections. It can easily create a
+    list of tuples where each tuple is formed of a string (word) and time of occurrences
+    of this word in the list `words`. Thus, `most_common_words` does not contain any
+    duplicate elements.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The dictionaries `word2id` and `id2word` associate a number with each word which
+    ensures a straightforward access to all words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Finally, we execute the `get_words()` and `build_dictionary()` functions, so
+    that the words and dictionaries can be accessed globally, as shown in the following
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Encoding the text
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This part shows how to encode our dataset using the popular one-hot encoding.
+    The reason behind this operation lies in the fact that any neural network operates
+    using some sort of numerical representation of strings.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, we declare `section_length = 20` which represents the length of a single
+    section in our encoded dataset. This dataset is a collection of sections where
+    each section has 20 one-hot encoded words.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Then, we store the sections of 20 words in the `input_values` array. The 21st
+    word is used as the output value for that particular section. This means that,
+    during training, the network learns that the words *I love reading non-fiction...I
+    can find these type of* (example sequence of 20 words extracted from the training
+    set) are followed by *book*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After that, comes the one-hot encoding which is also quite straightforward.
+    We create two arrays of zeros with dimensions `(num_sections, section_length,
+    most_common_words_length)`—for the inputs and `(num_sections, most_common_words_length)`—for
+    the outputs. We iterate over the `input_values` and find the index of each word
+    in each section. Using these indices, we replace the values in the one-hot arrays
+    with `1`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The code for this is in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we store the encoded words in two global variables (we also use the
+    parameter `words` from the previous part of that chapter), as shown in the following
+    example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Building the TensorFlow graph
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This step builds the most fundamental part of our program—the neural network
+    graph.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we start by initializing the hyperparameters of the model, as shown
+    in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'One often experiments with the above values until the model receives decent
+    results:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `learning_rate` ([https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10](https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10))
+    is used in backpropagation and should have a fairly small value.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The `batch_size` determines how many elements each batch should have. The data
+    is often divided into batches so that training is faster and requires less memory.
+    You will see more about the usage of batches later.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`number_of_iterations` is how many training steps we should take. A training
+    step includes picking one batch from the data and performing forward and then
+    backward propagation, which updates the weights and biases.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '`number_hidden_units` ([https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell](https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell))
+    is the number of units used in any RNN cell. There is actually a pretty neat formula
+    ([https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network](https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network)[)](https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell)
+    which calculates that number based on the input and output neurons of the network.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'After we have defined the above parameters, it is time to specify our graph.
+    This is demonstrated in the following snippets of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start with the TensorFlow placeholder X which holds the training data at
+    that current batch, and Y—which holds the predicted data at that current batch.
+    This is shown in the following code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we initialize our weights and biases using a normal distribution. The
+    dimensions of weights is `[number_hidden_units, most_common_words_length]` which
+    assures correct multiplication in our prediction. The same logic goes for biases
+    with dimensions `[most_common_words_length]`. This is shown in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we specify the GRU cell. All the complex logic learned in the first section
+    of that chapter is hidden behind the previous line of code. [Chapter 2](c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml), *Building
+    Your First RNN with TensorFlow*, explained why we then pass the parameter `num_units`,
+    which is shown in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Then, we calculate the outputs using the GRU cell and the inputs X. An important
+    step is to transpose those outputs with [1, 0, 2] permutations.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Let''s review the following illustration to understand how this `last_output` is
+    obtained:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cf3fa029-3080-498d-adfc-4747035c567f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: The illustration shows how one input example of `section_length` steps is plugged
+    into the network. This operation should be done `batch_size` times for each individual
+    example having `section_length` steps, but, for the sake of simplicity, we are
+    showing only one example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: After iteratively going through each time step, we produce a `section_length` number
+    of outputs, each one having the dimensions `[most_common_words_length, 1]`. So,
+    for one example of the `section_length` input time steps, we produce `section_length`
+    output steps. Presenting all outputs mathematically results in a `[batch_size,
+    section_length, most_common_words_length]` matrix. The height of the matrix is
+    `batch_size` - the number of individual examples in a single batch. The width
+    of the matrix is `section_length` - the number of time steps for each example.
+    The depth of the matrix is `most_common_words_length` - the dimension of each
+    element.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To make a prediction, we are only concerned about the `output_last` at each
+    example and, since the number of examples is `batch_size`, we only need the `batch_size`
+    output values. As seen previously, we reshape the matrix `[batch_size, section_length,
+    most_common_words_length]` into `[section_length, batch_size, most_common_words_length]`
+    which will make it easier to get the `output_last` from each example. Then, we
+    use `tf.gather` to obtain the `last_output` tensor.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Below is a code implementation of the above explanation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As we now have the array with these final step values, we can make our prediction
+    and use it (in a combination with the label values as seen on the fourth line
+    of the previous example) to find the loss at this training step. Since the loss
+    has the same dimensions as the labels (expected output values) and logits (predicted
+    output values), we use `tf.reduce_mean` to produce a single `total_loss`. This
+    is demonstrated in the following code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, the `total_loss` is used during backpropagation, with the aim of improving
+    the model''s performance by adjusting its weights and biases. This is done through `tf.train.AdamOptimizer` which
+    is run during training, and that is detailed in the following section:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training the network
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Once the model is built, we need to train it using the pre-collected data.
+    This operation follows the code snippets below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start by initializing all the TensorFlow variables. Then, we have the `iter_offset` which
+    makes sure the right batch is extracted from the data. This is shown in the following
+    code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, the `tf.train.Saver()` creates a saver object which periodically saves
+    the model locally. This helps us in case something happens and our training is
+    interrupted. Also, it helps us during the prediction phase to look up the pre-trained
+    parameters and so we do not have to run the training every time we want to make
+    a prediction:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, comes the time for the actual training. We loop through the training data
+    while calculating the optimizer using the individual batches. These calculations
+    will minimize the loss function and we can see it decreasing by printing its value,
+    as shown in the snippets as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, we need to divide the data into batches. This is done with the help
+    of the `iter_offset` parameter. It keeps track of the lower bound of each batch
+    so we always get the next batch from the training set, as shown in the following
+    code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Next, we should perform the training by calculating the `optimizer` and `total_loss`.
+    We can run a TensorFlow session with the current batch input and output. Finally,
+    we should print the loss function, so we can keep track of our progress. If our
+    network is training successfully, the value of the loss function should decrease
+    at each step:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Normally, this training takes several hours to finish. You can speed up the
+    process by increasing your computational power. We will discuss some techniques
+    to do that in [Chapter 6](c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml), *Improve
+    Your RNN Performance*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Generating your new text
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: After you have successfully trained your model, it is time to generate your
+    new *The Hunger Games* chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The preceding code can be divided into two parts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training the model using a custom input
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Predicting the next 1,000 words in the sequence
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Let''s explore the code snippets below:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning, we initialized a custom input of 21 words (we used the (`section_length
+    + 1`) in order to match the model''s dimensions). This input is used to give a
+    starting point on our prediction. Next, we will train the existing network with
+    it, so that the weight and biases are optimized for the upcoming predictions,
+    as shown in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we can restore the saved model from the `ckpt` folder in order to train
+    it using the newest input, as demonstrated in the following code:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We should then encode that input in a one-hot vector with dimensions `[1, section_length,
+    most_common_words_length]`. That array should be fed into our model so that the
+    predicted words follow the sequence. You may notice that we omit the last word
+    and add it later on to produce the `text_next_X` array (see the following code).
+    We do that in order to give an unbiased head start to our text generation. This
+    is demonstrated in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Finally, we should train the network using the encoded input sentence. To maintain
+    an unbiased head start of the training, we need to add the last word from the
+    sentence before starting the prediction shown in the following example. A slightly
+    confusing part can be the `np.concatenate` method. We should first reshape the `text_X` to
+    easily append the last section and then reshape the result to accommodate the prediction evaluation.
+    This is shown in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The last part is actually generating the words. At each step (of 1,000 steps)
+    we can calculate the prediction using the current `test_next_X`. Then, we can
+    remove the first character from the current `test_next_X` and append the prediction.
+    This way we constantly keep a set of 20 words where the last element is a fresh
+    new prediction. This is shown in the following example:'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The method `prediction_to_one_hot` encodes the prediction into a one hot encoding
+    array. This is defined in the following example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: After running the code, you should see the final chapter printed out in the
+    console. If there is inconsistency among the words, you need to tweak some of
+    the hyperparameters. I will explain in the last chapter how you can optimize your
+    model and receive good performance. Train a network with the snippets above and
+    keep me updated about your performance. I would be really happy to see your end
+    results.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, you went through the process of building a book chapter generator
+    using a Gated Recurrent Unit neural network. You understood what sits behind this
+    powerful model and how you can put it into practice with a handful of lines of
+    code using TensorFlow. In addition, you faced the challenge of preparing and clearing
+    your data so that your model is trained correctly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, you will fortify your skills by implementing your first
+    real-life practical application—a language translator. You have probably faced
+    the online Google Translate software and were amazed by how well it worked. In
+    the next chapter, you will understand what sits behind a sophisticated system
+    like that and why its level of accuracy has increased drastically in recent years.
+  prefs: []
+  type: TYPE_NORMAL
+- en: I hope the current chapter advanced your deep learning knowledge and that you
+    are excited to be exploring more from the world of recurrent neural networks.
+    I cannot wait for you to start the next section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: External links
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The Unreasonable Effectiveness of Recurrent Neural Networks—[http://karpathy.github.io/2015/05/21/rnn-effectiveness/](http://karpathy.github.io/2015/05/21/rnn-effectiveness/)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Sigmoid activation function—[https://www.youtube.com/watch?v=WcDtwxi7Ick&t=3s](https://www.youtube.com/watch?v=WcDtwxi7Ick&t=3s)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The difference between sigmoid and tanh activation function—[https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function](https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Element-wise multiplication—[https://www.youtube.com/watch?v=2GPZlRVhQWY](https://www.youtube.com/watch?v=2GPZlRVhQWY)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Learning rate in the neural network—[https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10](https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of hidden units in TensorFlow—[https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell](https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The formula for calculating the number of hidden units—[https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network](https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL

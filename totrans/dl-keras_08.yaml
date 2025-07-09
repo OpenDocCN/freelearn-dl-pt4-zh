@@ -1,0 +1,740 @@
+- en: AI Game Playing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In previous chapters, we looked at supervised learning techniques such as regression
+    and classification, and unsupervised learning techniques such as GANs, autoencoders
+    and generative models. In the case of supervised learning, we train the network
+    with the expected input and output and expect it to predict the output given a
+    new input. In the case of unsupervised learning, we show the network some input
+    and expect it to learn the structure of the data so that it can apply this knowledge
+    to a new input.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will learn about reinforcement learning, or more specifically
+    deep reinforcement learning, that is, the application of deep neural networks
+    to reinforcement learning. Reinforcement learning has its roots in behavioral
+    psychology. An agent is trained by rewarding it for correct behavior and punishing
+    it for incorrect behavior. In the context of deep reinforcement learning, a network
+    is shown some input and is given a positive or negative reward based on whether
+    it produces the correct output from that input. Thus, in reinforcement learning,
+    we have sparse and time-delayed labels. Over many iterations, the network learns
+    to produce the correct output.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The pioneer in the deep reinforcement learning space was a small British company
+    called DeepMind, which in 2013 published a paper (for more information refer to:
+    *Playing Atari with Deep Reinforcement Learning*, by V. Mnih, arXiv:1312.5602,
+    2013.) describing how a **convolutional neural network** (**CNN**) could be taught
+    to play Atari 2600 video games by showing it screen pixels and giving it a reward
+    when the score increases. The same architecture was used to learn seven different
+    Atari 2600 games, in six of which the model outperformed all previous approaches,
+    and it outperformed a human expert in three.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Unlike the learning strategies we learned about previously, where each network
+    learns about a single discipline, reinforcement learning seems to be a general
+    learning algorithm that can be applied to a variety of environments; it may even
+    be the first step to general artificial intelligence. DeepMind has since been
+    acquired by Google, and the group has been on the forefront of AI research. A
+    subsequent paper (for more information refer to: *Human-Level Control through
+    Deep Reinforcement Learning*, by V. Mnih, Nature 518.7540, 2015: 529-533.) was
+    featured in the prestigious Nature journal in 2015, where they applied the same
+    model to 49 different games.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In this chapter, we will explore the theoretical framework that underlies deep
+    reinforcement learning. We'll then apply this framework to build a network using
+    Keras that learns to play a game of catch. We'll briefly look at some ideas that
+    can make this network better as well as some promising new areas of research in
+    this space.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To sum up, we will learn the following core concepts around reinforcement learning
+    in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Q-learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Exploration versus exploitation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Experience replay
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Reinforcement learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Our objective is to build a neural network to play the game of catch. Each
+    game starts with a ball being dropped from a random position from the top of the
+    screen. The objective is to move a paddle at the bottom of the screen using the
+    left and right arrow keys to catch the ball by the time it reaches the bottom.
+    As games go, this is quite simple. At any point in time, the state of this game
+    is given by the *(x, y)* coordinates of the ball and paddle. Most arcade games
+    tend to have many more moving parts, so a general solution is to provide the entire
+    current game screen image as the state. The following screenshot shows four consecutive
+    screenshots of our catch game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/catch-frames-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Astute readers might note that our problem could be modeled as a classification
+    problem, where the input to the network are the game screen images and the output
+    is one of three actions--move left, stay, or move right. However, this would require
+    us to provide the network with training examples, possibly from recordings of
+    games played by experts. An alternative and simpler approach might be to build
+    a network and have it play the game repeatedly, giving it feedback based on whether
+    it succeeds in catching the ball or not. This approach is also more intuitive
+    and is closer to the way humans and animals learn.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The most common way to represent such a problem is through a **markov decision
+    process** (**MDP**). Our game is the environment within which the agent is trying
+    to learn. The state of the environment at time step *t* is given by *s[t]* (and
+    contains the location of the ball and paddle). The agent can perform certain actions
+    (such as moving the paddle left or right). These actions can sometimes result
+    in a reward *r[t]*, which can be positive or negative (such as an increase or
+    decrease in the score). Actions change the environment and can lead to a new state
+    *s[t+1]*, where the agent can perform another action *a[t+1]*, and so on. The
+    set of states, actions and rewards, together with the rules for transitioning
+    from one state to the other, make up a markov decision process. A single game
+    is one episode of this process, and is represented by a finite sequence of states,
+    actions, and rewards:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/episode.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Since, this is a markov decision process, the probability of state *s[t+1]*
+    depends only on current state *s[t]* and action *a[t]*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Maximizing future rewards
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'As an agent, our objective is to maximize the total reward from each game.
+    The total reward can be represented as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/total_reward.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'In order to maximize the total reward, the agent should try to maximize the
+    total reward from any time point *t* in the game. The total reward at time step
+    *t* is given by *R[t]* and is represented as:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/reward_at_t.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'However, it is harder to predict the value of the rewards the further we go
+    into the future. In order to take this into consideration, our agent should try
+    to maximize the total discounted future reward at time *t* instead. This is done
+    by discounting the reward at each future time step by a factor γ over the previous
+    time step. If γ is *0*, then our network does not consider future rewards at all,
+    and if γ is *1*, then our network is completely deterministic. A good value for
+    γ is around *0.9*. Factoring the equation allows us to express the total discounted
+    future reward at a given time step recursively as the sum of the current reward
+    and the total discounted future reward at the next time step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/reward_recursive.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Q-learning
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Deep reinforcement learning utilizes a model-free reinforcement learning technique
+    called **Q-learning**. Q-learning can be used to find an optimal action for any
+    given state in a finite markov decision process. Q-learning tries to maximize
+    the value of the Q-function which represents the maximum discounted future reward
+    when we perform action *a* in state *s*:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/qfunc.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Once we know the Q-function, the optimal action *a* at a state *s* is the one
+    with the highest Q-value. We can then define a policy *Ï€(s)* that gives us the
+    optimal action at any state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/qpolicy.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'We can define the Q-function for a transition point (*s[t]*, *a[t]*, *r[t]*, *s[t+1]*)
+    in terms of the Q-function at the next point (*s[t+1]*, *a[t+1]*, *r[t+1]*, *s[t+2]*)
+    similar to how we did with the total discounted future reward. This equation is
+    known as the **Bellman equation**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/bellman.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The Q-function can be approximated using the Bellman equation. You can think
+    of the Q-function as a lookup table (called a **Q-table**) where the states (denoted
+    by *s*) are rows and actions (denoted by *a*) are columns, and the elements (denoted
+    by *Q(s, a)*) are the rewards that you get if you are in the state given by the
+    row and take the action given by the column. The best action to take at any state
+    is the one with the highest reward. We start by randomly initializing the Q-table,
+    then carry out random actions and observe the rewards to update the Q-table iteratively
+    according to the following algorithm:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: You will realize that the algorithm is basically doing stochastic gradient descent
+    on the Bellman equation, backpropagating the reward through the state space (or
+    episode) and averaging over many trials (or epochs). Here α is the learning rate
+    that determines how much of the difference between the previous Q-value and the
+    discounted new maximum Q-value should be incorporated.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The deep Q-network as a Q-function
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We know that our Q-function is going to be a neural network, the natural question
+    is: what kind? For our simple example game, each state is represented by four
+    consecutive black and white screen images of size *(80, 80)*, so the total number
+    of possible states (and the number of rows of our Q-table) is *2^(80x80x4)*. Fortunately,
+    many of these states represent impossible or highly improbable pixel combinations.
+    Since convolutional neural networks have local connectivity (that is, each neuron
+    is connected to only a local region of its input), it avoids these impossible
+    or improbable pixel combinations. In addition, neural networks are generally very
+    good at coming up with good features for structured data such as images. Hence
+    a CNN can be used to model a Q-function very effectively.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The DeepMind paper (for more information refer to: *Playing Atari with Deep
+    Reinforcement Learning*, by V. Mnih, arXiv:1312.5602, 2013.), also uses three
+    layers of convolutions followed by two fully connected layers. Unlike traditional
+    CNNs used for image classification or recognition, there are no pooling layers.
+    This is because pooling layers makes the network less sensitive to the location
+    of specific objects in the image. In case of games this information is likely
+    to be required to compute the reward, and thus cannot be discarded.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following diagram, shows the structure of the deep Q-network that is used
+    for our example. It follows the same structure as the original DeepMind paper
+    except for the input and output layer shapes. The shape for each of our inputs
+    is *(80, 80, 4)*: four black and white consecutive screenshots of the game console,
+    each *80* x *80* pixels in size. Our output shape is (*3*), corresponding to the
+    Q-value for each of three possible actions (move left, stay, move right):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/deep-q-cnn.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Since our output are the three Q-values, this is a regression task, and we
+    can optimize this by minimizing the difference of the squared error between the
+    current value of *Q(s, a)* and its computed value in terms of the sum of the reward
+    and the discounted Q-value *Q(s'', a'')* one step into the future. The current
+    value is already known at the beginning of the iteration and the future value
+    is computed based on the reward returned by the environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/loss_function.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Balancing exploration with exploitation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Deep reinforcement learning is an example of online learning, where the training
+    and prediction steps are interspersed. Unlike batch learning techniques where
+    the best predictor is generated by learning on the entire training data, a predictor
+    trained with online learning is continuously improving as it trains on new data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thus in the initial epochs of training, a deep Q-network gives random predictions
+    which can give rise to poor Q-learning performance. To alleviate this, we can
+    use a simple exploration method such as &epsi;-greedy. In case of &epsi;-greedy
+    exploration, the agent chooses the action suggested by the network with probability
+    *1-&epsi;* or an action uniformly at random otherwise. That is why this strategy
+    is called exploration/exploitation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the number of epochs increases and the Q-function converges, it begins to
+    return more consistent Q-values. The value of &epsi; can be attenuated to account
+    for this, so as the network begins to return more consistent predictions, the
+    agent chooses to exploit the values returned by the network over choosing random
+    actions. In case of DeepMind, the value of &epsi; decreases over time from *1*
+    to *0.1*, and in our example it decreases from *0.1* to *0.001*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Thus, &epsi;-greedy exploration ensures that in the beginning the system balances
+    the unreliable predictions made from the Q-network with completely random moves
+    to explore the state space, and then settles down to less aggressive exploration
+    (and more aggressive exploitation) as the predictions made by the Q-network improve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experience replay, or the value of experience
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Based on the equations that represent the Q-value for a state action pair *(s[t],
+    a[t])* in terms of the current reward *r[t]* and the discounted maximum Q-value
+    for the next time step *(s[t+1], a[t+1])*, our strategy would logically be to
+    train the network to predict the best next state *s'* given the current state
+    *(s, a, r)*. It turns out that this tends to drive the network into a local minimum.
+    The reason for this is that consecutive training samples tend to be very similar.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To counter this, during game play, we collect all the previous moves *(s, a,
+    r, s')* into a large fixed size queue called the **replay memory**. The replay
+    memory represents the experience of the network. When training the network, we
+    generate random batches from the replay memory instead of the most recent (batch
+    of) transactions. Since the batches are composed of random experience tuples *(s,
+    a, r, s')* that are out of order, the network trains better and avoids getting
+    stuck in local minima.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experiences could be collected from human gameplay as well instead of (or in
+    addition to) from previous moves during game play by the network. Yet another
+    approach is to collect experiences by running the network in *observation* mode
+    for a while in the beginning, when it generates completely random actions (![](img/B06258_08_13-1.png)* =
+    1*) and extracts the reward and next state from the game and collects them into
+    its experience replay queue.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Example - Keras deep Q-network for catch
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The objective of our game is to catch a ball released from a random location
+    from the top of the screen with a paddle at the bottom of the screen by moving
+    the paddle horizontally using the left and right arrow keys. The player wins if
+    the paddle can catch the ball and loses if the balls falls off the screen before
+    the paddle gets to it. The game has the advantage of being very simple to understand
+    and build, and is modeled after the game of catch described by Eder Santana in
+    his blog post (for more information refer to: *Keras Plays Catch, a Single File
+    Reinforcement Learning Example*, by Eder Santana, 2017.) on deep reinforcement
+    learning. We built the original game using Pygame ([https://www.pygame.org/news](https://www.pygame.org/news)),
+    a free and open source library for building games. This game allows the player
+    to move the paddle using the left and right arrow keys. The game is available
+    as `game.py` in the code bundle for this chapter in case you want to get a feel
+    for it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Installing Pygame**:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Pygame runs on top of Python, and is available for Linux (various flavors),
+    macOS, Windows, as well as some phone operating systems such as Android and Nokia.
+    The full list of distributions can be found at: [http://www.pygame.org/download.shtml](http://www.pygame.org/download.shtml).
+    Pre-built versions are available for 32-bit and 64-bit versions of Linux and Windows
+    and 64-bit version of macOS. On these platforms, you can install Pygame with `pip
+    install pygame` command.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If a pre-built version does not exist for your platform, you can also build
+    it from source using instructions available at: [http://www.pygame.org/wiki/GettingStarted](http://www.pygame.org/wiki/GettingStarted).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Anaconda users can find pre-built Pygame versions on the conda-forge:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`conda install binstar`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`conda install anaconda-client`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`conda install -c https://conda.binstar.org/tlatorre pygame # Linux`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`conda install -c https://conda.binstar.org/quasiben pygame # Mac`'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In order to train our neural network, we need to make some changes to the original
+    game so the network can play instead of the human player. We want to wrap the
+    game to allow the network to communicate with it via an API instead of the keyboard
+    left and right arrow keys. Let us look at the code for this wrapped game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As usual, we start with the imports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We define our class. Our constructor can optionally set the wrapped version
+    of the game to run in *headless* mode, that is, without needing to display a Pygame
+    screen. This is useful where you have to run on a GPU box in the cloud and only
+    have access to a text based terminal. You can comment this line out if you are
+    running the wrapped game locally where you have access to a graphics terminal.
+    Next we call the `pygame.init()` method to initialize all Pygame components. Finally,
+    we set a bunch of class level constants:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `reset()` method defines the operations that need to be called at the start
+    of each game, such as clearing out the state queue, setting the ball, and paddle
+    to their starting positions, initializing the scores, and so on:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the original game, there is a Pygame event queue into which the left and
+    right arrow key events raised by the player as he moves the paddle, as well as
+    internal events raised by Pygame components are written to. The central part of
+    the game code is basically a loop (called the **event loop**), that reads the
+    event queue and reacts to it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the wrapped version, we have moved the event loop to the caller. The `step()`
+    method describes what happens in a single pass in the loop. The method takes an
+    integer `0`, `1`, or `2` representing an action (respectively move left, stay,
+    and move right), and then it sets variables that control the position of the ball
+    and paddle at this time step. The `PADDLE_VELOCITY` variable represents a *speed*
+    that moves the paddle that many pixels to the left or right when the move left
+    and move right actions are sent. If the ball has dropped past the paddle, it checks
+    whether there is a collision. If there is, the paddle *catches* the ball and the
+    player (the neural network) wins, otherwise the player loses. The method then
+    redraws the screen and appends it to the fixed length `deque` that contains the
+    last four frames of the game screen. Finally, it returns the state (given by the
+    last four frames), the reward for the current action and a flag that tells the
+    caller if the game is over:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will look at the code to train our network to play the game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As usual, first we import the libraries and objects that we need. In addition
+    to third-party components from Keras and SciPy, we also import the `wrapped_game`
+    class we described previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: We define two convenience functions. The first converts the set of four input
+    images to a form suitable for use by the network. The input comes in a set of
+    four 800 x 800 images, so the shape of the input is *(4, 800, 800)*. However,
+    the network expects its input as a four-dimensional tensor of shape *(batch size,
+    80, 80, 4)*. At the very beginning of the game, we don't have four frames, so
+    we fake it by stacking the first frame four times. The shape of the output tensor
+    returned from this function is *(80, 80, 4)*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `get_next_batch()` function samples `batch_size` state tuples from the
+    experience replay queue, and gets the reward and predicted next state from the
+    neural network. It then calculates the value of the Q-function at the next time
+    step and returns it:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: We define our network. This is the network that models the Q-function for our
+    game. Our network is very similar to the one proposed in the DeepMind paper. The
+    only difference is the size of the input and the output. Our input shape is *(80,
+    80, 4)* while theirs was *(84, 84, 4)* and our output is *(3)* corresponding to
+    the three actions for which the value of the Q-function needs to be computed,
+    whereas their was *(18)*, corresponding to the actions possible from Atari.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There are three convolutional layers and two fully connected (dense) layers.
+    All layers, except the last have the ReLU activation unit. Since we are predicting
+    values of Q-functions, it is a regression network and the last layer has no activation
+    unit:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As we have described previously, our loss function is the squared difference
+    between the current value of *Q(s, a)* and its computed value in terms of the
+    sum of the reward and the discounted Q-value *Q(s'', a'')* one step into the future,
+    so the mean squared error (MSE) loss function works very well. For the optimizer,
+    we choose Adam, a good general-purpose optimizer, instantiated with a low learning
+    rate:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We define some constants for our training. The `NUM_ACTIONS` constant defines
+    the number of output actions that the network can send to the game. In our case,
+    these actions are `0`, `1`, and `2`, corresponding to move left, stay, and move
+    right. The `GAMMA` value is the discount factor ![](img/image_01_042.jpg) for
+    future rewards. The `INITIAL_EPSILON` and `FINAL_EPSILON` refer to starting and
+    ending values for the ![](img/B06258_08_13-1.png) parameter in ![](img/B06258_08_13-1.png)-greedy
+    exploration. The `MEMORY_SIZE` is the size of the experience replay queue. The
+    `NUM_EPOCHS_OBSERVE` refer to the number of epochs where the network is allowed
+    to explore the game by sending it completely random actions and seeing the rewards.
+    The `NUM_EPOCHS_TRAIN` variable refers to the number of epochs the network will
+    undergo online training. Each epoch corresponds to a single game or episode. The
+    total number of games played for a training run is the sum of the `NUM_EPOCHS_OBSERVE`
+    and `NUM_EPOCHS_TRAIN` values. The `BATCH_SIZE` is the size of the mini-batch
+    that we will use for training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We instantiate the game and the experience replay queue. We also open up a
+    log file and initialize some variables in preparation for training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Next up, we set up the loop that controls the number of epochs of training.
+    As noted previously, each epoch corresponds to a single game, so we reset the
+    game state at this point. A game corresponds to a single episode of a ball falling
+    from the ceiling and either getting caught by the paddle or being missed. The
+    loss is the squared difference between the predicted and actual Q-value for the
+    game.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We start the game off by sending it a dummy action (in our case, a *stay*)
+    and get back the initial state tuple for the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The next block is the main loop of the game. This is the event loop in the
+    original game that we moved to the calling code. We save the current state because
+    we will need that for our experience replay queue, then decide what action signal
+    to send the wrapped game. If we are in observation mode, we will just generate
+    a random number corresponding to one of our actions, otherwise we will use ![](img/B06258_08_13-1.png)-greedy
+    exploration to either select a random action or use our neural network (which
+    we are also training) to predict the action we should send:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once we know our action, we send it to the game by calling `game.step()`, which
+    returns the new state, the reward and a Boolean flag indicating the game is over.
+    If the reward is positive (indicating that the ball was caught), we increment
+    the number of wins, and we store this *(state, action, reward, new state, game
+    over)* tuple in our experience replay queue:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We then draw a random mini-batch from our experience replay queue and train
+    our network. For each session of training, we compute the loss. The sum of the
+    losses for all the trainings in each epoch is the loss for the entire epoch:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'When the network is relatively untrained, its predictions are not very good,
+    so it makes sense to explore the state space more in an effort to reduce the chances
+    of getting stuck in a local minima. However, as the network gets more and more
+    trained, we reduce the value of ![](img/B06258_08_13-1.png) gradually so the model
+    gets to predict more and more of the actions the network sends to the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We write out a per epoch log both on console and into a log file for later
+    analysis. After 100 epochs of training, we save the current state of the model
+    so that we can recover in case we decide to stop training for any reason. We also
+    save our final model so that we can use it to play our game later:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We trained the game by making it observe 100 games, followed by playing 1,000,
+    2,000, and 5,000 games respectively. The last few lines of the log file for the
+    5,000 game run are shown next. As you can see, towards the end of the training,
+    the network gets quite skilled at playing the game:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ss-8-1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The plot of loss and win count over epoch, shown in the following graph, also
+    tells a similar story. While it does look like the loss could converge further
+    with more training, it has gone down from *0.6* to around *0.1* in *5000* epochs
+    of training. Similarly, the plot of the number of wins curve upward, showing that
+    the network is learning faster as the number of epochs increases:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/loss_function.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Finally, we evaluate the skill of our trained model by making it play a fixed
+    number of games (100 in our case) and seeing how many it can win. Here is the
+    code to do this. As previously, we start with our imports:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We load up the model we had saved at the end of training and compile it. We
+    also instantiate our `wrapped_game`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: We then loop over 100 games. We instantiate each game by calling its `reset()`
+    method, and start it off. Then, for each game, until it is over, we call on the
+    model to predict the action with the best Q-function. We report a running total
+    of how many games it won.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We ran the test with each of our models. The first one that was trained for
+    1,000 games won 42 of 100 games, the one trained for 2,000 games won 74 of 100
+    games, and the one trained for 5,000 games won 87 of 100 games. This clearly shows
+    that the network is improving with training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: If you run the evaluation code with the call to run it in headless mode commented
+    out, you can watch the network playing the game and it's quite amazing to watch.
+    Given that the Q-value predictions start off as random values and that it's mainly
+    the sparse reward mechanism that provides the guidance to the network during training,
+    it is almost unreasonable that the network learns to play the game this effectively.
+    But as with other areas of deep learning, the network does in fact learn to play
+    quite well.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The example presented previously is fairly simple, but it illustrates the process
+    by which deep reinforcement learning models work, and hopefully has helped create
+    a mental model using which you can approach more complex implementations. One
+    implementation you might find interesting is Ben Lau's implementation of FlappyBird
+    (for more information refer to: *Using Keras and Deep Q-Network to Play FlappyBird*,
+    by Ben Lau, 2016\. and GitHub page: [https://github.com/yanpanlau/Keras-FlappyBird](https://github.com/yanpanlau/Keras-FlappyBird)) using
+    Keras. The Keras-RL project ([https://github.com/matthiasplappert/keras-rl](https://github.com/matthiasplappert/keras-rl)),
+    a Keras library for deep reinforcement learning, also has some very good examples.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Since the original proposal from DeepMind, there have been other improvements
+    suggested, such as double Q-learning (for more information refer to: *Deep Reinforcement
+    Learning with Double Q-Learning*, by H. Van Hasselt, A. Guez, and D. Silver, AAAI.
+    2016), prioritized experience replay (for more information refer to: *Prioritized
+    Experience Replay*, by T. Schaul, arXiv:1511.05952, 2015), and dueling network
+    architectures (for more information refer to: *Dueling Network Architectures for
+    Deep Reinforcement Learning*, by Z. Wang, arXiv:1511.06581, 2015). Double Q-learning
+    uses two networks - the primary network chooses the action and the target network
+    chooses the target Q-value for the action. This reduces possible overestimation
+    of Q-values by the single network, and allows the network to train quicker and
+    better. Prioritized experience replay increases the probability of sampling experience
+    tuples with a higher expected learning progress. Dueling network architectures
+    decompose the Q-function into state and action components and combine them back
+    separately.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of the code discussed in this section, including the base game that can
+    be played by a human player, is available in the code bundle accompanying this
+    chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The road ahead
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In January 2016, DeepMind announced the release of AlphaGo (for more information
+    refer to: *Mastering the Game of Go with Deep Neural Networks and Tree Search*,
+    by D. Silver, Nature 529.7587, pp. 484-489, 2016), a neural network to play the
+    game of Go. Go is regarded as a very challenging game for AIs to play, mainly
+    because at any point in the game, there are an average of approximately *10^(170)*
+    possible (for more information refer to: [http://ai-depot.com/LogicGames/Go-Complexity.html](http://ai-depot.com/LogicGames/Go-Complexity.html))
+    moves (compared with approximately *10^(50)* for chess). Hence determining the
+    best move using brute force methods is computationally infeasible. At the time
+    of publication, AlphaGo had already won 5-0 in a 5-game competition against the
+    current European Go champion, Fan Hui. This was the first time that any computer
+    program had defeated a human player at Go. Subsequently, in March 2016, AlphaGo
+    won 4-1 against Lee Sedol, the world's second professional Go player.
+  prefs: []
+  type: TYPE_NORMAL
+- en: There were several notable new ideas that went into AlphaGo. First, it was trained
+    using a combination of supervised learning from human expert games and reinforcement
+    learning by playing one copy of AlphaGo against another. You have seen applications
+    of both these ideas in previous chapters.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Second, AlphaGo was composed of a value network and a policy network. During
+    each move, AlphaGo uses Monte Carlo simulation, a process used to predict the
+    probability of different outcomes in the future in the presence of random variables, to
+    imagine many alternative games starting from the current position. The value network
+    is used to reduce the depth of the tree search to estimate win/loss probability
+    without having to compute all the way to the end of the game, sort of like an
+    intuition about how good the move is. The policy network is used to reduce the
+    breadth of the search by guiding the search towards actions that promise the maximum
+    immediate reward (or Q-value). For a more detailed description, please refer to
+    the blog post: *AlphaGo: Mastering the ancient game of Go with Machine Learning*,
+    Google Research Blog, 2016.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While AlphaGo was a major improvement over the original DeepMind network, it
+    was still playing a game where all the players can see all the game pieces, that
+    is, they are still games of perfect information. In January, 2017, researchers
+    at Carnegie Mellon University announced Libratus (for more information refer to: *AI
+    Takes on Top Poker Players*, by T. Revel, New Scientist 223.3109, pp. 8, 2017),
+    an AI that plays Poker. Simultaneously, another group comprised of researchers
+    from the University of Alberta, Charles University of Prague, and Czech Technical
+    University (also from Prague), have proposed the DeepStack architecture (for more
+    information refer to: *DeepStack: Expert-Level Artificial Intelligence in No-Limit
+    Poker*, by M. Moravaa­k, arXiv:1701.01724, 2017) to do the same thing. Poker is
+    a game of imperfect information, since a player cannot see the opponent''s cards.
+    So, in addition to learning how to play the game, the Poker playing AI also needs
+    to develop an intuition about the opponent''s game play.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Rather than use a built-in strategy for its intuition, Libratus has an algorithm
+    that computes this strategy by trying to achieve a balance between risk and reward,
+    also known as the Nash equilibrium. From January 11, 2017 to January 31, 2017,
+    Libratus was pitted against four top human Poker players (for more information
+    refer to: *Upping the Ante: Top Poker Pros Face Off vs. Artificial Intelligence*,
+    Carnegie Mellon University, January 2017), and beat them resoundingly.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DeepStack's intuition is trained using reinforcement learning, using examples
+    generated from random Poker situations. It has played 33 professional Poker players
+    from 17 countries and has a win rating that makes it an *order of magnitude* better
+    than a good player rating (for more information refer to: *The Uncanny Intuition
+    of Deep Learning to Predict Human Behavior*, by C. E. Perez, Medium corporation,
+    Intuition Machine, February 13, 2017).
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, these are very exciting times indeed. Advances that started
+    with deep learning networks able to play arcade games have led to networks that
+    can effectively read your mind, or at least anticipate (sometimes non-rational)
+    human behavior and win at games of bluffing. The possibilities with deep learning
+    seem to be just limitless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we have learned the concepts behind reinforcement learning,
+    and how it can be used to build deep learning networks with Keras that learn how
+    to play arcade games based on reward feedback. From there, we moved on to briefly
+    discuss advances in this field, such as networks that have been taught to play
+    harder games such as Go and Poker at a superhuman level. While game playing might
+    seem like a frivolous application, these ideas are the first step towards general
+    artificial intelligence, where a network learns from experience rather than large
+    amounts of training data.
+  prefs: []
+  type: TYPE_NORMAL

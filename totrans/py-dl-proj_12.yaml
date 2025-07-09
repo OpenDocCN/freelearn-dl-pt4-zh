@@ -1,0 +1,1062 @@
+- en: Pose Estimation on 3D models Using ConvNets
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Welcome to our chapter on human pose estimation. In this chapter, we will be
+    building a neural network that will predict 3D human poses using 2D images. We
+    will do this with the help of transfer learning by using the VGG16 model architecture
+    and modifying it accordingly for our current problem. By the end of this chapter,
+    you will have a **deep learning** (**DL**) model that does a really good job of
+    predicting human poses.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '**Visual effects** (**VFX**) in movies are expensive. They involve using a
+    lot of expensive sensors that will be placed on the body of the actor when shooting.
+    The information from these sensors will then be used to build visual effects,
+    all of which ends up being super expensive. We have been asked (in this hypothetical
+    use case) by a major movie studio whether we can help their graphics department
+    build cheaper and better visual effects by building a human pose estimator, which
+    they will use to better estimate poses on the screen while editing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: For this task, we will be using images from **Frames Labeled In Cinema** (**FLIC**).
+    These images are not ready to be used for modeling just yet. So, get ready to
+    spend a bit more time on preparing the image data in this chapter. Also, we will
+    only be estimating the pose of arms, shoulders, and the head.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we''ll learn about the following topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Processing/preparing images for pose estimation
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The VGG16 model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Transfer learning
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Building and understanding the training loop
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Testing the model
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It would be better if you implement the code snippets as you go along in this
+    chapter, either in a Jupyter notebook or any source code editor. This will make
+    it easier for you to follow along, as well as understand what each part of the
+    code does.
+  prefs: []
+  type: TYPE_NORMAL
+- en: All of the Python files and the Jupyter Notebooks for this chapter can be found
+    at [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter12).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Code implementation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this exercise, we will be using the Keras deep learning library, which is
+    a high-level neural network API capable of running on top of TensorFlow, Theano,
+    and CNTK.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you ever have a question related to Keras, refer to this easy-to-understand
+    Keras documentation at [https://keras.io](https://keras.io).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Please download the `Chapter12` folder from GitHub before moving forward with
+    this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This project involves downloading files from various sources that will be called
+    inside the scripts. To make sure that the Python scripts or the Jupyter Notebook
+    have no issues locating the downloaded files, follow these steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Open a Terminal and change your directory by using the `cd` command in the `Chapter12`
+    folder.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Download the `FLIC-full` data file with the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Unzip the ZIP file with the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Remove the ZIP file with the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Change directories in the `FLIC-full` folder by using the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Download the file containing the training indices:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Change the directory back to the `Chapter12` folder.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Launch your Jupyter Notebook or run the Python scripts from the `Chapter12`
+    directory.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Further information on the `FLIC-full` data folder can be found at [https://bensapp.github.io/flic-dataset.html](https://bensapp.github.io/flic-dataset.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: Importing the dependencies
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will be using `numpy`, `matplotlib`, `keras`, `tensorflow`, and the `tqdm`
+    package in this exercise. Here, TensorFlow is used as the backend for Keras. You
+    can install these packages with `pip`. For the MNIST data, we will be using the dataset
+    that''s available in the `keras` module with a simple `import`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It is important that you set `seed` for reproducibility:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: Exploring and pre-processing the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: With the `FLIC-full` data folder downloaded and unpacked, inside the `FLIC-full` folder
+    you should find the `tr_plus_indices.mat` and `examples.mat` MATLAB files, and
+    also the folder named `images`, inside which are the images that will be used
+    in this project.
+  prefs: []
+  type: TYPE_NORMAL
+- en: You will find that the images have been captured from movies such as *2 Fast
+    2 Furious*, *Along Came Polly*, *American Wedding*, and a few others. Each of
+    these images is 480*720 px in size. These images are nothing but screenshots of
+    scenes involving actors from the selected movies, which we will use for pose estimation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s load the MATLAB file `examples.mat`. We will do this with the help of
+    the `loadmat` module, which we have imported already, along with other imports.
+    Also, let''s print out some of the information from this file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/218fec22-6838-416c-af68-de63f548ad27.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.1: Example file information from printout 1'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the printout, we can see that the MATLAB file has been loaded as a dictionary
+    with four keys, one of which is the one we need: the `examples` key. Let''s see
+    what this key holds:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d9b8d6cd-c3f0-4827-884a-2e649bbb0a4b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.2: Example file information from printout 1
+  prefs: []
+  type: TYPE_NORMAL
+- en: The notable thing here is that the value of the `examples` key is a numpy array
+    of shape (1, 20928). You will also see that the array has been reshaped to shape
+    `(20928,)`. The `examples` key contains the IDs of the images (in the `images`
+    folder) and the corresponding pose coordinates that can be used for modeling.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s print out an image ID and its corresponding coordinates array with its
+    shape. The image ID we need is stored at index `3`, and the corresponding coordinates
+    are at index `2`. Let''s print these out:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/212857ff-d2e7-4450-bcdc-f2048900451f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Figure 12.3: Example file information from printout 2
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the preceding screenshot, we can see that the coordinates array is of
+    shape (2,29):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/c0036acc-54ae-44b1-8f58-654bf1668521.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.4: List of joint labels'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'But, if you look back at the coordinates array that we printed in the preceding
+    screenshot, out of the 29 coordinates, we only have information on 11 of the body
+    joints/locations. These are as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/24a820f3-2079-4162-9183-9a3a15431900.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.5: List of joint labels with coordinates'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For the purpose of this project, we only need information on the following
+    body joints/locations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/33982f76-450e-4511-9f30-0b326d58db3f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.6: Required joints and their indices in the array'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lsho`: Left shoulder'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lelb`: Left elbow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`lwri`: Left wrist'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`rsho`: Right shoulder'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`relb`: Right elbow'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`rwri`: Right wrist'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`leye`: Left eye'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`reye`: Right eye'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`nose`: Nose'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s define a function that takes in a dictionary of nine joint labels
+    and coordinates and returns a list with seven coordinates (*7* (*x*,*y*) pairs).
+    The reason for seven coordinates is that the `leye`, `reye`, and the `nose` coordinates
+    are converted into one head coordinate when we take the mean across them:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now let''s load the `tr_plus_indices.mat` MATLAB file, just like we did previously:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The reason why we need to use the `tr_plus_indices.mat` file is because it contains
+    indices of images that should only be used for training, as well as some unlisted
+    ones for testing. The reason for such a split is to make sure that the train set
+    and the test set have frames from completely different movies so as to avoid overfitting.
+    More on this can be found at [https://bensapp.github.io/flic-dataset.html](https://bensapp.github.io/flic-dataset.html).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/facd390a-cf75-42f5-aa65-a71b2491ef90.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.7: train_indices file information printout 1'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'From the preceding screenshot, you can see that the MATLAB file has been loaded
+    as a dictionary with four keys, one of which is `tr_plus_indices`, which is the
+    one we need. Let''s look at the content of this key:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d444061b-4688-40f8-910a-e6371a2d6dee.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.8: train_indices file information printout 2'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that the `tr_plus_indices` key corresponds to a (17380*1) shaped
+    array. We will reshape this to `(17380, )` for convenience.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`tr_plus_indices` contains the indices of the data in the `examples` key of
+    the `examples.mat` file, which should only be used for training. Using this information,
+    we will subset the data into a train set and a test set:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code snippet, please refer to the `deeppose.ipynb`
+    file here : [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: We can see that the train data has 17,380 data points, with each data point
+    having an image ID and *7*(*x*,*y*) joint coordinates. Similarly, the test data
+    has 3,548 data points.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the preceding snippet, we first initialize four empty lists, two for saving
+    train and test image IDs, and two for saving train and test joints. Then, for
+    each data point in the `examples` key, we do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Extract the file name.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Extract the joint coordinates.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: ZIP the target joints (target joint labels) and the corresponding joint coordinates
+    and convert them into a dictionary.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Feed the dictionary to the `joint_coordinates` function to obtain the joints
+    needed for this task.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Append the image IDs and the resulting joints from the previous step to a train
+    or test list by using the `train_indices` list.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Finally, convert the lists into train and test data frames and save them as
+    a CSV file. Make sure that you don't set the index and header parameters to `False`
+    when saving the data frame as a CSV file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s load the `train_joints.csv` and `test_joints.csv` files we saved in
+    the previous step and print out some details:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2bc02243-2847-4e3f-a809-0e189df92240.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.9: Printout of image IDs and the joint''s array shape'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now, let''s load some images from the `images` folder and plot them to see
+    what they look like:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/7856b703-fe37-4781-8fdb-66b7bdacda1e.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.10: Plot of eight images from the images folder in the FLIC_full
+    folder'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can see that each image is of shape (480*720*3). Our next task will be to
+    crop the original image and focus on the person of interest by using the joint
+    coordinates that are available to us. We do this by resizing the images into a
+    shape of 224*24*3 so that we can feed them into the VGG16 model. Finally, we will
+    also build a `plotting` function to plot the joints on the image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9fe4c5d7-476a-4402-a583-bfdd7c2a9121.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.11: Plot showing the transformation each image has to go through'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Preparing the data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now let's implement the functions that will perform the tasks that we discussed
+    when we ended the previous section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Cropping
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will first start off with the `image_cropping()` function. This function
+    accepts an image ID and its corresponding joint coordinates. It loads the image
+    into memory and then crops the image so that it only includes the section of the
+    image that''s bound within the coordinates. The cropped image is then padded so
+    that the joints and limbs are completely visible. For the added padding, the joint
+    coordinates are also adjusted accordingly. When it has done this, the image is
+    returned. This is the most important part of the transformation. Take your time
+    and dissect the function to see exactly what is happening (the `crop_pad_inf` and `crop_pad_sup`
+    parameters control the amount of padding):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code snippet please refer to the file `deeppose.ipynb`
+    here : [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)
+    [](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s pass an image ID and its joints to the `image_cropping()` function and
+    plot the output image:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/cf6ad6e1-8611-4155-8cab-5e90b983a008.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.12: Plot of the resulting cropped image compared to the original
+    image'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Resizing
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the *Cropping* section, we saw that the original image of shape (480*720*3)
+    is cropped to shape (393*254*3). However, the VGG16 architecture accepts images
+    of shape (224*224*3). Hence, we will define a function called `image_resize()`
+    that does the resizing for us. It accepts the cropped image and the joint resulting
+    from the `image_cropping()` function as input and returns the resized image and
+    its joint coordinates:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d66c1090-a53d-4026-985b-34ba59dc99ee.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.13: Plot of the resized image'
+  prefs: []
+  type: TYPE_NORMAL
+- en: After passing the cropped image to the `image_resize()` function, we can see
+    that the resulting image is of shape (224*224*3). Now this image and its joints
+    can be passed into the model for training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plotting the joints and limbs
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s also define the plotting functions that will plot the limbs on the resized
+    image. The following defined `plot_joints()` function accepts the resized image
+    and its joints and returns an image of the same shape with the limbs plotted on
+    top:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code snippet please refer to the `deeppose.ipynb`
+    file here: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/04effbe1-f2bc-41a1-8d0c-3d789946e1d5.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.14: Plot showing the true joint coordinates on top of the image'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Transforming the images
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now let''s transform the images and their corresponding joints to the desired
+    form by using the functions we have defined previously. We will do this with the
+    help of the `model_data()` function, which is defined as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code snippet, please refer to the `deeppose.ipynb`
+    file here: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The preceding defined `model_data()` function accepts three parameters: `image_ids`
+    (array of image IDs), `joints` (array of joints), and a Boolean parameter called `train`.
+    Set the `train` parameter to `True` when transforming the training images and
+    joints and to `False` when transforming the test images and joints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'When the `train` parameter is set to `True`, perform the following steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialize an empty list to store the ID of the transformed image and its joint
+    coordinates.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: A new directory called `train` will be created inside the `images` folder if
+    the folder does not exist.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: An image and its joint coordinates are first passed to the `image_cropping`
+    function we defined previously, which will return the cropped image and joint
+    coordinates.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The result of *Step 3* is passed to the `image_resize` function, which will
+    then resize the image to the desired shape. In our case, this is 224*224*3.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The resized image is then written into the `train` folder via the OpenCV `imwrite()`
+    function with a new image ID (for example, `train0.jpg`).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The new image ID and its joints are appended to the list initialized in *Step
+    1.*
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '*Step 3* through *Step 6* are repeated until all of the training images are
+    transformed.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The list defined in *Step 1* now contains the new image IDs and the joint coordinates,
+    which are then converted to a data frame and saved as a CSV file in the `train`
+    folder.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: For transforming the test data, the preceding procedure is repeated by setting
+    the `train` parameter to `False` and feeding the test image IDs and the joints.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The train and test data frames that get generated inside the `model_data()`
+    function are stored as a CSV file with no header and no index column. Take this
+    into consideration when loading these files.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining hyperparameters for training
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The following are some of the hyperparameters that have been defined that we
+    will be using throughout our code. These are totally configurable:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: Experiment with different learning rates, optimizers, batch size, as well as
+    smoothing value to see how these factors affect the quality of your model. If
+    you get better results, show these to the deep learning community.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Building the VGG16 model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The VGG16 model is a deep convolution neural network image classifier. The model
+    uses a combination of Conv2D, MaxPooling2D, and Dense layers to form the final
+    architecture, and the activation function that's used is ReLU. It accepts color
+    images of shape 224*224*3, and is capable of predicting 1,000 classes. This means that
+    the final Dense layer has 1,000 neurons, and it uses softmax activation to get
+    scores for each class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Defining the VGG16 model
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this project, we want to feed in images of shape 224*224*3 and be able to
+    predict the joint coordinates for the body in the image. That is, we want to be
+    able to predict 14 numerical values (*7* (*x*,*y*) pairs). Therefore, we modify
+    the final Dense layer to have 14 neurons and use ReLU activation instead of sigmoid.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training a deep learning model such as VGG16 can take up to a week on a local
+    machine. This is a lot of time. An alternative to this in our case is to use the
+    weights of a trained VGG16 model through transfer learning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will do this with the help of the applications module in Keras that we imported
+    in the beginning, along with the other imports.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the following code, we will load part of the VGG16 model up to, but not
+    including, the Flatten layer and the corresponding weights. Setting the `include_top`
+    parameter to `False` does this for us:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The first line of the following snippet will also download the VGG16 weights
+    from the Keras server, so you don't have to worry about downloading the weights
+    file from anywhere else.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/8ceeddcd-bb4b-4e32-a851-699bd00f3362.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.15: Summary of the VGG16 model (up to Flatten)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the summary, we can see that all of the layers of the VGG16 model up to, but
+    not including, the Flatten layer have been loaded with their weights.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To learn more about the additional functionality of the applications module
+    of Keras, take a look at the official documentation at [https://keras.io/applications/](https://keras.io/applications/).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We don''t want weights of any of these layers to be trained. So, in the following
+    code, we need to set the `trainable` parameter of each layer to `False`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As a next step, flatten the output of the preceding section of the model and
+    then add three Dense layers, of which two layers have 1,024 neurons each with
+    a dropout between them, and a final Dense layer with 14 neurons to obtain the
+    14 joint coordinates. We will only be training the weights of the layers defined
+    in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Once all of the layers have been defined and configured, we will combine them
+    by using the `Model` function in Keras, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/656b47f0-c68e-4ac3-9fa9-77310a06ebc9.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.16: Summary of the customized VGG16 model'
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the summary, we can see that `26,755,086` parameters are trainable and
+    that `14,714,688` parameters are untrainable, since we have set them as untrainable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The model is then compiled with `mean_squared_error` as `loss`. The `optimizer`
+    used here is Adam, which has a learning rate of 0.0001, as defined by the optimizer
+    variable in the hyperparameter section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: Training loop
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that the VGG16 model is all set to be used for training, let's load the
+    `train_joints.csv` file from the `train` folder containing the IDs of the cropped
+    and resized images with their joint coordinates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, split the data into an 80:20 train and validation set by using the `train_test_split`
+    module from `sklearn`. We imported it with the other imports at the beginning
+    of this chapter. Since the validation data is small, load all of the corresponding
+    images into memory:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Be mindful of how many validation images you load into memory, as this may become
+    an issue with systems that have less RAM.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE30]'
+  prefs: []
+  type: TYPE_PRE
+- en: Explore the data with the pandas `head`, `tail`, and `info` functions. Please
+    note that when loading the `.csv` file using pandas, set the `header` parameter
+    to `False` so that pandas knows that the file has no header.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will now define the `training()` function, which will train the VGG16 model
+    on the train images. This function accepts the VGG16 model, train image IDs, train
+    joints, validation images, and validation joints as parameters. The following
+    steps define what is happening in the `training()` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The function defines empty lists by using `loss_lst` to store the train loss
+    and `val_loss_lst` to store the validation loss. It also defines a counter count
+    to keep track of the total number of batches.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It then creates a batch of train image IDs and their corresponding joints.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Using the batch image IDs, it loads the corresponding images into memory by
+    using the OpenCV `imread()` function.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It then converts the loaded train images into a `float`, which it feeds along
+    with the joint IDs to the `train_on_batch()` function of the model for the fit.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: At every 40^(th) batch, it evaluates the model on the validation data and stores
+    the train and validation loss in the defined lists.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: It then repeats *Steps 2* through *5* for the desired number of epochs.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Following is the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE31]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For the remaining part of this code snippet, please refer to the `deeppose.ipynb`
+    file here: [https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb](https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter12/deeppose.ipynb)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2296d449-0116-40b7-a1ca-55132b90f859.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The following is the output at the end of the code''s execution:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/048171cb-94b9-4623-a205-f0b0a8cc14c1.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.17: Loss output when training the model'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If you are using a small GPU for training, reduce the batch size to avoid GPU
+    memory issues. Also, remember that a smaller batch size may or may not result
+    in the same fit that this chapter indicates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Plot training and validation loss
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'With `loss_lst` and `val_loss_lst` containing the train and validation MSE
+    loss at intervals of 40 batches, let''s plot this and see how the learning has
+    progressed:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE32]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/445bc33e-63bd-4581-bbce-2f481f74228f.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.18: Plot of train and validation loss'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A smoother train validation loss plot can be obtained by reducing the store
+    hyperparameter. A small store value will result in a longer training time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Predictions
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This is what we have been waiting for...
+  prefs: []
+  type: TYPE_NORMAL
+- en: Making test predictions!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will define a function that takes the model as input and tests the model
+    on the test data we have preprocessed and saved in the `test` folder. Along with
+    predictions, it will also save test images with the true and predicted joints
+    plotted on it by using the `plot_limb()` and the `plot_joints()` functions we
+    defined in the preceding section:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE33]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/42596d64-7380-405a-8807-c875b26a8887.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.19: Test loss'
+  prefs: []
+  type: TYPE_NORMAL
+- en: On a test set with 200 images, the test MSE loss is 454.80, which is very close
+    to the validation MSE loss of 503.85, indicating that the model is not overfitting
+    on the train data.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Train the model for a few more epochs if possible, and check if a better fit
+    is possible. Be mindful of how many test images you want to load into memory for
+    evaluation since it might become a problem on machines with RAM limitations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Now let''s plot the images we saved during testing to get a measure of how
+    the true joints compare to the predicted joints:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE34]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Following is the output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dc8f0519-8697-48cb-98e9-306819b4afd3.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 12.20: Test images with true and predicted joints plotted on top'
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the preceding picture, we can see that the model is doing a really good
+    job of predicting the seven joints on unseen images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Scripts in modular form
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The entire script can be split into four modules named `train.py`, `test.py`,
+    `plotting.py`, and `crop_resize_transform.py`. You should be able to find these
+    scripts in the `Chapter12` folder. Follow the instructions under the *Code implementation* section
+    of this chapter to run the scripts. Set `Chapter12` as the project folder in your
+    favorite source code editor and just run the `train.py` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `train.py` Python file will import functions from all of the other modules
+    in places where they are needed for execution.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now let's walk through the contents of each file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Module 1 – crop_resize_transform.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This Python file contains the `image_cropping()`, `image_resize()`, and `model_data()`
+    functions, as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE35]'
+  prefs: []
+  type: TYPE_PRE
+- en: Module 2 – plotting.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This Python file contains two functions, namely `plot_limb()` and `plot_joints()`,
+    as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE36]'
+  prefs: []
+  type: TYPE_PRE
+- en: Module 3 – test.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'This module contains the `test()` function that will be called in the `train_dqn.py`
+    script so that it can test the performance of the trained model, as shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE37]'
+  prefs: []
+  type: TYPE_PRE
+- en: Module 4 – train.py
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In this module, we have the `joint_coordinates()` and `training()` functions,
+    as well as the calls to train and test the VGG16 model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE38]'
+  prefs: []
+  type: TYPE_PRE
+- en: Conclusion
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This project was all about building a **convolutional neural network **(**CNN**)
+    classifier to solve the problem of estimating 3D human poses using frames captured
+    from movies. Our hypothetical use case was to enable visual effects specialists
+    to easily estimate the pose of actors (from their shoulders, necks, and heads
+    from the frames in a video. Our task was to build the intelligence for this application.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The modified VGG16 architecture we built using transfer learning has a test
+    mean squared error loss of 454.81 squared units over 200 test images for each
+    of the 14 coordinates (that is, the *7*(*x*, *y*) pairs). We can also say that
+    the test root mean squared error over 200 test images for each of the 14 coordinates is
+    21.326 units. What does this mean?
+  prefs: []
+  type: TYPE_NORMAL
+- en: The **root mean squared error** (**RMSE**), in this case, is a measure of how
+    far off the predicted joint coordinates/joint pixel location are from the actual
+    joint coordinate/joint pixel location.
+  prefs: []
+  type: TYPE_NORMAL
+- en: An RMSE loss of 21.32 units is equivalent to having each predicted coordinate
+    off by 21.32 pixels within an image of shape 224*224*3\. The test results plotted
+    in *Figure 13.20* represent this measure.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Each coordinate being off by 21.32 pixels is good at a general level, but we
+    want to build a product that will be used in movies for which the margin for error
+    is much less, and being off by 21 pixels is not acceptable.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To improve the model, you can do the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Try using a lower learning rate for a larger number of epochs
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Try using a different loss function (for example, **mean absolute error** (**MAE**))
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Try using an even deeper model, such as RESNET50 or VGG19
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Try centering and scaling the data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Get more data
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: These are some of the additional steps you should take if you are interested
+    in becoming an expert in this specific area once you are done with this chapter.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we successfully built a deep convolution neural network/VGG16
+    model in Keras on FLIC images. We got hands-on experience in preparing these images
+    for modeling. We successfully implemented transfer learning, and understood that
+    doing so will save us a lot of time. We defined some key hyperparameters as well
+    in some places, and reasoned about why we used what we used. Finally, we tested
+    the modified VGG16 model performance on unseen data and determined that we succeeded
+    in achieving our goals.
+  prefs: []
+  type: TYPE_NORMAL

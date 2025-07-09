@@ -1,0 +1,628 @@
+- en: Building Virtual Worlds in Minecraft
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the two previous  chapters, we discussed the **deep Q-learning** (**DQN**) algorithm for
+    playing Atari games and the **Trust Region Policy Optimization** (**TRPO**) algorithm for
+    continuous control tasks. We saw the big success of these algorithms in solving
+    complex problems when compared to traditional reinforcement learning algorithms
+    without the use of deep neural networks to approximate the value function or the
+    policy function. Their main disadvantage, especially for DQN, is that the training
+    step converges too slowly, for example, training an agent to play Atari games
+    takes about one week. For more complex games, even one week's training is insufficient.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This chapter will introduce a more complicated example, Minecraft, which is
+    a popular online video game created by Swedish game developer Markus Persson and
+    later developed by Mojang. You will learn how to launch a Minecraft environment
+    using OpenAI Gym and play different missions. In order to build an AI player to
+    accomplish these missions, you will learn the **asynchronous advantage actor-critic**
+    (**A3C**) algorithm, which is a lightweight framework for deep reinforcement learning
+    that uses asynchronous gradient descent for optimization of deep neural network
+    controllers. A3C is a widely applied deep reinforcement learning algorithm for
+    different kinds of tasks, training for half the time on a single multi-core CPU
+    instead of a GPU. For Atari games such as Breakout, A3C achieves human-level performance
+    after 3 hours' training, which is much faster than DQN, which requires 3 days'
+    training. You will learn how to implement A3C using Python and TensorFlow. This
+    chapter does not require as much of a mathematical background as the previous
+    chapter—just have fun!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following topics will be covered in this chapter:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Introduction to the Minecraft environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Data preparation for training an AI bot in the Minecraft environment
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The asynchronous advantage actor-critic framework
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Implementation of the A3C framework
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Introduction to the Minecraft environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The original OpenAI Gym does not contain the Minecraft environment. We need
+    to install a Minecraft environment bundle, available at [https://github.com/tambetm/gym-minecraft](https://github.com/tambetm/gym-minecraft).
+    This bundle is built based on Microsoft's Malmö, which is a platform for AI experimentation
+    and research built on top of Minecraft.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before installing the `gym-minecraft` package, Malmö should first be downloaded
+    from [https://github.com/Microsoft/malmo](https://github.com/Microsoft/malmo).
+    We can download the latest pre-built version from [https://github.com/Microsoft/malmo/releases](https://github.com/Microsoft/malmo/releases).
+    After unzipping the package, go to the `Minecraft` folder and run `launchClient.bat`
+    on Windows, or `launchClient.sh` on Linux/MacOS, to launch a Minecraft environment.
+    If it is successfully launched, we can now install `gym-minecraft` via the following
+    scripts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, we can run the following code to test whether `gym-minecraft` has been
+    successfully installed or not:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `gym-minecraft` package provides 15 different missions, including `MinecraftDefaultWorld1-v0` and `MinecraftBasic-v0`.
+    For example, in `MinecraftBasic-v0`, the agent can move around in a small chamber
+    with a box placed in the corner, and the goal is to reach the position of this
+    box. The following screenshots show several missions available in `gym-minecraft`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/9da0172a-3067-4be7-8bbf-d74640b8cf64.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The `gym-minecraft` package has the same interface as other Gym environments,
+    such as Atari and classic control tasks. You can run the following code to test
+    different Minecraft missions and try to get a high-level understanding of their
+    properties, for example, goal, reward, and observation:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: At each step, an action is randomly drawn from the action space by calling `env.action_space.sample()`,
+    and then this action is submitted to the system by calling the `env.step(action)` function,
+    which returns the observation and the reward corresponding to this action. You
+    can also try other missions by replacing `MinecraftBasic-v0` with other names,
+    for example, `MinecraftMaze1-v0` and `MinecraftObstacles-v0`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Data preparation
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the Atari environment, recall that there are three modes for each Atari game,
+    for example, Breakout, BreakoutDeterministic, and BreakoutNoFrameskip, and each
+    mode has two versions, for example, Breakout-v0 and Breakout-v4\. The main difference
+    between the three modes is the frameskip parameter that indicates the number of
+    frames (steps) the one action is repeated on. This is called the **frame-skipping**
+    technique, which allows us to play more games without significantly increasing
+    the runtime.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'However, in the Minecraft environment, there is only one mode where the frameskip
+    parameter is equal to one. Therefore, in order to apply the frame-skipping technique,
+    we need to explicitly repeat a certain action frameskip multiple times during
+    one timestep. Besides this, the frame images returned by the `step` function are
+    RGB images. Similar to the Atari environment, the observed frame images are converted
+    to grayscale and then resized to 84x84\. The following code provides the wrapper
+    for `gym-minecraft`, which contains all the data preprocessing steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the constructor, the available actions for Minecraft are restricted to `move`
+    and `turn` (not considering other actions, such as the camera controls). Converting
+    an RGB image into a grayscale image is quite easy. Given an RGB image with shape
+    (height, width, channel), the `rgb_to_gray` function is used to convert an image
+    to grayscale. For cropping and reshaping frame images, we use the `opencv-python`
+    or `cv2` packages, which contain a Python wrapper around the original C++ OpenCV
+    implementation, that is, the `crop` function reshapes an image into an 84x84 matrix.
+    Unlike the Atari environment, where `crop_offset` is set to `8` to remove the
+    scoreboard from the screen, here, we set `crop_offset` to `0` and just reshape
+    the frame images.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The `play_action` function submits the input action to the Minecraft environment
+    and returns the corresponding reward, observation, and termination signal. The
+    default frameskip parameter is set to `4`, meaning that one action is repeated
+    four times for each `play_action` call. The `get_current_feedback` function returns
+    the observation that stacks the last four frame images together, since only considering
+    the current frame image is not enough for playing Minecraft because it doesn't
+    contain dynamic information about the game status.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This wrapper has the same interface as the wrappers for the Atari environment
+    and classic control tasks. Therefore, you can try to run DQN or TRPO with the
+    Minecraft environment without changing anything. If you have one idle GPU, it
+    is better to run DQN first before trying the A3C algorithm that we will discuss
+    next.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Asynchronous advantage actor-critic algorithm
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the previous chapters, we discussed the DQN for playing Atari games and
+    the use of the DPG and TRPO algorithms for continuous control tasks. Recall that
+    DQN has the following architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/29dfe3cd-6d21-40c9-b4c1-9279fcee5630.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: At each timestep ![](img/41ed7ed5-deb3-4fd3-a97a-40bb6de0ee10.png), the agent
+    observes the frame image ![](img/28fd3757-7d72-4c43-bae2-e929925fd291.png) and
+    selects an action ![](img/67c43cdd-89c8-4e29-a2ef-0df2ebe4ae8d.png) based on the
+    current learned policy. The emulator (the Minecraft environment) executes this
+    action and returns the next frame image ![](img/7a0548c3-d809-4999-8498-143237b64fd8.png)
+    and the corresponding reward ![](img/a3a2e63a-aff0-4b10-9e59-181e45fe8f43.png).
+    The quadruplet ![](img/38c725ab-c097-44a5-989c-4387ba094df0.png) is then stored
+    in the experience memory and is taken as a sample for training the Q-network by
+    minimizing the empirical loss function via stochastic gradient descent.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Deep reinforcement learning algorithms based on experience replay have achieved
+    unprecedented success in playing Atari games. However, experience replay has several
+    disadvantages:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: It uses more memory and computation per real interaction
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: It requires off-policy learning algorithms that can update from data generated
+    by an older policy
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In order to reduce memory consumption and accelerate the training of an AI agent,
+    Mnih et al. proposed an A3C framework for deep reinforcement learning that dramatically
+    reduces the training time without performance loss. This work, *Asynchronous Methods
+    for Deep Reinforcement Learning*, was published in ICML, 2016.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Instead of experience replay, A3C asynchronously executes multiple agents in
+    parallel on multiple instances of the environment, such as the Atari or Minecraft
+    environments. Since the parallel agents experience a variety of different states,
+    this parallelism breaks the correlation between the training samples and stabilizes
+    the training procedure, which means that the experience memory can be removed.
+    This simple idea enables a much larger spectrum of fundamental on-policy reinforcement
+    learning algorithms, such as Sarsa and actor-critic methods, as well as off-policy
+    reinforcement learning algorithms, such as Q-learning, to be applied robustly
+    and effectively using deep neural networks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another advantage is that A3C is able to run on a standard multi-core CPU without
+    relying on GPUs or massively distributed architectures, and requires far less
+    training time than GPU-based algorithms, such as DQN, when applied to Atari games.
+    A3C is good for a beginner in deep reinforcement learning since you can apply
+    it to Atari games on a standard PC with multiple cores. For example, for Breakout,
+    it takes only two-three hours to achieve a score of 300 when executing eight agents
+    in parallel.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will use the same notations as before. At each timestep
+    ![](img/45da604e-0854-485a-a60c-23defff392c8.png), the agent observes state ![](img/5be1b484-ebbe-4e3f-ac32-57aaee313588.png),
+    takes action ![](img/34265388-a7e5-448c-a166-b266407f287f.png), and then receives
+    the corresponding reward ![](img/a7721b22-193a-45c9-8a3c-c67ad83015cb.png) generated
+    from a function ![](img/d527382a-d269-415b-879f-c3bc82294fc8.png). We use ![](img/5c97dded-1a77-48a2-814e-1983905130ed.png)
+    to denote the policy of the agent, which maps states to a probability distribution
+    over the actions. The Bellman equation is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/d3db8e06-3cf6-4ae8-929e-aef016a7b54b.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The state-action value function ![](img/d12ee59d-1fcb-4cd7-bc9c-bd9b56094d6d.png)
+    can be approximated by a neural network parameterized by ![](img/bed31c8b-585c-4c44-b793-05c98ef1a50c.png),
+    and the policy ![](img/ebacb345-5c0b-40ee-98cd-4a9e7d7685cc.png) can also be represented
+    by another neural network parameterized by ![](img/fa647406-dbbe-4c4e-a3d7-f929057aee9a.png).
+    Then, ![](img/c65564c6-d8ca-4147-ba07-5c303b533323.png) can be be trained by minimizing
+    the following loss function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/a34c51ab-d44d-4ee3-9814-987ae393b567.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/e2dc75c1-f65d-4b16-91b5-74e3bc874fc0.png) is the approximated state-action
+    value function at step ![](img/732fb339-3138-4c91-909c-4bb069c0c7ff.png). In one-step
+    Q-learning such as DQN, ![](img/9ffb3f36-dc7c-46f9-8ebd-2dd889a37a22.png) equals
+    ![](img/ea64e07b-04f6-48ca-b25f-b57528eed50f.png), so that the following is true:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/2936efe7-364f-497b-9fba-c6a84fd299ff.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'One drawback of using one-step Q-learning is that obtaining a reward ![](img/e09ee797-bb93-440b-bff7-7951332b22a0.png)
+    only directly affects the value of the state action pair ![](img/6b4d4964-7ff3-4316-b58e-00b0846092cc.png)
+    that led to the reward. This can make the learning process slow since many updates
+    are required to propagate a reward to the relevant preceding states and actions.
+    One way of propagating rewards faster is by using n-step returns. In n-step Q-learning, ![](img/caca62a4-f2dc-4df3-9cf8-d6dc2c809c77.png)
+    can be set to this:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/ef0542d8-0f10-454d-8143-a06eb7c55615.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: As opposed to value-based methods, a policy-based method, such as TRPO, directly
+    optimizes the policy network ![](img/572b6b4e-0f30-4124-9b22-4898ae972d0f.png).
+    Besides TRPO, a much simpler method is REINFORCE, which updates the policy parameter ![](img/603c793f-3279-4b6f-9432-da8a0c1565d7.png)
+    in the direction ![](img/3bb579e0-2d10-4d82-b2b1-31fec55d2f2f.png), where ![](img/d4fccc88-5310-4eb7-a341-e5edb263382d.png)
+    is the the advantage of action ![](img/648a4f3f-f5df-4f96-a31b-6c5a0216537c.png)
+    in state ![](img/88de09b7-bcde-459f-ba1c-d29b81f0a05d.png). This method is an
+    actor-critic approach due to the fact that it is required to estimate the value
+    function ![](img/e39c8f90-7f7f-468a-8623-b840ca133089.png) and the policy ![](img/afbdb39f-4862-40dc-96d8-b9fc6a6cdf4d.png).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The asynchronous reinforcement learning framework can be applied in the approaches
+    already discussed here. The main idea is that we run multiple agents in parallel
+    with their own instances of the environment, for example, multiple players play
+    the same game using their own games consoles. These agents are likely to be exploring
+    different parts of the environment. The parameters ![](img/40e8244b-9873-4b75-9fc6-2072ce8647e4.png)
+    and ![](img/b71f66bd-8b71-4552-a87b-de87ced4eedf.png) are shared among all agents.
+    Each agent updates the policy and the value function asynchronously without considering
+    read–write conflicts. Although it seems weird that there is no synchronization
+    in updating the policy, this asynchronous method not only removes the communication
+    costs of sending gradients and parameters, but also guarantees the convergence.
+    For more details, please refer to the following paper: *A lock-free approach to
+    parallelizing stochastic gradient descent*, Recht et al. This chapter focuses
+    on  A3C, namely, we apply the asynchronous reinforcement learning framework in
+    REINFORCE. The following diagram shows the A3C architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/dbf41bca-f28f-4f1d-9dec-4743f801d062.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'For A3C, the policy ![](img/63257f79-470b-4c26-ba1c-e167c49ff93c.png) and the
+    value function ![](img/c3d8f91a-a788-4fb6-8200-57c127489e82.png) are approximated
+    by two neural networks. A3C updates the policy parameter ![](img/5a301c9e-5246-4be5-b347-6f53e3b147b0.png)
+    in the direction ![](img/25d10240-2cd5-4a76-99fd-3ea072246796.png), where ![](img/fdf6594a-5e6c-403e-b0bf-01ad6fcaed65.png)
+    is fixed, which is estimated by the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/183390c0-555b-4a40-8872-bde1af962b26.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'A3C updates the value function parameter ![](img/491def82-0543-4635-b454-849b899a1f61.png)
+    by minimizing the loss:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/e15cf3b5-e3a0-447d-8358-9259ce6e3bef.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: '![](img/7f7fcf68-337b-4497-93af-a621b7f57365.png) is computed via the previous
+    estimate. To encourage exploration during training, the entropy of the policy ![](img/c8c82e94-b736-487e-b11b-03699f589607.png)
+    is also added to the policy update, acting as a regularization term. Then, the
+    gradient for the policy update becomes the following:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/3363f84e-9978-4091-9b6b-eeb53f33e1c2.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The following pseudo code shows the A3C algorithm for each agent (thread):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: A3C uses ADAM or RMSProp to perform an asynchronous update of the parameters.
+    For different environments, it is hard to tell which method leads to better performance.
+    We can use RMSProp for the Atari and Minecraft environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Implementation of A3C
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We will now look at how to implement A3C using Python and TensorFlow. Here,
+    the policy network and value network share the same feature representation. We
+    implement two kinds of policies: one is based on the CNN architecture used in
+    DQN, and the other is based on LSTM.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We implement the `FFPolicy` class for the policy based on CNN:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The constructor requires three arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '`input_shape`'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`n_outputs`'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`network_type`'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`input_shape` is the size of the input image. After data preprocessing, the
+    input is an 84x84x4 image, so the default parameter is (84, 84, 4). `n_outputs` is
+    the number of all the available actions. `network_type` indicates the type of
+    the feature representation we want to use. Our implementation contains two different
+    networks. One is the CNN architecture used in DQN. The other is a feedforward
+    neural network used for testing.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the constructor, the `x` variable represents the input state (a batch of
+    84x84x4 images). After creating the input tensors, the `build_model` function
+    is called to build the policy and value network. Here is the `build_model`:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: The CNN architecture contains two convolutional layers and one hidden layer,
+    while the feedforward architecture contains two hidden layers. As discussed previously,
+    the policy network and the value network share the same feature representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The loss function for updating the network parameters can be constructed via
+    the following function:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'This function creates three input tensors:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`action`'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`reward`'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '`advantage`'
+  prefs:
+  - PREF_IND
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The `action` variable represents the selected actions ![](img/70b47b9a-88ae-42c6-ad2c-83613ebe8d67.png).
+    The `reward` variable is the discounted cumulative reward ![](img/a7d4f306-f0a7-4553-8f42-733a355c378a.png)in
+    the preceding A3C algorithm. The `advantage` variable is the advantage function
+    computed by ![](img/a2dc3329-3c39-43bd-b176-903ab799c8b7.png). In this implementation,
+    the losses of the policy and the value function are combined together, since the
+    feature representation layers are shared.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Therefore, instead of updating the `policy` parameter and the `value` parameter
+    separately, our implementation updates these parameters simultaneously. This function
+    also creates `summary_op` for TensorBoard visualization.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The implementation of the LSTM policy is quite similar to the feedforward policy.
+    The main difference is the `build_model` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: In this function, a LSTM layer follows the feature representation layers. In
+    TensorFlow, you can easily create a LSTM layer by constructing `BasicLSTMCell`
+    and then calling `tf.nn.dynamic_rnn` to get the layer outputs. `tf.nn.dynamic_rnn` returns
+    the output for each time step and the final cell state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We now implement the main A3C algorithm—the `A3C` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The `system` parameter is the emulator, either the Atari environment or Minecraft
+    environment. `directory` indicates the folder for the saved model and logs. `param`
+    includes all the training parameters of A3C, for example, the batch size and learning
+    rate. `agent_index` is the label for one agent. The constructor calls `init_network`
+    to initialize the policy network and the value network. Here is the implementation
+    of `init_network`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The tricky part in this function is how to implement the global shared parameters.
+    In TensorFlow, we can do this with the `tf.train.replica_device_setter` function. We
+    first create a `global` device shared among all the agents. Within this device,
+    the global shared network is created. Then, we create a local device and a local
+    network for each agent. To synchronize the global and local parameters, `update_local_ops` is
+    created by calling the `update_target_graph` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Then, the `gradients` op is constructed by calling `build_gradient_op`, which
+    is used to compute the gradient update for each agent. With `gradients`, an optimizer
+    is built via the `create_optimizer` function that is used for updating the global
+    shared parameters. The `create_optimizer` function is used as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The main function in A3C is `run`, which starts and trains the agent:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'At each timestep, it calls `choose_action` to select an action according to
+    the current policy, and executes this action by calling `play`. Then, the received
+    reward, the new state, and the termination signal, as well as the current state
+    and the selected action, are stored in the `replay_memory`, which records the
+    trajectory that the agent visited. Given this trajectory, it then calls `n_step_q_learning` to
+    estimate the cumulative reward and the `advantage` function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'It then updates the global shared parameters by calling `train`:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the model will be saved on the disk after 40,000 updates, and an evaluation
+    procedure starts after `self.eval_frequency` updates.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To launch one agent, we can run the following codes written in the `worker.py` file:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: The main function will create a new agent and begin the training procedure if
+    the `job_name` parameter is `worker`. Otherwise, it will start the TensorFlow
+    parameter server for the global shared parameters. Notice that before launching
+    multiple agents, we need to start the parameter server first. In the `train` function,
+    an environment is created by calling `new_environment` and then an agent is built
+    for this environment. After the agent is successfully created, the global shared
+    parameters are initialized and the train procedure starts by calling `a3c.run(sess,
+    saver)`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Because manually launching 8 or 16 agents is quite inconvenient, this can be
+    done automatically by the following script:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: This script creates the bash commands used to create the parameter server and
+    a set of agents. To handle the consoles of all the agents, we use TMUX (more information
+    is available at [https://github.com/tmux/tmux/wiki](https://github.com/tmux/tmux/wiki)).
+    TMUX is a terminal multiplexer that allows us to switch easily between several
+    programs in one terminal, detach them, and reattach them to a different terminal.
+    TMUX is quite a convenient tool for checking the training status of A3C. Note
+    that since A3C runs on CPUs, we set `CUDA_VISIBLE_DEVICES` to empty.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'A3C is much more sensitive to the training parameters than DQN. Random seed,
+    initial weights, learning rate, batch size, discount factor, and even hyperparameters
+    for RMSProp can affect the performance a lot. After testing it on different Atari
+    games, we select the following hyperparameters listed in the `Parameter` class:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here, `gamma` is the discount factor, `num_history_frames` is the parameter
+    frameskip, `async_update_interval` is the batch size for the training update,
+    and `rho` and `rmsprop_epsilon` are the internal hyperparameters for RMSProp.
+    This set of hyperparameters can be used for both Atari and Minecraft.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The full implementation of the A3C algorithm can be downloaded from our GitHub
+    repository ([https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects](https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects)).
+    There are three environments in our implementation we can test. The first one
+    is the special game, `demo`, introduced in [Chapter 3](0cd8e82e-dbf2-42f6-a525-e8689cace21b.xhtml),
+    *Playing Atari Games*. For this game, A3C only needs to launch two agents to achieve
+    good performance. Run the following command in the `src` folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The first argument, `-w`, or `--num_workers`, indicates the number of launched
+    agents. The second argument, `-e`, or `--env`, specifies the environment, for
+    example, `demo`. The other two environments are Atari and Minecraft. For Atari
+    games, A3C requires at least 8 agents running in parallel. Typically, launching
+    16 agents can achieve better performance:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'For Breakout, A3C takes about 2-3 hours to achieve a score of 300\. If you
+    have a decent PC with more than 8 cores, it is better to test it with 16 agents.
+    To test Minecraft, run the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: The Gym Minecraft environment provides more than 10 missions. To try other missions,
+    just replace `MinecraftBasic-v0` with other mission names.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After running one of the preceding commands, type the following to monitor
+    the training procedure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: To switch between console windows, press *Ctrl *+ *b* and then press *0*-*9*.
+    Window 0 is the parameter server. Windows 1-8 show the training stats of the 8
+    agents (if there are 8 launched agents). The last window runs htop. To detach
+    TMUX, press *Ctrl* and then press *b*.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The `tensorboard` logs are saved in the `save/<environment_name>/train/log_<agent_index>` folder.
+    To visualize the training procedure using TensorBoard, run the following command
+    under this folder:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: This chapter introduced the Gym Minecraft environment, available at [https://github.com/tambetm/gym-minecraft](https://github.com/tambetm/gym-minecraft).
+    You have learned how to launch a Minecraft mission and how to implement an emulator
+    for it. The most important part of this chapter was the asynchronous reinforcement
+    learning framework. You learned what the shortcomings of DQN are, and why DQN
+    is difficult to apply in complex tasks. Then, you learned how to apply the asynchronous
+    reinforcement learning framework in the actor-critic method REINFORCE, which led
+    us to the A3C algorithm. Finally, you learned how to implement A3C using Tensorflow
+    and how to handle multiple terminals using TMUX. The tricky part in the implementation
+    is that of the global shared parameters. This is related to creating a cluster
+    of TensorFlow servers. For the readers who want to learn more about this, visit
+    [https://www.tensorflow.org/deploy/distributed](https://www.tensorflow.org/deploy/distributed).
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following chapters, you will learn more about how to apply reinforcement
+    learning algorithms in other tasks, for example, the board game Go, and generating
+    deep image classifiers. This will help you to get a deep understanding about reinforcement
+    learning and help you solve real-world problems.
+  prefs: []
+  type: TYPE_NORMAL

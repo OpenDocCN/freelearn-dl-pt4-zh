@@ -1,0 +1,731 @@
+- en: Creating Custom OpenAI Gym Environments - CARLA Driving Simulator
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In the first chapter, we looked at the various categories of learning environments
+    available in the OpenAI Gym environment catalog. We then explored the list of
+    environments and their nomenclature in [Chapter 5](part0078.html#2ACBS0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing your First Learning Agent – Solving the Mountain Car problem*, as
+    well as a sneak peek into some of them. We also developed our agents to solve
+    the Mountain Car and Cart Pole problems, and a few Atari game environments. By
+    now, then, you should have a good understanding of the various environment types
+    and flavors that are available with OpenAI Gym. Most often, once we learn how
+    to develop our own intelligent agents, we want to use that knowledge and skill
+    to develop intelligent agents to solve new problems, problems that we already
+    face, or even problems that are of interest to us. For instance, you might be
+    a game developer wanting to add intelligent behaviors to your game characters
+    or a robotics engineer wanting to instill artificial intelligence to your robot,
+    or you could be an autonomous driving engineer wanting to apply reinforcement
+    learning to autonomous driving. You might be a tinkerer wanting to turn a gadget
+    into an intelligent **Internet of Things** (**IoT**) device, or you might even
+    be a healthcare professional wanting to improve your lab's diagnostic capabilities
+    using machine learning. The potential for application is almost limitless.
+  prefs: []
+  type: TYPE_NORMAL
+- en: One of the reasons we have chosen OpenAI Gym as our learning environment is
+    because of its simple yet standard interface that decouples the type and nature
+    of the environment from the environment-agent interface. In this chapter, we will
+    look at how you can create your own environment based on your own personal or
+    professional needs. This will enable you to use agent implementations, training
+    and testing scripts, the parameter manager, and the logging and visualization
+    routines that we developed in earlier chapters with your own design or problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Understanding the anatomy of Gym environments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Any Gym-compatible environment should subclass the `gym.Env` class and implement
+    the `reset` and `step` methods and the `observation_space` and `action_space`
+    properties and attributes. There is also the opportunity to implement other, optional
+    methods that can add additional functionality to our custom environments. The
+    following table lists and describes the other methods available:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Method** | ** Functionality description** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `observation_space` | The shape and type of the observations returned by
+    the environment. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `action_space` | The shape and type of the actions accepted by the environment.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `reset()` | Routines to reset the environment at the start or end of an episode.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `step(...)` | Routines that calculate the necessary information to advance
+    the environment, simulation, or game to the next step. The routine includes applying
+    the chosen action in the environment, calculating the reward, producing the next
+    observation, and determining if an episode has ended. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `_render()` | (Optional) This renders the state or observation of the Gym
+    environment. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `_close()` | (Optional) This closes the Gym environment. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `_seed` | (Optional) This seeds the random functions in the Gym environment
+    with a custom seed that makes the environment behave in a reproducible way for
+    a given seed. |'
+  prefs: []
+  type: TYPE_TB
+- en: '| `_configure` | (Optional) This enables additional environment configuration.
+    |'
+  prefs: []
+  type: TYPE_TB
+- en: Creating a template for custom Gym environment implementations
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Based on the anatomy of the Gym environment we have already discussed, we will
+    now lay out a basic version of a custom environment class implementation named `CustomEnv`,
+    which will be a subclass of `gym.Env` and implement the essential methods and
+    arguments required to make it a Gym-compatible environment. A template for a minimal
+    implementation is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: After we have finished our environment class implementation, we should register
+    it with the OpenAI Gym registry so that we can use `gym.make(ENV_NAME)` to create
+    an instance of the environment, as we have previously with Gym environments.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Registering custom environments with OpenAI Gym
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: We will make use of this template later on in this chapter to create a custom
+    Gym environment that uses a very sophisticated driving simulator.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Creating an OpenAI Gym-compatible CARLA driving simulator environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: CARLA is a driving simulator environment built on top of the UnrealEngine4 game
+    engine with more realistic rendering compared to some of its competitors. You
+    can read more about the CARLA simulator on their official website at [https://carla.org](https://carla.org).
+    In this section, we will look into how we can create a custom OpenAI Gym-compatible
+    car driving environment to train our learning agents. This is a fairly complex
+    environment and requires a GPU to run—which is unlike other Gym environments we
+    have seen so far. Once you understand how to create a custom environment interface
+    that is Gym-compatible for CARLA, you may well have enough information to develop
+    interfaces for any of your own custom environments, no matter how complex they
+    might be.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The latest version of CARLA is CARLA 0.8.2\. While most (if not all) of the
+    core environment interfaces, especially the `PythonClient` library, might stay
+    the same, there is a chance of future changes that necessitate tweaks in this
+    custom environment implementation. If that happens, the code repository of this
+    book will be updated accordingly to support newer versions of CARLA. You may want
+    to make sure you use the latest version of the code from the book's code repository
+    when you work on this chapter (which is yet another reason to subscribe to notifications
+    in GitHub). Nevertheless, the custom environment implementation building blocks
+    discussed in this chapter will stay generally applicable, and will walk you through
+    defining your own custom environments that are compatible with the OpenAI Gym
+    interface. The complete code for the custom CARLA environment interface is available
+    in the book's code repository under `ch7/carla-gym`.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Before we start a Gym-compatible CARLA environment, let''s first take a look
+    at the CARLA simulator. So, let''s go ahead and download the CARLA release binaries.
+    In the following section, we will use `VER_NUM` to denote the version number,
+    so be sure to replace the `VER_NUM` text with the version number you are using
+    before running the following commands:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'First, create a folder named `software` in your home directory using the following
+    bash command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: Download the CARLA binary release version for Linux ([CARLA_VER_NUM.tar.gz](https://drive.google.com/open?id=1ZtVt1AqdyGxgyTm69nzuwrOYoPUn_Dsm))
+    using the link on the official release page at [https://github.com/carla-simulator/carla/releases/tag/VER_NUM](https://github.com/carla-simulator/carla/releases/tag/0.8.2).
+    (The direct link to version 0.8.2 is: [https://drive.google.com/open?id=1ZtVt1AqdyGxgyTm69nzuwrOYoPUn_Dsm](https://drive.google.com/open?id=1ZtVt1AqdyGxgyTm69nzuwrOYoPUn_Dsm).)
+    Then, extract it into `~/software`. You should now have a file named `CarlaUE4.sh`
+    in the `~/software/CARLA_VER_NUM` folder.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'Set the `CARLA_SERVER` environment variable to point to `CarlaUE4.sh` on your
+    computer using the following command:'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now you are ready to test-run the CARLA driving simulator! Just execute `$CARLA_SERVER`
+    or, directly, `~/software/CARLA_VER_NUM/CarlaUE4.sh`. For CARLA version 0.8.2,
+    this command will be `~/software/CARLA_0.8.2/CarlaUE4.sh`. You should now see
+    a CARLA simulator screen, as shown in the following screenshot:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00149.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'The previous screenshot shows the vehicle (the agent) in one of CARLA''s starting
+    positions. The following screenshot shows the vehicle in another starting position
+    in the CARLA environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00150.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: Once the vehicle is initialized, you should be able to control the vehicle using
+    the *w*, *a*, *s*, *d* keys on your keyboard. The *w* key will move the car forwards,
+    the *a* key will turn the car to the left, and... you can probably figure out
+    the rest!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let's now move on and start our Gym-compatible CARLA environment implementation
+    with configuration and initialization.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuration and initialization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We will first define some environment-specific configuration parameters, as
+    well as briefly look at scenario configurations, as well. We will then start the
+    initialization process for the `CarlaEnv` class implementation, which will inherit
+    from the `Gym.Env` class.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Configuration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Let''s first define a list of configuration parameters for the environment
+    using a dictionary, shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`scenario_config` defines several parameters that are useful for creating a
+    variety of driving scenarios. The scenario configuration is described in the `scenarios.json`
+    file, which can be found in the book''s code repository at `ch7/carla-gym/carla_gym
+    /envs/scenarios.json`.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Initialization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'In the `__init__` method, we define the initialization parameters along with
+    the action and state spaces, which, as we saw in the previous section, are necessary.
+    The implementation is straight-forward, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Implementing the reset method
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: As you may have noticed, at the beginning of every episode, we call the `reset`
+    method of the Gym environment. For the CARLA environment, we want to update the
+    CARLA server to restart the level through the CARLA client.
+  prefs: []
+  type: TYPE_NORMAL
+- en: So, let's get on with starting our implementation of the `reset` method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Customizing the CARLA simulation using the CarlaSettings object
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: When we start a new episode, we want to be able to configure the start state
+    (where the agent or vehicle starts), the goal state (the agent or vehicle's intended
+    destination), the complexity of the episode (measured by the number of vehicles
+    or pedestrians in the episode), the type and sources of observations (the sensors
+    configured on the vehicle), and so on.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The CARLA project manages the interface between the UE4 environment and the
+    external configuration and control using a server-client architecture, for which
+    there are two servers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: For the CARLA environment, we can configure the environment's start state, goal
+    state, complexity level, and the sensor sources using the `CarlaSettings` object
+    or the `CarlaSettings.ini` file.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s now create a `CarlaSettings` object and configure some of the settings,
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: Adding cameras and sensors to a vehicle in CARLA
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'To add an RGB color camera in the CARLA environment, use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'You can also add a depth measuring sensor or camera using the following code
+    snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To add `LIDAR` to the CARLA environment, use the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once we have created a CARLA settings object based on our desired driving simulation
+    configuration, we can send it to the CARLA server to set up the environment and
+    start the simulation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Once we have sent the CARLA settings object to the CARLA server, it responds
+    with a scene description object that contains the available start positions for
+    the ego vehicle, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE13]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can now choose a particular starting position for the host or ego vehicle,
+    or even choose a starting spot at random, as shown in the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE14]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'We can also send this start spot preference to the server and request the start
+    of a new episode using the following code snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE15]'
+  prefs: []
+  type: TYPE_PRE
+- en: Note that the previous line is a blocking function call that will block action
+    until the CARLA server actually starts the episode.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We can now step through the episode from this starting position until the end.
+    In the next section, we will see what we need to implement the CARLA environment''s
+    `step()` method, which is used to step through the environment to the end of an
+    episode:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE16]'
+  prefs: []
+  type: TYPE_PRE
+- en: Implementing the step function for the CARLA environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Once we have initialized the CARLA simulator by sending the CARLA settings
+    object to the CARLA server and calling `client.start_episode(start_spot)`, the
+    driving simulation will begin. We can then use the `client.read_data()` method
+    to get the data produced by the simulation at a given step. We can do this using
+    the following line of code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE17]'
+  prefs: []
+  type: TYPE_PRE
+- en: Accessing camera or sensor data
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We can retrieve the sensor data at any given time step using the returned `sensor_data`
+    object''s `data` property. To retrieve the RGB camera frames, input the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE18]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`rgb_image` is a NumPy n-d array, which you can access and manipulate as you
+    would usually access and manipulate a NumPy n-d array.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For example, to access the pixel value of the RGB camera image at the (*x*,
+    *y*) image plane coordinates, you can do so using the following line:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE19]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To retrieve the depth camera frames, input the following code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE20]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sending actions to control agents in CARLA
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'We can control the car in CARLA by sending the desired steer, throttle, brake,
+    hand-brake, and reverse (gear) commands to the CARLA server through a TCP client.
+    The following table displays the value, range, and a description of the commands
+    that a car in CARLA will obey:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Command/action name** | **Value type, range** | **Description** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Steer | `Float`, [-1.0, +1.0] | Normalized steering angle |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Throttle | `Float`, [0.0, 1.0] | Normalized throttle input |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Brake | `Float`, [0.0, 1.0] | Normalized brake input |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Hand Brake | `Boolean`, True/False | This tells the car whether to engage
+    the hand brake (`True`) or not (`False`) |'
+  prefs: []
+  type: TYPE_TB
+- en: '| Reverse | `Boolean`, True/False | This tells the car whether to be in reverse
+    gear (`True`) or not (`False`) |'
+  prefs: []
+  type: TYPE_TB
+- en: 'As noted in the CARLA documentation, the actual steering angle will depend
+    on the vehicle. For example, the default Mustang vehicle has a maximum steering
+    angle of 70 degrees, as defined in the vehicle''s front wheel UE4 blueprint file.
+    Those are the five different commands that are needed to control a car in CARLA.
+    Among the five commands, three of them (steer, throttle, and brake) are real-value
+    floating-point numbers. Though their range is limited between -1 and +1 or 0 and
+    1, the number of (unique) possible values is enormous. For example, if we use
+    single precision floating point representation for throttle values that lie between
+    0 and 1, there are ![](img/00151.jpeg), which means there are 1,056,964,608 different
+    possible values for that throttle command. The same holds true for the brake command,
+    as it also lies between 0 and 1\. There are about twice as many possible float
+    values for the steering command, as it lies between -1 and +1\. Since a single
+    control message is composed of a set of values for each of the five commands,
+    the number of distinct actions (or control messages) is the product of the unique
+    values for each of the commands, which are roughly in the order that follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00152.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: This generates a huge action space as you can see, and it might prove to be
+    a very hard problem for a deep learning agent to regress onto such a huge action
+    space. So, let's simplify the action space and define the action space in two
+    flavors – one for continuous space and the other for discrete space, which is
+    useful for applying different reinforcement learning algorithms. For example,
+    the deep Q-learning based algorithms (without the naturalized advantage function)
+    can only work on discrete action spaces.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Continuous action space in CARLA
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'While driving, we don''t usually accelerate and brake at the same time; because
+    the action space in CARLA is continuous, and the agent will apply an action at
+    every step, it may be enough to have one command for accelerating and decelerating. Let''s
+    now combine the throttle and brake commands into one with a value range of -1
+    to +1, using the value range between -1 and 0 for the brake command and the value
+    range between 0 and 1 for the throttle or acceleration command. We can define
+    this using the following command:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE21]'
+  prefs: []
+  type: TYPE_PRE
+- en: '`action[0]` signifies the command for steering, while `action[1]` signifies
+    the value for our combined throttle and brake commands. For now, we will set both
+    `hand_brake` and `reverse` to False. Next, we will look at how we can define a
+    discrete action space so we choose what we want for our agent.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Discrete action space in CARLA
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We've already seen that the full action space is quite large (in the order of ![](img/00153.jpeg)
+    ). You may have played video games where you only used a joystick with four arrow
+    buttons or the arrow keys on a keyboard to control the speed and heading (the
+    direction in which the car is pointed) to drive, so why can't we ask the agent
+    to control the car in a similar way here? Well, that is the idea behind discretizing
+    the action space. Although we won't be able to have precise control over the car,
+    we can make sure that the discretized space gives us good control in a simulation
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let''s begin by using the similar convention we used in the continuous action
+    space case – where we used one floating point value to represent the throttle
+    (acceleration) and brake (deceleration) actions, thereby using a two-dimensional
+    bounded space internally. This means the action space, in this case, can be defined
+    as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE22]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see here, `NUM_DISCRETE_ACTONS` is equal to the number of different
+    actions available, which we will define later on in this section.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We will then discretize the space using two-dimensional bounded space and exposing
+    this as the discrete action space to the agent. To keep the number of possible
+    actions to a minimum while still allowing control over the car, we use the following
+    list of actions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| **Action index** | **Action description** | ** Action array value** |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 0 | Coast | [0.0, 0.0] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 1 | Turn Left | [0.0, -0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 2 | Turn Right | [0.0, 0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 3 | Forward | [1.0, 0.0] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 4 | Brake | [-0.5, 0.0] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 5 | Bear Left & Accelerate | [1.0, -0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 6 | Bear Right & Accelerate | [1.0, 0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 7 | Bear Left & Decelerate | [-0.5, -0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: '| 8 | Bear Right & Decelerate | [-0.5, 0.5] |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Let''s now define the previous set of discrete actions in a `DISCRETE_ACTIONS`
+    dictionary in our `carla_env` implementation script, shown as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE23]'
+  prefs: []
+  type: TYPE_PRE
+- en: Sending actions to the CARLA simulation server
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that we have the action space of the CARLA Gym environment defined, we can
+    look at how to convert the continuous or discrete actions we have defined into
+    values the CARLA simulation server will accept.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Since we have followed the same convention for two-dimensional bounded action
+    values in both the continuous and discrete action spaces, we can simply convert
+    the actions into steer, throttle, and brake commands using the following code
+    snippet:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE24]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, this is where `action[0]` is for throttle and brake, and `action[1]`
+    is for the steering angle.
+  prefs: []
+  type: TYPE_NORMAL
+- en: We will make use of the `CarlaClient` class implementation in the CARLA `PythonClient`
+    library to handle the communication with the CARLA server. You can look at the
+    implementation of the `CarlaClient` class in `ch7/carla-gym/carla_gym/envs/carla/client.py`,
+    if you want to understand how communication with the server is handled using protocol
+    buffers.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To implement a reward function for the CARLA environment, input the following
+    code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE25]'
+  prefs: []
+  type: TYPE_PRE
+- en: Determining the end of episodes in the CARLA environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: We have implemented `meta hod` to calculate the reward and defined the permitted
+    actions, observations, and the reset method for the custom CARLA environment.
+    According to our custom Gym environment creation template, those are the required
+    methods we need to implement for creating a custom environment that is compatible
+    with the OpenAI Gym interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: While this is true, there is one more thing we need to take care of so that
+    the agent can interact with our environment continuously. Remember when we were
+    developing our Q-learning agent in [Chapter 5](part0078.html#2ACBS0-22c7fc7f93b64d07be225c00ead6ce12),
+    *Implementing your First Learning Agent – Solving the Mountain Car problem*, for
+    the mountain car environment, the environment that always resets itself after
+    200 steps? Or in the cart pole environment, where the environment resets itself
+    if the pole falls below a certain threshold value? Or how about in Atari games,
+    where the environment is reset automatically if an agent loses their final life?
+    Yes, we need to look at the routine that determines when to reset the environment,
+    which is currently missing in our custom CARLA Gym environment implementation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'While we could pick any criteria to reset the CARLA Gym environment, there
+    are three things to consider, as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: When the host or ego car the agent is controlling collides with a car, pedestrian,
+    building, or other roadside object, that can be fatal (similar to losing a life
+    in Atari games)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When the host or ego car reaches its destination or end goal
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: When a time limit has been exceeded (similar to the 200 time step limit we have
+    in the mountain car Gym environment)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We can use these conditions to form the criteria that will determine the end
+    of an episode. The pseudo-code to determine the value of the `done` variable that
+    `.step(...)` will return is as follows (note that the complete code can be found
+    in the book''s code repository in `ch7/carla-gym/carla_gym/envs/`):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE26]'
+  prefs: []
+  type: TYPE_PRE
+- en: We have now gone through all the required components for creating our own custom
+    Gym-compatible environment based on the CARLA driving simulator! In the next section,
+    we will test the environment and finally see it in action.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Testing the CARLA Gym environment
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: To make it easy to test the basics of our environment implementation, we will
+    implement a simple `main()` routine so we can run the environment as a script.
+    This will show us if the basic interfaces have been set up correctly, as well
+    as how the environment actually looks!
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE27]'
+  prefs: []
+  type: TYPE_PRE
+- en: '[PRE28]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'Now, go ahead and test the environment we just created! Keep in mind that CARLA
+    requires a GPU to run smoothly, and the system environment `CARLA_SERVER` variable
+    to be defined and pointing to the `CarlaUE4.sh` file on your system. Once you
+    are ready, you can test the environment we created by running the following command
+    inside the `rl_gym_book` conda environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE29]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The previous command should open a small CARLA simulator window and initialize
+    the vehicle for the scenario configuration used in the `carla_env.py` script.
+    This should look similar to the following screenshots:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00154.jpeg)  ![](img/00155.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: As you can see, by default, the vehicle is scripted to drive straight. Note
+    that the `carla_env.py` script will also produce a console output to show the
+    current time step in the environment, the calculated instantaneous reward, the
+    total reward in the episode, and the value of `done` (True or False),  which is
+    all useful for testing our environment. As the vehicle starts moving forward,
+    you should see the reward value increasing!
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The console output is as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00156.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: So, you now have your custom CARLA Gym environment working! You can create several
+    different driving scenarios using the definitions in the `ch7/carla-gym/carla_gym/envs/scenarios.json`
+    file. You can then create new custom CARLA environments for each of those scenarios,
+    which you can use with the usual `gym.make(...)` command after you have registered
+    the custom environment, for example, `gym.make("Carla-v0")` .
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code in the book's code repository takes care of the environment registration
+    with the OpenAI Gym registry using the method we discussed earlier in this chapter.
+    You can now use OpenAI Gym to create an instance of the custom environment we
+    built.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The following screenshot shows the Python commands you can use to test the
+    custom Gym environment:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![](img/00157.jpeg)'
+  prefs: []
+  type: TYPE_IMG
+- en: And that's it! The rest is similar to any other Gym environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we went through a custom Gym environment implementation step-by-step,
+    starting with a template that laid out the bare-bones structure of an OpenAI Gym
+    environment that provided all of the necessary interfaces to the agents. We also
+    looked at how to register a custom environment implementation in the Gym registry
+    so that we can use the familiar `gym.make(ENV_NAME)` command to create an instance
+    of an existing environment. We then looked at how to create a Gym-compatible environment
+    implementation for the UnrealEngine based on the open-source driving simulator,
+    CARLA. We then quickly walked through the steps required to install and run CARLA
+    and then started implementing the `CarlaEnv` class piece-by-piece, carefully covering
+    all the important details involved in implementing custom environments compatible
+    with OpenAI Gym.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the next chapter, we will build an advanced agent from the ground up with
+    hands-on examples, before eventually using the custom CARLA environment we created
+    in this chapter to train an intelligent agent that can learn to drive the car
+    around all by itself!
+  prefs: []
+  type: TYPE_NORMAL

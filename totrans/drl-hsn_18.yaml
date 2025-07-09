@@ -1,0 +1,977 @@
+- en: '18'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Advanced Exploration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we will talk about the topic of exploration in reinforcement
+    learning (RL). It has been mentioned several times in the book that the exploration/exploitation
+    dilemma is a fundamental thing in RL and very important for efficient learning.
+    However, in the previous examples, we used quite a trivial approach to exploring
+    the environment, which was, in most cases, 𝜖-greedy action selection. Now it’s
+    time to go deeper into the exploration subfield of RL, as more complicated environments
+    might require much better exploration strategies than 𝜖-greedy approach.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More specifically, we will cover the following key topics:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why exploration is such a fundamental topic in RL
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The effectiveness of the epsilon-greedy (𝜖-greedy) approach
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Alternatives and how they work in different environments
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: We will implement the methods described to solve a toy, but still challenging,
+    problem called MountainCar. This will allow us to better understand the methods,
+    the way they could be implemented, and their behavior. After that, we will try
+    to tackle a harder problem from the Atari suite.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Why exploration is important
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this book, lots of environments and methods have been discussed, and in almost
+    every chapter, exploration was mentioned. Very likely, you’ve already got ideas
+    about why it’s important to explore the environment effectively, so I’m just going
+    to discuss the main reasons.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Before that, it might be useful to agree on the term “effective exploration.”
+    In theoretical RL, a strict definition of this exists, but the high-level idea
+    is simple and intuitive. Exploration is effective when we don’t waste time in
+    states of the environment that have already been seen by and are familiar to the
+    agent. Rather than taking the same actions again and again, the agent needs to
+    look for a new experience. As we’ve already discussed, exploration has to be balanced
+    by exploitation, which is the opposite and means using our knowledge to get the
+    best reward in the most efficient way. Let’s now quickly discuss why we might
+    be interested in effective exploration in the first place.
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, good exploration of the environment might have a fundamental influence
+    on our ability to learn a good policy. If the reward is sparse and the agent obtains
+    a good reward on some rare conditions, it might experience a positive reward only
+    once in many episodes, so the ability of the learning process to explore the environment
+    effectively and fully might bring more samples with a good reward that the method
+    could learn from.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In some cases, which are very frequent in practical applications of RL, a lack
+    of good exploration might mean that the agent will never experience a positive
+    reward at all, which makes everything else useless. If you have no good samples
+    to learn from, you can have the most efficient RL method, but the only thing it
+    will learn is that there is no way to get a good reward. This is the case for
+    lots of practically interesting problems around us. For instance, we will take
+    a closer look at the MountainCar environment later in the chapter, which has trivial
+    dynamics, but due to a sparsity of rewards, is quite tricky to solve.
+  prefs: []
+  type: TYPE_NORMAL
+- en: On the other hand, even if the reward is not sparse, effective exploration increases
+    the training speed due to better convergence and training stability. This happens
+    because our sample from the environment becomes more diverse and requires less
+    communication with the environment. As a result, our RL method has the chance
+    to learn a better policy in a shorter time.
+  prefs: []
+  type: TYPE_NORMAL
+- en: What’s wrong with 𝜖-greedy?
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Throughout the book, we have used the 𝜖-greedy exploration strategy as a simple,
+    but still acceptable, approach to exploring the environment. The underlying idea
+    behind 𝜖-greedy is to take a random action with the probability of 𝜖; otherwise,
+    (with 1 −𝜖 probability) we act according to the policy (greedily). By varying
+    the hyperparameter 0 ≤𝜖 ≤ 1, we can change the exploration ratio. This approach
+    was used in most of the value-based methods described in the book. Quite a similar
+    idea was used in policy-based methods, when our network returns the probability
+    distribution over actions to take. To prevent the network from becoming too certain
+    about actions (by returning a probability of 1 for a specific action and 0 for
+    others), we added the entropy loss, which is just the entropy of the probability
+    distribution multiplied by some hyperparameter. In the early stages of the training,
+    this entropy loss pushes our network toward taking random actions (by regularizing
+    the probability distribution). But in later stages, when we have explored the
+    environment enough and our reward is relatively high, the policy gradient dominates
+    over this entropy regularization. But this hyperparameter requires tuning to work
+    properly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'At a high level, both approaches are doing the same thing: to explore the environment,
+    we introduce randomness into our actions. However, recent research shows that
+    this approach is very far from being ideal:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the case of value iteration methods, random actions taken in some pieces
+    of our trajectory introduce bias into our Q-value estimation. The Bellman equation
+    assumes that the Q-value for the next state is obtained from the action with the
+    largest Q. In other words, the rest of the trajectory is supposed to be from our
+    optimal behavior. But with 𝜖-greedy, we might take not the optimal action, but
+    just a random action, and this piece of the trajectory will be stored in the replay
+    buffer for a long time, until our 𝜖 is decayed and old samples are pushed from
+    the buffer. Before that happens, we will learn wrong Q-values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: With random actions injected into our trajectory, our policy changes with every
+    step. With the frequency defined by the value of 𝜖 or the entropy loss coefficient,
+    our trajectory constantly switches from a random policy to our current policy.
+    This might lead to poor state space coverage in situations when multiple steps
+    are needed to reach some isolated areas in the environment’s state space.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'To illustrate the last issue, let’s consider a simple example taken from the
+    paper by Strehl and Littman called An analysis of model-based interval estimation
+    for Markov decision processes, which was published in 2008 [SL08]. The example
+    is called “River Swim” and it models a river that the agent needs to cross. The
+    environment contains six states and two actions: left and right. States 1 and
+    6 are on the river’s opposite sides and states 2 to 5 are in the water.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure [18.1](#x1-330004r1) shows the transition diagram for the first two
+    states, 1 and 2:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![123pppppp ====== 001000.6.4.0.6.355 ](img/B22150_18_01.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.1: Transitions for the first two states of the River Swim environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the first state (the circle with the label “1”), the agent stands on the
+    ground of the riverbank. The only action is right (shown in solid lines), which
+    means entering the river and swimming against the current to state 2\. But the
+    current is strong, and our right action from state 1 succeeds only with a probability
+    of 60% (the solid line from state 1 to state 2). With a probability of 40%, the
+    current keeps us in state 1 (the solid line connecting state 1 to itself).
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the second state (the circle with the label “2”), we have two actions: left,
+    which is shown by the dotted line connecting states 2 and 1 (this action always
+    succeeds, as the current flushes us back to the riverbank), and right (dashed
+    lines), which means swimming against the current to state 3\. As before, swimming
+    against the current is hard, so the probability of getting from state 2 to state
+    3 is just 35% (the dashed line connecting states 2 and 3). With a probability
+    of 60%, our left action ends up in the same state (the curved dashed line connecting
+    state 2 to itself). But sometimes, despite our efforts, our left action ends up
+    in state 1, which happens with a 5% probability (the curved dashed line connecting
+    states 2 and 1).'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As I’ve said, there are six states in River Swim, but the transitions for states
+    3, 4, and 5 are identical to those for state 2\. The last state, 6, is similar
+    to state 1, so there is only one action available there: left, meaning to swim
+    back. In Figure [18.2](#x1-330006r2), you can see the full transition diagram
+    (which is just clones of the diagram we’ve already seen, where right action transitions
+    are shown as solid lines, and left action transitions are dotted lines):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![123456ppppppppppppppppppp = = = = = = = = = = = = = = = = = = = 0010001000100010001.6.4.0.6.3.0.6.3.0.6.3.0.6.355555555
+    ](img/B22150_18_02.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.2: The full transition diagram for the River Swim environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In terms of the reward, the agent gets a small reward of 1 for the transition
+    between states 1 to 5, but it gets a very high reward of 1,000 for getting into
+    state 6, which acts as compensation for all the efforts of swimming against the
+    current.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Despite the simplicity of the environment, its structure creates a problem
+    for the 𝜖-greedy strategy being able to fully explore the state space. To check
+    this, I implemented a very simple simulation of this environment, which you will
+    find in Chapter18/riverswim.py. The simulated agent always acts randomly (𝜖 =
+    1) and the result of the simulation is the frequency of various state visits.
+    The number of steps the agent can take in one episode is limited to 10, but this
+    can be changed using the command line. We won’t go over the entire code here;
+    you can refer to it in the GitHub repository. Here, let’s look at the results
+    of the experiments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In the preceding output, each line shows the state number and the number of
+    times it was visited during the simulation. With default command-line options,
+    the simulation of 100 steps (10 episodes) was performed. As you can see, the agent
+    never reached state 6 and was only in state 5 once. By increasing the number of
+    episodes, the situation became a bit better, but not much:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: With 10 times more episodes simulated, we still didn’t visit state 6, so the
+    agent had no idea about the large reward there.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Only with 10,000 episodes simulated were we able to get to state 6, but only
+    five times, which is 0.05% of all the steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: Therefore, it’s not very likely that the training will be efficient, even with
+    the best RL method. Also, we had only six states in this example. Imagine how
+    inefficient it will be with 20 or 50 states, which is not that unlikely; for example,
+    in Atari games, there might be hundreds of decisions to be made before something
+    interesting happens. If you want to, you can experiment with the riverswim.py
+    tool, which allows you to change the random seed, the number of steps in the episode,
+    the total number of steps, and even the number of states in the environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This simple example illustrates the issue with random actions in exploration.
+    By acting randomly, our agent does not try to actively explore the environment;
+    it just hopes that random actions will bring something new to its experience,
+    which is not always the best thing to do.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Let’s now discuss more efficient approaches to the exploration problem.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Alternative ways of exploration
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will provide you with an overview of a set of alternative
+    approaches to the exploration problem. This won’t be an exhaustive list of approaches
+    that exist, but rather will provide an outline of the landscape.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'We’re going to explore the following three approaches to exploration:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Randomness in the policy, when stochasticity is added to the policy that we
+    use to get samples. The method in this family is noisy networks, which we have
+    already covered in Chapter [8](ch012.xhtml#x1-1240008).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Count-based methods, which keep track of the number of times the agent has
+    seen the particular state. We will check two methods: the direct counting of states
+    and the pseudo-count method.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Prediction-based methods, which try to predict something from the state and
+    from the quality of the prediction. We can make judgements about the familiarity
+    of the agent with this state. To illustrate this approach, we will take a look
+    at the policy distillation method, which has shown state-of-the-art results on
+    hard-exploration Atari games like Montezuma’s Revenge.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Before implementing these methods, let’s try and understand them in greater
+    detail.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Noisy networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Let’s start with an approach that is already familiar to us. We covered the
+    method called noisy networks in Chapter [8](ch012.xhtml#x1-1240008), when we referred
+    to Hessel et al. [[Hes+18](#)] and discussed deep Q-network (DQN) extensions.
+    The idea is to add Gaussian noise to the network’s weights and learn the noise
+    parameters (mean and variance) using backpropagation, in the same way that we
+    learn the model’s weights. In that chapter, this simple approach gave a significant
+    boost in Pong training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: At a high level, this might look very similar to the 𝜖-greedy approach, but
+    Fortunato et al. [[For+17](#)] claimed a difference. The difference lies in the
+    way we apply stochasticity to the network. In 𝜖-greedy, randomness is added to
+    the actions. In noisy networks, randomness is injected into part of the network
+    itself (several fully connected layers close to the output), which means adding
+    stochasticity to our current policy. In addition, parameters of the noise might
+    be learned during the training, so the training process might increase or decrease
+    this policy randomness if needed.
+  prefs: []
+  type: TYPE_NORMAL
+- en: According to the paper, the noise in noisy layers needs to be sampled from time
+    to time, which means that our training samples are not produced by our current
+    policy, but by the ensemble of policies. With this, our exploration becomes directed,
+    as random values added to the weights produce a different policy.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Count-based methods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: This family of methods is based on the intuition to visit states that have not
+    been explored before. In simple cases, when the state space is not very large
+    and different states are easily distinguishable from each other, we just count
+    the number of times we have seen the state or state + action and prefer to get
+    to the states for which this count is low.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This could be implemented as an extra reward, not obtained from the environment
+    but from the visit count of the state. In the literature, such a reward is called
+    an intrinsic reward. In this context, the reward from the environment is called
+    an extrinsic reward. One of the options to formulate such a reward is to use the
+    bandits exploration approach: ![√-1--- N˜(s)](img/eq70.png). Here, Ñ(s) is a count
+    or pseudo-count of times we have seen the state, s, and value c defines the weight
+    of the intrinsic reward.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the number of states is small, like in the tabular learning case (we discussed
+    it in Chapter [5](ch009.xhtml#x1-820005)), we can just count them. In more difficult
+    cases, when there are too many states, some transformation of the states needs
+    to be introduced, like the hashing function or some embeddings of the states (we’ll
+    discuss this later in the chapter in more detail).
+  prefs: []
+  type: TYPE_NORMAL
+- en: For pseudo-count methods, Ñ(s) is factorized into the density function and the
+    total number of states visited, given by Ñ(s) = ρ(x)n(x), where ρ(x) is a “density
+    function,” representing the likelihood of the state x and approximated by a neural
+    network. There are several different methods for how to do this, but they might
+    be tricky to implement, so we won’t deal with complex cases in this chapter. If
+    you’re curious, you can refer to the paper by Georg Ostrovski et al. called Count-based
+    exploration with neural density models [[Ost+17](#)].
+  prefs: []
+  type: TYPE_NORMAL
+- en: A special case of introducing the intrinsic reward is called curiosity-driven
+    exploration, when we don’t take the reward from the environment into account at
+    all. In that case, the training and exploration is driven 100% by the novelty
+    of the agent’s experience. Surprisingly, this approach might be very efficient
+    not only in discovering new states in the environment but also in learning quite
+    good policies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Prediction-based methods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The third family of exploration methods is based on another idea of predicting
+    something from the environment data. If the agent can make accurate predictions,
+    it means the agent has been in this situation enough and it isn’t worth exploring
+    it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if something unusual happens and our prediction is significantly off, it
+    might mean that we need to pay attention to the state that we’re currently in.
+    There are many different approaches to doing this, but in this chapter, we will
+    discuss how to implement this approach, as proposed by Burda et al. in 2018 in
+    the paper called Exploration by random network distillation [[Bur+18](#)]. The
+    authors were able to reach state-of-the-art results in so-called hard-exploration
+    games in Atari.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The approach used in the paper is quite simple: we add the intrinsic reward,
+    which is calculated from the ability of one neural network (NN) (which is being
+    trained) to predict the output from another randomly initialized (untrained) NN.
+    The input to both NNs is the current observation, and the intrinsic reward is
+    proportional to the mean squared error (MSE) of the prediction.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: MountainCar experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this section, we will try to implement and compare the effectiveness of different
+    exploration approaches on a simple, but still challenging, environment, which
+    could be classified as a “classical RL” problem that is very similar to the familiar
+    CartPole problem. But in contrast to CartPole, the MountainCar problem is quite
+    challenging from an exploration point of view.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The problem’s illustration is shown in Figure [18.3](#x1-335002r3) and it consists
+    of a small car starting from the bottom of the valley. The car can move left and
+    right, and the goal is to reach the top of the mountain on the right.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file265.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.3: The MountainCar environment'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The trick here is in the environment’s dynamics and the action space. To reach
+    the top, the actions need to be applied in a particular way to swing the car back
+    and forth to speed it up. In other words, the agent needs to apply the actions
+    for several time steps to make the car go faster and eventually reach the top.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Obviously, this coordination of actions is not something that is easy to achieve
+    with just random actions, so the problem is hard from the exploration point of
+    view and very similar to our River Swim example.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Gym, this environment has the name MountainCar-v0 and it has a very simple
+    observation and action space. The observations are just two numbers: the first
+    one gives the horizontal position of the car and the second value is the car’s
+    velocity. The action could be 0, 1, or 2, where 0 means pushing the car to the
+    left, 1 applies no force, and 2 pushes the car to the right. The following is
+    a very simple illustration of this in Python REPL:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, in every step, we get the reward of -1, so the agent needs to
+    learn how to get to the goal as soon as possible to get as little total negative
+    reward as possible. By default, the number of steps is limited to 200, so if we
+    haven’t reached the goal (which happens most of the time), our total reward is
+    −200.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN + 𝜖-greedy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The first method that we will use is our traditional 𝜖-greedy approach to exploration.
+    It is implemented in the source file Chapter18/mcar_dqn.py. I won’t include the
+    source code here, as it is already familiar to you. This program implements various
+    exploration strategies on top of the DQN method, allowing us to select between
+    them using the -p command-line option. To launch the normal 𝜖-greedy method, the
+    option -p egreedy needs to be passed. During the training, we are decreasing 𝜖
+    from 1.0 to 0.02 for the first 10⁵ training steps.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training is quite fast; it takes just two to three minutes to do 10⁵ training
+    steps. But from the charts shown in Figure [18.4](#x1-336002r4) and Figure [18.5](#x1-336003r5),
+    it is obvious that during those 10⁵ steps, which was 500 episodes, we didn’t reach
+    the goal state even once. That’s really bad news, as our 𝜖 has decayed, so we
+    will do no more exploration in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_04.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.4: The reward (left) and steps (right) during the DQN training with
+    the 𝜖-greedy strategy'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.5: Epsilon (left) and loss (right) during the training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The 2% of random actions that we still perform are just not enough because
+    it requires dozens of coordinated steps to reach the top of the mountain (the
+    best policy on MountainCar has a total reward of around −80). We can now continue
+    our training for millions of steps, but the only data we will get from the environment
+    will be episodes, which will take 200 steps with −200 total reward. This illustrates
+    once more how important exploration is. Regardless of the training method we have,
+    without proper exploration, we might just fail to train. So, what should we do?
+    If we want to stay with 𝜖-greedy, the only option for us is to explore for longer
+    (by changing the speed of 𝜖 decrease). You can experiment with the hyperparameters
+    of the -p egreedy mode, but I went to the extreme and implemented the -p egreedy-long
+    hyperparameter set. In this regime, we keep 𝜖 = 1.0 until we reach at least one
+    episode with a total reward better than −200\. Once this has happened, we start
+    training the normal way, decreasing 𝜖 from 1.0 to 0.02 for subsequent 10⁶ frames.
+    As we don’t do training, during the initial exploration phase, it normally runs
+    5 to 10 times faster. To start the training in this mode, we use the following
+    command line: ./mcar_dqn.py -n t1 -p egreedy-long.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Unfortunately, even with this improvement of 𝜖-greedy, it still failed to solve
+    the environment due to its complexity. I left this version to run for five hours,
+    but after 500k episodes, it still hadn’t faced even a single example of the goal,
+    so I gave up. Of course, you could try it for a longer period.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN + noisy networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To apply the noisy networks approach to our MountainCar problem, we just need
+    to replace one of two layers in our network with the NoisyLinear class, so our
+    architecture will become as follows:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: The only difference between the NoisyLinear class and the version from Chapter [8](ch012.xhtml#x1-1240008)
+    is that this version has an explicit method, sample_noise(), to update the noise
+    tensors, so we need to call this method on every training iteration; otherwise,
+    the noise will be constant during the training. This modification is needed for
+    future experiments with policy-based methods, which require the noise to be constant
+    during the relatively long period of trajectories. In any case, the modification
+    is simple, and we just need to call this method from time to time. In the case
+    of the DQN method, it is called on every training iteration. As in Chapter [8](ch012.xhtml#x1-1240008),
+    the implementation of NoisyLinear is taken from the TorchRL library. The code
+    is the same as before, so to activate the noisy networks, you need to run the
+    training with the -p noisynet command line.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Figure [18.6](#x1-337010r6), you can see the plots for the three hours of
+    training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.6: The training reward (left) and test steps (right) on DQN with
+    noisy networks exploration'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, the training process wasn’t able to reach the mean test reward
+    of −130 (as required in the code), but after just 7k training steps (20 minutes
+    of training), we discovered the goal state, which is great progress in comparison
+    to 𝜖-greedy, which didn’t find a single instance of the goal state after 5 hours
+    of trial and error.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From the test steps chart (on the right of Figure [18.6](#x1-337010r6)) we can
+    see that there are some tests with less than 100 steps, which is very close to
+    the optimal policy. But they were not often enough to push mean test reward below
+    the −130 level.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN + state counts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The last exploration technique that we will apply to the DQN method is count-based.
+    As our state space is just two floating-point values, we will discretize the observation
+    by rounding values to three digits after the decimal point, which should provide
+    enough precision to distinguish different states from each other but still group
+    similar states together. For every individual state, we will keep the count of
+    times we have seen this state before and use that to give an extra reward to the
+    agent. For an off-policy method, it might not be the best idea to modify rewards
+    during the training, but we will examine the effect.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As before, I’m not going to provide the full source code; I will just emphasize
+    the differences from the base version. First, we apply the wrapper to the environment
+    to keep track of the counters and calculate the intrinsic reward value. You will
+    find the code for the wrapper is in the lib/common.py module and it is shown here.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Let us look at the constructor first:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: In the constructor, we take the environment we want to wrap, the optional hash
+    function to be applied to the observations, and the scale of the intrinsic reward.
+    We also create the container for our counters, which will map the hashed state
+    into the number of times we have seen it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Then, we define the helper function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: This function will calculate the intrinsic reward value of the state. It applies
+    the hash to the observation, updates the counter, and calculates the reward using
+    the formula we have already seen.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The last method of the wrapper is responsible for the environment step:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: Here we call the helper function to get the reward and return the sum of the
+    extrinsic and intrinsic reward components.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To apply the wrapper, we need to pass to it the hashing function:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: Three digits are probably too many, so you can experiment with a different way
+    of hashing states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To start the training, pass -p counts to the training program. In Figure [18.7](#x1-338021r7),
+    you can see the charts with training and testing rewards. As the training environment
+    is wrapped in our PseudoCountReward wrapper, values during training are higher
+    than testing.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.7: The training reward (left) and test rewards (right) on DQN with
+    pseudo-count reward bonus'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, we weren’t able to get -130 average test reward using this method,
+    but were very close to it. It took it just 10 minutes to discover the goal state,
+    which is also quite impressive.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PPO method
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Another set of experiments that we will conduct with our MountainCar problem
+    is related to the on-policy method Proximal Policy Optimization (PPO), which we
+    covered in Chapter [16](ch020.xhtml#x1-29000016). There are several motivations
+    for this choice:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: First, as you saw in the DQN method + noisy networks case, when good examples
+    are rare, DQNs have trouble adapting to them quickly. This might be solved by
+    increasing the replay buffer size and switching to the prioritized buffer, or
+    we could try on-policy methods, which adjust the policy immediately according
+    to the obtained experience.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Another reason for choosing this method is the modification of the reward during
+    the training. Count-based exploration and policy distillation introduce the intrinsic
+    reward component, which might change over time. The value-based methods might
+    be sensitive to the modification of the underlying reward as, basically, they
+    will need to relearn values during the training. On-policy methods shouldn’t have
+    any problems with that, as an increase of the reward just puts more emphasis on
+    a sample with higher reward in terms of the policy gradient.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Finally, it’s just interesting to check our exploration strategies on both families
+    of RL methods.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To implement this approach, in the file Chapter18/mcar_ppo.py, we have a PPO
+    implementation combined with various exploration strategies applied to MountainCar.
+    The code is not very different from the PPO from Chapter [16](ch020.xhtml#x1-29000016),
+    so I’m not going to repeat it here. To start the normal PPO without extra exploration
+    tweaks, you should run the command ./mcar_ppo.py -n t1 -p ppo. In this version,
+    nothing specifically is done to perform exploration – we purely rely on random
+    weights initialization in the beginning of the training.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As a reminder, PPO is in the policy gradient methods family, which limits Kullback-Leibler
+    divergence between the old and new policy during the training, avoiding dramatic
+    policy updates. Our network has two heads: the actor and the critic. The actor
+    network returns the probability distribution over our actions (our policy) and
+    the critic estimates the value of the state. The critic is trained using MSE loss,
+    while the actor is driven by the PPO surrogate objective we discussed in Chapter [16](ch020.xhtml#x1-29000016).
+    In addition to those two losses, we regularize the policy by applying entropy
+    loss scaled by the hyperparameter β. There is nothing new here so far. The following
+    is the PPO network structure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'I stopped the training after three hours, as it showed no improvements. The
+    goal state was found after an hour and 30k episodes. The charts in Figure [18.8](#x1-339015r8)
+    show the reward dynamics during the training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.8: The training reward (left) and test rewards (right) on plain PPO'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the PPO result wasn’t very impressive, let’s try to extend it with extra
+    exploration tricks.
+  prefs: []
+  type: TYPE_NORMAL
+- en: PPO + Noisy Networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As with the DQN method, we can apply the noisy networks exploration approach
+    to our PPO method. To do that, we need to replace the output layer of the actor
+    with the NoisyLinear layer. Only the actor network needs to be affected because
+    we would like to inject the noisiness only into the policy and not into the value
+    estimation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is one subtle nuance related to the application of noisy networks: where
+    the random noise needs to be sampled. In Chapter [8](ch012.xhtml#x1-1240008),
+    when you first met noisy networks, the noise was sampled on every forward() pass
+    of the NoisyLinear layer. According to the original research paper, this is fine
+    for off-policy methods, but for on-policy methods, it needs to be done differently.
+    Indeed, when we train on-policy, we obtain the training samples produced by our
+    current policy and calculate the policy gradient, which should push the policy
+    toward improvement. The goal of noisy networks is to inject randomness, but as
+    we have discussed, we prefer directed exploration over just a random change of
+    policy after every step. With that in mind, our random component in the NoisyLinear
+    layer needs to be updated not after every forward() pass, but much less frequently.
+    In my code, I resampled the noise on every PPO batch, which was 2,048 transitions.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As before, I trained PPO+NoisyNets for 3 hours. But in this case, the goal
+    state was found after 30 minutes and 18k episodes, which is a better result. In
+    addition, according to the train steps count, the training process was able to
+    drive the car in the optimal way a couple of times (with a step count less than
+    100). But these successes did not lead to the optimal policy at the end. The charts
+    in Figure [18.9](#x1-340003r9) show the reward dynamics during the training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.9: The training reward (left) and test rewards (right) on PPO with
+    Noisy Networks'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PPO + state counts
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In this case, exactly the same count-based approach with three-digit hashing
+    is implemented for the PPO method and can be triggered by passing -p counts to
+    the training process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In my experiments, the method was able to solve the environment (get an average
+    reward higher than -130) in 1.5 hours, and it required 61k episodes. The following
+    is the final part of the console output:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'As you can see from the plots in Figure [18.10](#x1-341011r10), the training
+    discovered the goal state after 23k episodes. It took another 40k episodes to
+    polish the policy to the optimal count of steps:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.10: The training reward (left) and test rewards (right) on PPO with
+    pseudo-count reward bonus'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PPO + network distillation
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: As the final exploration method in our MountainCar experiment, I implemented
+    the network distillation method proposed by Burda et al. [[Bur+18](#)]. In this
+    method, two extra NNs are introduced. Both need to map the observation into one
+    number, in the same way that our value head does. The difference is in the way
+    they are used. The first NN is randomly initialized and kept untrained. This will
+    be our reference NN. The second one is trained to minimize the MSE loss between
+    the second and the first NN. In addition, the absolute difference between the
+    outputs of the NNs is used as the intrinsic reward component.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The idea behind this is that the better the agent has explored some state, the
+    better our second (trained) NN will predict the output of the first (untrained)
+    one. This will lead to a smaller intrinsic reward being added to the total reward,
+    which will decrease the policy gradient assigned to the sample.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the paper, the authors suggested training separate value heads to predict
+    separate intrinsic and extrinsic reward components, but for this example, I decided
+    to keep it simple and just added both rewards in the wrapper, the same way that
+    we did in the counter-based exploration method. This minimizes the number of modifications
+    in the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In terms of those extra NN architectures, I did a small experiment and tried
+    several architectures for both NNs. The best results were obtained with the reference
+    NN having three layers and the trained NN having just one layer. This helps to
+    prevent the overfitting of the trained NN, as our observation space is not very
+    large. Both NNs are implemented in the MountainCarNetDistillery class in the lib/ppo.py
+    module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: Besides the forward() method, which returns the output from both NNs, the class
+    includes two helper methods for intrinsic reward calculation and for getting the
+    loss between two NNs.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To start the training, the argument -p distill needs to be passed to the mcar_ppo.py
+    program. In my experiment, 33k episodes were required to solve the problem, which
+    is almost two times less than Noisy Networks. As discussed in earlier chapters,
+    there might be some bugs and inefficiencies in my implementation, so you’re welcome
+    to modify it to make it faster and more efficient:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The plots with the training and testing rewards are shown in Figure [18.11](#x1-342040r11).
+    In Figure [18.12](#x1-342041r12), the total loss and distillation loss are shown.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.11: The training reward (left) and test rewards (right) on PPO with
+    network distillation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.12: The total loss (left) and distillation loss (right)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As before, due to the intrinsic reward component, the training episodes have
+    a higher reward on the plots. From the distillation loss plot, it is clear that
+    before the agent discovered the goal state, everything was boring and predictable,
+    but once it had figured out how to end the episode earlier than 200 steps, the
+    loss grew significantly.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Comparison of methods
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'To simplify the comparison of the experiments we’ve done on MountainCar, I
+    put all the numbers into the following table:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '| Method | Goal state found | Solved |'
+  prefs: []
+  type: TYPE_TB
+- en: '|  | Episodes | Time | Episodes | Time |'
+  prefs: []
+  type: TYPE_TB
+- en: '| DQN + 𝜖-greedy | x | x | x | x |'
+  prefs: []
+  type: TYPE_TB
+- en: '| DQN + noisy nets | 8k | 15 min | x | x |'
+  prefs: []
+  type: TYPE_TB
+- en: '| PPO | 40k | 60 min | x | x |'
+  prefs: []
+  type: TYPE_TB
+- en: '| PPO + noisy nets | 20k | 30 min | x | x |'
+  prefs: []
+  type: TYPE_TB
+- en: '| PPO + counts | 25k | 36 min | 61k | 90 min |'
+  prefs: []
+  type: TYPE_TB
+- en: '| PPO + distillation | 16k | 36 min | 33k | 84 min |'
+  prefs: []
+  type: TYPE_TB
+- en: 'Table 18.1: Summary of experiments'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As you can see, both DQN and PPO with exploration extensions are able to solve
+    the MountainCar environment. Concrete method selection is up to you and your concrete
+    situation, but it is important to be aware of the different approaches to the
+    exploration you might use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Atari experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The MountainCar environment is a nice and fast way to experiment with exploration
+    methods, but to conclude the chapter, I’ve included Atari versions of the DQN
+    and PPO methods with the exploration tweaks we described to check a more complicated
+    environment.
+  prefs: []
+  type: TYPE_NORMAL
+- en: As the primary environment, I’ve used Seaquest, which is a game where the submarine
+    needs to shoot fish and enemy submarines, and save aquanauts. This game is not
+    as famous as Montezuma’s Revenge, but it still might be considered as medium-hard
+    exploration because, to continue the game, you need to control the level of oxygen.
+    When it becomes low, the submarine needs to rise to the surface for some time.
+    Without this, the episode will end after 560 steps and with a maximum reward of
+    20\. But once the agent learns how to replenish the oxygen, the game might continue
+    almost infinitely and bring to the agent a 10k-100k score. Surprisingly, traditional
+    exploration methods struggle with discovering this; normally, training gets stuck
+    at 560 steps, after which the oxygen runs out and the submarine dies.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The negative aspect of Atari is that every experiment requires at least half
+    a day of training to check the effect, so my code and hyperparameters are very
+    far from being the best, but they might be useful as a starting point for your
+    own experiments. Of course, if you discover a way to improve the code, please
+    share your findings on GitHub.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As before, there are two program files: atari_dqn.py, which implements the
+    DQN method with 𝜖-greedy and noisy networks exploration, and atari_ppo.py, which
+    is the PPO method with optional noisy networks and the network distillation method.
+    To switch between hyperparameters, the command-line option -p needs to be used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the following sections, let us look at the results that I got from a few
+    runs of the code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN + 𝜖-greedy
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In comparison to other methods tried on Atari, 𝜖-greedy was the best, which
+    might be surprising, as it gave s the worst results in the MountainCar experiment
+    earlier in this chapter. But this happens quite often in reality and can lead
+    to new directions of research and even breakthroughs. After 13 hours of training,
+    it was able to reach an average reward of 18 with a maximum reward of 25\. According
+    to the chart showing the number of steps, just a few episodes were able to discover
+    how to get the oxygen so, maybe with more training, this method can break the
+    560-step boundary. In Figure [18.13](#x1-345002r13), the plots with the average
+    reward and number of steps are shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_13.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.13: The average training reward (left) and count of steps (right)
+    on DQN with 𝜖-greedy'
+  prefs: []
+  type: TYPE_NORMAL
+- en: DQN + noisy networks
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Noisy networks combined with DQN showed worse results — after 6 hours of training,
+    it was able to reach a reward of 6\. In Figure [18.14](#x1-346002r14), the plots
+    are shown:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_18_14.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 18.14: The average training reward (left) and count of steps (right)
+    on DQN with noisy networks'
+  prefs: []
+  type: TYPE_NORMAL
+- en: PPO
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: PPO experiments were much worse — all the combinations (vanilla PPO, noisy networks,
+    and network distillation) showed no reward progress and were able to reach an
+    average reward of 4\. This is a bit surprising, as experiments with the same code
+    in the previous edition of the book were able to get better results. This might
+    be an indication of some subtle bugs in the code or in the training environment
+    I used. Feel free to experiment with these methods by yourself!
+  prefs: []
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we discussed why 𝜖-greedy exploration is not the best in some
+    cases and checked alternative modern approaches for exploration. The topic of
+    exploration is much wider and lots of interesting methods are left uncovered,
+    but I hope you were able to get an overall impression of the new methods and the
+    way they should be implemented and used in your own problems.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the next chapter, we’ll take a look at another approach to the exploration
+    in complex enviroments: RL with human feedback (RLHF).'
+  prefs: []
+  type: TYPE_NORMAL

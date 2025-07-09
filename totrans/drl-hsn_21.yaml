@@ -1,0 +1,1342 @@
+- en: '21'
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: RL in Discrete Optimization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: The perception of deep reinforcement learning (RL) is that it is a tool to be
+    used mostly for playing games. This is not surprising given the fact that, historically,
+    the first success in the field was achieved on the Atari game suite by DeepMind
+    in 2015 ([https://deepmind.com/research/dqn/](https://deepmind.com/research/dqn/)).
+    The Atari benchmark suite turned out to be very successful for RL problems and,
+    even now, lots of research papers use it to demonstrate the efficiency of their
+    methods. As the RL field progresses, the classic 53 Atari games continue to become
+    less and less challenging (at the time of writing, almost all the games have been
+    solved with superhuman accuracy) and researchers are turning to more complex games,
+    like StarCraft and Dota 2.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This perception, which is especially prevalent in the media, is something that
+    I’ve tried to counterbalance in this book by accompanying Atari games with examples
+    from other domains, including stock trading and natural language processing (NLP)
+    problems, web navigation automation, continuous control, board games, and robotics.
+    In fact, RL’s very flexible Markov decision process (MDP) model potentially could
+    be applied to a wide variety of domains; computer games are just one convenient
+    and attention-grabbing example of complicated decision-making.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In this chapter, we will explore a new field in RL application: discrete optimization
+    (which is a branch of mathematics that studies optimization problems on discrete
+    structures), which will be showcased using the famous Rubik’s cube puzzle. I’ve
+    tried to provide a detailed description of the process followed in the paper titled
+    Solving the Rubik’s cube without human knowledge, by UCI researchers McAleer et
+    al. [[McA+18](#)]. In addition, we will cover my implementation of the method
+    described in the paper (which is in the Chapter21 directory of the book’s GitHub
+    repository) and discuss directions to improve the method. I’ve combined the description
+    of the paper’s method with code pieces from my version to illustrate the concepts
+    with concrete implementation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More specifically, in this chapter, we will:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Briefly discuss the basics of discrete optimization
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Cover step by step the process followed by McAleer et al. [[McA+18](#)], who
+    apply RL methods to the Rubik’s cube optimization problem
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Explore experiments that I’ve done in an attempt to reproduce the paper’s results
+    and directions for future method improvement
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Let’s start with an overview of the Rubik’s cube and discrete optimization in
+    general.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The Rubik’s cube and discrete optimization
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: I’m sure you are aware of what a Rubik’s cube is, so I’m not going to go over
+    the general description ([https://en.wikipedia.org/wiki/Rubik\%27s_Cube](https://en.wikipedia.org/wiki/Rubik/))
+    of this puzzle, but rather focus on the connections it has to mathematics and
+    computer science.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If it’s not explicitly stated, by “cube” I mean the 3 × 3 × 3 classic Rubik’s
+    cube. There are lots of variations based on the original 3 × 3 × 3 puzzle, but
+    they are still far less popular than the classic invention.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Despite being quite simple in terms of mechanics and the task at hand, the
+    cube is quite a tricky object in terms of all the transformations we can make
+    by possible rotations of its sides. It was calculated that in total, the cube
+    has ≈ 4.33 ⋅ 10^(19) distinct states reachable by rotating it. That’s only the
+    states that are reachable without disassembling the cube; by taking it apart and
+    then assembling it, you can get 12 times more states in total: ≈ 5.19 ⋅ 10^(20),
+    but those “extra” states make the cube unsolvable without disassembling it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: All those states are quite intimately intertwined with each other through rotations
+    of the cube’s sides. For example, if we rotate the left side clockwise in some
+    state, we get to the state from which rotation of the same side counterclockwise
+    will destroy the effect of the transformation, and we will get into the original
+    state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: But if we apply the left-side clockwise rotation three times in a row, the shortest
+    path to the original state will be just a single rotation of the left side clockwise,
+    but not three times counterclockwise (which is also possible, but just not optimal).
+    As the cube has 6 edges and each edge can be rotated in 2 directions, we have
+    12 possible rotations in total. Sometimes, half turns (which are two consecutive
+    rotations in the same direction) are also included as distinct rotations, but
+    for simplicity, we will treat them as two distinct transformations of the cube.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In mathematics, there are several areas that study objects of this kind. One
+    of these is abstract algebra, a very broad division of math that studies abstract
+    sets of objects with operations on top of them. In these terms, the Rubik’s cube
+    is an example of quite a complicated group ( [https://en.wikipedia.org/wiki/Group_theory](https://en.wikipedia.org/wiki/Group_theory))
+    with lots of interesting properties.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The cube is not just states and transformations; it’s a puzzle, with the primary
+    goal to find a sequence of rotations with the solved cube as the end point. Problems
+    of this kind are studied using combinatorial optimization, which is a subfield
+    of applied math and theoretical computer science. This discipline has lots of
+    famous problems of high practical value, for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The traveling salesman problem ([https://en.wikipedia.org/wiki/Travelling_salesman_problem](https://en.wikipedia.org/wiki/Travelling_salesman_problem)):
+    Finds the shortest closed path in a graph'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The protein folding simulation ([https://en.wikipedia.org/wiki/Protein_folding](https://en.wikipedia.org/wiki/Protein_folding)):
+    Finds possible 3D structures of protein'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Resource allocation: How to spread a fixed set of resources among consumers
+    to get the best objective'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: What those problems have in common is a huge state space, which makes it infeasible
+    to just check all possible combinations to find the best solution. Our “toy cube
+    problem” also falls into the same category, because a state space of 4.33 ⋅ 10^(19)
+    makes a brute-force approach very impractical.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Optimality and God’s number
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'What makes the combinatorial optimization problem tricky is that we’re not
+    looking for any solution; we’re in fact interested in the optimal solution of
+    the problem. So, what is the difference? Right after the Rubik’s cube was invented,
+    it was known how to reach the goal state (but it took Ernő Rubik about a month
+    to figure out the first method of solving his own invention, which I expect was
+    a frustrating experience). Nowadays, there are lots of different ways or schemes
+    of cube solving: the beginner’s method (layer by layer), the method by Jessica
+    Fridrich (very popular among speedcubers), and so on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'All of them vary by the number of moves to be taken. For example, a very simple
+    beginner’s method requires about 100 rotations to solve the cube using just 5…7
+    sequences of rotations to be memorized. In contrast, the current world record
+    in the speedcubing competition is solving the cube in 3.13 seconds, which requires
+    much fewer steps, but more sequences need to be memorized. The method by Fridrich
+    requires about 55 moves on average, but you need to familiarize yourself with
+     120 different sequences of moves. Of course, the big question is: what is the
+    shortest sequence of actions to solve any given state of the cube? Surprisingly,
+    after 50 years since the invention of the cube, humanity still doesn’t know the
+    full answer to this question. Only in 2010 did a group of researchers from Google
+    prove that the minimum number of moves needed to solve any cube state is 20\.
+    This number is also known as God’s number (not to be confused with the ”golden
+    ratio” or ”divine proportion,” which is found everywhere in nature). Of course,
+    on average, the optimal solution is shorter, as only a bunch of states require
+    20 moves and one single state doesn’t require any moves at all (the solved state).
+    This result only proves the minimal amount of moves; it does not find the solution
+    itself. How to find the optimal solution for any given state is still an open
+    question.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Approaches to cube solving
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Before the paper by McAleer et al. was published, there were two major directions
+    for solving the Rubik’s cube:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: By using group theory, it is possible to significantly reduce the state space
+    to be checked. One of the most popular solutions using this approach is Kociemba’s
+    algorithm ([https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik\%27s_Cube#Kociemba’s_algorithm](https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik/)).
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: By using brute-force search accompanied by manually crafted heuristics, we can
+    direct the search in the most promising direction. A vivid example of this is
+    Korf’s algorithm ([https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik\%27s_Cube#Korf’s_algorithm](https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik/)),
+    which uses A* search with a large database of patterns to cut out bad directions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'McAleer et al. [[McA+18](#)] introduced a third approach (called autodidactic
+    iteration, or ADI): by training the neural network (NN) on lots of randomly shuffled
+    cubes, it is possible to get the policy that will show us the direction to take
+    toward the solved state. The training is done without any prior knowledge about
+    the domain; the only thing needed is the cube itself (not the physical one, but
+    the computer model of it). This is in contrast with the two preceding methods,
+    which require lots of human knowledge about the domain and labor to implement
+    them in the form of computer code.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'This method has lots of similarities to the AlphaGo Zero method we discussed
+    in the previous chapter: we need a model of the environment and use Monte Carlo
+    tree search (MCTS) to avoid full-state space exploration.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the subsequent sections, we will take a detailed look at this approach;
+    we’ll start with data representation. In our cube problem, we have two entities
+    that need to be encoded: actions and states.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Actions
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: Actions are possible rotations that we can do from any given cube state and,
+    as has already been mentioned, we have only 12 actions in total. For every side,
+    we have two different actions, corresponding to the clockwise and counterclockwise
+    rotation of the side (90^∘ or −90^∘). One small, but very important, detail is
+    that a rotation is performed from the position when the desired side is facing
+    toward you. This is obvious for the front side, for example, but for the back
+    side, it might be confusing due to the mirroring of the rotation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The names of the actions are taken from the cube sides that we’re rotating:
+    left, right, top, bottom, front, and back. The first letter of a side’s name is
+    used. For instance, the rotation of the right side clockwise is named as R. There
+    are different notations for counterclockwise actions; sometimes they are denoted
+    with an apostrophe (R′), with a lowercase letter (r), or even with a tilde (R̃).
+    The first and last notations are not very practical in computer code, so in my
+    implementation, I’ve used lowercase actions to denote counterclockwise rotations.
+    For the right side, we have two actions: R and r, and we have another two for
+    the left side: L and l, and so on.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In my code, the action space is implemented using a Python enum in libcube/cubes/cube3x3.py,
+    in the Action class, where each action is mapped into the unique integer value:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE0]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'In addition, we describe the dictionary with reverse actions:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE1]'
+  prefs: []
+  type: TYPE_PRE
+- en: States
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'A state is a particular configuration of the cube’s colored stickers and, as
+    discussed earlier, the size of our state space is very large (4.33 ⋅ 10^(19) different
+    states). But the number of states is not the only complication we have; in addition,
+    we have different objectives that we would like to meet when we choose a particular
+    representation of a state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Avoid redundancy: In the extreme case, we can represent a state of the cube
+    by just recording the colors of every sticker on every side. But if we just count
+    the number of such combinations, we get 6^(6⋅8) = 6^(48) ≈ 2.25 ⋅ 10^(37), which
+    is significantly larger than our cube’s state space size, which just means that
+    this representation is highly redundant; for example, it allows all sides of the
+    cube to have one single color (except the center cubelets). If you’re curious
+    to know how I got 6^(6⋅8), this is simple: we have six sides of a cube, each having
+    eight small cubes (we’re not counting centers), so we have 48 stickers in total
+    and each of them could be colored in one of six colors.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Memory efficiency: As you will see shortly, during the training and, even more
+    so, during the model application, we will need to keep in our computer’s memory
+    a large amount of different states of the cube, which might influence the performance
+    of the process. So, we would like the representation to be as compact as possible.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Performance of the transformations: On the other hand, we need to implement
+    all the actions applied to the state, and those actions need to be taken quickly.
+    If our representation is very compact in terms of memory (uses bit-encoding, for
+    example), but requires us to do a lengthy unpacking process for every rotation
+    of the cube’s side, our training might become too slow.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'NN friendliness: Not every data representation is equally as good as input
+    for the NN. This is true not only for our case but for machine learning in general.
+    For example, in NLP, it is common to use bag of words or word embeddings; in computer
+    vision, images are decoded from JPEG into raw pixels; random forests require data
+    to be heavily feature-engineered; and so on.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In the paper, every state of the cube is represented as a 20 × 24 tensor with
+    one-hot encoding. To understand how this is done and why it has this shape, let’s
+    start with the picture taken from the paper shown in Figure [21.1](#x1-396002r1):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file315.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.1: Stickers we need to track in the cube are marked in a lighter
+    color'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Here, the light color marks the stickers of the cubelets that we need to track;
+    the rest of the stickers (shown in a darker color) are redundant and there is
+    no need to track them. As you know, a cube consists of three types of cubelets:
+    8 corner cubelets with 3 stickers, 12 side cubelets with 2 stickers, and 6 central
+    ones with a single sticker. It might not be obvious from first sight, but the
+    central cubelets do not need to be tracked at all, as they can’t change their
+    relative position and can only rotate. So, in terms of the central cubelets, we
+    need only to agree on the cube alignment (how the cube is oriented in space) and
+    stick to it.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In my implementation, the white side is always on the top, the front is red,
+    the left is green, and so on. This makes our state rotation-invariant, which basically
+    means that all possible rotations of the cube as a whole are considered as the
+    same state.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the central cubelets are not tracked at all, on the figure, they are marked
+    with the darker color. What about the rest? Obviously, every cubelet of a particular
+    kind (corner or side) has a unique color combination of its stickers. For example,
+    the assembled cube in my orientation (white on top, red on the front, and so on)
+    has a top-left cubelet facing us with the following colors: green, white, and
+    red. There are no other corner cubelets with those colors (please check in case
+    of any doubt). The same is true for the side cubelets.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Due to this, to find the position of some particular cubelet, we need to know
+    the position of only one of its stickers. The selection of such stickers is completely
+    arbitrary, but once they are selected, you need to stick to this. As shown in
+    the preceding figure, we track eight stickers from the top side, eight stickers
+    from the bottom, and four additional side stickers: two on the front face and
+    two on the back. This gives us 20 stickers to be tracked.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Now, let’s discuss where 24 in the tensor dimension comes from. In total, we
+    have 20 different stickers to track, but in which positions could they appear
+    due to cube transformations? It depends on the kind of cubelet we’re tracking.
+    Let’s start with corner cubelets. In total, there are eight corner cubelets and
+    cube transformations can reshuffle them in any order. So, any particular cubelet
+    could end up in any of eight possible corners.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In addition, every corner cubelet could be rotated, so our “green, white, and
+    red” cubelet could end up in three possible orientations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: White on top, green left, and red front
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Green on top, red left, and white front
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Red on top, white left, and green front
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'So, to precisely indicate the position and orientation of the corner cubelet,
+    we have 8 × 3 = 24 different combinations. In the case of the 12-side cubelets,
+    they have only two stickers, so there are only two orientations possible, which,
+    again, gives us 24 combinations, but they are obtained from a different calculation:
+    12 × 2 = 24\. Finally, we have 20 cubelets to be tracked, 8 corners and 12 sides,
+    each having 24 positions that it could end up in.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: A very popular option to feed such data into an NN is one-hot encoding, when
+    the concrete position of the object has 1, with other positions filled with 0\.
+    This gives us the final representation of the state as a tensor with the shape
+    20 × 24.
+  prefs: []
+  type: TYPE_NORMAL
+- en: From a redundancy point of view, this representation is much closer to the total
+    state space; the amount of possible combinations equals 24^(20) ≈ 4.02 ⋅ 10^(27).
+    It is still larger than the cube state space (it could be said that it is significantly
+    larger, as the factor of 10⁸ is a lot), but it is better than encoding all the
+    colors of every sticker. This redundancy comes from tricky properties of cube
+    transformations; for example, it is not possible to rotate one single corner cubelet
+    (or flip one side cubelet) leaving all others in their places. Mathematical properties
+    are well beyond the scope of this book, but if you’re interested, I recommend
+    the wonderful book by Alexander Frey and David Singmaster called Handbook of Cubik
+    Math [[FS20](#)].
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'You might have noticed that the tensor representation of the cube state has
+    one significant drawback: memory inefficiency. Indeed, by keeping the state as
+    a floating-point tensor of 20 × 24, we’re using 4 × 20 × 24 = 1,920 bytes of memory,
+    which is a lot given the requirement to keep thousands of states during the training
+    process and millions of them during the cube solving (as you will get to know
+    shortly). To overcome this, in my implementation, I used two representations:
+    one tensor is intended for NN input and another, more compact, representation
+    is needed to store different states for longer. This compact state is saved as
+    a bunch of lists, encoding the permutations of corner and side cubelets, and their
+    orientation. This representation is not only much more memory efficient (160 bytes)
+    but also much more convenient for transformation implementation.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To illustrate this, what follows is the piece of the cube 3 × 3 library, libcube/cubes/cube3x3.py,
+    which is responsible for compact representation.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The variable intial_state is the encoding of the solved state of the cube.
+    In it, corner and side stickers that we’re tracking are in their original positions,
+    and both orientation lists are set to 0, indicating the initial orientation of
+    the cubelets:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE2]'
+  prefs: []
+  type: TYPE_PRE
+- en: The transformation of the cube is a bit complex and includes lots of tables
+    holding the rearrangements of cubelets after different rotations are applied.
+    I’m not going to put this code here; if you’re curious, you can start with the
+    function transform(state, action) in libcube/cubes/cube3x3.py. It might also be
+    helpful to check unit tests of this code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Besides the actions and compact state representation and transformation, the
+    module cube3x3.py includes a function that converts the compact representation
+    of the cube state (as the State named tuple) into the tensor form. This functionality
+    is provided by the encode_inplace() method.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Another functionality implemented is the ability to render the compact state
+    into human-friendly form by applying the render() function. It is very useful
+    for debugging the transformation of the cube, but it’s not used in the training
+    code.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training process
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: Now that you know how the state of the cube is encoded in a 20 × 24 tensor,
+    let’s explore the NN architecture and understand how it is trained.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The NN architecture
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'Figure [21.2](#x1-398003r2), from the paper by McAleer et al., shows the network
+    architecture:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file316.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.2: The NN architecture transforming the observation (top) to the
+    action and value (bottom)'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As the input, it accepts the already familiar cube state representation as
+    a 20 × 24 tensor and produces two outputs:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The policy, which is a vector of 12 numbers, representing the probability distribution
+    over our actions.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The value, a single scalar estimating the “goodness” of the state passed. The
+    concrete meaning of a value will be discussed in the next section.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'In my implementation, the architecture is exactly the same as in the paper,
+    and the model is in the module libcube/model.py. Between the input and output,
+    the network has several fully connected layers with exponential linear unit (ELU)
+    activations, as discussed in the paper:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE3]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The forward() call can be used in two modes: to get both the policy and the
+    value, or whenever value_only=True, only the value. This saves us some computations
+    in the case when only the value head’s result is of interest.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'In this network, the policy tells us what transformation we should apply to
+    the state, and the value estimates how good the state is. But the big question
+    still remains: how do we train the network?'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As discussed earlier, the training method proposed in the paper is called autodidactic
+    iterations (ADI). Let’s look at its structure. We start with the goal state (the
+    assembled cube) and apply the sequence of random transformations of some predefined
+    length, N. This gives us a sequence of N states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'For each state, s, in this sequence, we carry out the following procedure:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Apply every possible transformation (12 in total) to s.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Pass those 12 states to our current NN, asking for the value output. This gives
+    us 12 values for every substate of s.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The target value for s is calculated as y[v[i]] = max[a](v[s](a)+R(A(s,a))),
+    where A(s,a) is the state after the action, a, is applied to s and R(s) equals
+    1 if s is the goal state and -1 otherwise.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'The target policy for s is calculated using the same formula, but instead of
+    max, we take argmax: y[p[i]] = arg max[a](v[s](a) + R(A(s,a))). This just means
+    that our target policy will have 1 at the position of the maximum value for the
+    substate and 0 on all other positions.'
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: This process is shown in Figure [21.3](#x1-399011r3), taken from the paper.
+    The sequence of scrambles, x[0],x[1],…x[N], is generated, where the cube, x[i],
+    is shown expanded. For this state, x[i], we make targets for the policy and value
+    heads from the expanded states by applying the preceding formulas.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file317.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.3: Data generation for training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Using this process, we can generate any amounts of training data that we want.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The model application
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Okay, imagine that we have trained the model using the process just described.
+    How should we use it to solve the scrambled cube? From the network’s structure,
+    you might imagine the obvious, but not very successful, way:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Feed the model the current state of the cube that we want to solve.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: From the policy head, get the largest action to perform (or sample it from the
+    resulting distribution).
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Apply the action to the cube.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Repeat the process until the solved state has been reached.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: 'On paper, this method should work, but in practice, it has one serious issue:
+    it doesn’t! The main reason for that is our model’s quality. Due to the size of
+    the state space and the nature of the NNs, it just isn’t possible to train an
+    NN to return the exact optimal action for any input state all of the time. Rather
+    than telling us what to do to get the solved state, our model shows us promising
+    directions to explore. Those directions could bring us closer to the solution,
+    but sometimes they could be misleading, just from the fact that this particular
+    state has never been seen during the training. Don’t forget, there are 4.33 ⋅
+    10^(19) of them, so even with a graphics processing unit (GPU) training speed
+    of hundreds of thousands of states per second, and after a month of training,
+    we will only see a tiny portion of the state space, about 0.0000005%. So, a more
+    sophisticated approach has to be used.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'There is a family of very popular methods, called MCTS, and one of these methods
+    was covered in the last chapter. There are lots of variants of those methods,
+    but the overall idea can be described in comparison with the well-known brute-force
+    search methods, like breadth-first search (BFS) or depth-first search (DFS). In
+    BFS and DFS, we perform an exhaustive search of our state space by trying all
+    the possible actions and exploring all the states that we get from those actions.
+    That behavior is the other extreme of the procedure described previously (when
+    we have something that tells us where to go at every state). But MCTS offers something
+    in between those extremes: we want to perform the search and we have some information
+    about where we should go, but this information could be unreliable, noisy, or
+    just wrong in some situations. However, sometimes, this information could show
+    us the promising directions that could speed up the search process.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: As I’ve mentioned, MCTS is a family of methods and they vary in their particular
+    details and characteristics. In the paper, a method called Upper Confidence Bound
+    1 is used. This method operates on the tree, where the nodes are the states and
+    the edges are actions connecting those states. The whole tree is enormous in most
+    cases, so we can’t try to build the whole tree, just some tiny portion of it.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In the beginning, we start with a tree consisting of a single node, which is
+    our current state. At every step of the MCTS, we walk down the tree, exploring
+    some path in the tree, and there are two options we can face:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Our current node is a leaf node (we haven’t explored this direction yet)
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Our current node is in the middle of the tree and has children
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: In the case of a leaf node, we “expand” it by applying all the possible actions
+    to the state. All the resulting states are checked for being the goal state (if
+    the goal state of the solved cube has been found, our search is done). The leaf
+    state is passed to the model and the outputs from both the value and policy heads
+    are stored for later use.
+  prefs: []
+  type: TYPE_NORMAL
+- en: If the node is not the leaf, we know about its children (reachable states),
+    and we have value and policy outputs from the network. So, we need to make the
+    decision about which path to follow (in other words, which action is more promising
+    to explore). This decision is not a trivial one and this is the exploration versus
+    exploitation problem that we have covered previously in this book. On the one
+    hand, our policy from the network says what to do. But what if it is wrong? This
+    could be solved by exploring surrounding states, but we don’t want to explore
+    all the time (as the state space is enormous). So, we should keep the balance,
+    and this has a direct influence on the performance and the outcome of the search
+    process.
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve this, for every state, we keep the counter for every possible action
+    (there are 12 of them), which is incremented every time the action has been chosen
+    during the search. To make the decision to follow a particular action, we use
+    this counter; the more an action has been taken, the less likely it is to be chosen
+    in the future.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In addition, the value returned by the model is also used in this decision-making.
+    The value is tracked as the maximum from the current state’s value and the value
+    from its children. This allows the most promising paths (from the model perspective)
+    to be seen from the parent’s states.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To summarize, the action to follow from a non-leaf tree is chosen by using
+    the following formula:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq75.png) ![π (a |s) = P[At = a|St = s]
+    ](img/eq76.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: Here, N[s[t]](a) is a count of times that action a has been chosen in state
+    s[t]. P[s[t]](a) is the policy returned by the model for state s[t] and W[s[t]](a)
+    is the maximum value returned by the model for all children states of s[t] under
+    the branch a.
+  prefs: []
+  type: TYPE_NORMAL
+- en: This procedure is repeated until the solution has been found or our time budget
+    has been exhausted. To speed up the process, MCTS is very frequently implemented
+    in a parallel way, where several searches are performed by multiple threads. In
+    that case, some extra loss could be subtracted from A[t] to prevent multiple threads
+    from exploring the same paths of the tree.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The final piece in solving the process puzzle is how to get the solution from
+    the MCTS tree once we have reached the goal state. The authors of the paper experimented
+    with two approaches:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Naïve: Once we have faced the goal state, we use our path from the root state
+    as the solution'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The BFS way: After reaching the goal state, BFS is performed on the MCTS tree
+    to find the shortest path from the root to this state'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: According to the authors, the second method finds shorter solutions than the
+    naïve version, which is not surprising, as the stochastic nature of the MCTS process
+    can introduce cycles to the solution path.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'The final result published in the paper is quite impressive. After 44 hours
+    of training on a machine with three GPUs, the network learned how to solve cubes
+    at the same level as (and sometimes better than) human-crafted solvers. The final
+    model has been compared against the two solvers described earlier: the Kociemba
+    two-stage solver and Korf. The method proposed in the paper is named DeepCube.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To compare efficiency, 640 randomly scrambled cubes were used in all the methods.
+    The depth of the scramble was 1,000 moves. The time limit for the solution was
+    an hour and both the DeepCube and Kociemba solvers were able to solve all of the
+    cubes within the limit. The Kociemba solver is very fast, and its median solution
+    time is just one second, but due to the hardcoded rules implemented in the method,
+    its solutions are not always the shortest ones.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The DeepCube method took much more time, with the median time being about 10
+    minutes, but it was able to match the length of the Kociemba solutions or do better
+    in 55% of cases. From my personal perspective, 55% is not enough to say that NNs
+    are significantly better, but at least they are not worse.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'In Figure [21.4](#x1-401002r4), taken from the paper, the length distributions
+    for all the solvers are shown. As you can see, the Korf solver wasn’t compared
+    in 1,000 scramble test cases, due to the very long time needed to solve the cube.
+    To compare the performance of DeepCube against the Korf solver, a much easier
+    15-step scramble test set was created:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/file318.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.4: The length of solutions found by various solvers'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The code outline
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Now that you have some context, let’s switch to the code, which is in the Chapter21
+    directory in the book’s GitHub repository. In this section, I’m going to give
+    a quick outline of my implementation and the key design decisions, but before
+    that, I have to emphasize the important points about the code to set up the correct
+    expectations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: I’m not a researcher, so the original goal of this code was just to reimplement
+    the paper’s method. Unfortunately, the paper has very few details about the exact
+    hyperparameters used, so I had to experiment a lot, and still, my results are
+    very different from those published in the paper.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'At the same time, I’ve tried to implement everything in a general way to simplify
+    further experiments. For example, the exact details about the cube state and transformations
+    are abstracted away, which allows us to implement more puzzles similar to the
+    3×3 cube just by adding a new module. In my code, two cubes are implemented: 2×2
+    and 3×3, but any fully observable environment with a fixed set of predictable
+    actions can be implemented and experimented with. The details are given later
+    in this section (in the Cube environments subsection).'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Code clarity and simplicity were put ahead of performance. Of course, when it
+    was possible to improve performance without introducing much overhead, I did so.
+    For example, the training process was sped up by a factor of five by just splitting
+    the generation of the scrambled cubes and the forward network pass. But if the
+    performance required refactoring everything into multi-GPU and multithreaded mode,
+    I preferred to keep things simple. A very clear example is the MCTS process, which
+    is normally implemented as multithreaded code sharing the tree. It usually gets
+    sped up several times, but requires tricky synchronization between processes.
+    So, my version of MCTS is serial, with only trivial optimization of the batched
+    search.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Overall, the code consists of the following parts:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The cube environment, which defines the observation space, the possible actions,
+    and the exact representation of the state to the network. This part is implemented
+    in the libcube/cubes module.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The NN part, which describes the model that we will train, the generation of
+    training samples, and the training loop. It includes the training tool train.py
+    and the module libcube/model.py.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: The solver of cubes or the search process, including the solver.py utility and
+    the libcube/mcts.py module, which implements MCTS.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Various tools used to glue up other parts, like configuration files with hyperparameters
+    and tools used to generate cube problem sets.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: Cube environments
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'As you have already seen, combinatorial optimization problems are quite large
+    and diverse. Even the narrow area of cube-like puzzles includes a couple of dozen
+    variations. The most popular ones are 2 × 2 × 2, 3 × 3 × 3, and 4 × 4 × 4 Rubik’s
+    cubes, Square-1, and Pyraminx ([https://ruwix.com/twisty-puzzles/](https://ruwix.com/twisty-puzzles/)).
+    At the same time, the method presented in the paper is quite general and doesn’t
+    depend on prior domain knowledge, the amount of actions, and the state space size.
+    The critical assumptions imposed on the problem include:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: States of the environment need to be fully observable and observations need
+    to distinguish states from each other. That’s the case for the cube when we can
+    see all the sides’ states, but it doesn’t hold true for most variants of poker,
+    for example, when we can’t see the cards of our opponent.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The number of actions needs to be discrete and finite. There is a limited number
+    of actions we can take with the cube, but if our action space is “rotate the steering
+    wheel on angle α ∈ [−120^∘…120^∘],” we have a different problem domain here, as
+    you have already seen in chapters devoted to the continuous control problems.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'We need to have a reliable model of the environment; in other words, we have
+    to be able to answer questions like “What will be the result of applying action
+    a[i] to the state s[j]?” Without this, both ADI and MCTS become non-applicable.
+    This is a strong requirement and, for most problems, we don’t have such a model
+    or its outputs are quite noisy. On the other hand, in games like chess or Go,
+    we have such a model: the rules of the game.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: At the same time, as we’ve seen in the previous chapter (about the MuZero method),
+    you can approximate the model with neural networks, but paying the price of lower
+    performance.
+  prefs:
+  - PREF_IND
+  type: TYPE_NORMAL
+- en: In addition, our domain is deterministic, as the same action applied to the
+    same state always ends up in the same final state. The counter example might be
+    backgammon, when, on each turn, players roll the dice to get the amount of moves
+    they can possibly make. Most likely, this method could be generalized to this
+    case as well.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To simplify the application of the methods to domains different from the 3 ×
+    3 cube, all concrete environment details are moved to separate modules, communicating
+    with the rest of the code via the abstract interface CubeEnv, which is described
+    in the libcube/cubes/_env.py module. Let’s go through its interface.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'As shown in the following code snippet, the constructor of the class takes
+    a bunch of arguments:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the environment.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The type of the environment state.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The instance of the initial (assembled) state of the cube.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The predicate function to check that a particular state represents the assembled
+    cube. For 3 × 3 cubes, this might look like an overhead, as we possibly could
+    just compare this with the initial state passed in the initial_state argument,
+    but cubes of size 2 × 2 and 4 × 4, for instance, might have multiple final states,
+    so a separate predicate is needed to cover such cases.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The enumeration of actions that we can apply to the state.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The transformation function, which takes the state and the action and returns
+    the resulting state.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The inverse function, which maps every action into its inverse.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The render function to represent the state in human-readable form.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The shape of the encoded state tensor.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The function to encode the compact state representation into an NN-friendly
+    form.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: '[PRE4]'
+  prefs: []
+  type: TYPE_PRE
+- en: As you can see, cube environments are not compatible with the Gym API; I used
+    this example intentionally to illustrate how you can step beyond Gym.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Some of the methods in the CubeEnv API are just wrappers around functions passed
+    to the constructor. This allows the new environment to be implemented in a separate
+    module, register itself in the environment registry, and provide a consistent
+    interface to the rest of the code:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE5]'
+  prefs: []
+  type: TYPE_PRE
+- en: All the other methods in the class provide extended uniform functionality based
+    on those primitive operations.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The sample_action() method provides the functionality of randomly sampling
+    the random action. If the prev_action argument is passed, we exclude the reverse
+    action from possible results, which is handy to avoid a generation of short loops,
+    like R →r or L →l, for example:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE6]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The method scramble() applies the list of actions (passed as an argument) to
+    the initial state of the cube, returning the final state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE7]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The method scramble_cube() provides the functionality of randomly scrambling
+    the cube, returning all the intermediate states. In the case of the return_inverse
+    argument being False, the function returns the list of tuples with (depth, state)
+    for every step of the scrambling process. If the argument is True, it returns
+    a tuple with three values: (depth, state, inv_action), which are needed in some
+    situations:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE8]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'The method explore_states() implements functionality for ADI and applies all
+    the possible actions to the given cube state. The result is a tuple of lists in
+    which the first list contains the expanded states, and the second has flags of
+    those states as the goal state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE9]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'With this generic functionality, a similar environment might be implemented
+    and plugged into the existing training and testing methods with very little boilerplate
+    code. As an example, I have provided both the 2 × 2 × 2 cube and the 3 × 3 × 3
+    cube that I used in my experiments. Their internals reside in libcube/cubes/cube2x2.py
+    and libcube/cubes/cube3x3.py, which you can use as a base to implement your own
+    environments of this kind. Every environment needs to register itself by creating
+    the instance of the CubeEnv class and passing the instance into the function register(),
+    defined in libcube/cubes/_env.py. The following is the relevant piece of code
+    from the cube2x2.py module:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE10]'
+  prefs: []
+  type: TYPE_PRE
+- en: Once this is done, the cube environment can be obtained by using the libcube.cubes.get()
+    method, which takes the environment name as an argument. The rest of the code
+    uses only the public interface of the CubeEnv class, which makes the code cube-type
+    agnostic and simplifies the extensibility.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Training
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: 'The training process is implemented in the tool train.py and the module libcube/model.py,
+    and it is a straightforward implementation of the training process described in
+    the paper, with one difference: the code supports two methods of calculating the
+    target values for the value head of the network. One of the methods is exactly
+    how it was described in the paper and the other is my modification, which I’ll
+    explain in detail in the subsequent section.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To simplify the experimentation and make the results reproducible, all the
+    parameters of the training are specified in a separate .ini file, which gives
+    the following options for training:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The name of the environment to be used; currently, cube2x2 and cube3x3 are available.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The name of the run, which is used in TensorBoard names and directories to save
+    models.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'What target value calculation method in ADI will be used. I implemented two
+    of them: one is described in the paper and then there is my modification, which,
+    from my experiments, has more stable convergence.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The training parameters: the batch size, the usage of CUDA, the learning rate,
+    the learning rate decay, and others.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: You can find the examples of my experiments in the ini folder in the repo. During
+    the training, TensorBoard metrics of the parameters are written in the runs folder.
+    Models with the best loss value are saved in the saves directory.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To give you an idea of what the configuration file looks like, the following
+    is ini/cube2x2-paper-d200.ini, which defines the experiment for a 2 × 2 cube,
+    using the value calculation method from the paper and a scramble depth of 200:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE11]'
+  prefs: []
+  type: TYPE_PRE
+- en: 'To start the training, you need to pass the .ini file to the train.py utility;
+    for example, this is how the preceding .ini file could be used to train the model:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '[PRE12]'
+  prefs: []
+  type: TYPE_PRE
+- en: The extra argument -n gives the name of the run, which will be combined with
+    the name in the .ini file to be used as the name of a TensorBoard series.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The search process
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The result of the training is a model file with the network’s weights. The file
+    could be used to solve cubes using MCTS, which is implemented in the tool solver.py
+    and the module libcube/mcts.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The solver tool is quite flexible and could be used in various modes:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: To solve a single scrambled cube given as a comma-separated list of action indices,
+    passed in the -p option. For example, -p 1,6,1 is a cube scrambled by applying
+    the second action, then the seventh action, and finally, the second action again.
+    The concrete meaning of the actions is environment-specific, which is passed with
+    the -e option. You can find actions with their indices in the cube environment
+    module. For example, the actions 1,6,1 for a 2×2 cube mean an L →R′→L transformation.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To read permutations from a text file (one cube per line) and solve them. The
+    file name is passed with the -i option. There are several sample problems available
+    in the folder cubes_tests. You can generate your own random problem sets using
+    the gen_cubes.py tool, which allows you to set the random seed, the depth of the
+    scramble, and other options.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To generate a random scramble of the given depth and solve it.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: To run a series of tests with increasing complexity (scramble depth), solve
+    them, and write a CSV file with the result. This mode is enabled by passing the
+    -o option and is very useful for evaluating the quality of the trained model,
+    but it can take lots of time to complete. Optionally, plots with those test results
+    are produced.
+  prefs:
+  - PREF_OL
+  type: TYPE_NORMAL
+- en: In all cases, you need to pass the environment name with the -e option and the
+    file with the model’s weights (the -m option). In addition, there are other parameters,
+    allowing you to tweak MCTS options and time or search step limits. You can find
+    the names of those options in the code of solver.py.
+  prefs: []
+  type: TYPE_NORMAL
+- en: The experiment results
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'Unfortunately, the paper provided no details about very important aspects of
+    the method, like training hyperparameters, how deeply cubes were scrambled during
+    the training, and the obtained convergence. To fill in the missing blanks, I experimented
+    with various values of hyperparameters (.ini files are available in the GitHub
+    repo), but still my results are very different from those published in the paper.
+    I observed that the training convergence of the original method is very unstable.
+    Even with a small learning rate and a large batch size, the training eventually
+    diverges, with the value loss component growing exponentially. Examples of this
+    behavior are shown in Figure [21.5](#x1-406002r5) and Figure [21.6](#x1-406003r6)
+    (obtained from the 2 × 2 environment):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_05.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.5: Values predicted by the value head during training on the paper’s
+    method'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_06.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.6: The policy loss (left) and value loss (right) during the typical
+    run of the paper’s method'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'After several experiments with this problem, I came to the conclusion that
+    this behavior is a result of the wrong value objective being proposed in the method.
+    Indeed, in the formula y[v[i]] = max[a](v[s](a) + R(A(s,a))), the value v[s](a)
+    returned by the network is always added to the actual reward, R(s), even for the
+    goal state. With this, the actual values returned by the network could be anything:
+    −100, 10⁶, or 3.1415\. This is not a great situation for NN training, especially
+    with the mean squared error (MSE) objective.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To check this, I modified the method of the target value calculation by assigning
+    a 0 target for the goal state:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![π (a |s) = P[At = a|St = s] ](img/eq77.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: This target could be enabled in the .ini file by specifying the parameter value_targets_method
+    to be zero_goal_value, instead of the default value_targets_method=paper.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'With this simple modification, the training process converged much quicker
+    to stable values returned by the value head of the network. An example of this
+    convergence is shown in Figure [21.7](#x1-406006r7) and Figure [21.8](#x1-406007r8):'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_07.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.7: Values predicted by the value head during training'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_08.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.8: The policy loss (left) and value loss (right) after modifications
+    in value calculation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The 2 × 2 cube
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: In the paper, the authors reported training for 44 hours on a machine with three
+    Titan Xp GPUs. During the training, their model saw 8 billion cube states. Those
+    numbers correspond to the training speed  50,000 cubes/second. My implementation
+    shows 15,000 cubes/second on a single GTX 1080 Ti, which is comparable. So, to
+    repeat the training process on a single GPU, we need to wait for almost six days,
+    which is not very practical for experimentation and hyperparameter tuning.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'To overcome this, I implemented a much simpler 2 × 2 cube environment, which
+    takes just an hour or two to train. To reproduce my training, there are two .ini
+    files in the repo:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'ini/cube2x2-paper-d200.ini: This uses the value target method described in
+    the paper'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'ini/cube2x2-zero-goal-d200.ini: The value target is set to 0 for goal states'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'Both configurations use batches of 10k states and a scramble depth of 200,
+    and the training parameters are the same. After the training, using both configurations,
+    two models were produced:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'The paper’s method: loss 0.032572'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: 'The zero-goal method: loss 0.012226'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: To perform a fair comparison, I generated 20 test scrambles for depths 1…50
+    (1,000 test cubes in total), which are available in cubes_test/3ed, and ran the
+    solver.py utility on the best model produced by each method. For every test scramble,
+    the limit for searches was set to 30,000\. This utility produced CSV files (available
+    in csvs/3ed) with details about every test outcome.
+  prefs: []
+  type: TYPE_NORMAL
+- en: My experiments have shown that the model described in the paper was able to
+    solve 55% of test cubes, while the model with zero-goal modification solved 100%.
+    The results for both models depending on scramble depth are shown in Figure [21.9](#x1-407004r9).
+    On the left plot, the ratio of solved cubes is shown. On the right plot, the average
+    MCTS search steps per scramble depth are displayed. As you can see, the modified
+    version requires significantly (3x-5x) fewer MCTS searches to find a solution,
+    so the learned policy is better.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_09.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.9: The ratio of solved 2 × 2 cubes (left) and average count of MCTS
+    searches needed for various scramble depths'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Finally, let’s check the length of the found solutions. In Figure [21.10](#x1-407005r10),
+    both the naïve and BFS solution lengths are plotted. From those plots, it can
+    be seen that the naïve solutions are much longer (by a factor of 10) than solutions
+    found by BFS. Such a difference might be an indication of untuned MCTS parameters,
+    which could be improved. In naïve solutions, the zero goal finds shorter solutions
+    (which might again be an indication of a better policy).
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_10.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.10: A comparison of naïve (left) and BFS (right) ways of solution
+    generation'
+  prefs: []
+  type: TYPE_NORMAL
+- en: The 3 × 3 cube
+  prefs:
+  - PREF_H2
+  type: TYPE_NORMAL
+- en: The training of the 3 × 3 cube model is much more heavy; we’ve just scratched
+    the surface here. But my limited experiments show that zero-goal modifications
+    to the training method greatly improve the training stability and resulting model
+    quality. Training requires about 20 hours, so running lots of experiments requires
+    time and patience.
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'My results are not as shiny as those reported in the paper: the best model
+    I was able to obtain can solve cubes up to a scrambling depth of 12…15, but consistently
+    fails at more complicated problems. Probably, those numbers could be improved
+    with more central processing unit (CPU) cores plus parallel MCTS. To get the data,
+    the search process was limited to 100k steps and, for every scramble depth, five
+    random scrambles were generated (available in cubes_tests/3ed in the repo). But
+    again, the modified version shows better results – the model trained using the
+    paper’s method was able to solve only problems with a scramble depth of 9, but
+    the modified version was able to reach a depth of 13.'
+  prefs: []
+  type: TYPE_NORMAL
+- en: Figure [21.11](#x1-408004r11) shows a comparison of solution rates (left plot)
+    for the method presented in the paper and the modified version with the zero-value
+    target. On the right part of the figure, the average number of MCTS searches is
+    shown.
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_11.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.11: The ratio of solved 3 × 3 cubes by both methods (left) and the
+    average number of MCTS searches'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'Figure [21.12](#x1-408006r12) shows the length of the optimal solution found.
+    As before, naïve search produces longer results than the BFS-optimized one. The
+    BFS length almost perfectly aligned with the scramble depth:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: '![PIC](img/B22150_21_12.png)'
+  prefs: []
+  type: TYPE_IMG
+- en: 'Figure 21.12: A comparison of naïve (left) and BFS (right) solution lengths
+    for 3 × 3 cube'
+  prefs: []
+  type: TYPE_NORMAL
+- en: In theory, after a depth of 20, it should saturate (because “the God number”
+    is 20), but my version wasn’t able to solve any cubes with a scramble longer than
+    13, so it is hard to tell.
+  prefs: []
+  type: TYPE_NORMAL
+- en: Further improvements and experiments
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: 'There are lots of directions and things that could be tried:'
+  prefs: []
+  type: TYPE_NORMAL
+- en: 'More input and network engineering: The cube is a complicated thing, so simple
+    feed-forward NNs may not be the best model. Probably, the network could greatly
+    benefit from convolutions.'
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Oscillations and instability during training might be a sign of a common RL
+    issue with inter-step correlations. The usual approach is the target network,
+    when we use the old version of the network to get bootstrapped values.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The priority replay buffer might help the training speed.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: My experiments show that the samples’ weighting (inversely proportional to the
+    scramble depth) helps to get a better policy that knows how to solve slightly
+    scrambled cubes, but might slow down the learning of deeper states. Probably,
+    this weighting could be made adaptive to make it less aggressive in later training
+    stages.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Entropy loss could be added to the training to regularize our policy.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: The 2×2 cube model doesn’t take into account the fact that the cube doesn’t
+    have central cubelets, so the whole cube could be rotated. This might not be very
+    important for a 2 × 2 cube, as the state space is small, but the same observation
+    will be critical for 4 × 4 cubes.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: More experiments are needed to get better training and MCTS parameters.
+  prefs:
+  - PREF_UL
+  type: TYPE_NORMAL
+- en: Summary
+  prefs:
+  - PREF_H1
+  type: TYPE_NORMAL
+- en: In this chapter, we discussed discrete optimization problems – a subfield of
+    the optimization domain that deals with discrete structures like graphs or sets.
+    We checked RL’s applicability using the Rubik’s cube as a well-known, but still
+    challenging, problem. But in general, this topic is much wider than just puzzles
+    – the same methods could be used in optimizing schedules, optimal route planning,
+    and other practical topics.
+  prefs: []
+  type: TYPE_NORMAL
+- en: In the final chapter of the book, we will talk about multi-agent problems in
+    RL.
+  prefs: []
+  type: TYPE_NORMAL
