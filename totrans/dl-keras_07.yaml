@@ -765,6 +765,11 @@
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们准备好定义自动编码器了。如图所示，它由一个编码器LSTM和一个解码器LSTM组成。编码器LSTM读取一个形状为`(BATCH_SIZE, SEQUENCE_LEN,
+    EMBED_SIZE)`的张量，表示一个句子批次。每个句子表示为一个填充的固定长度的单词序列，长度为`SEQUENCE_LEN`。每个单词由一个300维的GloVe向量表示。编码器LSTM的输出维度是一个超参数`LATENT_SIZE`，这是后续经过训练的自动编码器编码器部分输出的句子向量的大小。`LATENT_SIZE`维度的向量空间表示了编码句子意义的潜在空间。LSTM的输出是每个句子的一个`LATENT_SIZE`大小的向量，因此，对于整个批次，输出张量的形状是`(BATCH_SIZE,
+    LATENT_SIZE)`。这个张量现在输入到RepeatVector层，该层将其在整个序列中复制，即该层的输出张量的形状为`(BATCH_SIZE, SEQUENCE_LEN,
+    LATENT_SIZE)`。这个张量接着输入到解码器LSTM，其输出维度是`EMBED_SIZE`，因此输出张量的形状为`(BATCH_SIZE, SEQUENCE_LEN,
+    EMBED_SIZE)`，即与输入张量的形状相同。
 - en: 'We compile this model with the `SGD` optimizer and the `mse` loss function.
     The reason we use MSE is that we want to reconstruct a sentence that has a similar
     meaning, that is, something that is close to the original sentence in the embedded
@@ -772,6 +777,7 @@
   id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用`SGD`优化器和`mse`损失函数来编译这个模型。我们使用MSE的原因是我们希望重建一个具有相似意义的句子，也就是说，重建一个在`LATENT_SIZE`维度的嵌入空间中接近原始句子的句子：
 - en: '[PRE22]'
   id: totrans-102
   prefs: []
@@ -783,6 +789,7 @@
   id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用以下代码训练自动编码器10个周期。选择10个周期是因为在这个时间范围内，MSE损失已经收敛。我们还会根据MSE损失保存到目前为止最好的模型：
 - en: '[PRE23]'
   id: totrans-104
   prefs: []
@@ -793,18 +800,22 @@
   id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练结果如下所示。正如你所看到的，训练MSE从0.14降到0.1，验证MSE从0.12降到0.1：
 - en: '![](img/ss-7-2.png)'
   id: totrans-106
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/ss-7-2.png)'
 - en: 'Or, graphically it shows as follows:'
   id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 或者，图形化显示如下：
 - en: '![](img/autoencoder-lossfunc.png)'
   id: totrans-108
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/autoencoder-lossfunc.png)'
 - en: Since we are feeding in a matrix of embeddings, the output will also be a matrix
     of word embeddings. Since the embedding space is continuous and our vocabulary
     is discrete, not every output embedding will correspond to a word. The best we
@@ -814,6 +825,7 @@
   id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们输入的是一个嵌入矩阵，输出也将是一个单词嵌入矩阵。由于嵌入空间是连续的，而我们的词汇表是离散的，并不是每个输出的嵌入都对应一个单词。我们能做的最好的方法是找到一个与输出嵌入最接近的单词，从而重建原始文本。这有点麻烦，所以我们将以不同的方式评估我们的自动编码器。
 - en: 'Since the objective of the autoencoder is to produce a good latent representation,
     we compare the latent vectors produced from the encoder using the original input
     versus the output of the autoencoder. First, we extract the encoder component
@@ -821,6 +833,7 @@
   id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于自动编码器的目标是生成一个良好的潜在表示，我们比较编码器生成的潜在向量，使用的是原始输入和自动编码器输出。首先，我们将编码器部分提取出来作为单独的网络：
 - en: '[PRE24]'
   id: totrans-111
   prefs: []
@@ -837,6 +850,7 @@
   id: totrans-112
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们在测试集上运行自动编码器以返回预测的嵌入。接着，我们将输入嵌入和预测的嵌入通过编码器传输，从每个嵌入生成句子向量，并使用*余弦*相似度比较这两个向量。接近1的余弦相似度表示高相似性，接近0则表示低相似性。以下代码对500个测试句子的随机子集进行处理，生成源嵌入和由自动编码器生成的相应目标嵌入之间的句子向量余弦相似度样本值：
 - en: '[PRE25]'
   id: totrans-113
   prefs: []
@@ -847,6 +861,7 @@
   id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是前10个余弦相似度值。如我们所见，这些向量似乎非常相似：
 - en: '[PRE26]'
   id: totrans-115
   prefs: []
@@ -860,15 +875,18 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下展示了测试集前500个句子的句子向量余弦相似度分布的直方图。如前所述，这确认了自动编码器的输入和输出生成的句子向量非常相似，表明生成的句子向量是句子的良好表示：
 - en: '![](img/autoencoder-cosims.png)'
   id: totrans-117
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/autoencoder-cosims.png)'
 - en: Composing deep networks
   id: totrans-118
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 构建深度网络
 - en: We have looked extensively at these three basic deep learning networks—the **fully
     connected network** (**FCN**), the CNN and the RNN models. While each of these
     have specific use cases for which they are most suited, you can also compose larger
@@ -878,6 +896,7 @@
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经深入研究了这三种基本的深度学习网络——**全连接网络**（**FCN**）、卷积神经网络（CNN）和循环神经网络（RNN）模型。虽然每种网络都有其最适用的特定用例，但你也可以通过将这些模型作为类似乐高的构建块，结合使用Keras功能性API以新的、有趣的方式将它们组合在一起，构建更大、更有用的模型。
 - en: Such models tend to be somewhat specialized to the task for which they were built,
     so it is impossible to generalize about them. Usually, however, they involve learning
     from multiple inputs or generating multiple outputs. One example could be a question
@@ -893,11 +912,13 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 这样的模型往往对其构建的任务有所专门化，因此很难进行一般化。不过，通常它们涉及从多个输入中学习或生成多个输出。例如，一个问答网络，可以在给定故事和问题的情况下预测答案。另一个例子是孪生网络，它计算一对图像之间的相似度，网络通过一对图像作为输入来预测二元（相似/不相似）或类别（相似度的不同级别）标签。再一个例子是物体分类和定位网络，它从图像中共同学习预测图像的类别以及图像在图片中的位置。前两个例子是具有多个输入的复合网络，最后一个是具有多个输出的复合网络。
 - en: Keras example — memory network for question answering
   id: totrans-121
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Keras 示例 —— 用于问答的记忆网络
 - en: 'In this example, we will build a memory network for question answering. Memory
     networks are a specialized architecture that consist of a memory unit in addition
     to other learnable units, usually RNNs. Each input updates the memory state and
@@ -920,10 +941,15 @@
   id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: '在这个例子中，我们将构建一个用于问答的记忆网络。记忆网络是一种专门的架构，除了其他可学习的单元（通常是RNN）外，还包含一个记忆单元。每个输入都会更新记忆状态，最终输出通过结合记忆和可学习单元的输出进行计算。该架构在2014年通过论文提出（更多信息请参考：*Memory
+    Networks*，J. Weston, S. Chopra 和 A. Bordes，arXiv:1410.3916，2014年）。一年后，另一篇论文（更多信息请参考：*Towards
+    AI-Complete Question Answering: A Set of Prerequisite Toy Tasks*，J. Weston，arXiv:1502.05698，2015年）提出了一个合成数据集的想法，并给出了20个问答任务的标准集，每个任务的难度比前一个更高，并应用各种深度学习网络来解决这些任务。在所有任务中，记忆网络取得了最佳结果。这个数据集后来通过Facebook的bAbI项目向公众发布（[https://research.fb.com/projects/babi/](https://research.fb.com/projects/babi/)）。我们记忆网络的实现最接近于这篇论文中描述的实现（更多信息请参考：*End-To-End
+    Memory Networks*，S. Sukhbaatar, J. Weston 和 R. Fergus，2015年《神经信息处理系统进展》），其特点是所有的训练都在单一网络中联合进行。它使用bAbI数据集来解决第一个问答任务。'
 - en: 'First, we will import the necessary libraries:'
   id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们将导入必要的库：
 - en: '[PRE27]'
   id: totrans-124
   prefs: []
@@ -938,6 +964,7 @@
   id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 第一个问答任务的bAbI数据集由10,000个短句组成，每个句子用于训练集和测试集。一个故事由两到三句组成，后面跟着一个问题。每个故事的最后一句话会在结尾附加问题和答案。以下代码块解析每个训练和测试文件，将其转换为包含故事、问题和答案三元组的列表：
 - en: '[PRE28]'
   id: totrans-126
   prefs: []
@@ -951,6 +978,7 @@
   id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一步是遍历生成的列表中的文本并构建我们的词汇表。现在这应该对我们非常熟悉，因为我们已经多次使用过类似的表达。与上次不同，我们的词汇表非常小，只有22个独特的词，因此我们不会遇到任何超出词汇表范围的单词：
 - en: '[PRE29]'
   id: totrans-128
   prefs: []
@@ -964,6 +992,7 @@
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 记忆网络基于RNN，其中故事和问题中的每个句子都被视为一个单词序列，因此我们需要找出故事和问题序列的最大长度。以下代码块执行此操作。我们发现，故事的最大长度是14个单词，问题的最大长度仅为4个单词：
 - en: '[PRE30]'
   id: totrans-130
   prefs: []
@@ -978,6 +1007,8 @@
   id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，我们的 RNN 输入是一个单词 ID 的序列。因此，我们需要使用我们的词汇字典，将（故事、问题和答案）三元组转换为整数单词 ID 的序列。下方的代码块完成了这一转换，并将结果中的故事和答案序列零填充至我们之前计算的最大序列长度。此时，我们为训练集和测试集中的每个三元组获得了填充后的单词
+    ID 序列列表：
 - en: '[PRE31]'
   id: totrans-132
   prefs: []
@@ -988,10 +1019,12 @@
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们想要定义模型。这个定义比我们之前看到的要长一些，所以在查看定义时，可能方便参考图示：
 - en: '![](img/memnet.png)'
   id: totrans-134
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/memnet.png)'
 - en: There are two inputs to our model, the sequence of word IDs for the question
     and that for the sentence. Each of these is passed into an Embedding layer to
     convert the word IDs to a vector in the 64-dimensional embedding space. Additionally
@@ -1001,6 +1034,8 @@
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们模型的输入有两个：问题的单词 ID 序列和句子的单词 ID 序列。每个序列都传入一个嵌入层，将单词 ID 转换为 64 维嵌入空间中的向量。此外，故事序列还会通过一个额外的嵌入层，将其投影到
+    `max_question_length` 大小的嵌入空间中。所有这些嵌入层都以随机权重开始，并与网络的其余部分一起训练。
 - en: The first two embeddings (story and question) are merged using a dot product
     to form the network's memory. These represent words in the story and question
     that are identical or close to each other in the embedding space. The output of
@@ -1012,11 +1047,14 @@
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 前两个嵌入（故事和问题）通过点积合并，形成网络的记忆。这些嵌入表示故事和问题中在嵌入空间中相同或相近的单词。记忆的输出与第二个故事嵌入合并，并求和形成网络的响应，之后再次与问题的嵌入合并，形成响应序列。这个响应序列被送入一个
+    LSTM，其上下文向量被传递到一个全连接层来预测答案，答案是词汇表中的一个单词。
 - en: 'The model is trained using the RMSprop optimizer and categorical cross-entropy
     as the loss function:'
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 该模型使用 RMSprop 优化器和分类交叉熵作为损失函数进行训练：
 - en: '[PRE32]'
   id: totrans-138
   prefs: []
@@ -1027,6 +1065,7 @@
   id: totrans-139
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们使用批量大小为 32，训练 50 轮网络，并在验证集上取得了超过 81% 的准确率：
 - en: '[PRE33]'
   id: totrans-140
   prefs: []
@@ -1036,24 +1075,29 @@
   id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是训练日志的跟踪记录：
 - en: '![](img/ss-7-3.png)'
   id: totrans-142
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/ss-7-3.png)'
 - en: 'The change in training and validation loss and accuracy for this training run
     is shown graphically in this graph:'
   id: totrans-143
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练和验证损失以及准确度的变化在下面的图表中显示：
 - en: '![](img/memnn-lossfunc-1.png)'
   id: totrans-144
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/memnn-lossfunc-1.png)'
 - en: 'We ran the model against the first 10 stories from our test set to verify how
     good the predictions were:'
   id: totrans-145
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将模型运行于测试集中的前 10 个故事上，以验证预测的准确性：
 - en: '[PRE34]'
   id: totrans-146
   prefs: []
@@ -1063,15 +1107,18 @@
   id: totrans-147
   prefs: []
   type: TYPE_NORMAL
+  zh: 如你所见，预测结果大多数是正确的：
 - en: '![](img/memnn-preds-1.png)'
   id: totrans-148
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/memnn-preds-1.png)'
 - en: Customizing Keras
   id: totrans-149
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 定制 Keras
 - en: Just as composing our basic building blocks into larger architectures enables
     us to build interesting deep learning models, sometimes we need to look at the
     other end of the spectrum. Keras has a lot of functionality built in already,
@@ -1081,6 +1128,8 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 就像将我们的基本构建块组合成更大的架构使我们能够构建有趣的深度学习模型一样，有时我们需要查看谱系的另一端。Keras 已经内置了许多功能，因此你很可能可以使用提供的组件构建所有模型，而完全不需要自定义。如果你确实需要自定义，Keras
+    也能满足你的需求。
 - en: As you will recall, Keras is a high level API that delegates to either a TensorFlow
     or Theano backend for the computational heavy lifting. Any code you build for
     your customization will call out to one of these backends. In order to keep your
@@ -1093,6 +1142,10 @@
   id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如你所记得的，Keras 是一个高层次的 API，它将计算任务委托给 TensorFlow 或 Theano 后端。你为自定义功能编写的任何代码都会调用其中一个后端。为了确保你的代码在两个后端之间具有可移植性，你的自定义代码应该使用
+    Keras 后端 API（[https://keras.io/backend/](https://keras.io/backend/)），它提供了一组函数，这些函数像一个
+    facade 一样封装了你选择的后端。根据所选的后端，调用后端 facade 会被转换为适当的 TensorFlow 或 Theano 调用。可以在 Keras
+    后端页面上找到可用函数的完整列表及其详细描述。
 - en: In addition to portability, using the backend API also results in more maintainable
     code, since Keras code is generally more high-level and compact compared to equivalent
     TensorFlow or Theano code. In the unlikely case that you do need to switch to
@@ -1101,6 +1154,8 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 除了可移植性之外，使用后端 API 还可以使代码更加易于维护，因为与等效的 TensorFlow 或 Theano 代码相比，Keras 代码通常更高层次、更简洁。即使在极少数情况下你确实需要直接使用后端，你的
+    Keras 组件也可以直接在 TensorFlow（但不是 Theano）代码中使用，正如这个 Keras 博客中所描述的那样（[https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html](https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html)）。
 - en: Customizing Keras typically means writing your own custom layer or custom distance
     function. In this section, we will demonstrate how to build some simple Keras
     layers. You will see more examples of using the backend functions to build other
@@ -1108,17 +1163,21 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 自定义 Keras 通常意味着编写你自己的自定义层或自定义距离函数。在本节中，我们将演示如何构建一些简单的 Keras 层。你将在后续的章节中看到更多使用后端函数构建其他自定义
+    Keras 组件（如目标函数（损失函数））的例子。
 - en: Keras example — using the lambda layer
   id: totrans-154
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Keras 示例 —— 使用 lambda 层
 - en: 'Keras provides a lambda layer; it can wrap a function of your choosing. For
     example, if you wanted to build a layer that squares its input tensor element-wise,
     you can say simply:'
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: Keras 提供了一个 lambda 层；它可以封装你选择的函数。例如，如果你想构建一个逐元素平方输入张量的层，你可以简单地这样写：
 - en: '[PRE35]'
   id: totrans-156
   prefs: []
@@ -1131,6 +1190,7 @@
   id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 你也可以将函数封装在 lambda 层中。例如，如果你想构建一个自定义层来计算两个输入张量之间的逐元素欧几里得距离，你需要定义一个函数来计算该值，并且定义另一个函数返回该函数的输出形状，如下所示：
 - en: '[PRE36]'
   id: totrans-158
   prefs: []
@@ -1140,6 +1200,7 @@
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以像下面这样使用 lambda 层来调用这些函数：
 - en: '[PRE37]'
   id: totrans-160
   prefs: []
@@ -1150,6 +1211,7 @@
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Keras 示例 —— 构建自定义归一化层
 - en: While the lambda layer can be very useful, sometimes you need more control.
     As an example, we will look at the code for a normalization layer that implements
     a technique called **local response normalization**. This technique normalizes
@@ -1159,6 +1221,8 @@
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 虽然 lambda 层非常有用，但有时你可能需要更多的控制。例如，我们将查看一个实现了称为**局部响应归一化**技术的归一化层代码。这种技术对局部输入区域进行归一化，但由于它没有其他正则化方法（如
+    dropout 和批量归一化）以及更好的初始化方法效果好，因此已经不再流行。
 - en: Building custom layers typically involves working with the backend functions,
     so it involves thinking about the code in terms of tensors. As you will recall,
     working with tensors is a two step process. First, you define the tensors and
@@ -1169,6 +1233,8 @@
   id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 构建自定义层通常涉及与后端函数的交互，因此需要将代码视为张量的形式来思考。正如你所记得的，处理张量是一个两步过程。首先，定义张量并将其排列成计算图，然后用实际数据运行该图。因此，在这个层面上工作比在
+    Keras 的其他部分更具挑战性。Keras 文档中有一些关于构建自定义层的指南（[https://keras.io/layers/writing-your-own-keras-layers/](https://keras.io/layers/writing-your-own-keras-layers/)），你一定要阅读。
 - en: 'One of the ways to make it easier to develop code in the backend API is to
     have a small test harness that you can run to verify that your code is doing what
     you want it to do. Here is a small harness I adapted from the Keras source to
@@ -1176,6 +1242,7 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 使后端 API 开发更容易的一种方法是拥有一个小的测试框架，您可以运行它来验证代码是否按预期工作。这是我从 Keras 源代码中改编的一个小测试框架，用来运行您的层并返回结果：
 - en: '[PRE38]'
   id: totrans-165
   prefs: []
@@ -1186,6 +1253,7 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里是使用 Keras 提供的 `layer` 对象进行的一些测试，以确保测试框架能够正常运行：
 - en: '[PRE39]'
   id: totrans-167
   prefs: []
@@ -1203,10 +1271,14 @@
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们开始构建本地响应归一化层之前，需要花点时间了解它到底是做什么的。这项技术最初是与 Caffe 一起使用的，Caffe 的文档（[http://caffe.berkeleyvision.org/tutorial/layers/lrn.html](http://caffe.berkeleyvision.org/tutorial/layers/lrn.html)）将其描述为一种*侧向抑制*，通过对局部输入区域进行归一化来工作。在
+    `ACROSS_CHANNEL` 模式下，局部区域跨越邻近的通道，但没有空间扩展。在 `WITHIN_CHANNEL` 模式下，局部区域在空间上扩展，但位于不同的通道中。我们将实现
+    `WITHIN_CHANNEL` 模型，如下所示。`WITHIN_CHANNEL` 模型中的本地响应归一化公式如下：
 - en: '![](img/lrn.png)'
   id: totrans-169
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/lrn.png)'
 - en: The code for the custom layer follows the standard structure. The `__init__`
     method is used to set the application specific parameters, that is, the hyperparameters
     associated with the layer. Since our layer only does a forward computation and
@@ -1217,6 +1289,7 @@
   id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 自定义层的代码遵循标准结构。`__init__` 方法用于设置应用程序特定的参数，也就是与层相关的超参数。由于我们的层只执行前向计算，且没有任何可学习的权重，因此我们在构建方法中做的唯一事情就是设置输入形状，并委托给父类的构建方法，后者负责处理任何必要的管理工作。在涉及可学习权重的层中，这个方法就是你设置初始值的地方。
 - en: The call method does the actual computation. Notice that we need to account
     for dimension ordering. Another thing to note is that the batch size is usually
     unknown at design times, so you need to write your operations so that the batch
@@ -1228,12 +1301,15 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: '`call` 方法执行实际的计算。请注意，我们需要考虑维度顺序。另一个需要注意的事情是，批次大小通常在设计时是未知的，因此您需要编写操作，使得批次大小不会被显式调用。计算本身非常直接，并且紧跟公式。分母中的求和部分也可以看作是对行和列维度进行平均池化，填充大小为
+    *(n, n)*，步幅为 *(1, 1)*。由于池化数据已经是平均值，因此我们不再需要将求和结果除以 *n*。'
 - en: 'The last part of the class is the `get_output_shape_for` method. Since the
     layer normalizes each element of the input tensor, the output size is identical
     to the input size:'
   id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 课堂的最后部分是`get_output_shape_for`方法。由于该层对输入张量的每个元素进行了归一化，输出大小与输入大小相同：
 - en: '[PRE40]'
   id: totrans-173
   prefs: []
@@ -1246,6 +1322,7 @@
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在开发过程中使用我们这里描述的测试工具测试这个层。运行这个工具比构建一个完整的网络并将其放入其中要容易得多，或者更糟糕的是，在完全指定该层之前等待运行：
 - en: '[PRE41]'
   id: totrans-175
   prefs: []
@@ -1262,11 +1339,15 @@
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 尽管构建自定义Keras层在经验丰富的Keras开发者中似乎非常普遍，但互联网上并没有太多可用的示例。这可能是因为自定义层通常是为了特定的狭窄目的而构建的，因此不一定具有广泛的用途。可变性也意味着一个单一的示例无法展示你可以通过API做的所有可能性。现在你已经对如何构建自定义Keras层有了很好的了解，你可能会发现查看Keunwoo
+    Choi的`melspectogram`（[https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/](https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/)）和Shashank
+    Gupta的`NodeEmbeddingLayer`（[http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html](http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html)）是很有启发性的。
 - en: Generative models
   id: totrans-177
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 生成模型
 - en: Generative models are models that learn to create data similar to data it is
     trained on. We saw one example of a generative model that learns to write prose
     similar to *Alice in Wonderland* in [Chapter 6](57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml),
@@ -1281,6 +1362,7 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 生成模型是学习创建与训练数据相似的数据的模型。我们在[第6章](57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml)中看到过一个生成模型的例子，该模型学习写出类似于*《爱丽丝梦游仙境》*的散文。在这个例子中，我们训练了一个模型，给定前10个字符来预测文本中的第11个字符。另一种生成模型是**生成对抗模型**（**GAN**），这种模型最近成为了一类非常强大的模型——你在[第4章](a67ea944-b1a6-48a3-b8aa-4e698166c0eb.xhtml)中看到了GAN的例子，*生成对抗网络和WaveNet*。生成模型的直觉是，它学习到一个好的内部表示，可以在*预测*阶段生成类似的数据。
 - en: Another perspective on generative models is the probabilistic one. A typical
     classification or regression network, also called a discriminative model, learns
     a function that maps the input data *X* to some label or output *y*, that is,
@@ -1293,6 +1375,8 @@
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 从概率的角度看生成模型，典型的分类或回归网络，也称为判别模型，学习一个函数，将输入数据*X*映射到某个标签或输出*y*，也就是说，这些模型学习条件概率*P(y|X)*。另一方面，生成模型学习联合概率，同时学习输入和标签，即*P(x,
+    y)*。然后，这些知识可以用来创建可能的新*(X, y)*样本。这赋予了生成模型在没有标签的情况下也能解释输入数据的潜在结构的能力。这在现实世界中是一个非常重要的优势，因为无标签数据比有标签数据更为丰富。
 - en: 'Simple generative models such as the example mentioned above can be extended
     to audio as well, for example, models that learn to generate and play music. One
     interesting one is described in the WaveNet paper (for more information refer
@@ -1302,11 +1386,14 @@
   id: totrans-180
   prefs: []
   type: TYPE_NORMAL
+  zh: '像上述示例这样的简单生成模型也可以扩展到音频领域，例如，学习生成和播放音乐的模型。一个有趣的例子在WaveNet论文中描述（更多信息请参考：*WaveNet:
+    A Generative Model for Raw Audio*，A. van den Oord，2016），该论文描述了一个使用空洞卷积层构建的网络，并提供了Keras的实现，代码托管在GitHub上（[https://github.com/basveeling/wavenet](https://github.com/basveeling/wavenet)）。'
 - en: Keras example — deep dreaming
   id: totrans-181
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Keras 示例 — 深度梦境
 - en: In this example, we will look at a slightly different generative network. We
     will see how to take a pre-trained convolutional network and use it to generate
     new objects in an image. Networks trained to discriminate between images learn
@@ -1318,6 +1405,8 @@
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这个示例中，我们将查看一个稍微不同的生成网络。我们将看到如何使用预训练的卷积网络生成图像中的新对象。训练用于区分图像的网络对图像有足够的了解，因此也能够生成图像。这一点最早由Google的Alexander
+    Mordvintsev展示，并在Google Research博客中描述（[https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html](https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html)）。它最初被称为*inceptionalism*，但*深度梦境*这一术语变得更加流行，用来描述这种技术。
 - en: Deep dreaming takes the backpropagated gradient activations and adds it back
     to the image, running the same process over and over in a loop. The network optimizes
     the loss function in the process, but we get to see how it does so in the input
@@ -1326,6 +1415,7 @@
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 深度梦境将反向传播的梯度激活值加回图像，并不断地重复同一过程。网络在这个过程中优化损失函数，但我们能够看到它如何在输入图像（三个通道）上进行优化，而不是在无法轻易可视化的高维隐藏层上。
 - en: There are many variations to this basic strategy, each of which leads to new
     and interesting effects. Some variations are blurring, adding constraints on the
     total activations, decaying the gradient, infinitely zooming into the image by
@@ -1336,10 +1426,12 @@
   id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种基本策略有许多变种，每一种都能带来新的有趣效果。一些变种包括模糊、对总激活值加约束、衰减梯度、通过裁剪和缩放来无限放大图像、通过随机移动图像来增加抖动等等。在我们的示例中，我们将展示最简单的方法——我们将优化选定层的激活值均值的梯度，针对预训练VGG-16的每个池化层，并观察其对输入图像的影响。
 - en: 'First, as usual, we will declare our imports:'
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，像往常一样，我们将声明我们的导入：
 - en: '[PRE42]'
   id: totrans-186
   prefs: []
@@ -1350,6 +1442,7 @@
   id: totrans-187
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将加载我们的输入图像。这张图像可能你在深度学习相关的博客文章中见过。原始图像来自这里（[https://www.flickr.com/photos/billgarrett-newagecrap/14984990912](https://www.flickr.com/photos/billgarrett-newagecrap/14984990912)）：
 - en: '[PRE43]'
   id: totrans-188
   prefs: []
@@ -1359,16 +1452,19 @@
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述示例的输出如下：
 - en: '![](img/cat-orig.png)'
   id: totrans-190
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/cat-orig.png)'
 - en: 'Next we define a pair of functions to preprocess and deprocess the image to
     and from a four-dimensional representation suitable for input to a pre-trained
     VGG-16 network:'
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们定义一对函数，用于将图像预处理和后处理成适合输入预训练VGG-16网络的四维表示：
 - en: '[PRE44]'
   id: totrans-192
   prefs: []
@@ -1379,6 +1475,7 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 这两个函数是互为反函数的，也就是说，将图像通过 `preprocess` 处理后再通过 `deprocess` 处理，将返回原始图像。
 - en: 'Next, we load up our pre-trained VGG-16 network. This network has been pre-trained
     on ImageNet data and is available from the Keras distribution. You already learned
     how to work with pre-trained models in [Chapter 3](4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml),
@@ -1393,6 +1490,7 @@
   id: totrans-194
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们加载预训练的VGG-16网络。这个网络已经在ImageNet数据上进行了预训练，并且可以从Keras发行版中获取。你已经在[第3章](4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml)《*深度学习与卷积神经网络*》中学习了如何使用预训练模型。我们选择了那个已经去掉全连接层的版本。除了节省我们自己去移除它们的麻烦外，这还允许我们传入任何形状的图像，因为我们需要指定图像宽度和高度的原因是，这决定了全连接层中权重矩阵的大小。由于CNN变换是局部的，图像的大小不会影响卷积层和池化层权重矩阵的大小。因此，图像大小的唯一限制是它必须在一个batch内保持一致：
 - en: '[PRE45]'
   id: totrans-195
   prefs: []
@@ -1404,6 +1502,7 @@
   id: totrans-196
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们需要在接下来的计算中按名称引用CNN的层对象，所以我们来构建一个字典。我们还需要理解层的命名规则，因此我们将其输出：
 - en: '[PRE46]'
   id: totrans-197
   prefs: []
@@ -1413,6 +1512,7 @@
   id: totrans-198
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述示例的输出如下：
 - en: '[PRE47]'
   id: totrans-199
   prefs: []
@@ -1424,6 +1524,7 @@
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们接着计算每一层五个池化层的损失，并计算每个步骤的平均激活的梯度。梯度会被加回到图像中，并且在每一步显示在每个池化层的图像上：
 - en: '[PRE48]'
   id: totrans-201
   prefs: []
@@ -1433,10 +1534,12 @@
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 结果图像如下所示：
 - en: '![](img/cat-pool1.png)![](img/cat-pool2.png)![](img/cat-pool3.png)![](img/cat-pool5.png)![](img/cat-pool6.png)'
   id: totrans-203
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/cat-pool1.png)![](img/cat-pool2.png)![](img/cat-pool3.png)![](img/cat-pool5.png)![](img/cat-pool6.png)'
 - en: As you can see, the process of deep dreaming amplifies the effect of the gradient
     on the chosen layer, resulting in images that are quite surreal. Later layers
     backpropagate gradients that result in more distortion, reflecting their larger
@@ -1444,12 +1547,14 @@
   id: totrans-204
   prefs: []
   type: TYPE_NORMAL
+  zh: 如你所见，深度梦境的过程放大了梯度在所选层的效果，结果是产生了非常超现实的图像。后续层反向传播的梯度造成了更多的失真，反映出它们更大的感受野和识别更复杂特征的能力。
 - en: 'To convince ourselves that a trained network really learns a representation
     of the various categories of the image it was trained on, let us consider a completely
     random image, shown next, and pass it through the pre-trained network:'
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了让我们自己确信，训练好的网络确实学到了它所训练的图像类别的表示，我们来看一个完全随机的图像，如下所示，并将其通过预训练网络：
 - en: '[PRE49]'
   id: totrans-206
   prefs: []
@@ -1459,20 +1564,24 @@
   id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 上述示例的输出如下：
 - en: '![](img/random-noise.png)'
   id: totrans-208
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/random-noise.png)'
 - en: 'Passing this image through the preceding code results in very specific patterns
     at each layer, as shown next, showing that the network is trying to find a structure
     in the random data:'
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: 将该图像通过前面的代码处理后，在每一层会生成非常特定的模式，如下所示，表明网络试图在随机数据中寻找结构：
 - en: '![](img/noise-pool1.png)![](img/noise-pool2.png)![](img/noise-pool3.png)![](img/noise-pool4.png)![](img/noise-pool5.png)'
   id: totrans-210
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/noise-pool1.png)![](img/noise-pool2.png)![](img/noise-pool3.png)![](img/noise-pool4.png)![](img/noise-pool5.png)'
 - en: 'We can repeat our experiment with the noise image as input and compute the
     loss from a single filter instead of taking the mean across all the filters. The
     filter we choose is for the ImageNet label African elephant (`24`). Thus, we replace
@@ -1482,6 +1591,7 @@
   id: totrans-211
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们可以用噪声图像作为输入重复我们的实验，并从单一的滤波器中计算损失，而不是对所有滤波器的损失求平均。我们选择的滤波器对应ImageNet标签中的非洲象（`24`）。因此，我们将上一段代码中的损失值替换为以下内容。这样，我们就不再对所有滤波器的损失求平均，而是计算代表非洲象类别的滤波器的输出损失：
 - en: '[PRE50]'
   id: totrans-212
   prefs: []
@@ -1492,15 +1602,18 @@
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们得到的结果看起来像是在`block4_pool`输出中重复出现的象鼻图像，如下所示：
 - en: '![](img/random-african-elephant.png)'
   id: totrans-214
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/random-african-elephant.png)'
 - en: Keras example — style transfer
   id: totrans-215
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: Keras示例 — 风格迁移
 - en: An extension of deep dreaming was described in this paper (for more information
     refer to: *Image Style Transfer Using Convolutional Neural Networks*, by L. A.
     Gatys, A. S. Ecker, and M. Bethge, Proceedings of the IEEE Conference on Computer
@@ -1511,10 +1624,12 @@
   id: totrans-216
   prefs: []
   type: TYPE_NORMAL
+  zh: 这篇论文描述了深度梦境的扩展（有关更多信息，请参考：*使用卷积神经网络的图像风格迁移*，L. A. Gatys, A. S. Ecker, M. Bethge，IEEE计算机视觉与模式识别会议论文集，2016年），该论文表明，训练过的神经网络（例如VGG-16）可以同时学习内容和风格，并且这两者可以独立操作。因此，物体的图像（内容）可以通过将其与画作的图像（风格）结合，风格化成类似画作的效果。
 - en: 'Let us start, as usual, by importing our libraries:'
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们像往常一样，首先导入我们的库：
 - en: '[PRE51]'
   id: totrans-218
   prefs: []
@@ -1525,6 +1640,8 @@
   id: totrans-219
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的示例将展示如何将我们的猫图像风格化为罗斯林·惠勒（Rosalind Wheeler）创作的克劳德·莫奈（Claude Monet）的《日本桥》（*The
+    Japanese Bridge*）的复制品图像 ([https://goo.gl/0VXC39](https://goo.gl/0VXC39))：
 - en: '[PRE52]'
   id: totrans-220
   prefs: []
@@ -1534,15 +1651,18 @@
   id: totrans-221
   prefs: []
   type: TYPE_NORMAL
+  zh: 上一个示例的输出如下：
 - en: '![](img/cat-style.png)'
   id: totrans-222
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/cat-style.png)'
 - en: 'As previously, we declare our two functions to convert back and forth from
     the image and the four-dimensional tensor that the CNN expects:'
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，我们声明了两个函数，用于在图像和卷积神经网络所期望的四维张量之间进行转换：
 - en: '[PRE53]'
   id: totrans-224
   prefs: []
@@ -1555,6 +1675,7 @@
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们声明张量来存储内容图像和风格图像，并声明另一个张量来存储合成图像。然后，内容图像和风格图像被连接成一个单一的输入张量。这个输入张量将被输入到预训练的VGG-16网络中：
 - en: '[PRE54]'
   id: totrans-226
   prefs: []
@@ -1565,6 +1686,7 @@
   id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们实例化一个预训练的VGG-16网络实例，该网络使用ImageNet数据进行预训练，并且排除了全连接层：
 - en: '[PRE55]'
   id: totrans-228
   prefs: []
@@ -1575,6 +1697,7 @@
   id: totrans-229
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，我们构建一个层字典，将层名称映射到训练好的VGG-16网络的输出层：
 - en: '[PRE56]'
   id: totrans-230
   prefs: []
@@ -1586,6 +1709,7 @@
   id: totrans-231
   prefs: []
   type: TYPE_NORMAL
+  zh: 下一个模块定义了计算`content_loss`、`style_loss`和`variational_loss`的代码。最后，我们将损失定义为这三种损失的线性组合：
 - en: '[PRE57]'
   id: totrans-232
   prefs: []
@@ -1598,6 +1722,7 @@
   id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里，内容损失是目标层提取的内容图像特征与组合图像之间的均方根距离（也称为**L2 距离**）。最小化此损失有助于使风格化图像保持接近原始图像。
 - en: The style loss is the L2 distance between the gram matrices of the base image
     representation and the style image. A gram matrix of a matrix *M* is the transpose
     of *M* multiplied by *M*, that is, *MT * M*. This loss measures how often features
@@ -1606,17 +1731,20 @@
   id: totrans-234
   prefs: []
   type: TYPE_NORMAL
+  zh: 风格损失是基本图像表示和风格图像的Gram矩阵之间的L2距离。矩阵*M*的Gram矩阵是*M*的转置与*M*的乘积，即*MT * M*。这个损失度量了在内容图像表示和风格图像中，特征如何一起出现。一个实际的含义是，内容和风格矩阵必须是方阵。
 - en: The total variation loss measures the difference between neighboring pixels.
     Minimizing this has the effect that neighboring pixels will be similar so the
     final image is smooth rather than *jumpy*.
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 总变差损失度量了相邻像素之间的差异。最小化此损失有助于使相邻像素相似，从而使最终图像平滑而不是*跳跃*。
 - en: 'We calculate the gradient and the loss function, and run our network in reverse
     for five iterations:'
   id: totrans-236
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们计算梯度和损失函数，并反向运行网络五次：
 - en: '[PRE58]'
   id: totrans-237
   prefs: []
@@ -1628,15 +1756,18 @@
   id: totrans-238
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后两次迭代的输出如下所示。正如你所看到的，它已经捕捉到了印象派模糊感，甚至是画布的纹理，出现在最终的图像中：
 - en: '![](img/cat-style-epoch4.png)![](img/cat-style-epoch5.png)'
   id: totrans-239
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/cat-style-epoch4.png)![](img/cat-style-epoch5.png)'
 - en: Summary
   id: totrans-240
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: In this chapter, we covered some deep learning networks that were not covered
     in earlier chapters. We started with a brief look into the Keras functional API,
     which allows us to build networks that are more complex than the sequential networks
@@ -1655,9 +1786,12 @@
   id: totrans-241
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一章中，我们介绍了一些之前章节没有涉及的深度学习网络。我们首先简要了解了 Keras 函数式 API，它允许我们构建比迄今为止看到的顺序网络更复杂的网络。接着，我们研究了回归网络，它允许我们在连续空间中进行预测，并开启了我们可以解决的全新问题。然而，回归网络实际上只是标准分类网络的一种非常简单的修改。接下来我们讨论了自编码器，它是一种网络风格，允许我们进行无监督学习，并利用如今所有人都可以访问的大量未标记数据。我们还学习了如何将已经学过的网络像巨大的乐高积木一样组合成更大、更有趣的网络。然后，我们从使用较小的网络构建大型网络转向学习如何使用
+    Keras 后端层定制网络中的单个层。最后，我们研究了生成模型，这是另一类模型，能够学习模仿其训练的输入，并探讨了这种模型的一些新颖应用。
 - en: In the next chapter, we will turn our attention to another learning style called
     reinforcement learning, and explore its concepts by building and training a network
     in Keras to play a simple computer game.
   id: totrans-242
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一章，我们将把注意力转向另一种学习方式——强化学习，并通过在 Keras 中构建和训练网络来玩一个简单的计算机游戏，从而探索其概念。
