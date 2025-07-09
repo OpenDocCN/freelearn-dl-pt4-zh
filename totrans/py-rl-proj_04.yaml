@@ -1,7 +1,9 @@
 - en: Simulating Control Tasks
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 控制任务的仿真
 - en: In the previous chapter, we saw the notable success of **deep Q-learning** (**DQN**)
     in training an AI agent to play Atari games. One limitation of DQN is that the
     action space must be discrete, namely, only a finite number of actions are available
@@ -10,8 +12,11 @@
     apply. A naive remedy for DQN in this case is discretizing the continuous action
     space. But this remedy doesn't work due to the curse of dimensionality, meaning
     that DQN quickly becomes infeasible and does not generalize well.
+  id: totrans-1
   prefs: []
   type: TYPE_NORMAL
+  zh: 在上一章中，我们看到了**深度 Q 学习**（**DQN**）在训练 AI 代理玩 Atari 游戏中的显著成功。DQN 的一个局限性是，动作空间必须是离散的，也就是说，代理可以选择的动作数量是有限的，并且动作的总数不能太大。然而，许多实际任务需要连续动作，这使得
+    DQN 难以应用。在这种情况下，对 DQN 的一种简单补救方法是将连续动作空间离散化。但由于维度灾难，这种补救方法并不起作用，意味着 DQN 很快变得不可行，并且无法很好地泛化。
 - en: This chapter will discuss deep reinforcement learning algorithms for control
     tasks with a continuous action space. Several classic control tasks, such as CartPole,
     Pendulum, and Acrobot, will be introduced first. You will learn how to simulate
@@ -23,8 +28,13 @@
     advanced algorithm, called the **trust region policy optimization** (**TRPO**),
     will be introduced. You will understand why TRPO works much better than DPG and
     how to learn a policy by applying the conjugate gradient method.
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将讨论用于具有连续动作空间的控制任务的深度强化学习算法。首先将介绍几个经典控制任务，如 CartPole、Pendulum 和 Acrobot。你将学习如何使用
+    Gym 仿真这些任务，并理解每个任务的目标和奖励。接下来，将介绍一种基本的演员-评论家算法，称为**确定性策略梯度**（**DPG**）。你将学习什么是演员-评论家架构，为什么这类算法能够处理连续控制任务。除此之外，你还将学习如何通过
+    Gym 和 TensorFlow 实现 DPG。最后，将介绍一种更高级的算法，称为**信任区域策略优化**（**TRPO**）。你将理解为什么 TRPO 的表现比
+    DPG 更好，以及如何通过应用共轭梯度法来学习策略。
 - en: This chapter requires some background knowledge of mathematical programming
     and convex/non-convex optimization. Don't be afraid-we will discuss these algorithms
     step by step to make sure that you fully understand the mechanism behind them.
@@ -33,27 +43,40 @@
     them with Gym and TensorFlow. After finishing this chapter, you will understand
     that the magic show of deep reinforcement learning is directed by mathematics
     and deep learning together.
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章需要一些数学编程和凸/非凸优化的背景知识。别担心，我们会一步步地讨论这些算法，确保你能充分理解它们背后的机制。理解它们为何有效、何时无法工作以及它们的优缺点，比仅仅知道如何用
+    Gym 和 TensorFlow 实现它们要重要得多。完成本章后，你将明白深度强化学习的魔法表演是由数学和深度学习共同指导的。
 - en: 'The following topics will be covered in this chapter:'
+  id: totrans-4
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章将涵盖以下主题：
 - en: Introduction to classic control tasks
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 经典控制任务介绍
 - en: Deterministic policy gradient methods
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 确定性策略梯度方法
 - en: Trust region policy optimization for complex control tasks
+  id: totrans-7
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 复杂控制任务的信任区域策略优化
 - en: Introduction to control tasks
+  id: totrans-8
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 控制任务介绍
 - en: 'OpenAI Gym offers classic control tasks from the classic reinforcement learning
     literature. These tasks include CartPole, MountainCar, Acrobot, and Pendulum.
     To find out more, visit the OpenAI Gym website at: [https://gym.openai.com/envs/#classic_control](https://gym.openai.com/envs/#classic_control).
@@ -64,69 +87,88 @@
     by Gym are Ant, HalfCheetah, Hopper, Humanoid, InvertedPendulum, Reacher, Swimmer,
     and Walker2d. These names are very tricky, aren''t they? For more details about
     these tasks, please visit the following link: [https://gym.openai.com/envs/#mujoco](https://gym.openai.com/envs/#mujoco)[.](http://www.mujoco.org/)'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: Getting started
+  id: totrans-10
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'If you don''t have a full installation of OpenAI Gym, you can install the `classic_control`
     and `mujoco` environment dependencies as follows:'
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-12
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: 'MuJoCo is not open source, so you''ll have to follow the instructions in `mujoco-py` (available
     at [https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key](https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key))
     to set it up. After the classic control environment is installed, try the following
     commands:'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-14
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'If it runs successfully, a small window will pop up, showing the screen of
     the Acrobot task:'
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/8f7814e7-22ab-410e-901e-c217a06af6ef.png)'
+  id: totrans-16
   prefs: []
   type: TYPE_IMG
 - en: 'Besides Acrobot, you can replace the `Acrobot-v1` task name with `CartPole-v0`,
     `MountainCarContinuous-v0`, and `Pendulum-v0` to check out the other control tasks.
     You can run the following code to simulate these tasks and try to get a high-level
     understanding of their physical properties:'
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-18
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: Gym uses the same interface for all the tasks, including Atari games, classic
     control tasks, and MuJoCo control tasks. At each step, an action is randomly drawn
     from the action space by calling `task.env.action_space.sample()` and then this
     action is submitted to the simulator via `task.step(action)`, which tells the
     simulator to execute it. The `step` function returns the observation and the reward
     corresponding to this action.
+  id: totrans-19
   prefs: []
   type: TYPE_NORMAL
 - en: The classic control tasks
+  id: totrans-20
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'We will now go through the details of each control task and answer the following
     questions:'
+  id: totrans-21
   prefs: []
   type: TYPE_NORMAL
 - en: What are the control inputs and the corresponding feedbacks?
+  id: totrans-22
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: How is the reward function defined?
+  id: totrans-23
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Is the action space continuous or discrete?
+  id: totrans-24
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -134,6 +176,7 @@
     proper reinforcement learning algorithms because their specifications, such as
     the dimension of the action space and the reward function, can affect the performance
     a lot.
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: 'CartPole is quite a famous control task in both the control and reinforcement
@@ -142,38 +185,47 @@
     Difficult Learning Control Problem*, 1983\. In CartPole, a pole is attached by
     an un-actuated joint to a cart, which moves along a frictionless track, as illustrated
     here:'
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/7e679e07-1c03-4306-9a0e-e182bd2e43f0.png)'
+  id: totrans-27
   prefs: []
   type: TYPE_IMG
 - en: 'Here are the specifications of CartPole:'
+  id: totrans-28
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Goal** | The goal is to prevent the pole from falling over. |'
+  id: totrans-29
   prefs: []
   type: TYPE_TB
 - en: '| **Action** | The action space is discrete, namely, the system is controlled
     by applying a force of +1 (right direction) and -1 (left direction) to the cart.
     |'
+  id: totrans-30
   prefs: []
   type: TYPE_TB
 - en: '| **Observation** | The observation is a vector with four elements, for example,
     [ 0.0316304, -0.1893631, -0.0058115, 0.27025422], which describe the positions
     of the pole and the cart. |'
+  id: totrans-31
   prefs: []
   type: TYPE_TB
 - en: '| **Reward** | A reward of +1 is provided for every timestep that the pole
     remains upright. |'
+  id: totrans-32
   prefs: []
   type: TYPE_TB
 - en: '| **Termination** | The episode ends when the pole is more than 15 degrees
     from vertical, or the cart moves more than 2.4 units from the center. |'
+  id: totrans-33
   prefs: []
   type: TYPE_TB
 - en: Because this chapter talks about solving continuous control tasks, we will later
     design a wrapper for CartPole to convert its discrete action space into a continuous
     one.
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: 'MountainCar was first described by Andrew Moore in his PhD thesis *A. Moore,
@@ -181,99 +233,123 @@
     as the benchmark for control, **Markov decision process** (**MDP**), and reinforcement
     learning algorithms. In MountainCar, a small car is on a one-dimensional track,
     moving between two mountains and trying to reach the yellow flag, as shown here:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/b05ae469-0ba1-4cef-811e-584dc93ba924.png)'
+  id: totrans-36
   prefs: []
   type: TYPE_IMG
 - en: 'The following table provides its specifications:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Goal** | The goal is to reach the top of the right mountain. However, the
     car''s engine is not strong enough to scale the mountain in a single pass. Therefore,
     the only way to succeed is to drive back and forth to build up momentum. |'
+  id: totrans-38
   prefs: []
   type: TYPE_TB
 - en: '| **Action** | The action space is continuous. The input action is the engine
     force applied to the car. |'
+  id: totrans-39
   prefs: []
   type: TYPE_TB
 - en: '| **Observation** | The observation is a vector with two elements, for example,
     [-0.46786288, -0.00619457], which describe the velocity and the position of the
     car. |'
+  id: totrans-40
   prefs: []
   type: TYPE_TB
 - en: '| **Reward** | The reward is greater if you spend less energy to reach the
     goal. |'
+  id: totrans-41
   prefs: []
   type: TYPE_TB
 - en: '| **Termination** | The episode ends when the car reaches the goal flag or
     the maximum number of steps is reached. |'
+  id: totrans-42
   prefs: []
   type: TYPE_TB
 - en: 'The Pendulum swing-up problem is a classic problem in the control literature
     and is used as a benchmark for testing control algorithms. In Pendulum, a pole
     is attached to a pivot point, as shown here:'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/3b3f9b21-e5d5-4f08-bb4c-fc5edac9557b.png)'
+  id: totrans-44
   prefs: []
   type: TYPE_IMG
 - en: 'Here are the specifications of Pendulum:'
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Goal** | The goal is to swing the pole up so it stays upright and to prevent
     it from falling over. |'
+  id: totrans-46
   prefs: []
   type: TYPE_TB
 - en: '| **Action** | The action space is continuous. The input action is the torque
     applied to the pole. |'
+  id: totrans-47
   prefs: []
   type: TYPE_TB
 - en: '| **Observation** | The observation is a vector with three elements, for example,
     [-0.19092327, 0.98160496, 3.36590881], which indicate the angle and angular velocity
     of the pole. |'
+  id: totrans-48
   prefs: []
   type: TYPE_TB
 - en: '| **Reward** | The reward is computed by a function with the angle, angular
     velocity, and the torque as the inputs. |'
+  id: totrans-49
   prefs: []
   type: TYPE_TB
 - en: '| **Termination** | The episode ends when the maximum number of steps is reached.
     |'
+  id: totrans-50
   prefs: []
   type: TYPE_TB
 - en: 'Acrobot was first described by Sutton in the paper *Generalization in Reinforcement
     Learning: Successful Examples Using Sparse Coarse Coding*, 1996\. The Acrobot
     system includes two joints and two links, where the joint between the two links
     is actuated:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/0528244b-5626-4c4e-841b-2ece663eb886.png)'
+  id: totrans-52
   prefs: []
   type: TYPE_IMG
 - en: 'Here are the settings of Acrobot:'
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
 - en: '| **Goal** | The goal is to swing the end of the lower link up to a given height.
     |'
+  id: totrans-54
   prefs: []
   type: TYPE_TB
 - en: '| **Action** | The action space is discrete, namely, the system is controlled
     by applying a torque of 0, +1 and -1 to the links. |'
+  id: totrans-55
   prefs: []
   type: TYPE_TB
 - en: '| **Observation** | The observation is a vector with six elements, for example,
     [0.9926474, 0.12104186, 0.99736744, -0.07251337, 0.47965018, -0.31494488], which
     describe the positions of the two links. |'
+  id: totrans-56
   prefs: []
   type: TYPE_TB
 - en: '| **Reward** | A reward of +1 is provided for every timestep where the lower
     link is at the given height or, otherwise, -1. |'
+  id: totrans-57
   prefs: []
   type: TYPE_TB
 - en: '| **Termination** | The episode ends when the end of the lower link is at the
     given height, or the maximum number of steps is reached. |'
+  id: totrans-58
   prefs: []
   type: TYPE_TB
 - en: 'Note that, in Gym, both CartPole and Acrobot have discrete action spaces, which
@@ -281,11 +357,14 @@
     Well, because this chapter considers continuous control tasks, we need to convert
     their action spaces into continuous ones. The following class provides a wrapper
     for Gym classic control tasks:'
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-60
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: For CartPole and Acrobot, the input action should be a probability vector indicating
     the probability of selecting each action. In the `play_action` function, an action
     is randomly sampled based on this probability vector and submitted to the system.
@@ -293,9 +372,11 @@
     `get_state_dim` functions return the dimension of the action space and the observation,
     respectively. The `get_activation_fn` function is used for the output layer in
     the actor network, which we will discuss later.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
 - en: Deterministic policy gradient
+  id: totrans-62
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -307,9 +388,11 @@
     the estimate of the corresponding Q-value. This architecture doesn''t require
     the number of available actions to be finite, and has the capability to deal with
     continuous input actions:'
+  id: totrans-63
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/e4a36225-b99e-4587-941e-2149251fecc7.png)'
+  id: totrans-64
   prefs: []
   type: TYPE_IMG
 - en: 'If we use this kind of network to estimate the `state-action value` function,
@@ -317,15 +400,18 @@
     outputting a proper action given the observed state. In fact, this is the intuition
     behind actor-critic reinforcement learning algorithms. The actor-critic architecture
     contains two parts:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
 - en: '**Actor**: The actor defines the behavior policy of the agent. In control tasks,
     it outputs the control signal given the current state of the system.'
+  id: totrans-66
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '**Critic**: The critic estimates the Q-value of the current policy. It can
     judge whether the policy is good or not.'
+  id: totrans-67
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -333,25 +419,30 @@
     (state, reward, next state, termination signal) received from the system, as in
     training the Q-network in DQN, then the classic control tasks will be solved.
     But how do we train them?
+  id: totrans-68
   prefs: []
   type: TYPE_NORMAL
 - en: The theory behind policy gradient
+  id: totrans-69
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'One solution is the **deep deterministic policy gradient** (**DDPG**) algorithm,
     which combines the actor-critic approach with insights from the success of DQN.
     This is discussed in the following papers:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
 - en: D. Silver, G. Lever, N. Heess, T. Degris, D. Wierstra and M. Riedmiller. *Deterministic
     policy gradient algorithms*. In ICML, 2014.
+  id: totrans-71
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver
     and D. Wierstra. *Continuous control with deep reinforcement learning*. In ICLR,
     2016.
+  id: totrans-72
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -359,16 +450,19 @@
     so you can understand the mechanism behind it much more easily after finishing
     the previous chapter. Recall that DQN is able to train the Q-network in a stable
     and robust way for the following reasons:'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
 - en: The Q-network is trained with the samples randomly drawn from the replay memory
     to minimize the correlations between samples.
+  id: totrans-74
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: A target network is used to estimate the target Q-value, reducing the probability
     that oscillation or divergence of the policy occurs. DDPG applies the same strategy,
     which means that DDPG is also a model-free and off-policy method.
+  id: totrans-75
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -384,9 +478,11 @@
     of the agent, which maps states to a probability distribution over the actions.
     Many approaches in reinforcement learning, such as DQN, use the Bellman equation
     as the backbone:'
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/d33ff51d-b88d-4860-a676-3bed39d88850.png).'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
 - en: 'The only difference between this formulation and the one in DQN is that the
@@ -395,9 +491,11 @@
     over ![](img/63b79d7f-ff2c-4b13-b7d9-67134f921b91.png). If the target policy ![](img/df3852c6-b7d4-48f2-906c-85e20d45b6d5.png)
     is deterministic, which can be described as a function ![](img/03d19098-5a51-4ecf-9349-97d235f0572c.png),
     then this inner expectation can be avoided:'
+  id: totrans-78
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/7e5b2b35-ed62-474b-9d78-9ab73c8cd725.png).'
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: 'The expectation depends only on the environment. This means that it is possible
@@ -410,14 +508,17 @@
     (in DQN, ![](img/afb1eec9-f424-4f1b-a510-4e582f3dfa11.png) is just ![](img/b7c37d7d-ea25-475a-9b07-4e839a6024fa.png)).
     Then, the critic ![](img/e84ee47b-b0f0-4ab4-9c06-807b68db4548.png) can be be trained
     by minimizing the following loss function:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/8885b2f4-a2b1-4a7f-93d1-06c763aa57f4.png),'
+  id: totrans-81
   prefs: []
   type: TYPE_NORMAL
 - en: Here, ![](img/373f36de-a6b8-4fdd-9f4c-199efec86702.png). As in DQN, ![](img/db4d322c-2054-423a-8834-466d98288b33.png)
     can be estimated via the target network and the samples for approximating ![](img/761e8806-ef76-48da-ac45-a8f533f2277e.png)
     can be randomly drawn from the replay memory.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
 - en: 'To train the actor ![](img/65c68316-35e0-4352-b0bd-4512ce079d3a.png), we fix
@@ -426,23 +527,29 @@
     maximize ![](img/8a50c452-1c5f-41b1-8dc7-8f01a0a8686d.png) over ![](img/f20dd0ca-a41a-4750-95d3-86434c885672.png),
     since a larger Q-value means a better policy. This can be done by following the
     applying the chain rule to the expected return with respect to the actor parameters:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/b67bb9db-a7c5-40cf-8fcb-1daf7adb257e.png).'
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following diagram shows the high-level architecture of DDPG:'
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/ce4a8706-e5a0-400f-bf01-eeac828b66c2.png)'
+  id: totrans-86
   prefs: []
   type: TYPE_IMG
 - en: 'Compared to DQN, there is a small difference in updating the target network.
     Instead of directly copying the weights of ![](img/83eb027c-4020-42e0-8222-63ccf5903e5b.png)
     to the target network after several iterations, a soft update is used:'
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/74e5cb42-fed1-4443-a51e-0b0a56c6ad40.png)'
+  id: totrans-88
   prefs: []
   type: TYPE_IMG
 - en: Here, ![](img/4aa85430-4001-4131-b53c-e9d49369d0ee.png) represents the weights
@@ -450,6 +557,7 @@
     to change slowly, greatly improving the stability of learning. This simple change
     moves the relatively unstable problem of learning the value function closer to
     the case of supervised learning.
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: 'Similar to DQN, DDPG also needs to balance exploration and exploitation during
@@ -458,9 +566,11 @@
     cannot be applied. Instead, we can construct an exploration policy ![](img/d75015e2-a728-46e8-9712-98640b2121d9.png)
     by adding noise sampled from a distribution ![](img/bf171446-b357-49f3-a646-c1cdb3b58a70.png)
     to the actor policy ![](img/f0bfd658-9b98-4c21-a175-efd17e3715b3.png):'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/dde2dd51-dbd4-48c5-98d5-8cfab67139c5.png) where ![](img/3d8a98da-c78f-43e5-b978-ca2258dddb19.png)'
+  id: totrans-91
   prefs: []
   type: TYPE_IMG
 - en: '![](img/4d4c9de1-140a-446c-a4c9-77d2d42b8185.png) can be chosen as ![](img/90caf88c-219a-40e7-8fe4-12dc270d38ce.png),
@@ -468,81 +578,112 @@
     distribution and ![](img/a1072a0b-8629-45ef-a059-7c0de83c8a87.png) decreases during
     each training step. Another choice is to apply an Ornstein-Uhlenbeck process to
     generate the exploration noise ![](img/d90e6e65-59e3-447f-9a31-42a692177ee9.png).'
+  id: totrans-92
   prefs: []
   type: TYPE_NORMAL
 - en: DPG algorithm
+  id: totrans-93
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'The following pseudo code shows the DDPG algorithm:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: There is a natural extension of DDPG by replacing the feedforward neural networks
     used for approximating the actor and the critic with recurrent neural networks.
     This extension is called the **recurrent deterministic policy gradient** algorithm
     (**RDPG**) and is discussed in the f paper N. Heess, J. J. Hunt, T. P. Lillicrap
     and D. Silver. *Memory-based control with recurrent neural networks*. 2015.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
 - en: The recurrent critic and actor are trained using **backpropagation through time**
     (**BPTT**). For readers who are interested in it, the paper can be downloaded
     from [https://arxiv.org/abs/1512.04455](https://arxiv.org/abs/1512.04455).
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 循环评论家和演员通过**时间反向传播**（**BPTT**）进行训练。对于有兴趣的读者，可以从[https://arxiv.org/abs/1512.04455](https://arxiv.org/abs/1512.04455)下载相关论文。
 - en: Implementation of DDPG
+  id: totrans-98
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: DDPG实现
 - en: This section will show you how to implement the actor-critic architecture using
     TensorFlow. The code structure is almost the same as the DQN implementation that
     was shown in the previous chapter.
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节将向你展示如何使用TensorFlow实现演员-评论家架构。代码结构几乎与上一章展示的DQN实现相同。
 - en: 'The `ActorNetwork` is a simple MLP that takes the observation state as its
     input:'
+  id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ActorNetwork`是一个简单的多层感知机（MLP），它将观测状态作为输入：'
 - en: '[PRE5]'
+  id: totrans-101
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'The constructor requires four arguments: `input_state`, `output_dim`, `hidden_layers`,
     and `activation`. `input_state` is a tensor for the observation state. `output_dim` is
     the dimension of the action space. `hidden_layers` specifies the number of the
     hidden layers and the number of units for each layer. `activation` indicates the
     activation function for the output layer.'
+  id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 构造函数需要四个参数：`input_state`、`output_dim`、`hidden_layers`和`activation`。`input_state`是观测状态的张量。`output_dim`是动作空间的维度。`hidden_layers`指定隐藏层的数量和每层的单元数。`activation`表示输出层的激活函数。
 - en: 'The `CriticNetwork` is also a MLP, which is enough for the classic control
     tasks:'
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: '`CriticNetwork`也是一个多层感知机（MLP），足以应对经典控制任务：'
 - en: '[PRE6]'
+  id: totrans-104
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: The network takes the state and the action as its inputs. It first maps the
     state into a hidden feature representation and then concatenates this representation
     with the action, followed by several hidden layers. The output layer generates
     the Q-value that corresponds to the inputs.
+  id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 网络将状态和动作作为输入。它首先将状态映射为一个隐藏特征表示，然后将该表示与动作进行拼接，接着通过几个隐藏层。输出层生成与输入对应的Q值。
 - en: 'The actor-critic network combines the actor network and the critic network
     together:'
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 演员-评论家网络将演员网络和评论家网络结合在一起：
 - en: '[PRE7]'
+  id: totrans-107
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: 'The constructor requires six arguments, as follows: `input_dim` and `action_dim`
     are the dimensions of the state space and the action space, respectively. `critic_layers`
     and `actor_layers` specify the hidden layers of the critic network and the actor
     network.  `actor_activation` indicates the activation function for the output
     layer of the actor network. `scope` is the scope name used for the `scope` TensorFlow
     variable.'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 构造函数需要六个参数，分别为：`input_dim`和`action_dim`是状态空间和动作空间的维度，`critic_layers`和`actor_layers`指定评论家网络和演员网络的隐藏层，`actor_activation`表示演员网络输出层的激活函数，`scope`是用于`scope`
+    TensorFlow变量的作用域名称。
 - en: The constructor first creates an instance of the `self.actor_network` actor
     network with an input of `self.x,` where `self.x` represents the current state.
     It then creates an instance of the critic network using the following as the inputs: `self.actor_network.get_output_layer()` as
@@ -552,54 +693,73 @@
     where `value` is the Q-value computed by the critic network. The critic loss is
     `0.5 * tf.reduce_mean(tf.square((value - self.y)))`, where `self.y` is a tensor
     for the predicted target value computed by the target network.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 构造函数首先创建一个`self.actor_network`演员网络的实例，输入为`self.x`，其中`self.x`表示当前状态。然后，它使用以下输入创建评论家网络的实例：`self.actor_network.get_output_layer()`作为演员网络的输出，`self.x`作为当前状态。给定这两个网络，构造函数调用`self._build()`来构建我们之前讨论过的演员和评论家的损失函数。演员损失是`-tf.reduce_mean(value)`，其中`value`是评论家网络计算的Q值。评论家损失是`0.5
+    * tf.reduce_mean(tf.square((value - self.y)))`，其中`self.y`是由目标网络计算的预测目标值的张量。
 - en: 'The class `ActorCriticNet` provides the functions for calculating the action
     and the Q-value given the current state, that is, `get_action` and `get_value`.
     It also provides `get_action_value`, which computes the `state-action value` function
     given the current state and the action taken by the agent:'
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: '`ActorCriticNet`类提供了在给定当前状态的情况下计算动作和Q值的功能，即`get_action`和`get_value`。它还提供了`get_action_value`，该函数根据当前状态和代理执行的动作计算`状态-动作值`函数：'
 - en: '[PRE8]'
+  id: totrans-111
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'Because DPG has almost the same architecture as DQN, the implementations of
     the replay memory and the optimizer are not shown in this chapter. For more details,
     you can refer to the previous chapter or visit our GitHub repository ([https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects](https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects)).
     By combining these modules together, we can implement the `DPG` class for the
     deterministic policy gradient algorithm:'
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-113
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'Here, `config` includes all the parameters of DPG, for example, batch size
     and learning rate for training. The `task` is an instance of a certain classic
     control task. In the constructor, the replay memory, Q-network, target network,
     and optimizer are initialized by calling the `_init_modules` function:'
+  id: totrans-114
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-115
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: The `choose_action` function selects an action based on the current estimate
     of the actor-critic network and the observed state.
+  id: totrans-116
   prefs: []
   type: TYPE_NORMAL
 - en: Note that a Gaussian noise controlled by `epsilon` is added for exploration.
+  id: totrans-117
   prefs: []
   type: TYPE_NORMAL
 - en: The `play` function submits an action into the simulator and returns the feedback
     from the simulator. The `update_target_network` function updates the target network
     from the current actor-critic network.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: 'To begin the training process, the following function can be called:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-120
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: In each episode, it calls `replay_memory.phi` to get the current state and calls
     the `choose_action` function to select an action based on the current state. This
     action is submitted into the simulator by calling the `play` function, which returns
@@ -609,26 +769,34 @@
     network is trained with a batch of transitions that are randomly sampled from
     the replay memory. For every `time_between_two_copies` step, the target network
     is updated and the weights of the Q-network are saved to the hard disk.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
 - en: 'After the training step, the following function can be called for evaluating
     the performance of our trained agent:'
+  id: totrans-122
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-123
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: Experiments
+  id: totrans-124
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'The full implementation of DPG can be downloaded from our GitHub ([https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects](https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects)).
     To train an agent for CartPole, run the following command under the `src` folder:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-126
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: There are two arguments in `train.py`. One is `-t`, or `--task`, indicating
     the name of the classic control task you want to test. The other one is `-d`,
     or `--device`, which specifies the device (CPU or GPU) that you want to use to
@@ -636,25 +804,32 @@
     classic control tasks are relatively low compared to the Atari environment, using
     the CPU to train the agent is fast enough. It should only take several minutes
     to finish.
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
 - en: 'During the training, you can open a new Terminal and type the following command
     to visualize both the architecture of the actor-critic network and the training
     procedure:'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-129
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: 'Here, `logdir` points to the folder where the `CartPole-v0` log file is stored.
     Once TensorBoard is running, navigate your web browser to `localhost:6006` to
     view the TensorBoard:'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/86309e48-df49-4dc5-91d1-53a3b33e5f6b.png)'
+  id: totrans-131
   prefs: []
   type: TYPE_IMG
 - en: Tensorboard view
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: The top two graphs show the changes of the actor loss and the critic loss against
@@ -662,40 +837,53 @@
     consistently, while the critic loss has a large fluctuation. After 60,000 training
     steps, the score becomes stable, achieving 200, the highest score that can be
     reached in the CartPole simulator.
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: 'Using a similar command, you can also train an agent for the `Pendulum` task:'
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-135
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'Then, check the training procedure via `Tensorboard`:'
+  id: totrans-136
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-137
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'The following screenshot shows the changes of the score during  training:'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/6af8e21c-55b9-405d-ac5a-1fc545f87f55.png)'
+  id: totrans-139
   prefs: []
   type: TYPE_IMG
 - en: Changes in score during training
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: 'A careful reader may notice that the score of Pendulum fluctuates widely compared
     to the score of CartPole. There are two reasons that are causing this problem:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: In Pendulum, the starting position of the pole is not deterministic, namely,
     it may be different for two episodes
+  id: totrans-142
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The train procedure in DPG may not be always stable, especially for complicated
     tasks, such as MuJoCo control tasks
+  id: totrans-143
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -703,17 +891,22 @@
     InvertedPendulum, Reacher, Swimmer, and Walker2d provided by Gym, have high-dimensional
     state and action space, which makes DPG fail. If you are curious about what happens
     when running DPG with the `Hopper-v0` task, you can try the following:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: After several minutes, you will see that DPG cannot teach Hopper how to walk.
     The main reason why DPG fails in this case is that the simple actor and critic
     updates discussed here become unstable with high-dimensional inputs.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: Trust region policy optimization
+  id: totrans-147
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -721,6 +914,7 @@
     to solve complex continuous control tasks in the following paper: Schulman, S.
     Levine, P. Moritz, M. Jordan and P. Abbeel. *Trust Region Policy Optimization*.
     In ICML, 2015.'
+  id: totrans-148
   prefs: []
   type: TYPE_NORMAL
 - en: To understand why TRPO works requires some mathematical background. The main
@@ -732,9 +926,11 @@
     and ![](img/d8d38231-bc91-43c4-a75f-8f3d39b6d8ca.png), for example, ![](img/dba88e62-aaac-48df-8696-ab24ba291e01.png)
     for a certain constraint function ![](img/87c66a83-5938-4481-8b63-92a08ddd9b81.png)
     constant ![](img/5b9d38d9-0b1e-443b-b93f-0b124e2af135.png).
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: Theory behind TRPO
+  id: totrans-150
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -750,9 +946,11 @@
     is the discount factor. Let ![](img/779c9c94-3227-4173-bc9b-47a496df8645.png)
     be a stochastic policy that we want to learn by minimizing the following expected
     discounted cost:'
+  id: totrans-151
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/4b2b2d3b-82ce-4be8-9268-804c004a1c75.png)'
+  id: totrans-152
   prefs: []
   type: TYPE_IMG
 - en: 'Here, this is ![](img/c6326a20-968a-4c4b-8edc-ef2a78164482.png), ![](img/4b3f52e1-26c7-469c-84ed-afc5dde95507.png) and ![](img/687aa323-eee8-4230-8c65-e74bae743a2e.png). The
@@ -760,21 +958,26 @@
     the value function ![](img/fd5bb2d1-02ca-4612-b937-a28495e2122b.png) ,and the
     advantage function ![](img/e2731530-62ec-47a3-ad8f-0e4f0fa96b4d.png) under policy ![](img/f0c57c4c-00ae-41c7-ae5b-504777148477.png)
     are as follows:'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/1ecdecae-c636-4f18-8a0f-d9f1852b3f55.png)![](img/dbe7950e-c726-4be1-ae1d-571772cd0ec3.png)![](img/695cfd42-af47-4f7a-a1df-2c19428aabb3.png)'
+  id: totrans-154
   prefs: []
   type: TYPE_IMG
 - en: Here, this is ![](img/8ad044e8-e6bc-40d4-93c0-37581d8858a6.png) and ![](img/e487be73-6cde-4217-8024-e4f7cd401537.png).
+  id: totrans-155
   prefs: []
   type: TYPE_NORMAL
 - en: 'Our goal is to improve policy ![](img/19d0debc-2372-4819-a9b2-ac5e04248f11.png)
     (by reducing the expected discounted cost) during each training step. In order
     to design an algorithm monotonically improving ![](img/68b1c497-e041-4391-8a5b-36ea39ab6685.png),
     let''s consider the following equation:'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/f20b954f-9a2d-4cbf-94c3-27e99e78982c.png)'
+  id: totrans-157
   prefs: []
   type: TYPE_IMG
 - en: 'Here, this is ![](img/4878a2f8-03b8-4c93-8ca6-ebc08fc5382b.png), ![](img/311043e8-58ca-4b6b-89e5-f82e712a6f04.png) and ![](img/324cf7f3-59a2-460b-84a2-efef176891c5.png).
@@ -783,16 +986,20 @@
     in the TRPO paper or the paper *Approximately optimal approximate reinforcement
     learning*, written by Kakade and Langford. To simplify this equation, let ![](img/10619e12-c8bf-4cf2-84a7-1c4e1cb07ec1.png)
     be the discounted visitation frequencies:'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/3c544a5f-60c8-4d3f-80a6-c3296d59e3fc.png)'
+  id: totrans-159
   prefs: []
   type: TYPE_IMG
 - en: 'By rearranging the preceding equation to sum over states instead of timesteps,
     it becomes the following:'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/3bceac54-47bb-4518-acb3-7b256a13febc.png)'
+  id: totrans-161
   prefs: []
   type: TYPE_IMG
 - en: 'From this equation, we can see that any policy update ![](img/fda3a1ca-854b-44d8-a0c6-197d8cc0cb8c.png)
@@ -807,17 +1014,21 @@
     positive, due to approximation errors. Besides this, the dependency of ![](img/5642fe43-339d-46fb-be5d-7b6bd14b1df0.png) on ![](img/0fc4904e-49e5-447a-a56a-efecaa1ff4a3.png) makes
     this equation hard to optimize, so TRPO considers optimizing the following function
     by replacing ![](img/d7fce747-17fc-4da3-97d6-20db3c3c9ed9.png) with ![](img/3f64995a-2da0-4ea4-9508-dd5d750197b6.png):'
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/78aa2307-eb0c-43b9-bd95-7d12f26f0530.png)'
+  id: totrans-163
   prefs: []
   type: TYPE_IMG
 - en: 'Kakade and Langford showed that if we have a parameterized policy, ![](img/8fd694a5-34cc-4604-8330-309b3cae3d44.png),
     which is a differentiable function of the parameter ![](img/1fe4211a-0762-4c8e-b964-f82205c58113.png),
     then for any parameter ![](img/aed1c2ad-56e3-4a6c-b9cc-667860302101.png):'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/b26d3705-7acd-46e3-95d9-7960a539a17d.png)![](img/2c4d94aa-c595-4312-b77b-4f5b5aa2268d.png)'
+  id: totrans-165
   prefs: []
   type: TYPE_IMG
 - en: 'This means that improving ![](img/7e29d171-632b-47f7-8fde-aa755abac2ad.png)
@@ -825,18 +1036,22 @@
     small update on ![](img/a5a215c0-8b48-4d4c-af73-b0cb2855f812.png). Based on this
     idea, Kakade and Langford proposed a policy updating scheme called the conservative
     policy iteration:'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/7b34ce87-7dad-4891-bfc4-d06ac637bf61.png)'
+  id: totrans-167
   prefs: []
   type: TYPE_IMG
 - en: 'Here, ![](img/8e97e940-f4a8-4aca-a389-196e3672e47b.png) is the current policy, ![](img/0690ebf6-d1d9-4a5d-9975-88e070099654.png)
     is the new policy, and ![](img/656c223d-a53d-466f-9049-cfb3ea1aa43e.png) is obtained
     by solving ![](img/bb69abc4-4efa-431d-bde8-8cb81333e9d9.png). They proved the
     following bound for this update:'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/2202bc30-b02d-4b4f-ac00-ccd006344629.png) where ![](img/4e8d8a89-687b-4c09-a75b-fd05efbb42bd.png)'
+  id: totrans-169
   prefs: []
   type: TYPE_IMG
 - en: 'Note that this bound only applies to mixture policies generated by the preceding
@@ -847,84 +1062,107 @@
     the distance measure is the total variation divergence. Taking two discrete distributions ![](img/3234f41f-86a5-4366-9189-5ca28c7c9043.png)
     and ![](img/6c78aec7-e723-4044-9371-d99781c5b6ce.png) as an example, the total
     variation divergence is defined as follows:'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/b39bd755-aac8-44f3-b148-40e7e6c75d22.png)'
+  id: totrans-171
   prefs: []
   type: TYPE_IMG
 - en: 'For policies ![](img/e1a2e0b2-a80f-4c94-a238-eb5c6a72884b.png) and ![](img/a5952e1b-fdf3-4d52-952d-08efb4aab567.png),
     let ![](img/962c116d-a5af-45c3-9868-2f3ff9c7c69c.png) be the maximum total variation
     divergence over all the states:'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/b8cdaa06-5dd1-42b5-964c-709d9194dd14.png)'
+  id: totrans-173
   prefs: []
   type: TYPE_IMG
 - en: 'With ![](img/f5ad7c02-2977-4428-92c9-e1d932054ab3.png) and ![](img/4e930847-34f4-4fd3-bbc6-65f4ec91fd6a.png),
     it can be shown that:'
+  id: totrans-174
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/eb185217-9538-492f-bffe-32d1307b6d08.png), where ![](img/00448aeb-93d9-4f75-bb9c-32de71911cab.png).'
+  id: totrans-175
   prefs: []
   type: TYPE_NORMAL
 - en: 'Actually, the total variation divergence can be upper bounded by the KL divergence,
     namely, ![](img/78c2353d-c2a3-4fe1-9e1b-407ac9f8101a.png), which means that:'
+  id: totrans-176
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/2de74f64-0e3f-4130-9b12-48ec49724f87.png), where ![](img/055f7bdb-5fcd-4f75-be54-a5033373ef64.png).'
+  id: totrans-177
   prefs: []
   type: TYPE_NORMAL
 - en: TRPO algorithm
+  id: totrans-178
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: 'Based on the preceding policy improvement bound, the following algorithm is
     developed:'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-180
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: 'In each step, this algorithm minimizes the upper bound of ![](img/af7c9656-8e07-4215-9d38-0f867bd07473.png),
     so that:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/22c9cc5b-58c6-4996-bb21-280af47bc7db.png)'
+  id: totrans-182
   prefs: []
   type: TYPE_IMG
 - en: The last equation follows from that ![](img/8acb0164-88a5-4075-a1ad-798769022863.png)
     for any policy ![](img/72c0ceb5-4b1f-4a7b-a34d-74cf20f5ca6e.png). This implies
     that this algorithm is guaranteed to generate a sequence of monotonically improving
     policies.
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: 'In practice, since the exact value of ![](img/08cd6ec4-d66e-4134-b835-13a665021708.png) in ![](img/6d906ae5-9485-497d-90be-9e3205312eb6.png)
     is hard to calculate, and it is difficult to control the step size of each update
     using the penalty term, TRPO replaces the penalty term with the constraint that
     KL divergence is bounded by a constant ![](img/e604b012-bcac-4dca-b9bf-c5d4ac226e43.png):'
+  id: totrans-184
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/9e0c56b3-1599-4ad7-8933-d3fcf07b1c67.png)'
+  id: totrans-185
   prefs: []
   type: TYPE_IMG
 - en: 'But this problem is still impractical to solve due to the large number of constraints.
     Therefore, TRPO uses a heuristic approximation that considers the average KL divergence:'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/8d508e2a-acf2-4345-aebb-e232439dcfbc.png)'
+  id: totrans-187
   prefs: []
   type: TYPE_IMG
 - en: 'This leads to the following optimization problem:'
+  id: totrans-188
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/e098bb38-864f-4fbd-ab5c-2a22a7902534.png)'
+  id: totrans-189
   prefs: []
   type: TYPE_IMG
 - en: 'In other words, by expanding ![](img/fff01813-299b-4fa6-910c-c6bdb438fbaf.png),
     we need to solve the following:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/305da5d4-b490-4301-9e4d-9b949f277cda.png)'
+  id: totrans-191
   prefs: []
   type: TYPE_IMG
 - en: 'Now, the question is: how do we optimize this problem? A straightforward idea
@@ -934,17 +1172,21 @@
     we replace ![](img/bf05b41e-458f-4cbf-ac10-dff5f4e25f56.png) with by the Q-value ![](img/b9edf522-8800-4336-8ac7-1c14d0aa0bd8.png)
     in the objective function, which only changes the objective by a constant. Besides,
     note the following:'
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/34f59a5f-7d84-44a2-b76d-f483147a3157.png)'
+  id: totrans-193
   prefs: []
   type: TYPE_IMG
 - en: 'Therefore, given a trajectory ![](img/c40ea99f-c792-44cb-bef0-1944188cfac8.png) generated
     under policy ![](img/17240a16-8143-425d-a94b-3f3029041e9b.png), we will optimize
     as follows:'
+  id: totrans-194
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/27da421f-eb3d-4630-b1e7-dec03aab4f25.png)'
+  id: totrans-195
   prefs: []
   type: TYPE_IMG
 - en: For the MuJoCo control tasks, both the policy ![](img/17f26470-538d-4521-be3f-f3e4ea1ed2b6.png)
@@ -954,9 +1196,11 @@
     problem can then be solved via the conjugate gradient algorithm. For more details,
     you can download the source code of TRPO from GitHub and check `optimizer.py`,
     which implements the conjugate gradient algorithm using TensorFlow.
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: Experiments on MuJoCo tasks
+  id: totrans-197
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -964,51 +1208,67 @@
     swimming robot in a viscous fluid, where the goal is to make it swim forward as
     fast as possible by actuating the two joints ([http://gym.openai.com/envs/Swimmer-v2/](http://gym.openai.com/envs/Swimmer-v2/)).
     The following screenshot shows how `Swimmer` looks in the MuJoCo simulator:'
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/c4e13121-31e1-4e6b-b34a-3f3d6577829c.png)'
+  id: totrans-199
   prefs: []
   type: TYPE_IMG
 - en: 'To train an agent for `Swimmer`, run the following command under the `src` folder:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-201
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: There are two arguments in `train.py`. One is `-t`, or `--task`, indicating
     the name of the MuJoCo or classic control task you want to test. Since the state
     spaces of these control tasks have relatively low dimensions compared to the Atari
     environment, it is enough to use CPU alone to train the agent by setting `CUDA_VISIBLE_DEVICES` to
     empty, which will take between 30 minutes and two hours.
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: 'During the training, you can open a new Terminal and type the following command
     to visualize the training procedure:'
+  id: totrans-203
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: 'Here, `logdir` points to the folder where the `Swimmer` log file is stored.
     Once TensorBoard is running, navigate your web browser to `localhost:6006` to
     view the TensorBoard:'
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: '![](img/61d02d5f-0705-499b-80e3-b4334d0e13af.png)'
+  id: totrans-206
   prefs: []
   type: TYPE_IMG
 - en: 'Clearly, after 200 episodes, the total reward achieved in each episode becomes
     stable, namely, around 366\. To check how `Swimmer` moves after the training,
     run the following command:'
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-208
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: You will see a funny-looking `Swimmer` object walking on the floor.
+  id: totrans-209
   prefs: []
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-210
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1019,6 +1279,7 @@
     the theory behind them, which explains why they work well in these tasks. You
     also learned how to implement DPG and TRPO using TensorFlow, and how to visualize
     the training procedure.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: In the next chapter, we will learn about how to apply reinforcement learning
@@ -1026,5 +1287,6 @@
     the **Asynchronous Actor-Critic** (**A3C**) algorithm, which is much faster than
     DQN at complex tasks, and has been widely applied as a framework in many deep
     reinforcement learning algorithms.
+  id: totrans-212
   prefs: []
   type: TYPE_NORMAL
