@@ -1114,6 +1114,7 @@
   id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 将DQN与策略梯度方法进行比较非常简单。例如，对于DQN，如果我们使用100万个回放缓冲区样本，每个新帧的训练批量大小为32个样本，那么每个过渡状态大约会在从经验回放中推送之前被使用32次。对于优先回放缓冲区（在第[8](ch012.xhtml#x1-1240008)章讨论过），这个数字可能会高得多，因为样本的选择概率不是均匀的。在策略梯度方法的情况下，从环境中获得的每个经验只能使用一次，因为我们的方法需要新鲜的数据，因此策略梯度方法的数据效率可能比基于价值的离线方法低一个数量级。
 - en: On the other hand, our A2C agent converged on Pong in 8 million frames, which
     is just eight times more than 1 million frames for basic DQN in Chapter [6](#)
     and Chapter [8](ch012.xhtml#x1-1240008). So, this shows us that policy gradient
@@ -1127,11 +1128,13 @@
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一方面，我们的A2C代理在Pong上收敛用了800万帧，这仅是第[6](#)章和第[8](ch012.xhtml#x1-1240008)章中基本DQN的100万帧的八倍。因此，这向我们展示了策略梯度方法并非完全无用；它们只是不同的，并且有其自身的特点，你在选择方法时需要考虑这些特点。如果你的环境在代理交互方面是“便宜”的（环境响应快速，内存占用低，支持并行化等），那么策略梯度方法可能是更好的选择。另一方面，如果环境“昂贵”，并且获取大量经验可能会减慢训练过程，那么基于价值的方法可能是更聪明的选择。
 - en: Adding an extra “A” to A2C
   id: totrans-160
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 向A2C中添加额外的“A”
 - en: 'From a practical point of view, communicating with several parallel environments
     is simple. We already did this in Chapter [9](ch013.xhtml#x1-1600009) and earlier
     in the current chapter, but it wasn’t explicitly stated. In the A2C agent, we
@@ -1146,14 +1149,17 @@
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 从实践角度看，与多个并行环境进行通信是简单的。我们已经在第[9](ch013.xhtml#x1-1600009)章和当前章节的前面部分做过这件事，但并没有明确说明。在A2C代理中，我们将一个Gym环境的数组传递给ExperienceSource类，该类将其切换为轮询数据收集模式。这意味着每次我们从经验源请求过渡时，该类会使用我们数组中的下一个环境（当然，会为每个环境保持状态）。这种简单的方法相当于与环境进行并行通信，但有一个小小的区别：通信不是严格意义上的并行，而是以串行的方式进行。然而，我们的经验源中的样本是打乱的。这个思路在下图中展示：
 - en: '![PIC](img/B22150_12_11.png)'
   id: totrans-162
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_12_11.png)'
 - en: 'Figure 12.11: An agent training from multiple environments in parallel'
   id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.11：一个代理在多个环境中并行训练
 - en: This method works fine and helped us to get convergence in the A2C method, but
     it is still not perfect in terms of computing resource utilization, as all the
     processing is done sequentially. Even a modest workstation nowadays has several
@@ -1169,10 +1175,12 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种方法运行良好，并帮助我们在A2C方法中达到了收敛，但在计算资源利用方面仍不完美，因为所有处理都是顺序进行的。即使是现在的一台普通工作站，也拥有多个CPU核心，可以用于计算，如训练和环境交互。另一方面，平行编程比传统范式更难，当你有一个清晰的执行流时，传统方法相对更简单。幸运的是，Python是一种非常具有表达力和灵活性的语言，拥有大量的第三方库，允许你轻松进行平行编程。我们已经在第 [9](ch013.xhtml#x1-1600009)章中看到过torch.multiprocessing库的示例，在DQN训练中我们平行化了代理的执行。但还有其他更高级的库，如ray，它允许我们平行化代码执行，隐藏底层的通信细节。
 - en: 'With regard to actor-critic parallelization, two approaches exist:'
   id: totrans-165
   prefs: []
   type: TYPE_NORMAL
+  zh: 关于演员-评论家并行化，有两种方法：
 - en: 'Data parallelism: We can have several processes, each of them communicating
     with one or more environments and providing us with transitions (s,r,a,s′). All
     those samples are gathered together in one single training process, which calculates
@@ -1183,6 +1191,7 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 数据并行性：我们可以有多个进程，每个进程与一个或多个环境进行通信，并提供过渡数据（s,r,a,s′）。所有这些样本将汇聚到一个单独的训练过程中，计算损失并执行SGD更新。然后，更新后的神经网络（NN）参数需要广播到所有其他进程，以便在未来的环境通信中使用。这个模型在图 [12.12](#x1-211008r12)中有所说明。
 - en: 'Gradients parallelism: As the goal of the training process is the calculation
     of gradients to update our NN, we can have several processes calculating gradients
     on their own training samples. Then, these gradients can be summed together to
@@ -1193,24 +1202,29 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: 梯度并行性：由于训练过程的目标是计算梯度来更新我们的神经网络（NN），我们可以有多个进程在各自的训练样本上计算梯度。然后，这些梯度可以汇总在一个进程中执行SGD更新。当然，更新后的NN权重也必须传播回所有工作进程，以保持数据的一致性。这在图 [12.13](#x1-211009r13)中有所说明。
 - en: '![PIC](img/B22150_12_12.png)'
   id: totrans-168
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_12_12.png)'
 - en: 'Figure 12.12: The first approach to actor-critic parallelism, based on distributed
     training samples being gathered'
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.12：第一种演员-评论家并行化方法，基于分布式训练样本的汇集
 - en: '![PIC](img/B22150_12_13.png)'
   id: totrans-170
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_12_13.png)'
 - en: 'Figure 12.13: The second approach to parallelism, gathering gradients for the
     model'
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.13：第二种并行化方法，为模型汇集梯度
 - en: The difference between the two methods might not look very significant from
     the diagrams, but you need to be aware of the computation cost. The heaviest operation
     in A2C optimization is the training process, which consists of loss calculation
@@ -1223,6 +1237,7 @@
   id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 这两种方法之间的差异从图表上看可能并不十分显著，但你需要意识到计算成本的差异。A2C优化中的最重操作是训练过程，它包括从数据样本中计算损失（前向传播）以及根据该损失计算梯度。SGD优化步骤相对轻量——基本上只是将缩放后的梯度加到神经网络（NN）的权重上。通过将第二种方法（梯度并行）中的损失计算和梯度计算从中央处理过程移出，我们消除了主要的潜在瓶颈，并使整个过程变得更加可扩展。
 - en: In practice, the choice of the method mainly depends on your resources and your
     goals. If you have one single optimization problem and lots of distributed computation
     resources, such as a couple of dozen GPUs spread over several machines in the
@@ -1231,6 +1246,7 @@
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 实际上，选择哪种方法主要取决于你的资源和目标。如果你有一个单一的优化问题，并且拥有大量分布式计算资源，比如在网络中分布的数十个GPU，那么梯度并行将是加速训练的最佳方法。
 - en: However, in the case of one single GPU, both methods will provide a similar
     performance, but the first approach is generally simpler to implement, as you
     don’t need to deal with low-level gradient values. In this chapter, we will compare
@@ -1239,11 +1255,13 @@
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 然而，如果只有一个GPU，两种方法会提供类似的性能，但第一种方法通常更易于实现，因为你无需处理低级别的梯度值。在本章中，我们将通过我们最喜欢的Pong游戏比较这两种方法，看看它们的差异，并探索PyTorch的多进程能力。
 - en: A3C with data parallelism
   id: totrans-175
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: A3C与数据并行
 - en: The first version of A3C parallelization that we will check (which was outlined
     in Figure [12.12](#x1-211008r12)) has both one main process that carries out training
     and several child processes communicating with environments and gathering experience
@@ -1251,6 +1269,7 @@
   id: totrans-176
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将检查的A3C并行化的第一个版本（如图[12.12](#x1-211008r12)所示）有一个主要进程负责执行训练，多个子进程与环境进行通信并收集经验进行训练。
 - en: In fact, we already implemented this version in Chapter [9](ch013.xhtml#x1-1600009)
     when we ran several agents in subprocesses when we trained the DQN model (then
     we got a speed-up of 27% in terms of FPS). In this section, I’m not going to reimplement
@@ -1259,6 +1278,7 @@
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 事实上，我们在第[9章](ch013.xhtml#x1-1600009)中已经实现了这个版本，当时我们在子进程中运行多个代理，训练DQN模型（那时我们在FPS方面获得了27%的加速）。在这一部分，我不会用A3C方法重新实现相同的方法，而是想展示“库的力量”。
 - en: 'We already briefly mentioned the class gym.vector.SyncVectorEnv from Gymnasium
     (it exists only in the Farama fork, not in the original OpenAI Gym) and the PTAN
     experience source, which supports “vectorized” environments: VectorExperienceSourceFirstLast.
@@ -1269,36 +1289,44 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们已经简要提到过Gymnasium中的类`gym.vector.SyncVectorEnv`（它仅存在于Farama的分支中，而不在原始的OpenAI
+    Gym中）和PTAN经验源，它支持“向量化”环境：`VectorExperienceSourceFirstLast`。类`SyncVectorEnv`按顺序处理封装的环境，但有一个替代类`AsyncVectorEnv`，它使用`mp.multiprocessing`处理子环境。所以，为了获得A2C方法的数据并行版本，我们只需要将`SyncVectorEnv`替换为`AsyncVectorEnv`，这样就完成了。
 - en: The code in Chapter12/02_pong_a2c.py already supports this replacement, which
     is done by passing the --use-async command-line option.
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 第12章的代码（Chapter12/02_pong_a2c.py）已经支持这个替换操作，方法是传递`--use-async`命令行选项。
 - en: Results
   id: totrans-180
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果
 - en: 'The asynchronous version with 50 environments shows a performance of 2000 FPS,
     which is a 2x improvement over the sequential version. The following charts compare
     the performance and reward dynamics of these two versions:'
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 异步版本在50个环境下展示了2000 FPS的性能，比顺序版本提高了2倍。以下图表比较了这两个版本的性能和奖励动态：
 - en: '![PIC](img/B22150_12_14.png)'
   id: totrans-182
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_12_14.png)'
 - en: 'Figure 12.14: Comparison of A2C and A3C in terms of reward (left) and speed
     (right)'
   id: totrans-183
   prefs: []
   type: TYPE_NORMAL
+  zh: 图12.14：A2C和A3C在奖励（左）和速度（右）上的比较
 - en: A3C with gradient parallelism
   id: totrans-184
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: A3C与梯度并行
 - en: The next approach that we will consider to parallelize A2C implementation will
     have several child processes, but instead of feeding training data to the central
     training loop, they will calculate the gradients using their local training data,
@@ -1308,6 +1336,7 @@
   id: totrans-185
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将考虑一种并行化A2C实现的方法，它将有多个子进程，但它们不是将训练数据传递给中央训练循环，而是使用它们本地的训练数据计算梯度，并将这些梯度发送给中央主进程。这个主进程负责将这些梯度合并（基本上就是求和）并对共享网络进行SGD更新。
 - en: The difference might look minor, but this approach is much more scalable, especially
     if you have several powerful nodes with multiple GPUs connected to the network.
     In this case, the central process in the data-parallel model quickly becomes a
@@ -1318,20 +1347,25 @@
   id: totrans-186
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个差异看起来可能微不足道，但这种方法的可扩展性更强，特别是当你有多个强大的节点并且这些节点通过多个 GPU 连接到网络时。在这种情况下，数据并行模型中的中央处理过程很快就会成为瓶颈，因为损失计算和反向传播是计算密集型的。梯度并行化可以将负载分配到多个
+    GPU 上，在中央位置仅执行相对简单的梯度组合操作。
 - en: Implementation
   id: totrans-187
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 实现
 - en: The complete example is in the Chapter12/03_a3c_grad.py file, and it uses the
     same Chapter12/lib/common.py module that we’ve already seen.
   id: totrans-188
   prefs: []
   type: TYPE_NORMAL
+  zh: 完整的示例在 Chapter12/03_a3c_grad.py 文件中，并且使用我们已经看到的 Chapter12/lib/common.py 模块。
 - en: 'As usual, we first define the hyperparameters:'
   id: totrans-189
   prefs: []
   type: TYPE_NORMAL
+  zh: 和往常一样，我们首先定义超参数：
 - en: '[PRE23]'
   id: totrans-190
   prefs: []
@@ -1350,11 +1384,16 @@
   id: totrans-191
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些与之前的示例大致相同，唯一的区别是 BATCH_SIZE 被两个参数取代：GRAD_BATCH 和 TRAIN_BATCH。GRAD_BATCH 的值定义了每个子进程用于计算损失并获取梯度值的批次大小。第二个参数
+    TRAIN_BATCH 指定了每个 SGD 迭代中将结合来自子进程的多少个梯度批次。每个由子进程产生的条目具有与我们的网络参数相同的形状，我们将其 TRAIN_BATCH
+    的值相加。因此，对于每一步优化，我们使用 TRAIN_BATCH * GRAD_BATCH 个训练样本。由于损失计算和反向传播是相当繁重的操作，我们使用较大的
+    GRAD_BATCH 来提高它们的效率。
 - en: Due to this large batch, we should keep TRAIN_BATCH relatively low to keep our
     network update on policy.
   id: totrans-192
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于这个大批次，我们应该保持相对较低的 TRAIN_BATCH，以保持网络的策略更新。
 - en: 'Now we have two functions – make_env(), which is used to create a wrapped Pong
     environment, and grads_func(), which is much more complicated and implements most
     of the training logic we normally do in the training loop. As a compensation,
@@ -1362,6 +1401,7 @@
   id: totrans-193
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们有两个函数——make_env()，用于创建一个封装的 Pong 环境，以及 grads_func()，它更加复杂，实现了我们通常在训练循环中执行的大部分训练逻辑。作为补偿，主进程中的训练循环变得几乎是微不足道的：
 - en: '[PRE24]'
   id: totrans-194
   prefs: []
@@ -1372,27 +1412,32 @@
   id: totrans-195
   prefs: []
   type: TYPE_NORMAL
+  zh: 在创建子进程时，我们将几个参数传递给 grads_func() 函数：
 - en: The name of the process, which is used to create the TensorBoard writer. In
     this example, every child process writes its own TensorBoard dataset.
   id: totrans-196
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于创建 TensorBoard 写入器的进程名称。在这个示例中，每个子进程都写入自己的 TensorBoard 数据集。
 - en: The shared NN.
   id: totrans-197
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 共享神经网络。
 - en: A torch.device instance, specifying the computation device.
   id: totrans-198
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个 torch.device 实例，用于指定计算设备。
 - en: The queue used to deliver the calculated gradients to the central process.
   id: totrans-199
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用于将计算出的梯度传递给中央处理过程的队列。
 - en: 'Our child process function looks very similar to the main training loop in
     the data-parallel version, which is not surprising, as the responsibilities of
     our child process increased. However, instead of asking the optimizer to update
@@ -1401,6 +1446,7 @@
   id: totrans-200
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的子进程函数与数据并行版本中的主训练循环非常相似，这并不令人惊讶，因为我们的子进程承担的责任增加了。然而，我们并没有要求优化器更新网络，而是收集梯度并将其发送到队列中。其余的代码几乎没有变化：
 - en: '[PRE25]'
   id: totrans-201
   prefs: []
@@ -1411,11 +1457,13 @@
   id: totrans-202
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，我们已经收集了包含转换的批次并处理了回合结束的奖励。
 - en: 'In the next part of the function, we calculate the combined loss from the training
     data and perform backpropagation of the loss:'
   id: totrans-203
   prefs: []
   type: TYPE_NORMAL
+  zh: 在函数的下一部分，我们从训练数据中计算组合损失并执行损失的反向传播：
 - en: '[PRE26]'
   id: totrans-204
   prefs: []
@@ -1426,6 +1474,7 @@
   id: totrans-205
   prefs: []
   type: TYPE_NORMAL
+  zh: 在接下来的代码中，我们将传送在训练过程中要监视的中间值到 TensorBoard：
 - en: '[PRE27]'
   id: totrans-206
   prefs: []
@@ -1440,6 +1489,7 @@
   id: totrans-207
   prefs: []
   type: TYPE_NORMAL
+  zh: 在循环结束时，我们需要剪裁梯度，并将其从网络的参数中提取到一个单独的缓冲区中（以防它们被下次循环的迭代损坏）。在这里，我们实际上将梯度存储在每个网络参数的`tensor.grad`字段中。这可以在不需要与其他工作进程同步的情况下完成，因为我们的网络参数是共享的，但梯度是由每个进程本地分配的：
 - en: '[PRE28]'
   id: totrans-208
   prefs: []
@@ -1450,11 +1500,13 @@
   id: totrans-209
   prefs: []
   type: TYPE_NORMAL
+  zh: '`grads_func`中的最后一行将None放入队列，表示该子进程已达到游戏解决状态，训练应当停止。'
 - en: 'The main process starts with the creation of the network and sharing of its
     weights:'
   id: totrans-210
   prefs: []
   type: TYPE_NORMAL
+  zh: 主进程从创建网络并共享其权重开始：
 - en: '[PRE29]'
   id: totrans-211
   prefs: []
@@ -1476,11 +1528,13 @@
   id: totrans-212
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，与前一部分一样，我们需要为`torch.multiprocessing`设置启动方法，并限制OpenMP启动的线程数量。这是通过设置环境变量`OMP_NUM_THREADS`来完成的，该变量告诉OpenMP库可以启动的线程数。OpenMP（[https://www.openmp.org/](https://www.openmp.org/)）被Gym和OpenCV库广泛使用，以在多核系统上提供加速，大多数情况下这是好事。默认情况下，使用OpenMP的进程会为系统中的每个核心启动一个线程。但在我们的案例中，OpenMP的效果正好相反：由于我们正在实现自己的并行化，通过启动多个进程，额外的线程会通过频繁的上下文切换给核心带来负担，从而对性能产生负面影响。为避免这种情况，我们明确将线程数限制为一个线程。如果你愿意，可以自己尝试调整这个参数。在我的系统上，没有设置该环境变量时，我体验到了3-4倍的性能下降。
 - en: 'Then, we create the communication queue and spawn the required count of child
     processes:'
   id: totrans-213
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，我们创建通信队列并生成所需数量的子进程：
 - en: '[PRE30]'
   id: totrans-214
   prefs: []
@@ -1490,6 +1544,7 @@
   id: totrans-215
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们可以进入训练循环：
 - en: '[PRE31]'
   id: totrans-216
   prefs: []
@@ -1503,10 +1558,12 @@
   id: totrans-217
   prefs: []
   type: TYPE_NORMAL
+  zh: 与数据并行版本的A3C相比，主要的区别在于训练循环，这里更加简单，因为子进程已经为我们完成了所有繁重的计算。在循环开始时，我们处理当某个进程已达到所需的平均奖励时的情况（此时队列中为None）。在这种情况下，我们直接退出循环以停止训练。
 - en: 'We sum gradients together for all the parameters in our network:'
   id: totrans-218
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将所有网络参数的梯度加总在一起：
 - en: '[PRE32]'
   id: totrans-219
   prefs: []
@@ -1520,6 +1577,7 @@
   id: totrans-220
   prefs: []
   type: TYPE_NORMAL
+  zh: 当我们累积了足够的梯度片段后，我们将梯度总和转换为PyTorch的FloatTensor，并将其赋值给网络参数的`grad`字段。为了对不同子进程的梯度进行平均，我们会为每个获取到的`TRAIN_BATCH`梯度调用优化器的step()函数。对于中间步骤，我们仅仅将对应的梯度加在一起：
 - en: '[PRE33]'
   id: totrans-221
   prefs: []
@@ -1530,11 +1588,13 @@
   id: totrans-222
   prefs: []
   type: TYPE_NORMAL
+  zh: 之后，我们所需要做的就是调用优化器的step()方法，通过累积的梯度更新网络参数。
 - en: 'On the exit from the training loop, we stop all child processes to make sure
     that we terminated them, even if Ctrl + C was pressed to stop the optimization:'
   id: totrans-223
   prefs: []
   type: TYPE_NORMAL
+  zh: 当退出训练循环时，我们停止所有子进程，以确保它们已被终止，即使按下Ctrl + C停止优化：
 - en: '[PRE34]'
   id: totrans-224
   prefs: []
@@ -1544,11 +1604,13 @@
   id: totrans-225
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个步骤是为了防止僵尸进程占用GPU资源。
 - en: Results
   id: totrans-226
   prefs:
   - PREF_H3
   type: TYPE_NORMAL
+  zh: 结果
 - en: This example can be started the same way as the previous example, and after
     a while, it should start displaying the speed and mean reward. However, you need
     to be aware that displayed information is local for every child process, which
@@ -1558,6 +1620,8 @@
   id: totrans-227
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个示例可以像之前的示例一样启动，过一段时间后，应该开始显示速度和平均奖励。然而，你需要注意，显示的信息对于每个子进程都是局部的，这意味着速度、完成的游戏数量和帧数需要乘以进程的数量。我的基准测试显示每个子进程的速度大约是500-600
+    FPS，总计大约是2,000-2,400 FPS。
 - en: 'Convergence dynamics are also very similar to the previous version. The total
     number of observations is about 8…10 million, which requires about 1.5 hours to
     complete. The reward chart on the left shows individual processes, but the speed
@@ -1566,20 +1630,24 @@
   id: totrans-228
   prefs: []
   type: TYPE_NORMAL
+  zh: 收敛动态与先前版本非常相似。总的观察次数大约为800万到1000万，完成这些需要大约1.5小时。左侧的奖励图显示了各个进程，右侧的速度图显示了所有进程的总和。如你所见，梯度并行比数据并行略微提高了性能：
 - en: '![PIC](img/B22150_12_15.png)'
   id: totrans-229
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/B22150_12_15.png)'
 - en: 'Figure 12.15: Comparison of A2C and A3C in terms of reward (left) and speed
     (right)'
   id: totrans-230
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 12.15：A2C和A3C在奖励（左）和速度（右）方面的比较
 - en: Summary
   id: totrans-231
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: 'In this chapter, you learned about one of the most widely used methods in deep
     RL: A2C, which wisely combines the policy gradient update with the value of the
     state approximation. We analyzed the effect of the baseline on the statistics
@@ -1593,17 +1661,20 @@
   id: totrans-232
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，你学习了深度强化学习中最广泛使用的方法之一：A2C，该方法巧妙地将策略梯度更新与状态近似值结合起来。我们分析了基准（baseline）对统计量和梯度收敛的影响。然后，我们检查了基准思想的扩展：A2C，其中一个独立的网络头为我们提供当前状态的基准。此外，我们讨论了为什么对于策略梯度方法来说，从多个环境收集训练数据非常重要，因为它们是基于策略的（on-policy）。我们还实现了两种不同的A3C方法，以实现训练过程的并行化和稳定化。并行化将在本书中再次出现，我们将在讨论黑盒方法时提到（第[17](ch021.xhtml#x1-31100017)章）。
 - en: In the next two chapters, we will take a look at practical problems that can
     be solved using policy gradient methods, which will wrap up the policy gradient
     methods part of the book.
   id: totrans-233
   prefs: []
   type: TYPE_NORMAL
+  zh: 在接下来的两章中，我们将探讨使用策略梯度方法可以解决的实际问题，这也将总结本书关于策略梯度方法的部分内容。
 - en: Join our community on Discord
   id: totrans-234
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 加入我们在Discord上的社区
 - en: Read this book alongside other users, Deep Learning experts, and the author
     himself. Ask questions, provide solutions to other readers, chat with the author
     via Ask Me Anything sessions, and much more. Scan the QR code or visit the link
@@ -1611,7 +1682,9 @@
   id: totrans-235
   prefs: []
   type: TYPE_NORMAL
+  zh: 与其他用户、深度学习专家以及作者本人一起阅读本书。提问，向其他读者提供解决方案，通过“问我任何问题”（Ask Me Anything）环节与作者交流，等等。扫描二维码或访问链接加入社区。[https://packt.link/rl](https://packt.link/rl)
 - en: '![PIC](img/file1.png)'
   id: totrans-236
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file1.png)'
