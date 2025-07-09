@@ -1,0 +1,1137 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Handwritten Digits Classification Using ConvNets</h1>
+                </header>
+            
+            <article>
+                
+<p>Welcome to this chapter on using <strong>convolution neural networks</strong> (<strong>ConvNets</strong>) for the classification of handwritten digits. In <a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression,</em> we built a simple neural network for classifying handwritten digits. This was 87% accurate, but we were not happy with its performance. In this chapter, we will understand what convolution is and build a ConvNet for classifying the handwritten digits to help the restaurant chain become more accurate in sending text messages to the right person. If you have not been through <a href="https://cdp.packtpub.com/python_deep_learning_projects/wp-admin/post.php?post=31&amp;action=edit#post_25" target="_blank">Chapter 2</a><span>, </span><em>Training NN for Prediction Using Regression</em>, please go through it once so that you can get an understanding of the use case.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Convolution</li>
+<li>Pooling</li>
+<li>Dropout</li>
+<li>Training the model</li>
+<li>Testing the model</li>
+<li>Building deeper models</li>
+</ul>
+<p><span>It would be better if you implement the code snippets as you go through this chapter, either in a </span><span>Jupyter</span><span> Notebook or any source code editor</span><span>. This will make it easier for you to follow along as well as understand how the different sections of the code work.</span></p>
+<p>All of the Python files and the Jupyter Notebook files for this chapter can be found at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter08" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter08</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Code implementation</h1>
+                </header>
+            
+            <article>
+                
+<p>In this exercise, we will be using the Keras deep learning library, which is a high-level neural network API capable of running on top of TensorFlow, Theano, and CNTK.</p>
+<div class="packt_tip">Know the code! We will not spend time understanding how Keras works, but if you are interested, refer to this easy-to-understand official documentation from Keras at <a href="https://keras.io/">https://keras.io/</a>.<a href="https://keras.io/"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Importing all of the dependencies</h1>
+                </header>
+            
+            <article>
+                
+<p>We will be using the <kbd>numpy</kbd>, <kbd>matplotlib</kbd>, <kbd>keras</kbd>, <kbd>scipy</kbd>, and <kbd>tensorflow</kbd> packages in this exercise. Here, TensorFlow is used as the backend for Keras. You can install these packages with <kbd>pip</kbd>. For the MNIST data, we will be using the dataset available in the <kbd>keras</kbd> module with a simple <kbd>import</kbd>:</p>
+<pre>import numpy as np</pre>
+<p>It is important that you set <kbd>seed</kbd> for reproducibility:</p>
+<pre><strong># set seed for reproducibility</strong><br/>seed_val = 9000<br/>np.random.seed(seed_val)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Exploring the data</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's import the <kbd>mnist</kbd> module that's available in <kbd>keras</kbd> with the following code:</p>
+<pre>from keras.datasets import mnist</pre>
+<p>Then, unpack the <kbd>mnist</kbd> train and test images with the following code:</p>
+<pre><strong># unpack mnist data</strong><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()</pre>
+<p>Now that the data has been imported, let's explore these digits:</p>
+<pre>print('Size of the training_set: ', X_train.shape)<br/>print('Size of the test_set: ', X_test.shape)<br/>print('Shape of each image: ', X_train[0].shape)<br/>print('Total number of classes: ', len(np.unique(y_train)))<br/>print('Unique class labels: ', np.unique(y_train))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6f46b58b-f424-4863-a117-e6ee356075d7.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.1: Printout information of the data</div>
+<p>From the preceding screenshot, we can see that we have <kbd>60000</kbd> train images, <kbd>10000</kbd> test images with each image being <kbd>28</kbd>*<kbd>28</kbd> in size, and a total of <kbd>10</kbd> predictable classes.</p>
+<p>Now, let's plot <kbd>9</kbd> handwritten digits. Before that, we will need to import <kbd>matplotlib</kbd> for plotting:</p>
+<pre>import matplotlib.pyplot as plt<br/><strong># Plot of 9 random images</strong><br/>for i in range(0, 9):<br/>    plt.subplot(331+i) <strong># plot of 3 rows and 3 columns</strong><br/>    plt.axis('off') <strong># turn off axis</strong><br/>    plt.imshow(X_train[i], cmap='gray') <strong># gray scale</strong></pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/86089bae-b734-4ffe-b382-c4e84ea7b84e.png" style="width:16.92em;height:12.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.2: Visualizing MNIST digits</div>
+<p>Print out the maximum and minimum pixel value of the pixels in the <kbd>training_set</kbd>:</p>
+<pre><strong># maximum and minimum pixel values</strong><br/>print('Maximum pixel value in the training_set: ', np.max(X_train))<br/>print('Minimum pixel value in the training_set: ', np.min(X_train))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/93e4e3f7-85d4-48ed-9cba-d22009aecff7.png" style="width:33.25em;height:3.08em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.3: Printout of the maximum and minimum pixel value in the data</div>
+<p>We can see that the maximum and minimum pixel values in the training set are <kbd>255</kbd> and <kbd>0</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the hyperparameters</h1>
+                </header>
+            
+            <article>
+                
+<p>The following are some of the hyperparameters that we will be using throughout our code. These are totally configurable:</p>
+<pre><strong># Number of epochs</strong><br/>epochs = 20<br/><br/><strong># Batchsize</strong><br/>batch_size = 128<br/><br/><strong># Optimizer for the generator<br/></strong>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/><br/><strong># Shape of the input image</strong><br/>input_shape = (28,28,1)</pre>
+<div>
+<p>If you look back at <a href="https://cdp.packtpub.com/python_deep_learning_projects/wp-admin/post.php?post=31&amp;action=edit#post_25" target="_blank">Chapter 2</a><span>, </span><em>Training NN for Prediction Using Regression</em>, you'll see that the <kbd>optimizer</kbd> used there was <kbd>Adam</kbd>. Therefore, we will import the <kbd>Adam</kbd> optimizer from the <kbd>keras</kbd> module and <span>set its learning rate, as shown in the preceding code. For most cases that will follow, we will be training for <kbd>20</kbd> <kbd>epochs</kbd> for ease of comparison.</span></p>
+<div class="packt_infobox">To learn more about the <kbd>optimizers</kbd> and their APIs in Keras, visit <a href="https://keras.io/optimizers/">https://keras.io/optimizers/</a>.<a href="https://keras.io/optimizers/"/></div>
+</div>
+<div class="packt_tip">Experiment with different learning rates, optimizers, and batch sizes to see how these factors affect the quality of your model. If you get better results, show this to the deep learning community.</div>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building and training a simple deep neural network</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have loaded the data into memory, we need to build a simple neural network model to predict the MNIST digits. We will use the same architecture we used in <a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression</em>.</p>
+<p>We will be building a <kbd>Sequential</kbd> model. So, let's import it from Keras <span>and initialize it </span>with the following code:</p>
+<pre>from keras.models import Sequential<br/>model = Sequential()</pre>
+<div class="packt_tip packt_infobox">To learn more about the Keras Model API, visit <a href="https://keras.io/models/model/">https://keras.io/models/model/</a>.</div>
+<p>The next thing that we need to do is define the <kbd>Dense</kbd>/Perceptron layer. In Keras, this can be done by importing the <kbd>Dense</kbd> layer, as follows:</p>
+<pre>from keras.layers import Dense</pre>
+<p>Then, we need to add the <kbd>Dense</kbd> layer to the <kbd>Sequential</kbd> model as follows:</p>
+<pre>model.add(Dense(300, input_shape=(784,), activation = 'relu'))</pre>
+<div class="packt_infobox">To learn more about the Keras <kbd>Dense</kbd> API call, visit <a href="https://keras.io/layers/core/">https://keras.io/layers/core/</a>.<a href="https://keras.io/layers/core/"/></div>
+<p>The <kbd>add</kbd> command performs the job of appending a layer to the <kbd>Sequential</kbd> model, in this case, <kbd>Dense</kbd>.</p>
+<p>In the <kbd>Dense</kbd> layer in the preceding code, we have defined the number of neurons in the first hidden layer, which is <kbd>300</kbd>. We have also defined the <span><kbd>input_shape</kbd> </span>parameter as being equal to <kbd>(784,)</kbd> to indicate to the model that it will be accepting input arrays of the shape <kbd>(784,)</kbd>. This means that the input layer will have <kbd>784</kbd> neurons.</p>
+<p>The type of activation function that needs to be applied to the result can be defined with the <kbd>activation</kbd> parameter. In this case, this is <kbd>relu</kbd>.</p>
+<p>Add another <kbd>Dense</kbd> layer of <kbd>300</kbd> neurons by using the following code:</p>
+<pre>model.add(Dense(300,  activation='relu'))</pre>
+<p>And the final <kbd>Dense</kbd> layer with the following code:</p>
+<pre>model.add(Dense(10,  activation='softmax'))</pre>
+<p>Here, the final layer has <kbd>10</kbd> neurons as we need it to predict scores for <kbd>10</kbd> classes. The <kbd>activation</kbd> function that has been chosen here is <kbd>softmax</kbd> so that we can limit the scores between 0 and 1, and the sum of scores to 1.</p>
+<p>Compiling the model in Keras is super-easy and can be done with following code:</p>
+<pre><strong># compile the model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer=optimizer , metrics = ['accuracy'])</pre>
+<p>All you need to do to compile the model is call the <kbd>compile</kbd> method of the model and specify the <kbd>loss</kbd>, <kbd>optimizer</kbd>, and <kbd>metrics</kbd> parameters, which in this case are <kbd>sparse_categorical_crossentropy</kbd>, <kbd>Adam</kbd>, and <kbd>['accuracy']</kbd>.</p>
+<div class="packt_infobox"><span>To learn more about the Keras Model's <kbd>compile</kbd> method, visit </span><a href="https://keras.io/models/model/">https://keras.io/models/model/</a>.<a href="https://keras.io/models/model/"/></div>
+<p>The metrics that need to be monitored during this learning process must be specified as a list to the <kbd>metrics</kbd> parameter of the <kbd>compile</kbd> method.</p>
+<p>Print out the summary of the model with the following code:</p>
+<pre><strong># print model summary</strong><br/>model.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/d0f371cb-8471-40ad-8f5e-77dc01bf564d.png" style="width:40.67em;height:16.08em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.4: Summary of the multilayer Perceptron model</div>
+<p>Notice that this model has <kbd>328,810</kbd> trainable parameters, which is reasonable.</p>
+<p>Now, split the train data into train and validation data by using the <kbd>train_test_split</kbd> function that we imported from <kbd>sklearn</kbd>:</p>
+<pre>from sklearn.model_selection import train_test_split<br/><br/><strong># create train and validation data</strong><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, stratify = y_train, test_size = 0.08333, random_state=42)<br/><br/>X_train = X_train.reshape(-1, 784)<br/>X_val = X_val.reshape(-1, 784)<br/>X_test = X_test.reshape(-1, 784)<br/><br/>print('Training Examples', X_train.shape[0])<br/>print('Validation Examples', X_val.shape[0])<br/>print('Test Examples', X_test.shape[0])</pre>
+<p>We have split the data so that we end up with 55,000 training examples and 5,000 validation examples.</p>
+<p>You will also see that we have reshaped the arrays so that each image is of shape <kbd>(784,)</kbd>. This is because we have defined the model to accept images/arrays of shape <kbd>(784,)</kbd>.</p>
+<p><span>Like we did in <a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression</em>, we will now train our model on 55,000 training examples, validate on 5,000 examples, and test on 10,000 examples.</span></p>
+<p> </p>
+<p>Assigning the fit to a variable stores relevant information inside it, such as train and validation loss and accuracy at each <kbd>epoch</kbd>, which can then be used for plotting the learning process.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting a model</h1>
+                </header>
+            
+            <article>
+                
+<p>To fit a model in Keras, along with train digits and train labels, call the <kbd>fit</kbd> method of the model with the following parameters:</p>
+<ul>
+<li><kbd>epochs</kbd>: The number of epochs</li>
+<li><kbd>batch_size</kbd>: The number of images in each batch</li>
+<li><kbd>validation_data</kbd>: The tuple of validation images and validation labels</li>
+</ul>
+<p>Look at the <em>Defining the hyperparameters</em> section of the chapter for the defined values of <kbd>epochs</kbd> and <kbd>batch_size</kbd>: </p>
+<pre><strong># fit the model</strong><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size, validation_data=(X_val, y_val))</pre>
+<p class="mce-root">The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/d4bbaf1a-b09d-4eb6-9936-4013b7c625de.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/60b81072-408b-47a5-a4fc-2f2b7bd14c23.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.5: Metrics printed out during the training of MLP</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating a model</h1>
+                </header>
+            
+            <article>
+                
+<p>To evaluate the model on test data, you can call the <kbd>evaluate</kbd> method of the <kbd>model</kbd> by feeding the test images and test labels:</p>
+<pre><strong># evaluate the model</strong><br/>loss, acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="mce-root CDPAlignCenter CDPAlign"><img src="assets/eb0eebef-2954-4f4d-a944-9046e9d05718.png" style="width:39.33em;height:4.83em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.6: Printout of <span>the evaluation of </span>MLP</div>
+<p>From the validation and test accuracy, we can see that after 20 epochs of training, we have reached the same level of accuracy as we did in <a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression,</em> but with very few lines of code.</p>
+<p>Now, let's define a function to plot the train and validation loss and accuracy that we have stored in the <kbd>history</kbd> variable:</p>
+<pre>import matplotlib.pyplot as plt<br/><br/>def <strong>loss_plot(history)</strong>:<br/>    train_acc = history.history['acc']<br/>    val_acc = history.history['val_acc']<br/><br/>    plt.figure(figsize=(9,5))<br/>    plt.plot(np.arange(1,21),train_acc, marker = 'D', label = 'Training Accuracy')<br/>    plt.plot(np.arange(1,21),val_acc, marker = 'o', label = 'Validation Accuracy')<br/>    plt.xlabel('Epochs')<br/>    plt.ylabel('Accuracy')<br/>    plt.title('Train/Validation Accuracy')<br/>    plt.legend()<br/>    plt.margins(0.02)<br/>    plt.show()<br/><br/>    train_loss = history.history['loss']<br/>    val_loss = history.history['val_loss']<br/><br/>    plt.figure(figsize=(9,5))<br/>    plt.plot(np.arange(1,21),train_loss, marker = 'D', label = 'Training Loss')<br/>    plt.plot(np.arange(1,21),val_loss, marker = 'o', label = 'Validation Loss')<br/>    plt.xlabel('Epochs')<br/>    plt.ylabel('Loss')<br/>    plt.title('Train/Validation Loss')<br/>    plt.legend()<br/>    plt.margins(0.02)<br/>    plt.show()<br/>    <br/><strong># plot training loss</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/9f2661fe-de56-4d6f-af06-92ef81b6086d.png" style="width:29.83em;height:35.50em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 8.7: MLP loss/accuracy plot during training</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">MLP – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements training and evaluation of a simple MLP:</p>
+<pre>"""This module implements a simple multi layer perceptron in keras."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense<br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 20<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1, 784)<br/>X_val = X_val.reshape(-1, 784)<br/>X_test = X_test.reshape(-1, 784)<br/><br/>model = Sequential()<br/>model.add(Dense(300, input_shape=(784,), activation = 'relu'))<br/>model.add(Dense(300, activation='relu'))<br/>model.add(Dense(10, activation='softmax'))<br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer=optimizer,<br/>              metrics = ['accuracy'])<br/><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size,<br/>                    validation_data=(X_val, y_val))<br/><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution</h1>
+                </header>
+            
+            <article>
+                
+<p>Convolution can be defined as the process of striding a small kernel/filter/array over a target array and obtaining the sum of element-wise multiplication between the kernel and a subset of equal size of the target array at that location.</p>
+<p>Consider the following example:</p>
+<pre>array = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])<br/>kernel = np.array([-1, 1, 0])</pre>
+<p>Here, you have a target <kbd>array</kbd> of length 10 and a <kbd>kernel</kbd> of length 3.</p>
+<p>When you start the convolution, implement the following steps:</p>
+<ol>
+<li>The <kbd>kernel</kbd> will be multiplied with the subset of the target <kbd>array</kbd> within indices 0 through 2. This will be between [-1,1,0] (kernel) and [0,1,0] (from index 0 through to 2 of the target array). The result of this element-wise multiplication will then be summed up to obtain what is called the result of convolution.</li>
+<li>The <kbd>kernel</kbd> will then be stridden by 1 unit and then multiplied with the subset of the target <kbd>array</kbd> within the indices 1 through 3, just like in <em>Step 1</em>, and the result is obtained.</li>
+<li><em>Step 2</em> is repeated until a subset equal to the length of the <kbd>kernel</kbd> is not possible at a new stride location.</li>
+</ol>
+<p>The result of convolution at each stride is stored in an <kbd>array</kbd>. This <kbd>array</kbd> that's holding the result of the convolution is called the feature map. The length of the 1-D feature map (with step/stride of 1) is equal to the difference in length of the <kbd>kernel</kbd> and the target <kbd>array</kbd> plus 1.</p>
+<p>Only in this case, we need to take the following equation into account:</p>
+<p class="CDPAlignCenter CDPAlign"><em>length of the feature map = length of the target array - length of the kernel + 1</em></p>
+<p>Here is a code snippet implementing 1-D convolution:</p>
+<pre>array = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])<br/>kernel = np.array([-1, 1, 0])<br/><br/><strong># empty feature map</strong><br/>conv_result = np.zeros(array.shape[0] - kernel.shape[0] +1).astype(int)<br/><br/>for i in range(array.shape[0] - kernel.shape[0] +1):<br/>    <strong># convolving</strong><br/>    conv_result[i] = (kernel * array[i:i+3]).sum()<br/>    print(kernel, '*', array[i:i+3], '=', conv_result[i])<br/>    <br/>print('Feature Map :', conv_result)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/19786906-1ec7-4677-8f4d-83fabcddbfd4.png" style="width:25.50em;height:12.17em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.8: Printout of example feature map</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution in Keras</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">Now that you have an understanding of how convolution works, let's put it into use and build a CNN classifier on MNIST digits.</p>
+<p>For this, import the <kbd>Conv2D</kbd> API from the <kbd>layers</kbd> module of Keras. You can do this with the following code:</p>
+<pre>from keras.layers import Conv2D</pre>
+<p>Since the convolution will be defined to accept images of shape <kbd>28</kbd>*<kbd>28</kbd>*<kbd>1</kbd>, we need to reshape all the images to be of <kbd>28</kbd>*<kbd>28</kbd>*<kbd>1</kbd>:</p>
+<pre><strong># reshape data</strong> <br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>print('Train data shape:', X_train.shape)<br/>print('Val data shape:', X_val.shape)<br/>print('Test data shape:', X_test.shape)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b66504ca-6c9c-4ed8-8308-8e13e21102db.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.9: Shape of data after reshaping</div>
+<p>To build the <kbd>model</kbd>, just like we did previously, we need to initialize the <kbd>model</kbd> as <kbd>Sequential</kbd>:</p>
+<pre>model = Sequential()</pre>
+<p>Now, add the <kbd>Conv2D</kbd> layer to the <kbd>model</kbd> with the following code:</p>
+<pre>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape, activation = 'relu'))</pre>
+<p>In the <kbd>Conv2D</kbd> API, we have defined the following parameters:</p>
+<ul>
+<li><kbd>units</kbd>: <kbd>32</kbd> (number of kernels/filters)</li>
+<li><kbd>kernel_size</kbd>: <kbd>(3,3)</kbd> (size of each kernel)</li>
+<li><kbd>input_shape</kbd>: <kbd>28*28*1</kbd> (shape of the input array it will receive)</li>
+<li><kbd>activation</kbd>: <kbd>relu</kbd></li>
+</ul>
+<div class="packt_infobox">For additional information on the <kbd>Conv2D</kbd> API, visit <a href="https://keras.io/layers/convolutional/">https://keras.io/layers/convolutional/</a>.<a href="https://keras.io/layers/convolutional/"/></div>
+<p>The result of the preceding convolution is <kbd>32</kbd> feature maps of size 26*26. These 2-D feature maps now have to be converted into a 1-D feature map. This can be done in Keras with the following code:</p>
+<pre>from keras.layers import Flatten<br/>model.add(Flatten())</pre>
+<p>The result of the preceding snippet is just like a layer of neurons in a simple neural network. The <kbd>Flatten</kbd> function converts all of the 2-D feature maps into a single <kbd>Dense</kbd> layer. In this layer, will we add a <kbd>Dense</kbd> layer with <kbd>128</kbd> neurons:</p>
+<pre>model.add(Dense(128, activation = 'relu'))</pre>
+<p>Since we need to get scores for each of the <kbd>10</kbd> possible classes, we must add another <kbd>Dense</kbd> layer with <kbd>10</kbd> neurons, with <kbd>softmax</kbd> as the <kbd>activation</kbd> function:</p>
+<pre>model.add(Dense(10, activation = 'softmax'))</pre>
+<p>Now, just like in the case of the simple dense neural network we built in the preceding code, we will compile and fit the model:</p>
+<pre><strong># compile model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer=optimizer, metrics = ['accuracy'])<br/><br/><strong># print model summary</strong><br/>model.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/057e49ab-6aaa-44dc-a757-f0963c239c92.png" style="width:42.17em;height:20.00em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.10: Summary of the convolution classifier</div>
+<p>From the model's summary, we can see that this convolution classifier has <kbd>2,770,634</kbd> parameters. This is a lot of parameters compared to the Perceptron model. Let's fit this model and evaluate its performance.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Fit the convolution neural network model on the data with the following code:</p>
+<pre><strong># fit model</strong><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size, validation_data=(X_val, y_val))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8ddd7b69-c41e-4470-af04-6baa6893e70d.png"/></p>
+<p>The following is the output from the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f7b06e8e-39a6-4e6b-bb51-28bb823a12d8.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.11: Metrics printed out during the training of the convolution classifier</span></div>
+<p>We can see that the convolution classifier's accuracy is 97.72% on the validation data.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p>You can evaluate the convolution model on the test data with<span> the following code</span>:</p>
+<pre><strong># evaluate model</strong><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/5f297d6d-c560-43fc-a4aa-6695398f9c48.png" style="width:40.67em;height:4.42em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.12: Printout of</span> <span>the evaluation of the convolution classifier</span></div>
+<p>We can see that the model is 97.92% accurate on test data, 97.72% on validation data, and 99.71% on train data. It is clear from the loss as well that<span> the model is slightly overfitting on the train data. We will talk about how to handle overfitting later.</span></p>
+<p>Now, let's plot the train and validation metrics to see how the training has progressed:</p>
+<pre><strong># plot training loss</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/0b4f6081-a092-4032-a404-6fd8ee593819.png" style="width:35.42em;height:40.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.13: Loss/accuracy plot of the convolution classifier during training</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements the training and evaluation of a convolution classifier:</p>
+<pre>"""This module implements a simple convolution classifier."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Conv2D, Flatten<br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 20<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape,<br/>                 activation = 'relu'))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dense(10, activation='softmax'))<br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer=optimizer,<br/>              metrics = ['accuracy'])<br/><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size,<br/>                    validation_data=(X_val, y_val))<br/><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Pooling</h1>
+                </header>
+            
+            <article>
+                
+<p>Max pooling can be defined as the process of summarizing a group of values with the maximum value within that group. Similarly, if you computed the average, it would be average pooling. Pooling operations are usually performed on the generated feature maps after convolution to reduce the number of parameters.</p>
+<p>Let's take the example array we considered for convolution:</p>
+<pre><span>array = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])</span></pre>
+<p>Now, if you were to perform max pooling on this <kbd>array</kbd> with the pool size set to size 1*2 and a stride of 2, the result would be an array of [1,1,1,1,1]. The <kbd>array</kbd> of size 1*10 has been reduced to a size of 1*5 due to max pooling.</p>
+<p>Here, since the pool size is of shape 1*2, you would take the subset of the target <kbd>array</kbd> from index 0 to index 2, which will be [0,1], and compute the maximum of this subset as 1. You would do the same for the subset from index 2 to index 4, from index 4 to index 6, index 6 to index 8, and finally index 8 to 10.</p>
+<p>Similarly, average pooling can be implemented by computing the average value of the pooled section. In this case, it would result in the array [0.5, 0.5, 0.5, 0.5, 0.5].</p>
+<p>The following are a couple of code snippets that are implementing max and average pooling:</p>
+<pre><strong># 1D Max Pooling</strong><br/>array = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])<br/>result = np.zeros(len(array)//2)<br/>for i in range(len(array)//2):<br/>    result[i] = np.max(array[2*i:2*i+2])<br/>result</pre>
+<p class="mce-root">The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/733c7c85-bf2a-4c0e-b81d-3b731c007ceb.png" style="width:19.00em;height:2.33em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.14: Max pooling operation's result on an array</div>
+<p>The following is the code snippet for average pooling:</p>
+<pre><strong># 1D Average Pooling</strong><br/>array = np.array([0, 1, 0, 1, 0, 1, 0, 1, 0, 1])<br/>result = np.zeros(len(array)//2)<br/>for i in range(len(array)//2):<br/>    result[i] = np.mean(array[2*i:2*i+2])<br/>result</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/3631da1b-3ee5-4b59-ab05-926159042499.png" style="width:22.50em;height:2.50em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.15: Average pooling operation's result on an array</span></div>
+<p>The following is a diagram explaining the max pooling operation:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ae6d1b2c-13c4-478e-85c1-a416714eaa3e.png" style="width:24.33em;height:14.08em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 8.16: 2*2 max pooling with stride 2 (Source: https://en.wikipedia.org/wiki/Convolutional_neural_network)</div>
+<p>Consider the following code for a digit:</p>
+<pre>plt.imshow(X_train[0].reshape(28,28), cmap='gray') </pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/523de311-01e5-4497-9088-248fc21f24f3.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.17: Random MNIST digit</span></div>
+<p>This image is of shape <kbd>28</kbd>*<kbd>28</kbd>. Now, if you were to perform a 2*2 max pooling operation of this, the resulting image would have a shape of <kbd>14</kbd>*<kbd>14</kbd>.</p>
+<p><span>Now, let's write a function to implement a 2*2 max pooling operation on a MNIST digit:</span></p>
+<pre>def <strong>square_max_pool(image, pool_size=2)</strong>:<br/>    result = np.zeros((14,14))<br/>    for i in range(result.shape[0]):<br/>        for j in range(result.shape[1]):<br/>            result[i,j] = np.max(image[i*pool_size : i*pool_size+pool_size, j*pool_size : j*pool_size+pool_size])<br/>            <br/>    return result<br/><br/><strong># plot a pooled image</strong><br/>plt.imshow(square_max_pool(X_train[0].reshape(28,28)), cmap='gray')</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/7ab0b5fc-261c-4e9e-a7e5-b1a429a169b0.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.18: Random MNIST digit after max pooling</span></div>
+<p><span>You may have noticed that the convolution classifier that we built in the previous section has around 2.7 million parameters. It has been proven that having a lot of parameters can lead to overfitting in a lot of cases. This is where pooling comes in. It helps us to retain the important features in the data as well as reduce the number of parameters. </span></p>
+<p>Now, let's implement a convolution classifier with max pooling.</p>
+<p>Import the max pool operation from Keras with the following code:</p>
+<pre>from keras.layers import MaxPool2D</pre>
+<p>Then, define and compile the model:</p>
+<pre><strong># model</strong><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape, activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/><strong># compile model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer, metrics = ['accuracy'])<br/><br/><strong># print model summary</strong><br/>model.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/a0eef9af-8c2a-479a-95f7-4aa3e2f29ef7.png" style="width:41.67em;height:21.17em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.19: Summary of the convolution classifier with max pooling</span></div>
+<p>From the summary, we can see that with a pooling filter of 2*2 with stride 2, the number of parameters has come down to <kbd>693,962</kbd>, which is 1/4<sup>th</sup> of the number of parameters in the convolution classifier.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's fit the model on the data:</p>
+<pre><strong># fit model</strong><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size, validation_data=(X_val, y_val))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/37aaddc3-716d-47fb-92ea-405aa4daa2cf.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6e318c23-82ba-4a2f-8a78-827d1400e94d.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.20: Metrics printed out during the training of the convolution classifier with max pooling</span></div>
+<p><span>We can see that the convolution classifier with max pooling has an accuracy of 97.72% on the validation data.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Now, evaluate the convolution model with max pooling on the test data:</span></p>
+<pre><strong># evaluate model</strong><br/>loss, acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/af78f6d0-bf8f-4991-b522-a8bc839f5652.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.21: Printout of</span> <span>the evaluation of the convolution classifier with max pooling</span></div>
+<p>We can see that the model is 97.88% accurate on the test data, 97.72% on the validation data, and 99.74% on the train data. <span>The convolution model with pooling gives the same level of performance as the convolution model without pooling, but with four times less parameters.</span></p>
+<p>In this case, we can clearly see from the loss that<span> the model is slightly overfitting on the train data.</span></p>
+<p>Just like we did previously, <span>plot the train and validation metrics to see how the training has progressed:</span></p>
+<pre><strong># plot training loss</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ecc6dcb1-e810-4ef6-9d75-7bb64805b8f2.png" style="width:38.75em;height:45.50em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.22: Loss/accuracy plot of the convolution classifier with max pooling during training</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution with pooling – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements the training and evaluation of a convolution classifier with the pooling operation:</p>
+<pre>"""This module implements a convolution classifier with maxpool operation."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Conv2D, Flatten, MaxPool2D<br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 20<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape,<br/>                 activation='relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dense(10, activation='softmax'))<br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer=optimizer,<br/>              metrics = ['accuracy'])<br/><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size,<br/>                    validation_data=(X_val, y_val))<br/><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Dropout</h1>
+                </header>
+            
+            <article>
+                
+<p>Dropout is a regularization technique used to prevent overfitting. During training, it is implemented by randomly sampling a neural network from the original neural network during each forward and backward propagation, and then training this subset network on the batch of input data. During testing, no dropout is implemented. The test results are obtained as an ensemble of all of the sampled networks:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/73b7aca8-0bd1-4833-89c6-70da2ebdacf1.png" style="width:35.00em;height:18.67em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.23: Dropout, as shown in the Dropout: A Simple Way to Prevent Neural Networks from<br/>
+Overfitting paper (Source: http://www.cs.toronto.edu/~rsalakhu/papers/srivastava14a.pdf)</div>
+<p>In Keras, implementing <kbd>Dropout</kbd> is easy. First, import it from the <kbd>layers</kbd> module of <kbd>keras</kbd>:</p>
+<pre>from keras.layers import Dropout</pre>
+<p>Then, place the layer where needed. In the case of our CNN, we will place one after the max pool operation and one after the <kbd>Dense</kbd> layer, as shown in the following code:</p>
+<pre><strong># model</strong><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape, activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/><strong># compile model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer, metrics = ['accuracy'])<br/><br/><strong># model summary</strong><br/>model.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/4647d988-3e13-49f7-a703-ec54f465ee6c.png" style="width:39.17em;height:24.67em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.24: Summary of the convolution classifier</span></div>
+<p>Since <kbd>Dropout</kbd> is a regularization technique, adding it to a model will not result in a change in the number of trainable parameters.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Again, train the model on the standard 20 <kbd>epochs</kbd>:</p>
+<pre><strong># fit model</strong><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size, validation_data=(X_val, y_val))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/d19d9627-f78b-4236-aab5-ca2f67b12a81.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8b9bfe45-5557-4d4d-bd77-0d80bad973e4.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.25: Metrics printed out during the training of the convolution classifier with max pooling and dropout</span></div>
+<p><span>We see that the convolution classifier with max pooling and dropout is 98.52% accurate on the validation data.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let’s evaluate the model and capture the loss and the accuracy:</p>
+<pre><strong># evaluate model</strong><br/>loss, acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b3216a23-ca5a-470c-b77c-2a48a300d96e.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.26: Printout of</span> <span>the evaluation of the convolution classifier with max pooling and dropout</span></div>
+<p>We can see that the model is 98.42% accurate on the test data, 98.52% on the validation data, and 99.26% on the train data. <span>The convolution model with pooling and dropout gives the same level of performance as the convolution model without pooling, but with four times fewer parameters. If you look at the <kbd>loss</kbd> as well, this model was able to reach a better minima than the other models we have trained before.</span></p>
+<p>Plot the metrics to understand how the training has progressed:</p>
+<pre><strong># plot training loss</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/4c0d735f-5b28-4408-97f2-8e48e40a59da.png" style="width:41.58em;height:50.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 8.27: Loss/accuracy plot of the convolution classifier with max pooling and dropout </span><span>during training</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution with pooling – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements the training and evaluation of a convolution classifier with the max pool and <kbd>Dropout</kbd> operations:</p>
+<pre>"""This module implements a deep conv classifier with max pool and dropout."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Conv2D, Flatten, MaxPool2D, Dropout<br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 20<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape,<br/>                 activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(64, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(128, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer,<br/>              metrics = ['accuracy'])<br/><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size,<br/>                    validation_data=(X_val, y_val))<br/><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Going deeper</h1>
+                </header>
+            
+            <article>
+                
+<p>The convolution classifier with max pooling and dropout seems to be the best classifier so far. However, we also noticed that there was a slight amount of overfitting on the train data.</p>
+<p>Let's build a deeper model to see if we can create a classifier that is more accurate than the other models we have trained so far, and see if we can get it to reach an even better minima.</p>
+<p>We will build a deeper model by adding two more convolution layers to our best model so far:</p>
+<ul>
+<li>The first layer is a convolution 2-D layer with 32 filters of size 3*3 with <kbd>activation</kbd> as <kbd>relu</kbd>, followed by downsampling with max pooling of size 2*2, followed by <kbd>Dropout</kbd> as the regularizer</li>
+<li>The second layer is a convolution 2-D layer with 64 filters of size 3*3 with <kbd>activation</kbd> as <kbd>relu</kbd>, followed by downsampling with max pooling of size 2*2, followed by <kbd>Dropout</kbd> as the regularizer</li>
+<li>The third layer is a convolution 2-D layer with 128 filters of size 3*3 with <kbd>activation</kbd> as <kbd>relu</kbd>, followed by downsampling with max pooling of size 2*2, followed by <kbd>Dropout</kbd> as the regularizer</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Compiling the model</h1>
+                </header>
+            
+            <article>
+                
+<p>The following is the code for the deeper model:</p>
+<pre><strong># model</strong><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape, activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(64, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(128, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/><strong># compile model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer, metrics = ['accuracy'])<br/><br/><strong># print model summary</strong><br/>model.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/4c6da246-d210-45da-8a69-311a1f58142d.png" style="width:33.92em;height:34.42em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.28: Summary of the deep convolution classifier</span></div>
+<p>From the summary, we can see that the deeper model has only <kbd>110,474</kbd> parameters. Now, let's see if a deeper model with fewer parameters can do a better job than we have done so far.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Just like we did previously, fit the model, but with <kbd>epochs</kbd> set as <span><kbd>40</kbd> </span>instead of 20, since the deeper model takes longer to learn. Try training the model for 20 epochs first to see what happens:</p>
+<pre><strong># fit model</strong><br/>history = model.fit(X_train, y_train, epochs = 40, batch_size=batch_size, validation_data=(X_val, y_val))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6b362dee-0822-44f6-9e85-93421de78866.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/01f12117-7e01-4ade-8fcc-45cb8d3c09dd.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.29: Metrics printed out during the training of the deep convolution classifier</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, evaluate the model with the following code:</p>
+<pre><strong># evaluate model</strong><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6c817d9c-5f72-48fe-b3c4-bc89d13f8b3f.png" style="width:39.08em;height:4.00em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.30: Printout of</span> <span>the evaluation of the deep convolution classifier</span></div>
+<p>We can see that the model is 99.01% accurate on the test data, 98.84% on the validation data, and 98.38% on the train data. <span>The deeper convolution model with pooling and dropout gives a much better performance with just 110,000 parameters. If you look at the <kbd>loss</kbd> as well, this model was able to reach a better minima than the other models that we trained previously:</span></p>
+<p>Plot the metrics to understand how the training has progressed:</p>
+<pre><strong># plot training loss</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/e92baa61-56d7-43d5-bfbd-2aae16e39bfb.png" style="width:39.75em;height:47.33em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.31: Loss/accuracy plot of the deep convolution classifier during training</span></div>
+<p>This is one of the best training plots you can get. We can see no overfitting at all.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Convolution with pooling and Dropout – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements the training and evaluation of a deep convolution classifier with the max pool and <kbd>Dropout</kbd> operations:</p>
+<pre>"""This module implements a deep conv classifier with max pool and dropout."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Conv2D, Flatten, MaxPool2D, Dropout<br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 20<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.0001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape,<br/>                 activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(64, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(128, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer,<br/>              metrics = ['accuracy'])<br/><br/>history = model.fit(X_train, y_train, epochs = epochs, batch_size=batch_size,<br/>                    validation_data=(X_val, y_val))<br/><br/>loss,acc = model.evaluate(X_test, y_test)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data augmentation</h1>
+                </header>
+            
+            <article>
+                
+<p>Imagine a situation where you might want to build a convolution classifier on a small set of images. The problem here is that the classifier will easily overfit on this small set of data. The reason why the classifier will overfit is that there are very few images that are similar. That is, there are not a lot of variations for the model to capture within a specific class so that it can be robust and perform well on new data. </p>
+<p>Keras provides a preprocessing utility called <kbd>ImageDataGenerator</kbd> that can be used to augment image data with simple configuration.</p>
+<p>Its capabilities include the following:</p>
+<ul>
+<li><kbd>zoom_range</kbd>: Randomly zoom in on images to a given zoom level</li>
+<li><kbd>horizontal_flip</kbd>: Randomly flip images horizontally</li>
+<li><kbd>vertical_flip</kbd>: Randomly flip images vertically</li>
+<li><kbd>rescale</kbd>: Multiply the data with the factor provided</li>
+</ul>
+<p>It also includes capabilities for random rotations, random shear, and many more.</p>
+<div class="packt_infobox">Visit the official Keras documentation (<a href="https://keras.io/preprocessing/image/">https://keras.io/preprocessing/image/</a>) to learn more about some of the additional functionalities of the <kbd>image_data_generator</kbd> API.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Using ImageDataGenerator</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>image_data_generator</kbd> API transforms and augments the data in batches on the go, and is also super easy to use. </p>
+<p>First, import the <kbd>ImageDataGenerator</kbd>:</p>
+<pre>from keras.preprocessing.image import ImageDataGenerator</pre>
+<p>Implement a random horizontal flip augmenter:</p>
+<pre>train_datagen = ImageDataGenerator(horizontal_flip=True)  </pre>
+<p>Fit the augmenter on the train data:</p>
+<pre><strong># fit the augmenter</strong><br/>train_datagen.fit(X_train)</pre>
+<p>After the fit, we usually use the <kbd>transform</kbd> command. Here, instead of <kbd>transform</kbd>, we have the <kbd>flow</kbd> command. It accepts the images and its corresponding labels, and then generates batches of transformed data of the specified batch size.</p>
+<p>Let's transform a bunch of images and look at the result:</p>
+<pre><strong># transform the data</strong><br/>for img, label in train_datagen.flow(X_train, y_train, batch_size=6):<br/>    for i in range(0, 6):<br/>        plt.subplot(2,3,i+1)<br/>        plt.title('Label {}'.format(label[i]))<br/>        plt.imshow(img[i].reshape(28, 28), cmap='gray')<br/>    break<br/>plt.tight_layout()<br/>plt.show()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="mce-root CDPAlignCenter CDPAlign"><img src="assets/6a115712-ae5d-4032-9f25-b05d9ac6cae3.png" style="width:42.33em;height:29.17em;"/></p>
+<div class="mce-root packt_figref CDPAlignCenter CDPAlign">Figure 8.32: Digits after horizontal flip augmentation</div>
+<p>Similarly, we can implement a random zoom augmenter, like so:</p>
+<pre>train_datagen = ImageDataGenerator(zoom_range=0.3)<br/><strong><br/>#fit</strong><br/>train_datagen.fit(X_train)<br/><br/><strong>#transform</strong><br/>for img, label in train_datagen.flow(X_train, y_train, batch_size=6):<br/>    for i in range(0, 6):<br/>        plt.subplot(2,3,i+1)<br/>        plt.title('Label {}'.format(label[i]))<br/>        plt.imshow(img[i].reshape(28, 28), cmap='gray')<br/>    break<br/>plt.tight_layout()<br/>plt.show()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ce701893-0f28-45d4-96c9-83e7cd303fdb.png" style="width:39.83em;height:27.08em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.33: <span>Digits after zoom augmentation</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting ImageDataGenerator</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's build a classifier using the same architecture as the deep convolution model with pooling and Dropout, but on augmented data.</p>
+<p>First, define the features of the <kbd>ImageDataGenerator</kbd>, as follows:</p>
+<pre>train_datagen = ImageDataGenerator(<br/>        rescale = 1./255,<br/>        zoom_range = 0.2,<br/>        horizontal_flip = True)  </pre>
+<p>We have defined that the <kbd>ImageDataGenerator</kbd> can perform the following operations</p>
+<ul>
+<li>Rescaling</li>
+<li>Random zoom</li>
+<li>Random horizontal flip</li>
+</ul>
+<div class="packt_infobox">The rescaling operation scales the pixel values to a range between 0 and 1.</div>
+<p>The next step is to fit this generator on the train data:</p>
+<pre>train_datagen.fit(X_train)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Compiling the model</h1>
+                </header>
+            
+            <article>
+                
+<p>We need to define and compile the deep convolution model like so:</p>
+<pre><strong># define model</strong><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape, activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(64, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(128, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/><strong># compile model</strong><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer, metrics = ['accuracy'])</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Finally, we need to fit the model:</p>
+<pre><strong># fit the model on batches with real-time data augmentation</strong><br/>history = model.fit_generator(train_datagen.flow(X_train, y_train, batch_size=128), steps_per_epoch=len(X_train) / 128, epochs=10, validation_data=(train_datagen.flow(X_val, y_val)))</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/60dafac5-58d2-45dd-9a27-3f75978b2878.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f5fae92c-b6f1-4ae0-addc-46b9e2630e1d.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.34: <span>Metrics printed out during the training of the deep convolution classifier on augmented data</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, we need to evaluate the model:</p>
+<pre><strong># transform/augment test data</strong><br/>for test_img, test_lab in train_datagen.flow(X_test, y_test, batch_size = X_test.shape[0]):<br/>    break<br/><br/><strong># evaluate model on test data</strong> <br/>loss,acc = model.evaluate(test_img, test_lab)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/9d368191-8ef0-4800-912b-8cf6cfc6245a.png" style="width:37.25em;height:4.83em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.35: Printout of</span><span> </span><span>the evaluation of the deep convolution classifier on augmented data</span></div>
+<p>Then, we need to plot the deep convolution classifier:</p>
+<pre><strong># plot the learning</strong><br/>loss_plot(history)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6c796851-f809-4951-99ca-b22b888d51c7.png" style="width:40.42em;height:48.17em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 8.36: Loss/accuracy plot of the deep convolution classifier during training on augmented data</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Augmentation – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements the training and evaluation of a deep convolution classifier on augmented data:</p>
+<pre>"""This module implements a deep conv classifier on augmented data."""<br/>import numpy as np<br/>from keras.datasets import mnist<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Conv2D, Flatten, MaxPool2D, Dropout<br/>import matplotlib.pyplot as plt<br/>from keras.preprocessing.image import ImageDataGenerator<br/><br/>from sklearn.model_selection import train_test_split<br/>from loss_plot import loss_plot<br/><br/># Number of epochs<br/>epochs = 10<br/># Batchsize<br/>batch_size = 128<br/># Optimizer for the generator<br/>from keras.optimizers import Adam<br/>optimizer = Adam(lr=0.001)<br/># Shape of the input image<br/>input_shape = (28,28,1)<br/><br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>X_train, X_val, y_train, y_val = train_test_split(X_train, y_train,<br/>                                                  stratify = y_train,<br/>                                                  test_size = 0.08333,<br/>                                                  random_state=42)<br/><br/>X_train = X_train.reshape(-1,28,28,1)<br/>X_val = X_val.reshape(-1,28,28,1)<br/>X_test = X_test.reshape(-1,28,28,1)<br/><br/>train_datagen = ImageDataGenerator(<br/>        rescale=1./255,<br/>        zoom_range=0.2,<br/>        horizontal_flip=True)<br/><br/>train_datagen.fit(X_train)<br/><br/>model = Sequential()<br/>model.add(Conv2D(32, kernel_size=(3,3), input_shape=input_shape,<br/>                 activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(64, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Conv2D(128, kernel_size=(3,3), activation = 'relu'))<br/>model.add(MaxPool2D(2,2))<br/>model.add(Dropout(0.2))<br/>model.add(Flatten())<br/>model.add(Dense(128, activation = 'relu'))<br/>model.add(Dropout(0.2))<br/>model.add(Dense(10, activation = 'softmax'))<br/><br/>model.compile(loss = 'sparse_categorical_crossentropy', optimizer= optimizer,<br/>              metrics = ['accuracy'])<br/><br/># fits the model on batches with real-time data augmentation:<br/>history = model.fit_generator(train_datagen.flow(X_train, y_train,<br/>                                                 batch_size=128),<br/>                              steps_per_epoch=len(X_train) / 128, epochs=epochs,<br/>                              validation_data=(train_datagen.flow(X_val,<br/>                                                                  y_val)))<br/><br/>for test_img, test_lab in train_datagen.flow(X_test, y_test,<br/>                                             batch_size = X_test.shape[0]):<br/>    break<br/><br/>loss,acc = model.evaluate(test_img, test_lab)<br/>print('Test loss:', loss)<br/>print('Accuracy:', acc)<br/><br/>loss_plot(history)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Additional topic – convolution autoencoder</h1>
+                </header>
+            
+            <article>
+                
+<p>An autoencoder is a combination of two parts: an encoder and a decoder. The encoder and decoder of a simple autoencoder are usually made up of dense layers, whereas in a convolution autoencoder, they are made of convolution layers:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ca01c5ff-38df-424d-b324-035f7f964ac9.png" style="width:39.42em;height:29.42em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.37: The structure of an autoencoder (image source: Wikipedia)</div>
+<p>The encoder part of the autoencoder accepts an image and compresses it into a smaller size with the help of a pooling operation. In our case, this is max pooling. The decoder accepts the input of the encoder and learns to expand the image to our desired size by using convolution and upsampling.</p>
+<p>Imagine a situation where you want to build high-resolution images out of blurred images:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="aligncenter size-full wp-image-951 image-border" src="assets/3792613d-9ac2-4ab4-964e-678ad0ad96c5.png" style="width:55.00em;height:25.50em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">          Figure 8.38: Low-resolution digits on the left and high-resolution digits on the right</div>
+<p>Convolution autoencoders are capable of doing this job very well. The preceding high-resolution digits that you can see were actually generated using convolution autoencoders. </p>
+<p>By the end of this section, you will have built a convolution autoencoder that accepts low-resolution 14*14*1 MNIST digits and generates high-resolution 28*28*1 digits.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Importing the dependencies</h1>
+                </header>
+            
+            <article>
+                
+<p>Consider restarting your session before starting this section:</p>
+<pre>import numpy as np<br/>import matplotlib.pyplot as plt<br/>%matplotlib inline<br/><br/>from keras.datasets import mnist<br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>from keras.layers import Conv2D, MaxPooling2D, UpSampling2D<br/>from keras.models import Model, Sequential<br/>from keras.optimizers import Adam<br/>from keras import backend as k<br/><br/><strong># for resizing images</strong><br/>from scipy.misc import imresize</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating low-resolution images</h1>
+                </header>
+            
+            <article>
+                
+<p>To generate low-resolution images, define a function called <kbd>reshape()</kbd> that will resize the input image/digit to size <kbd>14</kbd>*<kbd>14</kbd>. After defining this, we will use the <kbd>reshape()</kbd> function to generate low-resolution train and test images:</p>
+<pre>def <strong>reshape(x)</strong>:<br/>    """Reshape images to 14*14"""<br/>    img = imresize(x.reshape(28,28), (14, 14))<br/>    return img<br/><br/><strong># create 14*14 low resolution train and test images</strong><br/>XX_train = np.array([*map(reshape, X_train.astype(float))])<br/>XX_test = np.array([*map(reshape, X_test.astype(float))])</pre>
+<p><kbd>XX_train</kbd> and <kbd>XX_test</kbd> will be the images that we will feed into the encoder, and <kbd>X_train</kbd> and <kbd>X_test</kbd> will be the targets.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Scaling</h1>
+                </header>
+            
+            <article>
+                
+<p>Scale the train input, test input, and target images to range between 0 and 1 so that the learning process is faster:</p>
+<pre><strong># scale images to range between 0 and 1</strong><br/><strong># 14*14 train images</strong><br/>XX_train = XX_train/255<br/><strong># 28*28 train label images</strong><br/>X_train = X_train/255<br/><br/><strong># 14*14 test images</strong><br/>XX_test = XX_test/255<br/><strong># 28*28 test label images</strong><br/>X_test = X_test/255</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the autoencoder</h1>
+                </header>
+            
+            <article>
+                
+<p>The convolution autoencoder we are going to build will accept 14*14*1 images as input with 28*28*1 images as the targets, and will have the following characteristics:</p>
+<p>In the encoder:</p>
+<ul>
+<li>The first layer is a convolution 2-D layer with 64 filters of size 3*3, followed by batch normalization, with <kbd>activation</kbd> as <kbd>relu</kbd>, followed by downsampling with <kbd>MaxPooling2D</kbd> of size 2*2</li>
+<li>The second layer, or the final layer in this encoder part, is again a <span>convolution 2-D layer with 128 filters of size 3*3, batch normalization, with <kbd>activation</kbd> as </span><kbd>relu</kbd></li>
+</ul>
+<p>In the decoder:</p>
+<ul>
+<li>The first layer is a convolution 2-D layer with 128 filters of size 3*3 with <kbd>activation</kbd> as<span> </span><kbd>relu</kbd>, followed by upsampling that's performed with <kbd>UpSampling2D </kbd></li>
+<li>The second layer is a convolution 2-D layer with 64 filters of size 3*3 with <kbd>activation</kbd> as<span> </span><kbd>relu</kbd>, followed by upsampling with <kbd>UpSampling2D</kbd></li>
+<li>The third layer, or the final layer in this decoder part, is again a <span>convolution 2-D layer with 1 filter of size 3*3 with <kbd>activation</kbd> as </span><kbd>sigmoid</kbd></li>
+</ul>
+<p>The following is the code for our autoencoder:</p>
+<pre>batch_size = 128<br/>epochs = 40<br/>input_shape = (14,14,1)<br/><br/><strong># define autoencoder</strong><br/>def <strong>make_autoencoder(input_shape)</strong>:<br/>    <br/>    generator = Sequential()<br/>    generator.add(Conv2D(64, (3, 3), activation='relu', padding='same', input_shape=input_shape))<br/>    generator.add(MaxPooling2D(pool_size=(2, 2)))<br/>    <br/>    generator.add(Conv2D(128, (3, 3), activation='relu', padding='same'))<br/>    <br/>    generator.add(Conv2D(128, (3, 3), activation='relu', padding='same'))<br/>    generator.add(UpSampling2D((2, 2)))<br/>    <br/>    generator.add(Conv2D(64, (3, 3), activation='relu', padding='same'))<br/>    generator.add(UpSampling2D((2, 2)))<br/>    <br/>    generator.add(Conv2D(1, (3, 3), activation='sigmoid', padding='same'))<br/><br/>    return generator<br/><br/>autoencoder = make_autoencoder(input_shape)<br/><br/><strong># compile auto encoder</strong><br/>autoencoder.compile(loss='mean_squared_error', optimizer = Adam(lr=0.0002, beta_1=0.5))<br/><br/><strong># auto encoder summary</strong><br/>autoencoder.summary()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f2158296-4726-440e-8dbb-18237991eae7.png" style="width:41.58em;height:29.42em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.39: Autoencoder summary</div>
+<p>We are using <kbd>mean_squared_error</kbd> as the <kbd>loss</kbd>, as we want the model to predict the pixel values.</p>
+<p>If you take a look at the summary, the input image of size 14*14*1 is compressed along the width and the height dimensions to a size of 7*7, but is expanded along the channel dimension from 1 to 128. These small/compressed feature maps are then fed to the decoder to learn the mappings that are required to generate high-resolution images of the defined dimension, which in this case is 28*28*1.</p>
+<div class="packt_tip">If you have any questions about the usage of he Keras API, please visit the Keras official documentation at <a href="https://keras.io/" target="_blank">https://keras.io/</a><a href="https://keras.io/" target="_blank">.</a></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fitting the autoencoder</h1>
+                </header>
+            
+            <article>
+                
+<p>Like any regular model fit, fit the autoencoder:</p>
+<pre><strong># fit autoencoder</strong> <br/>autoencoder_train = autoencoder.fit(XX_train.reshape(-1,14,14,1), X_train.reshape(-1,28,28,1), batch_size=batch_size,<br/>                                    epochs=epochs, verbose=1,<br/>                                    validation_split = 0.2)</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/aedb2da6-ebc4-4b7d-ba04-c87d3b280378.png"/></p>
+<p>The following is the output at the end of the code's execution:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/19eeb2fe-1fa9-46d1-8115-f9821562ed81.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.40: Printout during the training of the autoencoder</div>
+<p>You will notice that inside the fit, we have specified a parameter called <kbd>validation_split</kbd> and that we have set it to <kbd>0.2</kbd>. This will split the train data into train and validation data, with validation data having 20% of the original train data.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Loss plot and test results</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's get to plotting the train and validation loss progression during training. We will also plot the high-resolution image result from the model by feeding the test images:</p>
+<pre>loss = autoencoder_train.history['loss']<br/>val_loss = autoencoder_train.history['val_loss']<br/>epochs_ = [x for x in range(epochs)]<br/>plt.figure()<br/>plt.plot(epochs_, loss, label='Training loss')<br/>plt.plot(epochs_, val_loss, label='Validation loss')<br/>plt.title('Training and validation loss')<br/>plt.legend()<br/>plt.show()<br/><br/>print('Input')<br/>plt.figure(figsize=(5,5))<br/>for i in range(9):<br/>    plt.subplot(331 + i)<br/>    plt.imshow(np.squeeze(XX_test.reshape(-1,14,14)[i]), cmap='gray')<br/>plt.show()<br/><br/><strong># Test set results</strong><br/>print('GENERATED')<br/>plt.figure(figsize=(5,5))<br/>for i in range(9):<br/>    pred = autoencoder.predict(XX_test.reshape(-1,14,14,1)[i:i+1], verbose=0)<br/>    plt.subplot(331 + i)<br/>    plt.imshow(pred[0].reshape(28,28), cmap='gray')<br/>plt.show()</pre>
+<p>The following is the output of the preceding code:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1404 image-border" src="assets/f0c7474d-8cf7-4c5e-915b-25802632cb27.png" style="width:31.75em;height:21.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.41: Train/val loss plot</div>
+<p>The following is the output of high-resolution <span>images that have been generated from low-resolution images</span>:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ee3eda9b-96b0-4237-9a71-29cbe5ac921c.png"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 8.42: High-resolution test (28*28) images generated from low-resolution test (14*14) images</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Autoencoder – Python file</h1>
+                </header>
+            
+            <article>
+                
+<p>This module implements training an autoencoder on MNIST data:</p>
+<pre>"""This module implements a convolution autoencoder on MNIST data."""<br/>import numpy as np<br/>import matplotlib.pyplot as plt<br/><br/>from keras.datasets import mnist<br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/><br/>from keras.layers import Conv2D, MaxPooling2D, UpSampling2D<br/>from keras.models import Model, Sequential<br/>from keras.optimizers import Adam<br/>from keras import backend as k<br/><br/># for resizing images<br/>from scipy.misc import imresize<br/><br/>def reshape(x):<br/>    """Reshape images to 14*14"""<br/>    img = imresize(x.reshape(28,28), (14, 14))<br/>    return img<br/><br/># create 14*14 low resolution train and test images<br/>XX_train = np.array([*map(reshape, X_train.astype(float))])<br/>XX_test = np.array([*map(reshape, X_test.astype(float))])<br/><br/># scale images to range between 0 and 1<br/>#14*14 train images<br/>XX_train = XX_train/255<br/>#28*28 train label images<br/>X_train = X_train/255<br/><br/>#14*14 test images<br/>XX_test = XX_test/255<br/>#28*28 test label images<br/>X_test = X_test/255<br/><br/>batch_size = 128<br/>epochs = 40<br/>input_shape = (14,14,1)<br/><br/>def make_autoencoder(input_shape):<br/><br/>    generator = Sequential()<br/>    generator.add(Conv2D(64, (3, 3), activation='relu', padding='same',<br/>                         input_shape=input_shape))<br/>    generator.add(MaxPooling2D(pool_size=(2, 2)))<br/><br/>    generator.add(Conv2D(128, (3, 3), activation='relu', padding='same'))<br/><br/>    generator.add(Conv2D(128, (3, 3), activation='relu', padding='same'))<br/>    generator.add(UpSampling2D((2, 2)))<br/><br/>    generator.add(Conv2D(64, (3, 3), activation='relu', padding='same'))<br/>    generator.add(UpSampling2D((2, 2)))<br/><br/>    generator.add(Conv2D(1, (3, 3), activation='sigmoid', padding='same'))<br/><br/>    return generator<br/><br/><br/>autoencoder = make_autoencoder(input_shape)<br/>autoencoder.compile(loss='mean_squared_error', optimizer = Adam(lr=0.0002,<br/>                                                                beta_1=0.5))<br/><br/>autoencoder_train = autoencoder.fit(XX_train.reshape(-1,14,14,1),<br/>                                    X_train.reshape(-1,28,28,1),<br/>                                    batch_size=batch_size,<br/>                                    epochs=epochs, verbose=1,<br/>                                    validation_split = 0.2)<br/><br/>loss = autoencoder_train.history['loss']<br/>val_loss = autoencoder_train.history['val_loss']<br/>epochs_ = [x for x in range(epochs)]<br/>plt.figure()<br/>plt.plot(epochs_, loss, label='Training loss', marker = 'D')<br/>plt.plot(epochs_, val_loss, label='Validation loss', marker = 'o')<br/>plt.title('Training and validation loss')<br/>plt.legend()<br/>plt.show()<br/><br/>print('Input')<br/>plt.figure(figsize=(5,5))<br/>for i in range(9):<br/>    plt.subplot(331 + i)<br/>    plt.imshow(np.squeeze(XX_test.reshape(-1,14,14)[i]), cmap='gray')<br/>plt.show()<br/><br/># Test set results<br/>print('GENERATED')<br/>plt.figure(figsize=(5,5))<br/>for i in range(9):<br/>    pred = autoencoder.predict(XX_test.reshape(-1,14,14,1)[i:i+1], verbose=0)<br/>    plt.subplot(331 + i)<br/>    plt.imshow(pred[0].reshape(28,28), cmap='gray')<br/>plt.show()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Conclusion</h1>
+                </header>
+            
+            <article>
+                
+<p>This project was all about building a CNN classifier to classify handwritten digits better than we did in <a href="https://cdp.packtpub.com/python_deep_learning_projects/wp-admin/post.php?post=31&amp;action=edit#post_25" target="_blank">Chapter 2</a><span>, </span><em>Training NN for Prediction Using Regression,</em> with a multilayer Perceptron. </p>
+<p>Our deep convolution neural network classifier with max pooling and dropout hit 99.01% accuracy on a test set of 10,000 images/digits. This is good. This is almost 12% better than our multilayer Perceptron model.</p>
+<p>However, there are some implications. What are the implications of this accuracy? It is important that we understand this. Just like we did in <a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression,</em> let's <span>calculate the incidence of an error occurring that would result in a customer service issue.</span></p>
+<p>Just to refresh our memory, in this hypothetical use case, we assumed that the <span>restaurant has an average of 30 tables at each location, and that those tables turn over two times per night during the rush hour when the system is likely to be used, and finally that the restaurant chain has 35 locations. This means that each day of operation, there are approximately 21,000 handwritten numbers being captured (30 tables x 2 turns/day x 35 locations x 10-digit phone number).</span></p>
+<p>The ultimate goal is to classify all of the digits properly, since even a single-digit misclassification will result in a failure. With the classifier that we have built, it would improperly classify 208 digits per day. If we consider the worst case scenario, out of the 2,100 patrons, 208 phone numbers would be misclassified. That is, even in the worst case, 90.09% ((2,100-208)/2,100) of the time, we would be sending the text to the right patron.</p>
+<p>The best case scenario would be that <span>if all ten digits were misclassified in each phone number</span>, we would only be improperly classifying 21 phone numbers. This means that we would have a failure rate of ((2,100-21)/2,100) 1%. This is as good as it gets.</p>
+<p>Unless you aim at reducing that 1% error...</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">In this chapter, we understood how to implement a convolution neural network classifier in Keras. You now have a brief understanding of what convolution, average, max pooling, and dropout are, and you also built a deep model. You understood how to reduce overfitting as well as how to generate more/validation in data to build a generalizable model when you have less data than you need. Finally, we assessed the model's performance on test data and determined that we succeeded in achieving our goal. We ended this chapter by introducing you to autoencoders.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

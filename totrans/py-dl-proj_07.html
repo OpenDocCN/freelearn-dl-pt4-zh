@@ -1,0 +1,370 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building Speech Recognition with DeepSpeech2</h1>
+                </header>
+            
+            <article>
+                
+<p>It's been a great journey, building awesome deep learning projects in Python using image, text, and sound data.</p>
+<p>We've been working quite heavily on language models in building chatbots in our previous chapters. Chatbots are a powerful tool for customer engagement and the automation of a wide range of business processes from customer service to sales. Chatbots enable the automation of repetitive and/or redundant interactions such as frequently asked questions or product-ordering workflows. This automation saves time and money for businesses and enterprises. If we've done our job well as deep-learning engineers, it also means that the consumers are receiving a much-improved <strong>user experience</strong> (<strong>UX</strong>) as a result.</p>
+<p>The new interaction between a business and its customers via a chatbot is very effective in each party receiving value. Let's look at the interaction scenario and see if we can identify any constraints that should be the focus of our next project. Up until now, all of our chat interactions have been through text. Let's think about what this means for the consumer. Text interactions are often (but not exclusively) initiated via mobile devices. Secondly, chatbots open up a new <strong>user interaction</strong> (<strong>UI</strong>)—for conversational UI. Part of the power of conversational UI is that it can remove the constraint of the physical keyboard and open the range of locations and devices that are now possible for this interaction to take place.</p>
+<div class="packt_tip">Conversational UI is made possible by speech recognition systems working through popular devices, such as your smartphone with Apple's Siri, Amazon's Echo, and Google Home. It's very cool technology, consumers love it, and businesses that adopt this technology gain an advantage over those in their industry that do not keep up with the times.</div>
+<p class="p1"><span class="s1">In this chapter, we will build a system that recognizes English speech, using the <strong>DeepSpeech2</strong> (<strong>DS2</strong>) model.</span></p>
+<p class="p1"><span class="s1">You will learn the following:</span></p>
+<ul>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">To w</span>ork with speech and spectrograms</span></li>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">To build an </span>end-to-end speech recognition system</span></li>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">The </span><strong>Connectionist Temporal Classification</strong> (<strong>CTC</strong>) loss function</span></li>
+<li class="p6"><span class="s1">Batch normalization and SortaGrad for <strong>recurrent neural networks</strong> (<strong>RNNs</strong>)</span></li>
+</ul>
+<p class="p6"><span class="s1"><span>Let's get started and deep dive into the speech data, learn to feature engineer the speech data, extract various kinds of features from it, and then build a speech recognition system that can detect your or a registered user's voice.</span></span></p>
+<div class="packt_infobox"><strong><span>Define the goal</span></strong><span>: The goal of this project is to build and train an </span><strong><span>automatic speech recognition</span></strong><span> (</span><strong><span>ASR</span></strong><span>) system to take in and convert an audio call to text that could then be used as input for a text-based chatbot that could understand and respond.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data preprocessing</h1>
+                </header>
+            
+            <article>
+                
+<p><span>In this project, we will use </span><em>LibriSpeech ASR corpus</em> (<a href="http://www.openslr.org/12/" target="_blank">http://www.openslr.org/12/</a>)<span>, which is 1,000 hours of </span>16 kHz-read English speech.</p>
+<p>Let's use the following commands to download the corpus and unpack the LibriSpeech data:</p>
+<pre><strong>mkdir -p data/librispeech</strong><br/><strong>cd data/librispeech</strong><br/><strong>wget http://www.openslr.org/resources/12/train-clean-100.tar.gz</strong><br/><strong>wget http://www.openslr.org/resources/12/dev-clean.tar.gz</strong><br/><strong>wget http://www.openslr.org/resources/12/test-clean.tar.gz</strong><br/><strong>mkdir audio</strong><br/><strong>cd audio</strong><br/><strong>tar xvzf ../train-clean-100.tar.gz LibriSpeech/train-clean-100 --strip-components=1</strong><br/><strong>tar xvzf ../dev-clean.tar.gz LibriSpeech/dev-clean --strip-components=1</strong><br/><strong>tar xvzf ../test-clean.tar.gz LibriSpeech/test-clean --strip-components=1</strong></pre>
+<p>This will take a while and once the process is completed, we will have the <kbd>data</kbd> folder structure, as shown in the following screenshot:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6808431a-97af-4fd3-ba24-a023f5ad024a.png" style="width:26.25em;height:32.00em;"/></p>
+<p>We now have three folders named as <kbd>train-clean-100</kbd>, <kbd>dev-clean</kbd>, and <kbd>test-clean</kbd>. Each folder will have subfolders that are the associated IDs used for mapping the small segment of the transcript and the audio. All the audio files are in the <kbd>.flac</kbd> extension, and all the folders will have one <kbd>.txt</kbd> file, which is the transcript for the audio files.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Corpus exploration</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's explore the dataset in detail. First, let's look into the audio file by reading it from the file and plotting it. To read the audio file, we will use the <kbd>pysoundfile</kbd> package with the following command:</p>
+<pre><strong>pip install pysoundfile</strong></pre>
+<p>Next, we will import the modules, read the audio files, and plot them with the following code block:</p>
+<pre>import soundfile as sf<br/>import matplotlib.pyplot as plt<br/><br/><br/>def plot_audio(audio):<br/>    fig, axs = plt.subplots(4, 1, figsize=(20, 7))<br/>    axs[0].plot(audio[0]);<br/>    axs[0].set_title('Raw Audio Signals')<br/>    axs[1].plot(audio[1]);<br/>    axs[2].plot(audio[2]);<br/>    axs[3].plot(audio[3]);<br/><br/>    <br/>audio_list =[]<br/>for i in xrange(4): <br/>    file_path = 'data/128684/911-128684-000{}.flac'.format(i+1)<br/>    a, sample_rate = sf.read(file_path)<br/>    audio_list.append(a) <br/>plot_audio(audio_list)</pre>
+<p>The following is the frequency representation of each segment of speech:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/3b80d1ea-0131-486a-9078-b725e20bcfe2.png"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The raw audio signal plot from the audio MIDI file</div>
+<p>Now let's look into the content of the transcript text file. It's a clean version of the text with the audio file IDs in the beginning and the associated text following:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/9f89089e-8ebc-49c0-adcb-2439d9151ad6.png"/></p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1399 image-border" src="assets/2f46caaa-5309-4215-a84d-e86145b25560.png" style="width:39.33em;height:12.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The transcript data is stored a specific format. Left numbers are the midi file name and the right part is the actually transcript. This helps in building the mapping between the midi file and its respective transcript.</div>
+<p>What we see is that each audio file is the narration of the transcript contained in the file. Our model will try to learn this sequence pattern. But before we work on the model, we need to extract some features from the audio file and convert the text into one-hot encoding format.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Feature engineering</h1>
+                </header>
+            
+            <article>
+                
+<p>So, before we feed the raw audio data into our model, we need to transform the data into numerical representations that are features. In this section, we will explore various techniques to extract features from the speech data that we can use to feed into the model. The accuracy and performance of the model vary based on the type of features we use. As an inquisitive deep-learning engineer, it's your opportunity to explore and learn the features with these techniques and use the best one for the use case at hand.</p>
+<p>The following table gives us a list of techniques and their properties:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td style="width: 28.4289%"><strong>Techniques</strong></td>
+<td style="width: 71.0723%"><strong>Properties</strong></td>
+</tr>
+<tr>
+<td style="width: 28.4289%"><strong>Principal component analysis</strong> (<strong>PCA</strong>)</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Eigenvector-based method</li>
+<li class="mce-root">Non-linear feature extraction method</li>
+<li class="mce-root">Supported to linear map</li>
+<li class="mce-root">Faster than other techniques</li>
+<li class="mce-root">Good for Gaussian data</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%"><strong>Linear discriminate analysis</strong> (<strong>LDA</strong>)</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Linear feature extraction method</li>
+<li class="mce-root">Supported to the supervised linear map</li>
+<li class="mce-root">Faster than other techniques</li>
+<li class="mce-root">Better than PCA for classification</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%"><strong>Independent component analysis</strong> (<strong>ICA</strong>)</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Blind course separation method</li>
+<li class="mce-root">Support to linear map </li>
+<li class="mce-root">Iterative in nature </li>
+<li class="mce-root">Good for non-Gaussian data</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%">Cepstral analysis</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Static feature extraction method</li>
+<li class="mce-root">Power spectrum method</li>
+<li class="mce-root">Used to represent spectral envelope</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%">Mel-frequency scale analysis</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Static feature extraction method</li>
+<li class="mce-root">Spectral analysis method</li>
+<li class="mce-root">Mel scale is calculated</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%"><strong>Mel-frequency cepstral coefficient</strong> (<strong>MFFCs</strong>)</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Power spectrum is computed by performing Fourier Analysis</li>
+<li class="mce-root">Robust and dynamic method for speech feature extraction</li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="width: 28.4289%">Wavelet technique</td>
+<td style="width: 71.0723%">
+<ul>
+<li class="mce-root">Better time resolution than Fourier transform</li>
+<li class="mce-root">Real-time factor is minimum</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<p class="mce-root">The MFCC technique is the most efficient and is often used for the extraction of speech features for speech recognition. The MFCC is based on the known variation of the human ear's critical bandwidth frequencies, with filters spaced linearly at low frequencies. The process of MFCC is shown in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/0d01cbae-4f9a-4440-b02d-f7d41ce7de6d.png" style="width:63.25em;height:34.58em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Block diagram of MFCC process</div>
+<p>For our implementation purposes, we are not going to perform each step; instead, we will use a Python package called <kbd>python_speech_features</kbd> that provides common speech features for ASR, including MFCCs and filterbank energies.</p>
+<p>Let's <kbd>pip install</kbd> the package with the following command:</p>
+<pre><strong>pip install python_speech_features</strong></pre>
+<p>So, let's define a function that will normalize the audio time series data and extract the MFCC features:</p>
+<pre>from python_speech_features import mfcc<br/><br/>def compute_mfcc(audio_data, sample_rate):<br/>    ''' Computes the MFCCs.<br/>    Args:<br/>        audio_data: time series of the speech utterance.<br/>        sample_rate: sampling rate.<br/>    Returns:<br/>        mfcc_feat:[num_frames x F] matrix representing the mfcc.<br/>    '''<br/><br/>    audio_data = audio_data - np.mean(audio_data)<br/>    audio_data = audio_data / np.max(audio_data)<br/>    mfcc_feat = mfcc(audio_data, sample_rate, winlen=0.025, winstep=0.01,<br/>                     numcep=13, nfilt=26, nfft=512, lowfreq=0, highfreq=None,<br/>                     preemph=0.97, ceplifter=22, appendEnergy=True)<br/>    return mfcc_feat</pre>
+<p>Let's plot the audio and MFCC features and visualize them:</p>
+<pre>audio, sample_rate = sf.read(file_path)<br/>feats[audio_file] = compute_mfcc(audio, sample_rate)<br/>plot_audio(audio,feats[audio_file])</pre>
+<p>The following is the output of the spectrogram:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ed8d2416-9bc1-41d2-89dc-4e54c4bc9f39.png" style="width:92.08em;height:95.75em;"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data transformation</h1>
+                </header>
+            
+            <article>
+                
+<p>Once we have all the features that we need to feed into the model, we will transform the raw NumPy tensors into the TensorFlow specific format called <kbd>TFRecords</kbd><em>. </em></p>
+<p>In the following code snippet, we are creating the folders to store all the processed records. The <kbd>make_example()</kbd> function creates the sequence example for <span>a single utterance</span> given the sequence length, MFCC features, and corresponding transcript. <span>Multiple sequence</span> <span>records are then written into TFRecord files usin</span>g the <kbd>tf.python_io.TFRecordWriter()</kbd> function:</p>
+<pre>if os.path.basename(partition) == 'train-clean-100':<br/>    # Create multiple TFRecords based on utterance length for training<br/>    writer = {}<br/>    count = {}<br/>    print('Processing training files...')<br/>    for i in range(min_t, max_t+1):<br/>        filename = os.path.join(write_dir, 'train' + '_' + str(i) +<br/>                                '.tfrecords')<br/>        writer[i] = tf.python_io.TFRecordWriter(filename)<br/>        count[i] = 0<br/><br/>    for utt in tqdm(sorted_utts):<br/>        example = make_example(utt_len[utt], feats[utt].tolist(),<br/>                               transcripts[utt])<br/>        index = int(utt_len[utt]/100)<br/>        writer[index].write(example)<br/>        count[index] += 1<br/><br/>    for i in range(min_t, max_t+1):<br/>        writer[i].close()<br/>    print(count)<br/><br/>    # Remove bins which have fewer than 20 utterances<br/>    for i in range(min_t, max_t+1):<br/>        if count[i] &lt; 20:<br/>            os.remove(os.path.join(write_dir, 'train' +<br/>                                   '_' + str(i) + '.tfrecords'))<br/>else:<br/>    # Create single TFRecord for dev and test partition<br/>    filename = os.path.join(write_dir, os.path.basename(write_dir) +<br/>                            '.tfrecords')<br/>    print('Creating', filename)<br/>    record_writer = tf.python_io.TFRecordWriter(filename)<br/>    for utt in sorted_utts:<br/>        example = make_example(utt_len[utt], feats[utt].tolist(),<br/>                               transcripts[utt])<br/>        record_writer.write(example)<br/>    record_writer.close()<br/>    print('Processed '+str(len(sorted_utts))+' audio files')</pre>
+<p>All the data-processing code is written in the <kbd>preprocess_LibriSpeech.py</kbd> file, which will perform all the previously mentioned data manipulation part, and once the operation is complete,<span> the resulting processed data gets</span><span> stored at the </span><kbd>data/librispeech/processed/</kbd> location. Use the following command to run the file:</p>
+<pre class="p1"><strong>python preprocess_LibriSpeech.py</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">DS2 model description and intuition</h1>
+                </header>
+            
+            <article>
+                
+<p>DS2 architecture is composed of many layers of recurrent connections, convolutional filters, and non-linearities, as well as the impact of a specific instance of batch normalization, applied to RNNs, as shown here:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/67764589-524c-4e06-b44b-8b70180284fc.png" style="width:30.42em;height:30.83em;"/></p>
+<p class="p1">To learn from datasets with a large amount of data, DS2 model's capacity is increased by adding more depth.<span class="Apple-converted-space"> The </span>architectures are made up to 11 layers of many bidirectional recurrent layers and convolutional layers.<span class="Apple-converted-space"> T</span>o optimize these models successfully, batch normalization for RNNs and a novel optimization curriculum called SortaGrad were used.</p>
+<p>The training data is a combination of input sequence <kbd>x(i)</kbd> and the transcript <kbd>y(i)</kbd>, whereas the goal of the RNN layers is to learn the features between <kbd>x(i)</kbd> and <kbd>y(i)</kbd>:</p>
+<pre class="p1">training set X =<span class="Apple-converted-space">  </span>{(x(1), y(1)), (x(2), y(2)), . . .}<br/>utterance =<span class="Apple-converted-space">  </span><span>x(i)<br/></span>label = y(i)</pre>
+<p class="p1">The spectrogram of power normalized audio clips are used as the features to the system and the outputs of the network are the graphemes of each language. In terms of adding non-linearity, the clipped <strong>rectified linear unit</strong> (<strong>ReLU</strong>) function <em>σ(x) = min{max{x, 0}, 20}</em> was used. After the bidirectional recurrent layers, one or more fully connected layers are placed and the output layer <em>L</em> is a softmax, computing a probability distribution over characters.</p>
+<p>Now let's look into the implementation of the DS2 architecture. You can find the full code <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter07" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter07</a>.</p>
+<p>The following is what the model looks like in TensorBoard:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/aa7975fa-5aa0-439f-b254-8d78dcde3663.png"/></p>
+<p>For the convolution layers, we have the kernel of size <kbd>[11, input_seq_length, number_of_filter]</kbd> followed by the 2D convolution operation on the input sequence, and then <kbd>dropout</kbd> is applied to prevent overfitting.</p>
+<p>The following code segment executes these steps:</p>
+<pre>    with tf.variable_scope('conv1') as scope:<br/>        kernel = _variable_with_weight_decay(<br/>            'weights',<br/>            shape=[11, feat_len, 1, params.num_filters],<br/>            wd_value=None, use_fp16=params.use_fp16)<br/><br/>        feats = tf.expand_dims(feats, dim=-1)<br/>        conv = tf.nn.conv2d(feats, kernel,<br/>                            [1, params.temporal_stride, 1, 1],<br/>                            padding='SAME')<br/>        <br/>        biases = _variable_on_cpu('biases', [params.num_filters],<br/>                                  tf.constant_initializer(-0.05),<br/>                                  params.use_fp16)<br/>        bias = tf.nn.bias_add(conv, biases)<br/>        conv1 = tf.nn.relu(bias, name=scope.name)<br/>        _activation_summary(conv1)<br/><br/>        # dropout<br/>        conv1_drop = tf.nn.dropout(conv1, params.keep_prob)</pre>
+<p>Then, we next have the recurrent layer, where we reshape the output of the convolution layer to fit the data into the RNN layer. Then, the custom RNN cells are created based on the hyperparameter called <kbd>rnn_type</kbd>, which can be of two types, uni-directional or bi-directional, followed by the dropout cells.</p>
+<p>The following code block creates the RNN part of the model:</p>
+<pre>    with tf.variable_scope('rnn') as scope:<br/><br/>        # Reshape conv output to fit rnn input<br/>        rnn_input = tf.reshape(conv1_drop, [params.batch_size, -1,<br/>                                            feat_len*params.num_filters])<br/>        # Permute into time major order for rnn<br/>        rnn_input = tf.transpose(rnn_input, perm=[1, 0, 2])<br/>        # Make one instance of cell on a fixed device,<br/>        # and use copies of the weights on other devices.<br/>        cell = rnn_cell.CustomRNNCell(<br/>            params.num_hidden, activation=tf.nn.relu6,<br/>            use_fp16=params.use_fp16)<br/>        drop_cell = tf.contrib.rnn.DropoutWrapper(<br/>            cell, output_keep_prob=params.keep_prob)<br/>        multi_cell = tf.contrib.rnn.MultiRNNCell(<br/>            [drop_cell] * params.num_rnn_layers)<br/><br/>        seq_lens = tf.div(seq_lens, params.temporal_stride)<br/>        if params.rnn_type == 'uni-dir':<br/>            rnn_outputs, _ = tf.nn.dynamic_rnn(multi_cell, rnn_input,<br/>                                               sequence_length=seq_lens,<br/>                                               dtype=dtype, time_major=True,<br/>                                               scope='rnn',<br/>                                               swap_memory=True)<br/>        else:<br/>            outputs, _ = tf.nn.bidirectional_dynamic_rnn(<br/>                multi_cell, multi_cell, rnn_input,<br/>                sequence_length=seq_lens, dtype=dtype,<br/>                time_major=True, scope='rnn',<br/>                swap_memory=True)<br/>            outputs_fw, outputs_bw = outputs<br/>            rnn_outputs = outputs_fw + outputs_bw<br/>        _activation_summary(rnn_outputs)</pre>
+<p>Further more, the <span>linear layer is created to perform the</span> <span>CTC</span> loss function and output from the softmax layer:</p>
+<pre>    with tf.variable_scope('softmax_linear') as scope:<br/>        weights = _variable_with_weight_decay(<br/>            'weights', [params.num_hidden, NUM_CLASSES],<br/>            wd_value=None,<br/>            use_fp16=params.use_fp16)<br/>        biases = _variable_on_cpu('biases', [NUM_CLASSES],<br/>                                  tf.constant_initializer(0.0),<br/>                                  params.use_fp16)<br/>        logit_inputs = tf.reshape(rnn_outputs, [-1, cell.output_size])<br/>        logits = tf.add(tf.matmul(logit_inputs, weights),<br/>                        biases, name=scope.name)<br/>        logits = tf.reshape(logits, [-1, params.batch_size, NUM_CLASSES])<br/>        _activation_summary(logits)</pre>
+<div class="packt_infobox">
+<p class="p1"><strong>Production scale tip</strong>: Training a single model at these scales requires tens of exaFLOPs that would take three to six weeks to execute on a single GPU. This makes model exploration a very time-consuming exercise, so the developers of DeepSpeech have built a highly optimized training system that uses eight or 16 GPUs to train one model, as well as synchronous <strong>stochastic gradient descent</strong> (<strong>SGD</strong>), which is easier to debug while testing new ideas, and also converges faster for the same degree of data parallelism.</p>
+</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we understand the data that we are using and the DeepSpeech model architecture, let's set up the environment to train the model. There are some preliminary steps to create a virtual environment for the project that are optional, but always recommended to use. Also, it's recommended to use GPUs to train these models.</p>
+<p>Along with Python Version 3.5 and TensorFlow version 1.7+, the following are some of the prerequisites:</p>
+<ul>
+<li><kbd>python-Levenshtein</kbd>: To compute <strong>character error rate</strong> (<strong>CER</strong>), basically the distance</li>
+<li><kbd>python_speech_features</kbd>: To extract MFCC features from raw data</li>
+<li><kbd>pysoundfile</kbd>: To read FLAC files</li>
+<li><kbd>scipy</kbd>: Helper functions for windowing</li>
+<li><kbd>tqdm</kbd>: For displaying a progress bar</li>
+</ul>
+<p>Let's create the virtual environment and install all the dependencies:</p>
+<pre><strong>conda create -n 'SpeechProject' python=3.5.0</strong><br/><strong>source activate SpeechProject</strong></pre>
+<p>Install the following dependencies:</p>
+<pre><strong>(SpeechProject)$ pip install python-Levenshtein</strong><br/><strong>(SpeechProject)$ pip install python_speech_features</strong><br/><strong>(SpeechProject)$ pip install pysoundfile</strong><br/><strong>(SpeechProject)$ pip install scipy</strong><br/><strong>(SpeechProject)$ pip install tqdm</strong></pre>
+<p>Install TensorFlow with GPU support:</p>
+<pre class="mce-root"><strong>(SpeechProject)$ conda install tensorflow-gpu</strong></pre>
+<p>If you see a <kbd>sndfile</kbd> error, use the following command:</p>
+<pre><strong>(SpeechProject)$ sudo apt-get install libsndfile1</strong></pre>
+<p>Now you will need to clone the repository that contains all the code:</p>
+<pre><strong>(SpeechRecog)$ git clone https://github.com/FordSpeech/deepSpeech.git</strong><br/><strong>(SpeechRecog)$ cd deepSpeech</strong></pre>
+<p>Let's move the TFRecord files that we created in the <em>Data transformation</em> section. <span>The computed MFCC features are stored inside the <kbd>data/librispeech/processed/</kbd> directory:</span></p>
+<pre><strong>cp -r ./data/librispeech/audio /home/deepSpeech/data/librispeech</strong><br/><strong>cp -r ./data/librispeech/processed /home/deepSpeech/librispeech</strong></pre>
+<p>Once we have all the data files in place, it's time to train the model. We are defining four hyperparameters as <kbd>num_rnn_layers</kbd> set to <kbd>3</kbd>, <kbd>rnn_type</kbd> set to <kbd>bi-dir</kbd>, <kbd>max_steps</kbd> is set to <kbd>30000</kbd>, and <kbd>initial_lr</kbd> is set to <kbd>3e-4</kbd>:</p>
+<pre><strong>(SpeechRecog)$python deepSpeech_train.py --num_rnn_layers 3 --rnn_type 'bi-dir' --initial_lr 3e-4 --max_steps 30000 --train_dir ./logs/</strong> </pre>
+<div class="packt_infobox">Also, if you want to resume the training using the pre-trained models from <a href="https://drive.google.com/file/d/1E65g4HlQU666RhgY712Sn6FuU2wvZTnQ/view" target="_blank">https://drive.google.com/file/d/1E65g4HlQU666RhgY712Sn6FuU2wvZTnQ/view</a>, y<span><span>ou can download and unzip them to the <kbd>logs</kbd> folder:<br/></span></span>
+<p><kbd>(SpeechRecog)$python deepSpeech_train.py --checkpoint_dir ./logs/ --max_steps 40000</kbd></p>
+</div>
+<p>Note that during the first epoch, the cost will increase and it will take longer to train on later steps because the utterances are presented in a sorted order to the network.</p>
+<p>The following are the steps involved during the training process:</p>
+<pre><strong># Learning rate set up from the hyper-param.</strong><br/>learning_rate, global_step = set_learning_rate()<br/><br/><strong># Create an optimizer that performs gradient descent.</strong><br/>optimizer = tf.train.AdamOptimizer(learning_rate)<br/><br/><strong># Fetch a batch worth of data for each tower to train.</strong><br/>data = fetch_data()<br/><br/><strong># Construct loss and gradient ops.</strong><br/>loss_op, tower_grads, summaries = get_loss_grads(data, optimizer)<br/><br/><strong># Calculate the mean of each gradient. Note that this is the synchronization point across all towers.</strong><br/>grads = average_gradients(tower_grads)<br/><br/><strong># Apply the gradients to adjust the shared variables</strong>.<br/>apply_gradient_op = optimizer.apply_gradients(grads,<br/>                                              global_step=global_step)<br/><br/><strong># Track the moving averages of all trainable variables.</strong><br/>variable_averages = tf.train.ExponentialMovingAverage(<br/>    ARGS.moving_avg_decay, global_step)<br/>variables_averages_op = variable_averages.apply(<br/>    tf.trainable_variables())<br/><br/><strong># Group all updates to into a single train op.</strong><br/>train_op = tf.group(apply_gradient_op, variables_averages_op)<br/><br/><strong># Build summary op.</strong><br/>summary_op = add_summaries(summaries, learning_rate, grads)<br/><br/><strong># Create a saver.</strong><br/>saver = tf.train.Saver(tf.all_variables(), max_to_keep=100)<br/><br/><strong># Start running operations on the Graph with allow_soft_placement set to True</strong> <br/><strong># to build towers on GPU.</strong><br/>sess = tf.Session(config=tf.ConfigProto(<br/>    allow_soft_placement=True,<br/>    log_device_placement=ARGS.log_device_placement))<br/><br/><strong># Initialize vars depending on the checkpoints.</strong><br/>if ARGS.checkpoint is not None:<br/>    global_step = initialize_from_checkpoint(sess, saver)<br/>else:<br/>    sess.run(tf.initialize_all_variables())<br/><br/><strong># Start the queue runners.</strong><br/>tf.train.start_queue_runners(sess)<br/><br/><strong># Run training loop.</strong><br/>run_train_loop(sess, (train_op, loss_op, summary_op), saver)</pre>
+<p>While the training process happens, we can see significant improvements, as shown in the following plots. Following graph shows the accuracy of the plot after 50k steps:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b30c4288-74b4-44ab-8445-3713db09822e.png" style="width:44.17em;height:20.25em;"/></p>
+<p>Here are the loss plots over 50k steps:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/df80ad19-b089-4b41-b243-14b2d50b00fc.png"/></p>
+<p>The learning rate is slowing down over the period of time:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/58d9769f-6c43-4ede-834a-b32a644cbef8.png"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Testing and evaluating the model</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Once the model is trained, you can perform the following command to execute the <kbd>test</kbd> steps using the <kbd>test</kbd> dataset:</span></p>
+<pre><strong>(SpeechRecog)$python deepSpeech_test.py --eval_data 'test' --checkpoint_dir ./logs/</strong></pre>
+<p><span>We evaluate its performance by testing it on previously unseen utterances from a <kbd>test</kbd> set. </span>The model generates sequences of probability vectors as outputs, so we need to build a decoder to transform the model's output into word sequences. <span>Despite being trained on character sequences, DS2 models are still able to learn an implicit language model and are already quite adept at spelling out words phonetically, as shown in the following table. The model's spelling performance is typically measured using CERs calculated using the Levenshtein distance (<a href="https://en.wikipedia.org/wiki/Levenshtein_distance" target="_blank">https://en.wikipedia.org/wiki/Levenshtein_distance</a>) at the character level:</span></p>
+<table border="1" style="border-collapse: collapse;width: 504px">
+<thead>
+<tr style="height: 13px">
+<th style="width: 268px;height: 13px">Ground truth</th>
+<th style="width: 293px;height: 13px">Model output</th>
+</tr>
+</thead>
+<tbody>
+<tr style="height: 13px">
+<td style="width: 268px;height: 13px">This had some effect in calming him</td>
+<td style="width: 293px;height: 13px">This had some offectind calming him</td>
+</tr>
+<tr style="height: 13px">
+<td style="width: 268px;height: 13px">He went in and examined his letters but there was nothing from carrier</td>
+<td style="width: 293px;height: 13px">He went in an examined his letters but there was nothing from carry</td>
+</tr>
+<tr style="height: 13px">
+<td style="width: 268px;height: 13px">The design was different but the thing was clearly the same</td>
+<td style="width: 293px;height: 13px">The design was differampat that thing was clarly the same</td>
+</tr>
+</tbody>
+</table>
+<div class="packt_tip"><span>Although the model exhibit excellent CERs, their tendency to spell out words phonetically results in relatively high word-error rates. You can improve the model's performance <strong>word-error rate</strong> (<strong>WER</strong>) by allowing the decoder to incorporate constraints from an external lexicon and language model. </span></div>
+<p><span>We have observed that many of the errors in the model's predictions occur in words that do not appear in the training set. It is thus reasonable to expect that the overall CER would continue to improve as we increased the size of the training set and training steps. It achieved 15% CERs after 30k steps or training.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p><span>We dove right into this deep-learning project in Python, creating and training an ASR model that understands speech data. We learned to feature engineer the speech data to extract various kinds of features from it and then build a speech recognition system that could detect a user's voice.</span></p>
+<p>We're happy to have achieved our stated goal!</p>
+<p class="p1"><span class="s1">I</span><span class="s1">n this chapter, we built a system that recognizes English speech, using the DS2 model. </span></p>
+<p><span class="s1">You learned following:</span></p>
+<ul>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">To w</span>ork with speech and spectrograms</span></li>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">To build an </span>end-to-end<span> </span>speech recognition system</span></li>
+<li class="p5"><span class="s1"><span class="Apple-converted-space">The </span>CTC loss function</span></li>
+<li class="p6"><span class="s1">Batch normalization and<span> </span>SortaGrad<span> </span>for RNNs</span></li>
+</ul>
+<p>This caps off a major section of the deep-learning projects in this Python book that explores chatbots, NLP, and speech recognition with RNNs (uni and bi-directional, with and without LSTM components), and CNNs. We've seen the power of these technologies to provide intelligence to existing business processes and to create entirely new and smart systems. This is exciting work at the cutting edge of applied AI using deep learning! In the remaining half of the book, we'll explore deep-learning projects in Python that are generally grouped into computer vision technologies.</p>
+<p>Let's turn the page and get started!</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

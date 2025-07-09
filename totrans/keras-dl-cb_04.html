@@ -1,0 +1,1128 @@
+<html><head></head><body><div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Convolutional Neural Networks</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Convolutional networks (reference <em class="calibre17">LeCun[1]</em>, 2013), also known as <strong class="calibre7">Convolutional</strong> <strong class="calibre7">neural networks</strong><br class="calibre25"/>
+or <strong class="calibre7">CNNs</strong>, are a particular type of neural network that process data with a grid-like topology. Examples include time-series data, which can be thought of as a 1D grid taking samples at regular time intervals, or image data that is a 2D grid of pixels. The name convolutional neural network means that the network employs a mathematical operation called <strong class="calibre7">convolution</strong>. Convolution is a specific kind of linear operation. Convolutional networks are neural networks that use convolution (a mathematical operation) in place of general matrix multiplication in at least one of their layers.</p>
+<p class="calibre4">First, we will describe the mathematical operation of convolution. Then we will discuss the concept of pooling and how it helps CNN. We will also look at convolution networks implementation in TensorFlow.</p>
+<p class="calibre4">Toward the end of this chapter, we will use TensorFlow's CNN implementation to classify dogs and cats from the Stanford dataset.</p>
+<p class="calibre4">Lecun[1] :<span class="calibre14"> </span><a href="http://yann.lecun.com/exdb/lenet/" target="_blank" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">http://yann.lecun.com/exdb/lenet/</a></p>
+<p class="calibre4">We will be covering the following topics in this chapter:</p>
+<ul class="calibre20">
+<li class="calibre21">An overview and the intuition of CNN</li>
+<li class="calibre21">Convolution operations</li>
+<li class="calibre21">Pooling</li>
+<li class="calibre21">Image classification with convolutional networks</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">An overview and the intuition of CNN</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">CNN consists of multiple layers of convolutions, polling and finally fully connected layers. This is much more efficient than pure feedforward networks we discussed in <a href="99346436-65d0-4059-81eb-e29091747df3.xhtml" target="_blank" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">Chapter 2</a>, <em class="calibre17">Deep Feedforward Networks</em>.</p>
+<div class="mce-root4"><img src="Images/df7b7f21-ff98-4900-9eed-778fde9122d9.png" width="1008" height="248" class="calibre86"/></div>
+<p class="calibre4">The preceding diagram takes images through <strong class="calibre7">Convolution Layer</strong> | <strong class="calibre7">Max Pooling</strong> | <strong class="calibre7">Convolution</strong> | <strong class="calibre7">Max Pooling</strong> | <strong class="calibre7">Fully Connected Layers</strong> this is an CNN architecture</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Single Conv Layer Computation</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's first discuss what the conv layer computes intuitively. The Conv layer's parameters consist of a set of learnable filters (also called <strong class="calibre7">tensors</strong>). Each filter is small spatially (depth, width, and height), but extends through the full depth of the input volume (image). A filter on the first layer of a ConvNet typically has a size of 5 x 5 x 3 (that is, five pixels width and height, and three for depth, because images have three depths for color channels). During the forward pass, filters slide (or <strong class="calibre7">convolve</strong>) across the width and height of the input volume and compute the dot product between the entries of the filter and the input at any point. As the filter slides over the width and height of the input volume, it produces a 2D activation that gives the responses of that filter at every spatial position. The network will learn filters that activate when they see some kind of visual feature, such as an edge of some orientation or a blotch of some color on the first layer, or it might detect an entire honeycomb or wheel-like patterns on higher layers of the network. Once we have an entire set of filters in each conv layer (for example, 12 filters), each of them produces a separate 2D activation map. We stack these activation maps along the depth dimension and produce the output volume.</p>
+<div class="mce-root"><img src="Images/ee47f9f9-11ab-48ab-beb6-551faa50bb8d.jpg" width="657" height="661" class="calibre87"/></div>
+<div class="mce-root3">Image of 32 x 32 pixels convolved by 5 x 5 filter</div>
+<p class="calibre4">The preceding image shows a 32 x 32 x 3 image on which a filter of 5 x 5 x 3 is applied.</p>
+<div class="mce-root"><img src="Images/2d72b474-77a0-422b-82a5-4fb0c91002c1.jpg" width="832" height="511" class="calibre88"/></div>
+<div class="mce-root3">Each dot product between filter and image chunk results in a single number</div>
+<p class="calibre4">Next, let's convolve the filter created above the whole image, moving it one pixel at a time. The final output will be sized 28 x 28 x 1. This is called an <strong class="calibre7">activation map</strong>.</p>
+<div class="mce-root"><img src="Images/3bac5eb6-fd65-4de5-85f9-7c8b79337c3b.jpg" width="855" height="488" class="calibre89"/></div>
+<div class="mce-root3">Activation map generated by applying a filter on a image</div>
+<p class="calibre4">Consider using two filters one after the other; this will result in two activation maps of size 28 x 28 x 1.</p>
+<div class="mce-root"><img src="Images/9eb97f4c-5cb4-46c7-9260-87f46e754008.jpg" width="855" height="513" class="calibre90"/></div>
+<div class="mce-root3">Applying two filters on a single image results in two activation maps</div>
+<p class="calibre4">If we use six such filters, we will end up with a new image sized 28 x 28 x 3. A ConvNet is a sequence of such convolution layers interspersed with activation functions such as <strong class="calibre7">Relu</strong>.</p>
+<div class="mce-root"><img src="Images/1629fe0d-d370-4f34-bb9d-3bce9ec47bfe.jpg" width="855" height="488" class="calibre91"/></div>
+<div class="mce-root3">Result of applying six filters of 5 x 5 x 3 on image results in activation map of 28 x 28 x 6</div>
+<p class="calibre4">Let us formally defined CNN according to TensorFlow parlance.</p>
+<p class="calibre4"><strong class="calibre7">Definition</strong>: A CNN is a neural network that has at least one layer (<kbd class="calibre18">tf.nn.conv2d</kbd>) that makes a convolution between its input and a configurable kernel generating the layer's output. A convolution applies a kernel (filter) to every point in the input layer (a tensor). It generates a filtered output by sliding the kernel over an input tensor.</p>
+<p class="calibre4"><strong class="calibre7">Use Case</strong>: Following example is an edge detection filter applied on an input image using  a Convolution</p>
+<div class="mce-root"><img src="Images/49356c6c-9b70-48f9-9701-5a61b24f70b9.jpg" width="799" height="848" class="calibre92"/></div>
+<div class="mce-root3">Edge detection by applying kernel on an input image</div>
+<div class="title-page-name">
+<p class="mce-root5">CNNs follow a process that matches information similar to the structure found in the cellular layout of a cat's striate cortex. As signals are passed through a cat's striate cortex, certain layers signal when a visual pattern is highlighted. For example, one layer of cells activates (increases its output signal) when a horizontal line passes through it. A CNN will exhibit a similar behavior where clusters of neurons activate based on patterns learned from training. After training based on prelabeled data, a CNN will have certain layers that activate when a horizontal/vertical line passes through it.</p>
+<p class="mce-root5">Matching horizontal/vertical lines would be a useful neural network architecture, but CNNs layer multiple simple patterns to match complex patterns. These patterns are called <strong class="calibre3">filters</strong> or <strong class="calibre3">kernels</strong>. The goal of training is to adjust these kernel weights to minimize the loss function. Training these filters is accomplished by combining multiple layers and learning weights using gradient descent or other optimization techniques.</p>
+</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">CNN in TensorFlow</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">A CNN is composed of convolution layers (defined by <kbd class="calibre18">tf.nn.conv2d</kbd>), a non-linearity layer (<kbd class="calibre18">tf.nn.relu</kbd>), a max pool (<kbd class="calibre18">tf.nn.max_pool</kbd>), and fully connected layers (<kbd class="calibre18">tf.matmul</kbd>). The following image shows typical CNN layers and their corresponding implementations in TensorFlow:</p>
+<div class="mce-root"><img src="Images/d7949c19-8b34-4a86-b6e7-5aa9746d84a4.jpg" width="656" height="650" class="calibre93"/></div>
+<div class="mce-root3">Mapping CNN layers to TensorFlow functions</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Image loading in TensorFlow</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Now let's look at how TensorFlow loads images. Let's define a constant with a small array of three images and load them into a session:</p>
+<pre class="calibre26">sess = tf.InteractiveSession()<br class="calibre2"/>image_batch = tf.constant([<br class="calibre2"/>   [ # First Image<br class="calibre2"/>     [[255, 0, 0], [255, 0, 0], [0, 255, 0]],<br class="calibre2"/>     [[255, 0, 0], [255, 0, 0], [0, 255, 0]]<br class="calibre2"/>   ],<br class="calibre2"/>   [ # Second Image<br class="calibre2"/>     [[0, 0, 0], [0, 255, 0], [0, 255, 0]],<br class="calibre2"/>     [[0, 0, 0], [0, 255, 0], [0, 255, 0]]<br class="calibre2"/>   ],<br class="calibre2"/>   [ # Third Image<br class="calibre2"/>     [[0, 0, 255], [0, 0, 255], [0, 0, 255]],<br class="calibre2"/>     [[0, 0, 255], [0, 0, 255], [0, 0, 255]]<br class="calibre2"/>   ]<br class="calibre2"/> ])<br class="calibre2"/> print(image_batch.get_shape())<br class="calibre2"/> print(sess.run(image_batch)[1][0][0])</pre>
+<p class="calibre4">The output of the preceding listing shows the shape of the tensor and the first pixel of the first image. In this example code, an array of images is created that includes three images. Each image has a height of two pixels and a width of three pixels with an RGB color space. The output from the example code shows the number of images as the size of the first set of dimensions, Dimension(1). The height of each image is the size of the second set, Dimension(2), the width of each image comprises the third set, Dimension(3), and the array size of the color channel is the final set, Dimension(3):</p>
+<pre class="calibre26">(3, 2, 3, 3)<br class="calibre2"/>[255 0 0]</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Convolution operations</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Convolution operations are key components of a CNN; these operations use an input tensor and a filter to compute the output. The key is deciding the parameters available to tune them.</p>
+<p class="calibre4">Suppose we are tracking the location of an object. Its output is a single <em class="calibre17">x(t)</em>, which is the position of the object at time <em class="calibre17">t</em>. Both <em class="calibre17">x</em> and <em class="calibre17">t</em> are real-valued, that is, we can get a different reading at any instant in time. Suppose that our measurement is noisy. To obtain a less noisy estimate of the object's position, we would like to average together measurements. More recent measurements are more relevant for us; we want this to be a weighted average giving higher weight to recent measurements. We can compute this using a weighting function <em class="calibre17">w(a)</em>, where <em class="calibre17">a</em> is the age of a measurement (when the measurement was taken)<br class="calibre25"/>
+If we apply a weighted average operation at every moment, we obtain a new function providing a smoothed estimate of the position of the object:</p>
+<div class="mce-root6"><img src="Images/136f8c61-0fbb-4ab6-ad49-73cef018deee.png" width="614" height="154" class="calibre94"/></div>
+<p class="calibre4">This operation is called <strong class="calibre7">convolution</strong>. A convolution operation is denoted with an asterisk:</p>
+<div class="mce-root6"><img src="Images/b4e11c31-065e-44d8-869c-7b8993d9072c.png" width="476" height="102" class="calibre95"/></div>
+<p class="calibre4">Here,</p>
+<ul class="calibre20">
+<li class="calibre21"><em class="calibre29">w</em> is the kernel</li>
+<li class="calibre21"><em class="calibre29">x</em> is the input</li>
+<li class="calibre21"><em class="calibre29">s</em> is the output, also called a <strong class="calibre3">feature map</strong></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Convolution on an image</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">If we use a 2D image <em class="calibre17">I</em> as our input, we probably also want to use a 2D kernel <em class="calibre17">K</em>. The preceding equation will look as follows:</p>
+<div class="mce-root2"><img src="Images/2c8fcc55-c730-4e45-9931-07a02f67d6d7.png" width="1468" height="164" class="calibre96"/></div>
+<p class="calibre4">As the convolution function is commutative, we can write the preceding equation as follows:</p>
+<div class="mce-root2"><img src="Images/5f2da051-543d-4049-81b0-4b8a86ce60a0.png" width="1466" height="132" class="calibre97"/></div>
+<p class="calibre4">Changing <em class="calibre17">i - m</em> and <em class="calibre17">j -n</em> to additions is referred to as cross-correlation, as that is what is implemented by TensorFlow:</p>
+<div class="mce-root2"><img src="Images/a918398f-37c2-4aa0-bdef-076bd0417146.png" width="1466" height="188" class="calibre98"/></div>
+<p class="calibre4">Let's define a simple input and a kernel and run the <kbd class="calibre18">conv2d</kbd> operation in TensorFlow. Let's take a look at a simple image input and a kernel input. The following diagram shows a basic image, a kernel, and the expected output by applying the convolution operation:</p>
+<div class="mce-root"><img src="Images/5c93289c-7713-40b6-8a5f-2bd2d8ac2efb.jpg" width="806" height="407" class="calibre99"/></div>
+<div class="mce-root3">Example of basic image and kernel applied to it</div>
+<p class="calibre4">Now let's look at how the output is achieved with a stride of 1, 1, 1, 1:</p>
+<div class="mce-root"><img src="Images/be47e774-a84e-4442-9085-9f259093ba78.jpg" width="874" height="855" class="calibre100"/></div>
+<div class="mce-root3">Calculating output by applying kernel to the input</div>
+<p class="calibre4">Next, we will implement the same in TensorFlow:</p>
+<div class="title-page-name">
+<pre class="calibre26">i = tf.constant([<br class="calibre2"/>                 [1.0, 1.0, 1.0, 0.0, 0.0],<br class="calibre2"/>                 [0.0, 0.0, 1.0, 1.0, 1.0],<br class="calibre2"/>                 [0.0, 0.0, 1.0, 1.0, 0.0],<br class="calibre2"/>                 [0.0, 0.0, 1.0, 0.0, 0.0]], dtype=tf.float32)<br class="calibre2"/>k = tf.constant([<br class="calibre2"/>                [1.0, 0.0, 1.0],<br class="calibre2"/>                [0.0, 1.0, 0.0],<br class="calibre2"/>                [1.0, 0.0, 1.0]<br class="calibre2"/>        ], dtype=tf.float32),<br class="calibre2"/>kernel = tf.reshape(k, [3, 3, 1, 1], name='kernel')<br class="calibre2"/>image = tf.reshape(i, [1, 4, 5, 1], name='image')<br class="calibre2"/>res = tf.squeeze(tf.nn.conv2d(image, kernel, strides=[1, 1, 1, 1], padding="VALID"))<br class="calibre2"/># VALID means no padding<br class="calibre2"/>with tf.Session() as sess:<br class="calibre2"/>    print sess.run(res)</pre>
+<p class="mce-root5">The output of the preceding listing is as follows--this is the same as the one we calculated manually:</p>
+<pre class="calibre26">[[ 3. 3. 3.]<br class="calibre2"/> [ 2. 2. 4.]]</pre></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Strides</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The primary purpose of convolutions is to reduce the dimensions of an image (width, height, and number of channels). The larger the image, the more processing time is required.</p>
+<p class="calibre4">The <kbd class="calibre18">strides</kbd> <span class="calibre14">parameter</span> causes a kernel to skip over pixels in an image and not include them in the output. The <kbd class="calibre18">strides</kbd> parameter determines how a convolution operation works with a kernel when a larger image and more complex kernel are used. As a convolution is sliding the kernel over the input, it is using the <kbd class="calibre18">strides</kbd> parameter to determine how it walks over the input, instead of going over every element of an input.</p>
+<p class="calibre4">Let's take a look at the following example, where we are moving a 3 x 3 x 1 kernel over a 6 x 6 x 1 image with a stride of 1, 3, 3, 1:</p>
+<div class="mce-root"><img src="Images/88babb37-5210-499f-8ed8-267661d6b995.png" width="809" height="587" class="calibre101"/></div>
+<div class="mce-root3">Step 1 as kernel slides with stride of 1,3,3,1</div>
+<p class="calibre4">The kernel strides over the following elements in steps 3 and 4:</p>
+<div class="mce-root"><img src="Images/d37b361e-768b-4670-a7c8-a5dc10beef9e.png" width="506" height="534" class="calibre102"/></div>
+<div class="mce-root3">Step 3 and 4 of kernel stride over input</div>
+<p class="calibre4">Let's implement this in TensorFlow; the output will be a 4 x 4 x 1 tensor:</p>
+<div class="title-page-name">
+<pre class="calibre26">import tensorflow as tf<br class="calibre2"/><br class="calibre2"/>def main():<br class="calibre2"/>  session = tf.InteractiveSession()<br class="calibre2"/>  input_batch = tf.constant([<br class="calibre2"/>    [ # First Input (6x6x1)<br class="calibre2"/>      [[0.0], [1.0], [2.0], [3.0], [4.0], [5.0]],<br class="calibre2"/>      [[0.1], [1.1], [2.1], [3.1], [4.1], [5.1]],<br class="calibre2"/>      [[0.2], [1.2], [2.2], [3.2], [4.2], [5.2]],<br class="calibre2"/>      [[0.3], [1.3], [2.3], [3.3], [4.3], [5.3]],<br class="calibre2"/>      [[0.4], [1.4], [2.4], [3.4], [4.4], [5.4]],<br class="calibre2"/>      [[0.5], [1.5], [2.5], [3.5], [4.5], [5.5]],<br class="calibre2"/>  ],<br class="calibre2"/> ])<br class="calibre2"/>kernel = tf.constant([ # Kernel (3x3x1)<br class="calibre2"/>  [[[0.0]], [[0.5]], [[0.0]]],<br class="calibre2"/>  [[[0.0]], [[0.5]], [[0.0]]],<br class="calibre2"/>  [[[0.0]], [[0.5]], [[0.0]]]<br class="calibre2"/>])<br class="calibre2"/><br class="calibre2"/># NOTE: the change in the size of the strides parameter.<br class="calibre2"/>conv2d = tf.nn.conv2d(input_batch, kernel, strides=[1, 3, 3, 1], padding='SAME')<br class="calibre2"/>conv2d_output = session.run(conv2d)<br class="calibre2"/>print(conv2d_output)<br class="calibre2"/>if __name__ == '__main__':<br class="calibre2"/>main()</pre></div>
+<p class="calibre4">The output is similar to the following listing, in which 1, 3, 3, 1 stride leaders to four red boxes in the preceding image are being multiplied with the kernel:</p>
+<div class="title-page-name">
+<pre class="calibre26">[[[[ 1.64999998][ 6.1500001 ]]<br class="calibre2"/>  [[ 2.0999999 ][ 6.60000038]]]]</pre></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Pooling</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Pooling layers help with overfitting and improve performance by reducing the size of the input tensor. Typically, they are used to scale down the input, keeping important information. Pooling is a much faster mechanism for input size reduction compared with <kbd class="calibre18">tf.nn.conv2d</kbd>.</p>
+<p class="calibre4">The following pooling mechanisms are supported by TensorFlow:</p>
+<ul class="calibre20">
+<li class="calibre21">Average</li>
+<li class="calibre21">Max</li>
+<li class="calibre21">Max with argmax</li>
+</ul>
+<p class="calibre4">Each pooling operation uses rectangular windows of size <kbd class="calibre18">ksize</kbd> separated by offset <kbd class="calibre18">strides</kbd>. If <kbd class="calibre18">strides</kbd> are all ones (1, 1, 1, 1), every window is used; if <kbd class="calibre18">strides</kbd> are all twos (1, 2, 2, 1), every other window is used in each dimension; and so on.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Max pool</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following defined <span class="calibre14">function</span> provides max pooling for the input 4D tensor <kbd class="calibre18">tf.nn.max_pool</kbd>:</p>
+<pre class="calibre26">max_pool(<br class="calibre2"/>  value, ksize, strides, padding, data_format='NHWC', name=None<br class="calibre2"/>)</pre>
+<p class="calibre4">The preceding arguments are explained here:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">value</kbd>: This is the 4D tensor with shape [batch, height, width, channels], type <kbd class="calibre18">tf.float32</kbd> on which max pooling needs to be done.</li>
+<li class="calibre21"><kbd class="calibre18">ksize</kbd>: This is the list of ints that has <kbd class="calibre18">length &gt;= 4</kbd>. The size of the window for each dimension of the input tensor.</li>
+<li class="calibre21"><kbd class="calibre18">strides</kbd>: This is the list of ints, <kbd class="calibre18">length &gt;= 4</kbd>. A stride of the sliding window for each dimension of the input tensor.</li>
+<li class="calibre21"><kbd class="calibre18">padding</kbd>: This is a string, either <kbd class="calibre18">VALID</kbd> or <kbd class="calibre18">SAME</kbd>. The padding algorithm. The following section explains <kbd class="calibre18">VALID</kbd> and <kbd class="calibre18">SAME</kbd> padding.</li>
+</ul>
+<div class="mce-root4"><img src="Images/12b26b0d-fafe-45c2-92ff-4701475b58a5.png" width="1346" height="684" class="calibre103"/></div>
+<div class="packt_infobox1">Reference: <a href="https://stackoverflow.com/questions/37674306/what-is-the-difference-between-same-and-valid-padding-in-tf-nn-max-pool-of-t" target="_blank" class="pcalibre pcalibre3 pcalibre2 pcalibre1 calibre31">https://stackoverflow.com/questions/37674306/what-is-the-difference-between-same-and-valid-padding-in-tf-nn-max-pool-of-t</a></div>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">data_format</kbd>: This is a string. <kbd class="calibre18">NHWC</kbd> and <kbd class="calibre18">NCHW</kbd> are supported.</li>
+<li class="calibre21"><kbd class="calibre18">name</kbd>: This is the optional name for the operation.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Example code</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following code demonstrates max pooling on a tensor using a <kbd class="calibre18">VALID</kbd> padding scheme:</p>
+<pre class="calibre26">import tensorflow as tf<br class="calibre2"/><br class="calibre2"/>batch_size=1<br class="calibre2"/>input_height = 3<br class="calibre2"/>input_width = 3<br class="calibre2"/>input_channels = 1<br class="calibre2"/><br class="calibre2"/>def main():<br class="calibre2"/>  sess = tf.InteractiveSession()<br class="calibre2"/>  layer_input = tf.constant([<br class="calibre2"/>    [<br class="calibre2"/>     [[1.0], [0.2], [2.0]],<br class="calibre2"/>     [[0.1], [1.2], [1.4]],<br class="calibre2"/>     [[1.1], [0.4], [0.4]]<br class="calibre2"/>    ] <br class="calibre2"/>  ])<br class="calibre2"/><br class="calibre2"/># The strides will look at the entire input by using the image_height and image_width<br class="calibre2"/>kernel = [batch_size, input_height, input_width, input_channels]<br class="calibre2"/>max_pool = tf.nn.max_pool(layer_input, kernel, [1, 1, 1, 1], "VALID")<br class="calibre2"/>print(sess.run(max_pool))<br class="calibre2"/><br class="calibre2"/>if __name__ == '__main__':<br class="calibre2"/>  main()</pre>
+<p class="calibre4">The output of the preceding listing will give the maximum values in the window 3 x 3 x 1:</p>
+<pre class="calibre26">[[[[ 2.]]]]</pre>
+<p class="calibre4">The following diagram explains how max pool logic works:</p>
+<div class="mce-root"><img src="Images/f500a11c-b10d-4cd6-b4bf-38f16e45446f.png" width="389" height="139" class="calibre104"/></div>
+<p class="calibre4">As can be seen, max pool selected the maximum value from the window based on a stride of 1, 1, 1.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Average pool</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">It performs the average pooling on the input tensor. Each entry in the output is the mean of the corresponding size <kbd class="calibre18">ksize</kbd> window in value. It is defined using the <kbd class="calibre18">tf.nn.avg_pool</kbd> method:</p>
+<pre class="calibre26">avg_pool( value, ksize, strides, padding, data_format='NHWC', name=None)</pre>
+<p class="calibre4">Let's look at the code example where <kbd class="calibre18">avg_pool</kbd> is used in a simple 2D tensor:</p>
+<pre class="calibre26">import tensorflow as tf<br class="calibre2"/><br class="calibre2"/>batch_size=1<br class="calibre2"/>input_height = 3<br class="calibre2"/>input_width = 3<br class="calibre2"/>input_channels = 1<br class="calibre2"/><br class="calibre2"/>def main():<br class="calibre2"/>  sess = tf.InteractiveSession()<br class="calibre2"/>  layer_input = tf.constant([<br class="calibre2"/>    [<br class="calibre2"/>      [[1.0], [0.2], [2.0]],<br class="calibre2"/>      [[0.1], [1.2], [1.4]],<br class="calibre2"/>      [[1.1], [0.4], [0.4]]<br class="calibre2"/>    ]<br class="calibre2"/>  ])<br class="calibre2"/><br class="calibre2"/>  # The strides will look at the entire input by using the image_height and image_width<br class="calibre2"/>  kernel = [batch_size, input_height, input_width, input_channels]<br class="calibre2"/>  avg_pool = tf.nn.avg_pool(layer_input, kernel, [1, 1, 1, 1], "VALID")<br class="calibre2"/>  print(sess.run(avg_pool))<br class="calibre2"/><br class="calibre2"/>if __name__ == '__main__': <br class="calibre2"/>    main()</pre>
+<p class="calibre4">The output of the preceding listing is the average of all the values in the tensor.</p>
+<p class="calibre51"><em class="calibre17">Average = (1.0 + 0.2 + 2.0 + 0.1 + 1.2 + 1.4 + 1.1 + 0.4 + 0. 4) / 9 = 0.86666</em></p>
+<pre class="calibre26">[[[[ 0.86666667]]]]</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Image classification with convolutional networks</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's look at a more realistic case for using CNNs; we will use the Stanford Dogs versus Cats dataset. This dataset has 100+ images of dogs and cats.</p>
+<div class="packt_tip">You can download this dataset (100 images each) from the following location:<a href="https://s3.amazonaws.com/neural-networking-book/ch04/dogs_vs_cats.tar.gz" class="pcalibre pcalibre3 pcalibre2 pcalibre1 calibre31"><br class="calibre2"/>
+https://s3.amazonaws.com/neural-networking-book/ch04/dogs_vs_cats.tar.gz</a></div>
+<ol class="calibre23">
+<li class="chapter">Import the relevant functions and Python classes:</li>
+</ol>
+<pre class="calibre64">import matplotlib.pyplot as plt
+import tensorflow as tf
+import pandas as pd
+import numpy as np
+from sklearn.metrics import confusion_matrix
+import time
+from datetime import timedelta
+import math
+import dataset
+import random</pre>
+<ol start="2" class="calibre23">
+<li class="chapter">We will define the parameters for the convolution layers. There are three convolution layers with the following parameters:</li>
+</ol>
+<table class="calibre9">
+<tbody class="calibre10">
+<tr class="calibre11">
+<td class="calibre105">
+<p class="calibre13"><strong class="calibre7">Layer number</strong></p>
+</td>
+<td class="calibre105">
+<p class="calibre13"><strong class="calibre7">Layer type</strong></p>
+</td>
+<td class="calibre105">
+<p class="calibre13"><strong class="calibre7">Number of filters/neurons</strong></p>
+</td>
+</tr>
+<tr class="calibre106">
+<td class="calibre105">
+<p class="calibre13">1</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">Convolution</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">32 filters</p>
+</td>
+</tr>
+<tr class="calibre107">
+<td class="calibre105">
+<p class="calibre13">2</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">Convolution</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">32 filters</p>
+</td>
+</tr>
+<tr class="calibre106">
+<td class="calibre105">
+<p class="calibre13">3</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">Convolution</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">64 filters</p>
+</td>
+</tr>
+<tr class="calibre108">
+<td class="calibre105">
+<p class="calibre13">4</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">Fully connected</p>
+</td>
+<td class="calibre105">
+<p class="calibre13">128 neurons</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="calibre65">The Network topolgy can be represented as shown in the following diagram:</p>
+<div class="mce-root"><img src="Images/04579c56-ba76-4fc4-9c9d-c1282aa91ac6.png" class="calibre109"/></div>
+<p class="mce-root7">The following code should be helpful for understanding the parameters:</p>
+<pre class="calibre64"># Convolutional Layer 1.
+filter_size1 = 3 
+num_filters1 = 32
+
+# Convolutional Layer 2.
+filter_size2 = 3
+num_filters2 = 32
+
+# Convolutional Layer 3.
+filter_size3 = 3
+num_filters3 = 64
+
+# Fully-connected layer.
+# Number of neurons in fully-connected layer.
+fc_size = 128
+
+# Number of color channels for the images: 1 channel for gray-scale.
+num_channels = 3
+
+# image dimensions (only squares for now)
+img_size = 128
+
+# Size of image when flattened to a single dimension
+img_size_flat = img_size * img_size * num_channels
+
+# Tuple with height and width of images used to reshape arrays.
+img_shape = (img_size, img_size)</pre>
+<ol start="3" class="calibre23">
+<li class="chapter">Define the constant for the number of classes (two, in this case) and other variables. We have taken the Stanford dataset and reduced it to 100 images each of dogs and cats for easier processing:</li>
+</ol>
+<pre class="calibre64"># class info
+classes = ['dogs', 'cats']
+num_classes = len(classes)
+
+# batch size
+batch_size = 2
+
+# validation split
+validation_size = .2
+total_iterations = 0
+early_stopping = None  # use None if you don't want to implement early stoping
+home = '/home/ubuntu/Downloads/dogs_vs_cats'
+train_path = home + '/train-cat-dog-100/'
+test_path = home + '/test-cat-dog-100/'
+checkpoint_dir = home + "/models/"</pre>
+<p class="calibre65">Let's first read the dataset into a tensor. The logic for the reading is defined in the <kbd class="calibre18">dataset</kbd> <span class="calibre14">class</span>:</p>
+<pre class="calibre64">data = dataset.read_train_sets(train_path, img_size, classes, validation_size=validation_size)</pre>
+<p class="calibre65">Here, <kbd class="calibre18">train_path</kbd>, <kbd class="calibre18">image_size</kbd>, <kbd class="calibre18">classes</kbd>, and <kbd class="calibre18">validation_size</kbd> are defined. Let's look at the implementation of <kbd class="calibre18">read_train_sets(..)</kbd>:</p>
+<pre class="calibre64">def read_train_sets(train_path, image_size, classes, validation_size=0):
+  class DataSets(object):
+    pass
+  data_sets = DataSets()
+
+  images, labels, ids, cls = load_train(train_path, image_size, classes)
+  images, labels, ids, cls = shuffle(images, labels, ids, cls)  # shuffle the data
+
+  if isinstance(validation_size, float):
+    validation_size = int(validation_size * images.shape[0])
+
+  validation_images = images[:validation_size]
+  validation_labels = labels[:validation_size]
+  validation_ids = ids[:validation_size]
+  validation_cls = cls[:validation_size]
+
+  train_images = images[validation_size:]
+  train_labels = labels[validation_size:]
+  train_ids = ids[validation_size:]
+  train_cls = cls[validation_size:]
+
+  data_sets.train = DataSet(train_images, train_labels, train_ids, train_cls)
+  data_sets.valid = DataSet(validation_images, validation_labels, validation_ids, <br class="calibre2"/>   validation_cls)
+
+  return data_sets</pre>
+<p class="calibre65">This method, in turn, calls <kbd class="calibre18">load_train(...)</kbd> to return a <kbd class="calibre18">numpy.array</kbd> of the data types:</p>
+<pre class="calibre64">def load_train(train_path, image_size, classes) :<br class="calibre2"/> images = labels = []<br class="calibre2"/> ids = cls = []<br class="calibre2"/> # load data into arrays<br class="calibre2"/> images = np.array(images) <br class="calibre2"/> labels = np.array(labels) <br class="calibre2"/> ids = np.array(ids) <br class="calibre2"/> cls =  np.array(cls)   <br class="calibre2"/> return images, labels, ids, cls</pre>
+<p class="calibre65">The data loaded into training is a function of <kbd class="calibre18">validation_set</kbd>; it is calculated from the images array's first dimension:</p>
+<div class="mce-root"><img src="Images/19940b2c-a831-4b0e-a3e1-515a1fb652d6.png" width="786" height="50" class="calibre110"/></div>
+<p class="calibre65">We calculate <kbd class="calibre18">validation_size as</kbd> shown in the following code:</p>
+<pre class="calibre64">validation_size = int(validation_size * images.shape[0])</pre>
+<p class="calibre65">As we have kept validation size as <kbd class="calibre18">0.2</kbd>, it comes out to <kbd class="calibre18">58.2</kbd> rounded off to <kbd class="calibre18">58</kbd>:</p>
+<div class="mce-root"><img src="Images/4686ba14-d906-429d-a911-2c5841fedc0d.png" width="308" height="54" class="calibre111"/></div>
+<p class="calibre65">Similarly, we create the test dataset, <kbd class="calibre18">test_images</kbd> and <kbd class="calibre18">test_ids</kbd>:</p>
+<pre class="calibre64">test_images, test_ids = dataset.read_test_set(test_path, img_size)</pre>
+<p class="calibre65">Here, <kbd class="calibre18">read_test_set(...)</kbd> is a function called internally:</p>
+<pre class="calibre64">def read_test_set(test_path, image_size):
+  images, ids  = load_test(test_path, image_size)
+  return images, ids</pre>
+<p class="calibre65"><kbd class="calibre18">read_test_set(test_path, image_size)</kbd> in turn calls <kbd class="calibre18">load_test(test_path, image_size)</kbd>, for which the listing is given as follows:</p>
+<pre class="calibre64">def load_test(test_path, image_size):
+  path = os.path.join(test_path, '*g')
+  files = sorted(glob.glob(path))
+
+  X_test = []
+  X_test_id = []
+  print("Reading test images")
+  for fl in files:
+      flbase = os.path.basename(fl)
+      img = cv2.imread(fl)
+      img = cv2.resize(img, (image_size, image_size), fx=0.5, fy=0.5,<br class="calibre2"/>        interpolation=cv2.INTER_LINEAR)
+
+      #img = cv2.resize(img, (image_size, image_size), cv2.INTER_LINEAR)
+      X_test.append(img)
+      X_test_id.append(flbase)
+
+  ### because we're not creating a DataSet object for the test images, <br class="calibre2"/>  ### normalization happens here
+  X_test = np.array(X_test, dtype=np.uint8)
+  X_test = X_test.astype('float32')
+  X_test = X_test / 255
+
+  return X_test, X_test_id</pre>
+<ol start="4" class="calibre23">
+<li class="chapter">Let's look at the sizes of the various <kbd class="calibre18">numpy</kbd> arrays created:</li>
+</ol>
+<pre class="calibre64">print("Size of:")
+print("- Training-set:\t\t{}".format(len(data.train.labels)))
+print("- Test-set:\t\t{}".format(len(test_images)))
+print("- Validation-set:\t{}".format(len(data.valid.labels)))</pre>
+<pre class="calibre64">Size of:Size of:<br class="calibre2"/>- Training-set: 233<br class="calibre2"/>- Test-set: 100<br class="calibre2"/>- Validation-set: 58</pre>
+<ol start="5" class="calibre23">
+<li class="chapter">Plot nine random images in a grid of 3 x 3 with the appropriate classes:</li>
+</ol>
+<pre class="calibre64"> images, cls_true = data.train.images, data.train.cls<br class="calibre2"/> plot_images(images=images, cls_true=cls_true</pre>
+<p class="calibre65">Here, the <kbd class="calibre18">plot_images</kbd> function is defined in the following code block:</p>
+<pre class="calibre64">def plot_images(images, cls_true, cls_pred=None):
+    
+    if len(images) == 0:
+        print("no images to show")
+        return 
+    else:
+        random_indices = random.sample(range(len(images)), min(len(images), 9))
+        
+    images, cls_true  = zip(*[(images[i], cls_true[i]) for i in random_indices])
+    
+    # Create figure with 3x3 sub-plots.
+    fig, axes = plt.subplots(3, 3)
+    fig.subplots_adjust(hspace=0.3, wspace=0.3)
+
+    for i, ax in enumerate(axes.flat):
+        # Plot image.
+        print(images[i])
+        ax.imshow(images[i].reshape(img_size, img_size, num_channels))
+        print(images[i].size)
+        print(img_size)
+        print(num_channels)
+        # Show true and predicted classes.
+        if cls_pred is None:
+            xlabel = "True: {0}".format(cls_true[i])
+        else:
+            xlabel = "True: {0}, Pred: {1}".format(cls_true[i], cls_pred[i])
+
+        # Show the classes as the label on the x-axis.
+        ax.set_xlabel(xlabel)
+        
+        # Remove ticks from the plot.
+        ax.set_xticks([])
+        ax.set_yticks([])
+    
+    # Ensure the plot is shown correctly with multiple plots
+    # in a single Notebook cell.
+    plt.show()</pre>
+<p class="calibre4">The following is the output of our code:</p>
+<div class="mce-root"><img src="Images/0baca6e1-e7d0-4d90-8a99-54c0f13843d1.png" width="865" height="737" class="calibre112"/></div>
+<div class="mce-root3">Nine random images from the dataset</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Defining a tensor for input images and the first convolution layer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Next, we will define a tensor for input images and the first convolution layer.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Input tensor</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Create a placeholder with <kbd class="calibre18">shape[None, img_size_flat]</kbd> and reshape it into <kbd class="calibre18">[-1, img_size, img_size, num_channels]</kbd>:</p>
+<pre class="calibre26">x = tf.placeholder(tf.float32, shape=[None, img_size_flat], name='x')
+x_image = tf.reshape(x, [-1, img_size, img_size, num_channels])</pre>
+<p class="calibre4">Here, the parameters <kbd class="calibre18">img_size</kbd> and <kbd class="calibre18">num_channels</kbd> have the following values:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">img_size</kbd> = 128</li>
+<li class="calibre21"><kbd class="calibre18">num_channels</kbd> = 3</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">First convolution layer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">After reshaping the input tensor into <kbd class="calibre18">x_image</kbd>, we will create the first convolution layer:</p>
+<pre class="calibre26"><br class="calibre2"/>layer_conv1, weights_conv1 = new_conv_layer(input=x_image,
+                                            num_input_channels=num_channels,
+                                            filter_size=filter_size1,
+                                            num_filters=num_filters1,
+                                            use_pooling=True)
+print(layer_conv1)</pre>
+<p class="calibre4">The <kbd class="calibre18">new_conv_layer(...)</kbd> function is defined here. Let's look at the value of each variable being sent to this function:</p>
+<div class="mce-root"><img src="Images/b8b1af64-88cf-40e5-aba0-c1b7f4704291.png" width="508" height="338" class="calibre113"/></div>
+<pre class="calibre26">def new_conv_layer(input,              # The previous layer.
+                   num_input_channels, # Num. channels in prev. layer.
+                   filter_size,        # Width and height of each filter.
+                   num_filters,        # Number of filters.
+                   use_pooling=True):  # Use 2x2 max-pooling.
+
+    # Shape of the filter-weights for the convolution.
+    # This format is determined by the TensorFlow API.
+    shape = [filter_size, filter_size, num_input_channels, num_filters]
+
+    # Create new weights aka. filters with the given shape.
+    weights = new_weights(shape=shape)
+
+    # Create new biases, one for each filter.
+    biases = new_biases(length=num_filters)
+
+    # Create the TensorFlow operation for convolution.
+    # Note the strides are set to 1 in all dimensions.
+    # The first and last stride must always be 1,
+    # because the first is for the image-number and
+    # the last is for the input-channel.
+    # But e.g. strides=[1, 2, 2, 1] would mean that the filter
+    # is moved 2 pixels across the x- and y-axis of the image.
+    # The padding is set to 'SAME' which means the input image
+    # is padded with zeroes so the size of the output is the same.
+    layer = tf.nn.conv2d(input=input,
+                         filter=weights,
+                         strides=[1, 1, 1, 1],
+                         padding='SAME')
+
+    # Add the biases to the results of the convolution.
+    # A bias-value is added to each filter-channel.
+    layer += biases
+
+    # Use pooling to down-sample the image resolution?
+    if use_pooling:
+        # This is 2x2 max-pooling, which means that we
+        # consider 2x2 windows and select the largest value
+        # in each window. Then we move 2 pixels to the next window.
+        layer = tf.nn.max_pool(value=layer,
+                               ksize=[1, 2, 2, 1],
+                               strides=[1, 2, 2, 1],
+                               padding='SAME')
+
+    # Rectified Linear Unit (ReLU).
+    # It calculates max(x, 0) for each input pixel x.
+    # This adds some non-linearity to the formula and allows us
+    # to learn more complicated functions.
+    layer = tf.nn.relu(layer)
+
+    # Note that ReLU is normally executed before the pooling,
+    # but since relu(max_pool(x)) == max_pool(relu(x)) we can
+    # save 75% of the relu-operations by max-pooling first.
+
+    # We return both the resulting layer and the filter-weights
+    # because we will plot the weights later.
+    return layer, weights</pre>
+<p class="calibre4">The variables have the following values at runtime:</p>
+<div class="mce-root"><img src="Images/94fc1581-7e56-4eea-8f6a-462173e18a4c.png" width="1042" height="50" class="calibre114"/></div>
+<div class="mce-root"><img src="Images/b86f9480-4130-4e9b-a42c-56e921259837.png" width="1108" height="51" class="calibre115"/></div>
+<p class="calibre4">If we run this, the output of the <kbd class="calibre18">print(..)</kbd> statement will be as follows:</p>
+<div class="title-page-name">
+<pre class="calibre26">Tensor("Relu:0", shape=(?, 64, 64, 32), dtype=float32)</pre>
+<p class="mce-root5">The output shows the shape of the output tensor coming out of input layer 1.</p>
+</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Second convolution layer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In the second convolution layer, we start with the first layer's output as input and build a new layer with the following parameters:</p>
+<div class="mce-root"><img src="Images/fe16178f-69ae-4b98-a2cd-c6db7d000c1f.png" width="635" height="409" class="calibre116"/></div>
+<p class="calibre4">First, we define a placeholder for real <kbd class="calibre18">y</kbd> and the class of real <kbd class="calibre18">y</kbd> (the label of the class):</p>
+<pre class="calibre26">y_true = tf.placeholder(tf.float32, shape=[None, num_classes], name='y_true')
+ 
+y_true_cls = tf.argmax(y_true, dimension=1)</pre>
+<p class="calibre4">The shape of these two variables is the following:</p>
+<div class="mce-root"><img src="Images/21d8c384-836d-44e2-84ea-c905f32cf6a3.png" width="1518" height="278" class="calibre117"/></div>
+<pre class="calibre26"><br class="calibre2"/>layer_conv2, weights_conv2 = new_conv_layer(input=layer_conv1,
+                                            num_input_channels=num_filters1,filter_size=filter_size2,num_filters=num_filters2,use_pooling=True)</pre>
+<p class="calibre4">where following are the values:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">num_input_channels</kbd> = 3</li>
+<li class="calibre21"><kbd class="calibre18">filter_size</kbd> = 3</li>
+<li class="calibre21"><kbd class="calibre18">num_filters</kbd> = 32</li>
+</ul>
+<p class="calibre4">This is the output of the printout:</p>
+<pre class="calibre26">Tensor("Relu_1:0", shape=(?, 32, 32, 32), dtype=float32)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Third convolution layer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">This layer takes the output of the second layer as the input. Let's look at the inputs going into the creation of this layer:</p>
+<div class="mce-root"><img src="Images/2d0e1178-13c2-41d2-b055-3e003015ed40.png" width="438" height="309" class="calibre118"/></div>
+<pre class="calibre26">shape = [filter_size, filter_size, num_input_channels, num_filters] weights = new_weights(shape=shape)</pre>
+<pre class="calibre26">layer_conv3, weights_conv3 = new_conv_layer(input=layer_conv2,<br class="calibre2"/>                                            num_input_channels=num_filters2,filter_size=filter_size3,num_filters=num_filters3,use_pooling=True) </pre>
+<pre class="calibre26">print(layer_conv3)</pre>
+<p class="calibre4">The shape of <kbd class="calibre18">layer_conv3</kbd> is as follows:</p>
+<pre class="calibre26">Tensor("Relu_2:0", shape=(?, 16, 16, 64), dtype=float32)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Flatten the layer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Next, we flatten the layer to the <kbd class="calibre18">num</kbd> of images and the <kbd class="calibre18">num</kbd> of features, which is 16,384 in this case. If you notice for the last layer's output, we have flattened it with the following logic, 16 x 16 x 64 = 16,384:</p>
+<pre class="calibre26">layer_flat, num_features = flatten_layer(layer_conv3)</pre>
+<p class="calibre4">If we print these values, you will see the following output:</p>
+<pre class="calibre26">Tensor("Reshape_1:0", shape=(?, 16384), dtype=float32)<br class="calibre2"/>16384</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Fully connected layers</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In the fourth and fifth layers, we define fully connected layers:</p>
+<pre class="calibre26">layer_fc1 = new_fc_layer(input=layer_flat,<br class="calibre2"/>                         num_inputs=num_features,<br class="calibre2"/>                         num_outputs=fc_size,<br class="calibre2"/>                         use_relu=True)</pre>
+<p class="calibre4">where</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">layer_flat</kbd>: the last layer flattened</li>
+<li class="calibre21"><kbd class="calibre18">num_features</kbd>: number of features</li>
+<li class="calibre21"><kbd class="calibre18">fc_size</kbd>: number of outputs</li>
+</ul>
+<p class="calibre4">The following image shows the values that are passed to <kbd class="calibre18">new_fc_layer()</kbd>:</p>
+<div class="mce-root"><img src="Images/dd3e30ec-b8fb-4c02-ac90-428f32e4a762.png" width="1256" height="321" class="calibre119"/></div>
+<pre class="calibre26">print(layer_fc1)</pre>
+<p class="calibre4">The value of the print is as follows:</p>
+<pre class="calibre26">Tensor("Relu_3:0", shape=(?, 128), dtype=float32)</pre>
+<p class="calibre4">Next is the fully connected layer 2, where the function takes the following parameters:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">layer_fc1</kbd>: the output from the first fully connected layer</li>
+<li class="calibre21"><kbd class="calibre18">num_inputs</kbd>: 128</li>
+<li class="calibre21"><kbd class="calibre18">num_inputs</kbd>: <kbd class="calibre18">num_classes</kbd>, 2 in this case</li>
+<li class="calibre21"><kbd class="calibre18">use_relu</kbd>: a Boolean function specifying whether to use <kbd class="calibre18">relu</kbd> or not; <kbd class="calibre18">False</kbd> in this case</li>
+</ul>
+<pre class="calibre26">layer_fc2 = new_fc_layer(input=layer_fc1,<br class="calibre2"/>                         num_inputs=fc_size,<br class="calibre2"/>                         num_outputs=num_classes,<br class="calibre2"/>                         use_relu=False)</pre>
+<p class="calibre4">Let's take a look at the output of the second fully connected layer:</p>
+<pre class="calibre26">print(layer_fc2)</pre>
+<pre class="calibre26">Tensor("add_4:0", shape=(?, 2), dtype=float32)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Defining cost and optimizer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Apply Softmax on the output from <kbd class="calibre18">layer_fc2</kbd> (the fully connected second layer).</p>
+<p class="calibre4"><span class="calibre14">In</span> mathematics<span class="calibre14">, the</span> <kbd class="calibre18">softmax</kbd> function<span class="calibre14">, or</span> normalized exponential function<span class="calibre14">,</span><sup class="calibre120"><a href="https://en.wikipedia.org/wiki/Softmax_function#cite_note-bishop-1" class="pcalibre pcalibre3 pcalibre1 calibre121 pcalibre2">[1]</a></sup><sup class="calibre120">:198</sup> <span class="calibre14">is a generalization of the</span> <a href="https://en.wikipedia.org/wiki/Logistic_function" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">logistic function</a> <span class="calibre14">that <em class="calibre17">squashes</em> a</span> <span class="calibre14">K</span><span class="calibre14">-dimensional vector</span> <span class="calibre14">Z of arbitrary real values to a</span> <span class="calibre14">K</span><span class="calibre14">-dimensional vector</span> <span class="calibre14"><em class="calibre17">σ(z)</em> of real values in the range [<em class="calibre17">0</em>, <em class="calibre17">1</em>] that add up to <em class="calibre17">1</em>. The function is given by the following formula:</span></p>
+<p class="calibre51"><span class="calibre14"><img src="Images/be5e10c9-6ffd-4ff8-bcf3-35b80c8c2454.png" width="536" height="126" class="calibre122"/></span></p>
+<pre class="calibre26">y_pred = tf.nn.softmax(layer_fc2)<br class="calibre2"/>y_pred_cls = tf.argmax(y_pred, dimension=1)</pre>
+<p class="calibre4">Calculate the cross entropy:</p>
+<pre class="calibre26">cross_entropy = tf.nn.softmax_cross_entropy_with_logits(<br class="calibre2"/>  logits=layer_fc2,<br class="calibre2"/>  labels=y_true)<br class="calibre2"/>cost = tf.reduce_mean(cross_entropy)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Optimizer</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Next, we define the optimizer, which is based on the Adam optimizer.</p>
+<p class="calibre4">Adam is different to the stochastic gradient descent algorithm. Stochastic gradient descent maintains a single learning rate (called <strong class="calibre7">alpha</strong>) for all weight updates and the learning rate does not change during training.</p>
+<p class="calibre4">This algorithm maintains a learning rate for each network weight (parameter) and separately adapts as learning unfolds. It computes individual adaptive learning rates for different parameters from the estimates of the first and second moments of the gradients.</p>
+<p class="calibre4">Adam combines the advantages of two other extensions of stochastic gradient descent.</p>
+<p class="calibre4">The <strong class="calibre7">adaptive gradient algorithm</strong> (<strong class="calibre7">AdaGrad</strong>) maintains a per-parameter learning rate that improves performance for ML problems with sparse gradients (for example, natural language and computer vision problems). <strong class="calibre7">Root mean square propagation</strong> (<strong class="calibre7">RMSProp</strong>) maintains learning rates for each parameter; these are adapted based on the average of recent values of the gradients for the weight (how quickly it is changing).</p>
+<pre class="calibre26">optimizer = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(cost)</pre>
+<p class="calibre4">We also calculate the variables for <kbd class="calibre18">correct_prediction</kbd> and <kbd class="calibre18">accuracy</kbd>:</p>
+<pre class="calibre26">correct_prediction = tf.equal(y_pred_cls, y_true_cls)<br class="calibre2"/>accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">First epoch</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Initialize the session and call the <kbd class="calibre18">optimize()</kbd> function for <kbd class="calibre18">num_iterations=1</kbd>:</p>
+<pre class="calibre26">session = tf.Session()<br class="calibre2"/>session.run(tf.global_variables_initializer())<br class="calibre2"/>batch_size = 2<br class="calibre2"/>train_batch_size = batch_size<br class="calibre2"/>optimize(num_iterations = 1, data=data, train_batch_size=train_batch_size, x=x, y_true=y_true,<br class="calibre2"/>session=session, optimizer=optimizer, cost=cost, accuracy=accuracy)</pre>
+<p class="calibre4">Here, the <kbd class="calibre18">optimize()</kbd> function is defined in the following block:</p>
+<pre class="calibre26">def optimize(num_iterations, data, train_batch_size, x, y_true, session, optimizer, cost, accuracy):
+    # Ensure we update the global variable rather than a local copy.
+    global total_iterations
+
+    # Start-time used for printing time-usage below.
+    start_time = time.time()
+    
+    best_val_loss = float("inf")
+    patience = 0
+
+    for i in range(total_iterations,
+                   total_iterations + num_iterations):
+
+        # Get a batch of training examples.
+        # x_batch now holds a batch of images and
+        # y_true_batch are the true labels for those images.
+        x_batch, y_true_batch, _, cls_batch = data.train.next_batch(train_batch_size)
+        x_valid_batch, y_valid_batch, _, valid_cls_batch = data.valid.next_batch(train_batch_size)
+
+        # Convert shape from [num examples, rows, columns, depth]
+        # to [num examples, flattened image shape]
+
+        x_batch = x_batch.reshape(train_batch_size, img_size_flat)
+        x_valid_batch = x_valid_batch.reshape(train_batch_size, img_size_flat)
+
+        # Put the batch into a dict with the proper names
+        # for placeholder variables in the TensorFlow graph.
+        feed_dict_train = {x: x_batch,
+                           y_true: y_true_batch}
+        
+        feed_dict_validate = {x: x_valid_batch,
+                              y_true: y_valid_batch}
+
+        # Run the optimizer using this batch of training data.
+        # TensorFlow assigns the variables in feed_dict_train
+        # to the placeholder variables and then runs the optimizer.
+        session.run(optimizer, feed_dict=feed_dict_train)
+        
+        # Print status at end of each epoch (defined as full pass through <br class="calibre2"/>        # training dataset).
+        if i % int(data.train.num_examples/batch_size) == 0: 
+            val_loss = session.run(cost, feed_dict=feed_dict_validate)
+            epoch = int(i / int(data.train.num_examples/batch_size))
+            
+            #print_progress(epoch, feed_dict_train, feed_dict_validate, val_loss)
+            print_progress(session, accuracy, epoch, feed_dict_train, feed_dict_validate,<br class="calibre2"/>              val_loss)
+            
+            if early_stopping:    
+                if val_loss &lt; best_val_loss:
+                    best_val_loss = val_loss
+                    patience = 0
+                else:
+                    patience += 1
+
+                if patience == early_stopping:
+                    break
+
+    # Update the total number of iterations performed.
+    total_iterations += num_iterations
+
+    # Ending time.
+    end_time = time.time()
+
+    # Difference between start and end-times.
+    time_dif = end_time - start_time
+
+    # Print the time-usage.
+    print("Time elapsed: " + str(timedelta(seconds=int(round(time_dif)))))</pre>
+<p class="calibre4">The output that prints the training, validation accuracy, and validation loss is listed here:</p>
+<pre class="calibre26">Epoch 1 --- Training Accuracy: 100.0%, Validation Accuracy: 50.0%, Validation Loss: 0.705</pre>
+<p class="calibre4">Print the accuracy of <kbd class="calibre18">Test-Set</kbd>:</p>
+<pre class="calibre26">print_validation_accuracy(x, y_true, y_pred_cls, session, data, show_example_errors=True, show_confusion_matrix=False)<br class="calibre2"/>Epoch 2 --- Training Accuracy: 50.0%, Validation Accuracy: 100.0%, Validation Loss: 0.320<br class="calibre2"/>Accuracy on Test-Set: 43.1% (25 / 58)</pre>
+<p class="calibre4">Next, let's optimize the model for <kbd class="calibre18">100</kbd> iterations:</p>
+<pre class="calibre26">optimize(num_iterations=100, data=data, train_batch_size=train_batch_size, x=x, y_true=y_true,session=session, optimizer=optimizer, cost=cost, accuracy=accuracy)
+
+print_validation_accuracy(x, y_true, y_pred_cls, session, data, show_example_errors=True,
+                              show_confusion_matrix=False)<br class="calibre2"/>Accuracy on Test-Set: 62.1% (36 / 58)</pre>
+<p class="calibre4">The output also shows false positives:</p>
+<div class="mce-root"><img src="Images/0701d3e7-93a0-4d1f-a3a1-b60938860ec7.png" width="1059" height="873" class="calibre123"/></div>
+<div class="mce-root3">Output showing false positives</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Plotting filters and their effects on an image</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's apply filters in two layers to two test images and see how that affects them:</p>
+<pre class="calibre26">image1 = test_images[0] <br class="calibre2"/>plot_image(image1)</pre>
+<p class="calibre4">The output of the <kbd class="calibre18">plot_image(image1)</kbd> function is shown in the following image:</p>
+<div class="mce-root"><img src="Images/e73c27ed-677f-4ced-a229-e7ae1b1f0828.png" width="894" height="876" class="calibre124"/></div>
+<pre class="calibre26">image2 = test_images[13]
+plot_image(image2)</pre>
+<p class="calibre4">The output of <kbd class="calibre18">image2</kbd> with filters applied is shown here:</p>
+<div class="mce-root"><img src="Images/7a69fdcd-2edf-412c-8c87-2f3e61a606f0.png" width="908" height="880" class="calibre125"/></div>
+<p class="calibre4"><strong class="calibre7">Convolution layer 1</strong>: The following is the plot for weights for layer 1:</p>
+<div class="mce-root"><img src="Images/148d381d-ae2f-431f-9f59-c5777a7ffdd3.png" width="1070" height="854" class="calibre126"/></div>
+<p class="calibre4">Filters from layer 1 applied to i mage 1:</p>
+<pre class="calibre26">plot_conv_layer(layer=layer_conv1, image=image1, session=session, x=x)</pre>
+<div class="mce-root"><img src="Images/0a7fcbe4-27aa-4810-8426-3dcfc2b29895.png" width="1084" height="876" class="calibre127"/></div>
+<p class="calibre4">Filters from Layer 1 applied to Image 2:</p>
+<pre class="calibre26">plot_conv_layer(layer=layer_conv1, image=image2, session=session, x=x)</pre>
+<div class="mce-root"><img src="Images/c87f3e63-b355-43f2-a591-73c5adbff0c9.png" width="1072" height="856" class="calibre128"/></div>
+<p class="calibre4"><strong class="calibre7">Convolution layer 2</strong>: Now plot the filter-weights for the second convolutional layer. There are 16 output channels from the first conv-layer, which means there are 16 input channels to the second conv-layer. The second Conv layer has a set of filter-weights for each of its input channels. We start by plotting the filter-weights for the first channel.</p>
+<p class="calibre4">Layer 2 weights:</p>
+<pre class="calibre26">plot_conv_weights(weights=weights_conv1, session=session)</pre>
+<div class="mce-root"><img src="Images/1fef67e7-1d91-4d12-8472-88ba49458be4.png" width="1044" height="846" class="calibre129"/></div>
+<div class="mce-root3"><span class="calibre5">Weights for Conv2, input channel 0. Positive weights are red and negative weights are blue</span></div>
+<p class="calibre4">There are 16 input channels to the second convolutional layer, so we can make another 15 plots of filter-weights like this. We just make one more with the filter-weights for the second channel:</p>
+<pre class="calibre26">plot_conv_weights(weights=weights_conv2, session=session, input_channel=1)</pre>
+<div class="mce-root"><img src="Images/3940424f-1b26-4655-a8e6-33b1f835132c.png" width="1076" height="860" class="calibre130"/></div>
+<div class="mce-root3"><span class="calibre5">Positive weights are red and negative weights are blue</span></div>
+<p class="calibre4">Plot Images 1 and 2 with filters from convolution layer 2:</p>
+<pre class="calibre26">plot_conv_layer(layer=layer_conv2, image=image1, session=session, x=x)
+plot_conv_layer(layer=layer_conv2, image=image2, session=session, x=x)</pre>
+<div class="mce-root3"><img src="Images/32a3fb47-36fc-4c28-a134-dbe122e429f9.png" width="1046" height="876" class="calibre131"/></div>
+<div class="mce-root3"><span class="calibre5">Weights for conv2, input channel 1.</span> Image displaying image1 filtered through a layer 2 filter</div>
+<div class="mce-root"><img src="Images/cf75f4f8-7094-42de-93ae-a53ef5def00c.png" width="1036" height="832" class="calibre132"/></div>
+<div class="mce-root3">Image displaying image 2 filtered through a layer 2 filter</div>
+<p class="calibre4"><strong class="calibre7">Convolution Layer 3</strong>: Let's print the layer 3 weights; this layer has 64 filters. This is how images 1 and 2 look passed through each of these filters:</p>
+<p class="calibre4"/>
+<pre class="calibre26">plot_conv_weights(weights=weights_conv3, session=session, input_channel=0)</pre>
+<div class="mce-root"><img src="Images/75b0fedd-b2fc-4fd5-b618-1bfad5389d36.png" width="1056" height="854" class="calibre133"/></div>
+<div class="mce-root3">Weights for Conv2, Input Channel 0, <span class="calibre5">Positive weights are red and negative weights are blue</span></div>
+<pre class="calibre26">plot_conv_weights(weights=weights_conv3, session=session, input_channel=1)</pre>
+<div class="mce-root"><img src="Images/ee6baebb-0628-4681-b538-6049633ac2e8.png" width="1038" height="852" class="calibre134"/></div>
+<div class="mce-root3">Weights for Conv2, input channel 1. P<span class="calibre5">ositive weights are red and negative weights are blue.</span></div>
+<p class="calibre4"><strong class="calibre7">Plotting an image passed through layer 3 filters</strong>: Execute the following statements to plot images 1 and 2 being passed from 64 filters of convolution layer 3:</p>
+<pre class="calibre26">plot_conv_layer(layer=layer_conv3, image=image1, session=session, x=x)<br class="calibre2"/>plot_conv_layer(layer=layer_conv3, image=image2, session=session, x=x)</pre>
+<div class="mce-root"><img src="Images/0c6fbc09-09e5-4a7d-ae8b-9f7c14c9a579.png" class="calibre135"/></div>
+<div class="mce-root3">Image 1, plotted with convolution filters from conv3</div>
+<p class="calibre4">The following is the image with convolution filters from conv3:</p>
+<div class="mce-root"><img src="Images/a8b2d685-5888-4864-b36a-f979f377d1ec.png" width="1028" height="834" class="calibre136"/></div>
+<div class="mce-root3">Image 2, plotted with convolution filters from conv3</div>
+<p class="calibre4">With this, we have completed the analysis of the Cats versus Dogs dataset, where we used a five-layer CNN with three hidden layers and two fully connected layers to build our model.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this chapter, you learned the basics of convolution and why it is an effective mechanism for image label prediction. You learned about basic concepts such as <kbd class="calibre18">strides</kbd> and padding. This was followed by an example based on the Stanford dataset of Cats versus Dogs. We used three convolution layers to build the neural network and two fully connected layers to showcase how it is used to classify the images. We also plotted the weights for three layers and saw how filters modify the image. We also looked at concepts such as image pooling and how it helps make CNN more efficient.</p>
+<p class="calibre4">In the next chapter we look at a different kind of neural network called a <strong class="calibre7">Recurrent Neural Network</strong> (<strong class="calibre7">RNN</strong>), which processes time series data or is used for <strong class="calibre7">natural language processing</strong> (<strong class="calibre7">NLP</strong>) to predict next word in a sequence</p>
+<p class="calibre4"/>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  </body></html>

@@ -1,0 +1,1362 @@
+<html><head></head><body>
+        <section id="62HIO1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Generative Models in Deep Learning</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this chapter, we will cover the following topics:</p>
+<ul class="calibre12">
+<li class="calibre13">Comparing principal component analysis with the Restricted Boltzmann machine</li>
+<li class="calibre13">Setting up a Restricted Boltzmann machine for Bernoulli distribution input</li>
+<li class="calibre13">Training a Restricted Boltzmann machine</li>
+<li class="calibre13">Backward or reconstruction phase of RBM</li>
+<li class="calibre13">Understanding the contrastive divergence of the reconstruction</li>
+<li class="calibre13">Initializing and starting a new TensorFlow session</li>
+<li class="calibre13">Evaluating the output from an RBM</li>
+<li class="calibre13">Setting up a Restricted Boltzmann machine for Collaborative Filtering</li>
+<li class="calibre13">Performing a full run of training an RBM</li>
+<li class="calibre13">Setting up a Deep Belief Network</li>
+<li class="calibre13">Implementing a feed-forward backpropagation Neural Network</li>
+<li class="calibre13">Setting up a Deep Restricted Boltzmann Machine</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="63G3A1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Comparing principal component analysis with the Restricted Boltzmann machine</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this section, you will learn about two widely recommended dimensionality reduction techniques--<strong class="calibre1">Principal component analysis</strong> (<strong class="calibre1">PCA</strong>) and the <strong class="calibre1">Restricted Boltzmann machine</strong> (<strong class="calibre1">RBM</strong>). Consider a vector <em class="calibre9">v</em> in <em class="calibre9">n</em>-dimensional space. The dimensionality reduction technique essentially transforms the vector <em class="calibre9">v</em> into a relatively smaller (or sometimes equal) vector <em class="calibre9">v'</em> with <em class="calibre9">m</em>-dimensions (<em class="calibre9">m</em>&lt;<em class="calibre9">n</em>). The transformation can be either linear or nonlinear.</p>
+<p class="calibre2">PCA performs a linear transformation on features such that orthogonally adjusted components are generated that are later ordered based on their relative importance of variance capture. These <em class="calibre9">m</em> components can be considered as new input features, and can be defined as follows:</p>
+<p class="calibre2">Vector <em class="calibre9">v'</em> = <img src="../images/00103.gif" class="calibre44"/></p>
+<p class="calibre2">Here, <em class="calibre9">w</em> and <em class="calibre9">c</em> correspond to weights (loading) and transformed components, respectively.</p>
+<p class="calibre2">Unlike PCA, RBMs (or DBNs/autoencoders) perform non-linear transformations using connections between visible and hidden units, as described in <a href="part0166.html#4U9TC1-a0a93989f17f4d6cb68b8cfd331bc5ab" target="_blank" class="calibre4">Chapter 4</a>, <em class="calibre9">Data Representation Using Autoencoders</em>. The nonlinearity helps in better understanding the relationship with latent variables. Along with information capture, they also tend to remove noise. RBMs are generally based on stochastic distribution (either Bernoulli or Gaussian).</p>
+<div class="packt_infobox">A large amount of Gibbs sampling is performed to learn and optimize the connection weights between visible and hidden layers. The optimization happens in two passes: a forward pass where hidden layers are sampled using given visible layers and a backward pass where visible layers are resampled using given hidden layers. The optimization is performed to minimize the reconstruction error.</div>
+<p class="calibre2">The following image represents a restricted Boltzmann machine:</p>
+<div class="cdpaligncenter"><img class="image-border65" src="../images/00099.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="64EJS1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">For this recipe, you will require R (the <kbd class="calibre10">rbm</kbd> and <kbd class="calibre10">ggplot2</kbd> packages) and the MNIST dataset. The MNIST dataset can be downloaded from the TensorFlow dataset library. The dataset consists of handwritten images of 28 x 28 pixels. It has 55,000 training examples and 10,000 test examples. It can be downloaded from the <kbd class="calibre10">tensorflow</kbd> library using the following script:</p>
+<pre class="calibre20">
+library(tensorflow) <br class="title-page-tagline"/>datasets &lt;- tf$contrib$learn$datasets <br class="title-page-tagline"/>mnist &lt;- datasets$mnist$read_data_sets("MNIST-data", one_hot = TRUE)  <br class="title-page-tagline"/> 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="65D4E1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<ol class="calibre15">
+<li value="1" class="calibre13">Extract the train dataset (<kbd class="calibre10">trainX</kbd> with all 784 independent variables and <kbd class="calibre10">trainY</kbd> with the respective 10 binary outputs):</li>
+</ol>
+<pre class="calibre23">
+trainX &lt;- mnist$train$images <br class="title-page-tagline"/>trainY &lt;- mnist$train$labels 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Run a PCA on the <kbd class="calibre10">trainX</kbd> data:</li>
+</ol>
+<pre class="calibre23">
+PCA_model &lt;- prcomp(trainX, retx=TRUE) 
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Run an RBM on the <kbd class="calibre10">trainX</kbd> data:</li>
+</ol>
+<pre class="calibre23">
+RBM_model &lt;- rbm(trainX, retx=TRUE, max_epoch=500,num_hidden =900) 
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Predict on the train data using the generated models. In the case of the RBM model, generate probabilities:</li>
+</ol>
+<pre class="calibre23">
+PCA_pred_train &lt;- predict(PCA_model) <br class="title-page-tagline"/>RBM_pred_train &lt;- predict(RBM_model,type='probs')<strong class="calibre1"> </strong>
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Convert the outcomes into data frames:</li>
+</ol>
+<pre class="calibre23">
+PCA_pred_train &lt;- as.data.frame(PCA_pred_train)<br class="title-page-tagline"/> class="MsoSubtleEmphasis"&gt;RBM_pred_train &lt;- as.data.frame(as.matrix(RBM_pred_train))<br class="title-page-tagline"/>  
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Convert the 10-class binary <kbd class="calibre10">trainY</kbd> data frame into a numeric vector:</li>
+</ol>
+<pre class="calibre23">
+    <span>trainY_num&lt;- as.numeric(stringi::stri_sub(colnames(as.data.frame(trainY))[max.col(as.data.frame(trainY),ties.method="first")],2))</span><br class="title-page-tagline"/>  
+</pre>
+<ol start="7" class="calibre15">
+<li value="7" class="calibre13">Plot the components generated using PCA. Here, the <em class="calibre9">x</em>-axis represents component 1 and the <em class="calibre9">y</em>-axis represents component 2. The following image shows the outcome of the PCA model:</li>
+</ol>
+<pre class="calibre23">
+ggplot(PCA_pred_train, aes(PC1, PC2))+<br class="title-page-tagline"/>  geom_point(aes(colour = trainY))+ <br class="title-page-tagline"/>  theme_bw()+labs()+ <br class="title-page-tagline"/>  theme(plot.title = element_text(hjust = 0.5)) 
+</pre>
+<div class="cdpaligncenter"><img class="image-border66" src="../images/00058.jpeg"/></div>
+<ol start="8" class="calibre15">
+<li value="8" class="calibre13">Plot the hidden layers generated using PCA. Here, the <em class="calibre9">x</em>-axis represents hidden 1 and <em class="calibre9">y</em>-axis represents hidden 2. The following image shows the outcome of the RBM model:</li>
+</ol>
+<pre class="calibre23">
+ggplot(RBM_pred_train, aes(Hidden_2, Hidden_3))+<br class="title-page-tagline"/>  geom_point(aes(colour = trainY))+ <br class="title-page-tagline"/>  theme_bw()+labs()+ <br class="title-page-tagline"/>  theme(plot.title = element_text(hjust = 0.5)) 
+</pre>
+<div class="cdpaligncenter"><img class="image-border67" src="../images/00102.jpeg"/></div>
+<p class="calibre2">The following code and image shows the cumulative variance explained by the principal components:</p>
+<pre class="calibre20">
+var_explain &lt;- as.data.frame(PCA_model$sdev^2/sum(PCA_model$sdev^2)) <br class="title-page-tagline"/>var_explain &lt;- cbind(c(1:784),var_explain,cumsum(var_explain[,1])) <br class="title-page-tagline"/>colnames(var_explain) &lt;- c("PcompNo.","Ind_Variance","Cum_Variance") <br class="title-page-tagline"/>plot(var_explain$PcompNo.,var_explain$Cum_Variance, xlim = c(0,100),type='b',pch=16,xlab = "# of Principal Components",ylab = "Cumulative Variance",main = 'PCA - Explained variance') 
+</pre>
+<div class="cdpaligncenter"><img class="image-border68" src="../images/00106.jpeg"/></div>
+<p class="calibre2">The following code and image shows the decrease in the reconstruction training error while generating an RBM using multiple epochs:</p>
+<pre class="calibre20">
+plot(RBM_model,xlab = "# of epoch iterations",ylab = "Reconstruction error",main = 'RBM - Reconstruction Error') 
+</pre>
+<div class="cdpaligncenter"><img class="image-border69" src="../images/00107.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="66BL01-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Setting up a Restricted Boltzmann machine for Bernoulli distribution input</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this section, let's set up a restricted Boltzmann machine for Bernoulli distributed input data, where each attribute has values ranging from 0 to 1 (equivalent to a probability distribution). The dataset (MNIST) used in this recipe has input data satisfying a Bernoulli distribution.</p>
+<p class="calibre2">An RBM comprises of two layers: a visible layer and a hidden layer. The visible layer is an input layer of nodes equal to the number of input attributes. In our case, each image in the MNIST dataset is defined using 784 pixels (28 x 28 size). Hence, our visible layer will have 784 nodes.</p>
+<p class="calibre2">On the other hand, the hidden layer is generally user-defined. The hidden layer has a set of binary activated nodes, with each node having a probability of linkage with all other visible nodes. In our case, the hidden layer will have 900 nodes. As an initial step, all the nodes in the visible layer are connected with all the nodes in the hidden layer bidirectionally.</p>
+<p class="calibre2">Each connection is defined using a weight, and hence a weight matrix is defined where the rows represent the number of input nodes and the columns represent the number of hidden nodes. In our case, the weight matrix (<em class="calibre9">w</em>) will be a tensor of dimensions 784 x 900.</p>
+<p class="calibre2">In addition to weights, all the nodes in each layer are assisted by a bias node. The bias node of the visible layer will have connections with all the visible nodes (that is, the 784 nodes) and is represented with <strong class="calibre1">vb</strong>, whereas the bias node of the hidden layer will have connections with all the hidden nodes (that is, the 900 nodes) and is represented as <strong class="calibre1">vh</strong>.</p>
+<div class="packt_infobox">A point to remember with RBMs is that there will be no connections among nodes within each layer. In other words, the connections will be interlayer, but not intralayer.</div>
+<p class="calibre2">The following image represents an RBM with the visible layer, hidden layer, and interconnections:</p>
+<div class="cdpaligncenter"><img class="image-border70" src="../images/00108.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="67A5I1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for setting up an RBM.</p>
+<ul class="calibre12">
+<li class="calibre13">TensorFlow in R is installed and set up</li>
+<li class="calibre13">The <kbd class="calibre10">mnist</kbd> data is downloaded and loaded for setting up RBM</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="688M41-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the steps to set up the visible and hidden layers of an RBM using TensorFlow:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Start a new interactive TensorFlow session:</li>
+</ol>
+<pre class="calibre23">
+# Reset the graph <br class="title-page-tagline"/>tf$reset_default_graph() <br class="title-page-tagline"/># Starting session as interactive session <br class="title-page-tagline"/>sess &lt;- tf$InteractiveSession() 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Define the model parameters. The <kbd class="calibre10">num_input</kbd> parameter defines the number of nodes in the visible layer and <kbd class="calibre10">num_hidden</kbd> defines the number of nodes in the hidden layer:</li>
+</ol>
+<pre class="calibre23">
+num_input&lt;-784L <br class="title-page-tagline"/>num_hidden&lt;-900L
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Create a placeholder variable for the weight matrix:</li>
+</ol>
+<pre class="calibre23">
+W &lt;- tf$placeholder(tf$float32, shape = shape(num_input, num_hidden)) 
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Create placeholder variables of the visible and hidden biases:</li>
+</ol>
+<pre class="calibre23">
+vb &lt;- tf$placeholder(tf$float32, shape = shape(num_input)) <br class="title-page-tagline"/>hb &lt;- tf$placeholder(tf$float32, shape = shape(num_hidden)) 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6976M1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Training a Restricted Boltzmann machine</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Every training step of an RBM goes through two phases: the forward phase and the backward phase (or reconstruction phase). The reconstruction of visible units is fine tuned by making several iterations of the forward and backward phases.</p>
+<p class="calibre2"><strong class="calibre1">Training a forward phase</strong>: In the forward phase, the input data is passed from the visible layer to the hidden layer and all the computation occurs within the nodes of the hidden layer. The computation is essentially to take a stochastic decision of each connection from the visible to the hidden layer. In the hidden layer, the input data (<kbd class="calibre10">X</kbd>) is multiplied by the weight matrix (<kbd class="calibre10">W</kbd>) and added to a hidden bias vector (<kbd class="calibre10">hb</kbd>).</p>
+<p class="calibre2">The resultant vector of a size equal to the number of hidden nodes is then passed through a sigmoid function to determine each hidden node's output (or activation state). In our case, each input digit will produce a tensor vector of 900 probabilities, and as we have 55,000 input digits, we will have an activation matrix of the size 55,000 x 900. Using the hidden layer's probability distribution matrix, we can generate samples of activation vectors that can be used later to estimate negative phase gradients.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6A5N81-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for setting up an RBM.</p>
+<ul class="calibre12">
+<li class="calibre13">TensorFlow in R is installed and set up</li>
+<li class="calibre13">The <kbd class="calibre10">mnist</kbd> data is downloaded and loaded for setting up the RBM</li>
+<li class="calibre13">The RBM model is set up as described in the recipe <em class="calibre9">Setting up a Restricted Boltzmann machine for Bernoulli distribution input</em></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6B47Q1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Example of a sampling</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Consider a constant vector <kbd class="calibre10">s1</kbd> equivalent to a tensor vector of probabilities. Then, create a new random uniformly distributed sample <kbd class="calibre10">s2</kbd> using the distribution of the constant vector <kbd class="calibre10">s1</kbd>. Then calculate the difference and apply a rectified linear activation function.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6C2OC1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the steps to set up the script for running the RBM model using TensorFlow:</p>
+<pre class="calibre20">
+X = tf$placeholder(tf$float32, shape=shape(NULL, num_input)) <br class="title-page-tagline"/>prob_h0= tf$nn$sigmoid(tf$matmul(X, W) + hb) <br class="title-page-tagline"/>h0 = tf$nn$relu(tf$sign(prob_h0 - tf$random_uniform(tf$shape(prob_h0))))
+</pre>
+<p class="calibre2">Use the following code to execute the graph created in TensorFlow:</p>
+<pre class="calibre20">
+sess$run(tf$global_variables_initializer()) <br class="title-page-tagline"/>s1 &lt;- tf$constant(value = c(0.1,0.4,0.7,0.9)) <br class="title-page-tagline"/>cat(sess$run(s1)) <br class="title-page-tagline"/>s2=sess$run(tf$random_uniform(tf$shape(s1))) <br class="title-page-tagline"/>cat(s2) <br class="title-page-tagline"/>cat(sess$run(s1-s2)) <br class="title-page-tagline"/>cat(sess$run(tf$sign(s1 - s2))) <br class="title-page-tagline"/>cat(sess$run(tf$nn$relu(tf$sign(s1 - s2)))) 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6D18U1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Backward or reconstruction phase of RBM</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In the reconstruction phase, the data from the hidden layer is passed back to the visible layer. The hidden layer vector of probabilities <kbd class="calibre10">h0</kbd> is multiplied by the transpose of the weight matrix <kbd class="calibre10">W</kbd> and added to a visible layer bias <kbd class="calibre10">vb</kbd>, which is then passed through a sigmoid function to generate a reconstructed input vector <kbd class="calibre10">prob_v1</kbd>.</p>
+<p class="calibre2">A sample input vector is created using the reconstructed input vector, which is then multiplied by the weight matrix <kbd class="calibre10">W</kbd> and added to the hidden bias vector <kbd class="calibre10">hb</kbd> to generate an updated hidden vector of probabilities <kbd class="calibre10">h1</kbd>.</p>
+<p class="calibre2">This is also called Gibbs sampling. In some scenarios, the sample input vector is not generated and the reconstructed input vector <kbd class="calibre10">prob_v1</kbd> is directly used to update the hi</p>
+<div class="cdpaligncenter"><img class="image-border71" src="../images/00124.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6DVPG1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for image reconstruction using the input probability vector.</p>
+<ul class="calibre12">
+<li class="calibre13"><kbd class="calibre10">mnist</kbd> data is loaded in the environment</li>
+<li class="calibre13">The RBM model is trained using the recipe <em class="calibre9">Training a Restricted Boltzmann machine</em></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6EUA21-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section covers the steps to perform backward reconstruction and evaluation:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">The backward image reconstruction can be performed using the input probability vector with the following script:</li>
+</ol>
+<pre class="calibre23">
+prob_v1 = tf$nn$sigmoid(tf$matmul(h0, tf$transpose(W)) + vb)<br class="title-page-tagline"/>v1 = tf$nn$relu(tf$sign(prob_v1 - tf$random_uniform(tf$shape(prob_v1))))<br class="title-page-tagline"/>h1 = tf$nn$sigmoid(tf$matmul(v1, W) + hb) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13"><span>The evaluation can be performed using a defined metric, such as <strong class="calibre1">mean squared error</strong> (<strong class="calibre1">MSE</strong>), which is computed between the actual input data (</span><kbd class="calibre10">X</kbd><span>) and the reconstructed input data (</span><kbd class="calibre10">v1</kbd><span>). The MSE is computed after each epoch and the key objective is to minimize the MSE:</span></li>
+</ol>
+<pre class="calibre23">
+err = tf$reduce_mean(tf$square(X - v1)) 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6FSQK1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Understanding the contrastive divergence of the reconstruction</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">As an initial start, the objective function can be defined as the minimization of the average negative log-likelihood of reconstructing the visible vector <em class="calibre9">v</em> where <em class="calibre9">P(v)</em> denotes the vector of generated probabilities:</p>
+<div class="cdpaligncenter"><img src="../images/00110.gif" class="calibre39"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6GRB61-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for image reconstruction using the input probability vector.</p>
+<ul class="calibre12">
+<li class="calibre13"><kbd class="calibre10">mnist</kbd> data is loaded in the environment</li>
+<li class="calibre13">The images are reconstructed using the recipe <em class="calibre9">Backward or reconstruction phase</em></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6HPRO1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This current recipe present the steps for, a <strong class="calibre1">contrastive divergence</strong> (<strong class="calibre1">CD</strong>) technique used to speed up the sampling process:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Compute a positive weight gradient by multiplying (outer product) the input vector <kbd class="calibre10">X</kbd> with a sample of the hidden vector <kbd class="calibre10">h0</kbd> from the given probability distribution <kbd class="calibre10">prob_h0</kbd>:</li>
+</ol>
+<pre class="calibre23">
+w_pos_grad = tf$matmul(tf$transpose(X), h0) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Compute a negative weight gradient by multiplying (outer product) the sample of the reconstructed input data <kbd class="calibre10">v1</kbd> with the updated hidden activation vector <kbd class="calibre10">h1</kbd>:</li>
+</ol>
+<pre class="calibre23">
+w_neg_grad = tf$matmul(tf$transpose(v1), h1)<strong class="calibre1"> </strong>
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Then, compute the <kbd class="calibre10">CD</kbd> matrix by subtracting the negative gradient from the positive gradient and dividing by the size of the input data:</li>
+</ol>
+<pre class="calibre23">
+CD = (w_pos_grad - w_neg_grad) / tf$to_float(tf$shape(X)[0])
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Then, update the weight matrix <kbd class="calibre10">W</kbd> to <kbd class="calibre10">update_W</kbd> using a learning rate (<em class="calibre9">alpha</em>) and the CD matrix:</li>
+</ol>
+<pre class="calibre23">
+update_w = W + alpha * CD 
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Additionally, update the visible and hidden bias vectors:</li>
+</ol>
+<pre class="calibre23">
+update_vb = vb + alpha * tf$reduce_mean(X - v1) <br class="title-page-tagline"/>update_hb = hb + alpha * tf$reduce_mean(h0 - h1) 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6IOCA1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The objective function can be minimized using stochastic gradient descent by indirectly modifying (and optimizing) the weight matrix. The entire gradient can be further divided into two forms based on the probability density: positive gradient and negative gradient. The positive gradient primarily depends on the input data and the negative gradient depends only on the generated model.</p>
+<div class="packt_infobox">In the positive gradient, the probability toward the reconstructing training data increases, and in the negative gradient, the probability of randomly generated uniform samples by the model decreases.</div>
+<p class="calibre2">The CD technique is used to optimize the negative phase. In the CD technique, the weight matrix is adjusted in each iteration of reconstruction. The new weight matrix is generated using the following formula. The learning rate is defined as <em class="calibre9">alpha</em>, in our case:</p>
+<div class="cdpaligncenter"><img src="../images/00105.gif" class="calibre45"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6JMSS1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Initializing and starting a new TensorFlow session</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">A big part of calculating the error metric such as mean square error (MSE) is initialization and starting a new TensorFlow session. Here is how we proceed with it.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6KLDE1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for starting a new TensorFlow session used to compute the error metric.</p>
+<ul class="calibre12">
+<li class="calibre13"><kbd class="calibre10">mnist</kbd> data is loaded in the environment</li>
+<li class="calibre13">The TensorFlow graph for the RBM is loaded</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6LJU01-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the steps for optimizing the error using reconstruction from an RBM:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Initialize the current and previous vector of biases and matrices of weights:</li>
+</ol>
+<pre class="calibre23">
+cur_w = tf$Variable(tf$zeros(shape = shape(num_input, num_hidden), dtype=tf$float32)) <br class="title-page-tagline"/>cur_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32)) <br class="title-page-tagline"/>cur_hb = tf$Variable(tf$zeros(shape = shape(num_hidden), dtype=tf$float32)) <br class="title-page-tagline"/>prv_w = tf$Variable(tf$random_normal(shape=shape(num_input, num_hidden), stddev=0.01, dtype=tf$float32)) <br class="title-page-tagline"/>prv_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32)) <br class="title-page-tagline"/>prv_hb = tf$Variable(tf$zeros(shape = shape(num_hidden), dtype=tf$float32)) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Start a new TensorFlow session:</li>
+</ol>
+<pre class="calibre23">
+sess$run(tf$global_variables_initializer()) 
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Perform a first run with the full input data (<strong class="calibre1">trainX</strong>) and obtain the first set of weight matrix and bias vectors:</li>
+</ol>
+<pre class="calibre23">
+output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=trainX, <br class="title-page-tagline"/>                                                                          W = prv_w$eval(), <br class="title-page-tagline"/>                                                                          vb = prv_vb$eval(), <br class="title-page-tagline"/>                                                                          hb = prv_hb$eval())) <br class="title-page-tagline"/>prv_w &lt;- output[[1]]<br class="title-page-tagline"/>prv_vb &lt;-output[[2]] <br class="title-page-tagline"/>prv_hb &lt;-output[[3]]
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Let's look at the error of the first run:</li>
+</ol>
+<pre class="calibre23">
+sess$run(err, feed_dict=dict(X= trainX, W= prv_w, vb= prv_vb, hb= prv_hb)) 
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">The full model for the RBM can be trained using the following script:</li>
+</ol>
+<pre class="calibre23">
+epochs=15 <br class="title-page-tagline"/>errors &lt;- list() <br class="title-page-tagline"/>weights &lt;- list() <br class="title-page-tagline"/>u=1 <br class="title-page-tagline"/>for(ep in 1:epochs){ <br class="title-page-tagline"/>  for(i in seq(0,(dim(trainX)[1]-100),100)){ <br class="title-page-tagline"/>    batchX &lt;- trainX[(i+1):(i+100),] <br class="title-page-tagline"/>    output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=batchX, <br class="title-page-tagline"/>                                                                              W = prv_w, <br class="title-page-tagline"/>                                                                              vb = prv_vb, <br class="title-page-tagline"/>                                                                              hb = prv_hb)) <br class="title-page-tagline"/>    prv_w &lt;- output[[1]]  <br class="title-page-tagline"/>    prv_vb &lt;- output[[2]] <br class="title-page-tagline"/>    prv_hb &lt;-  output[[3]] <br class="title-page-tagline"/>    if(i%%10000 == 0){ <br class="title-page-tagline"/>      errors[[u]] &lt;- sess$run(err, feed_dict=dict(X= trainX, W= prv_w, vb= prv_vb, hb= prv_hb)) <br class="title-page-tagline"/>      weights[[u]] &lt;- output[[1]] <br class="title-page-tagline"/>      u &lt;- u+1 <br class="title-page-tagline"/>     cat(i , " : ") <br class="title-page-tagline"/>    } <br class="title-page-tagline"/>  } <br class="title-page-tagline"/>  cat("epoch :", ep, " : reconstruction error : ", errors[length(errors)][[1]],"\n") <br class="title-page-tagline"/>} 
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Plot reconstruction using mean squared errors:</li>
+</ol>
+<pre class="calibre23">
+error_vec &lt;- unlist(errors)<br class="title-page-tagline"/>plot(error_vec,xlab="# of batches",ylab="mean squared reconstruction error",main="RBM-Reconstruction MSE plot")
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6MIEI1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Here, we will run 15 epochs (or iterations) where, in each epoch, a batchwise (size = 100) optimization is performed. In each batch, the CD is computed and, accordingly, weights and biases are updated. To keep track of the optimization, MSE is calculated after every batch of 10,000 rows.</p>
+<p class="calibre2">The following image shows the declining trend of mean squared reconstruction errors computed for 90 batches:</p>
+<div class="cdpaligncenter"><img class="image-border72" src="../images/00112.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6NGV41-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Evaluating the output from an RBM</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Here, let's plot the weights of the final layer with respect to the output (reconstruction input data). In the current scenario, 900 is the number of nodes in the hidden layer and 784 is the number of nodes in the output (reconstructed) layer.</p>
+<p class="calibre2">In the following image, the first 400 nodes in the hidden layer are seen:</p>
+<div class="cdpaligncenter"><img class="image-border73" src="../images/00113.gif"/></div>
+<p class="calibre2">Here, each tile represents a vector of connections formed between a hidden node and all the visible layer nodes. In each tile, the black region represents negative weights (weight &lt; 0), the white region represents positive weights (weight &gt; 1), and the grey region represents no connection (weight = 0). The higher the positive value, the greater the chance of activation in hidden nodes, and vice versa. These activations help determine which part of the input image is being determined by a given hidden node.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6OFFM1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for running the evaluation recipe:</p>
+<ul class="calibre12">
+<li class="calibre13"><kbd class="calibre10">mnist</kbd> data is loaded in the environment</li>
+<li class="calibre13">The RBM model is executed using TensorFlow and the optimal weights are obtained</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6PE081-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This recipe covers the steps for the evaluation of weights obtained from an RBM:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Run the following code to generate the image of 400 hidden nodes:</li>
+</ol>
+<pre class="calibre23">
+uw = t(weights[[length(weights)]])   # Extract the most recent weight matrix <br class="title-page-tagline"/>numXpatches = 20    # Number of images in X-axis (user input) <br class="title-page-tagline"/>numYpatches=20      # Number of images in Y-axis (user input) <br class="title-page-tagline"/>pixels &lt;- list() <br class="title-page-tagline"/>op &lt;- par(no.readonly = TRUE) <br class="title-page-tagline"/>par(mfrow = c(numXpatches,numYpatches), mar = c(0.2, 0.2, 0.2, 0.2), oma = c(3, 3, 3, 3)) <br class="title-page-tagline"/>for (i in 1:(numXpatches*numYpatches)) { <br class="title-page-tagline"/>  denom &lt;- sqrt(sum(uw[i, ]^2)) <br class="title-page-tagline"/>  pixels[[i]] &lt;- matrix(uw[i, ]/denom, nrow = numYpatches, ncol = numXpatches) <br class="title-page-tagline"/>  image(pixels[[i]], axes = F, col = gray((0:32)/32)) <br class="title-page-tagline"/>} <br class="title-page-tagline"/>par(op) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Select a sample of four actual input digits from the training data:</li>
+</ol>
+<pre class="calibre23">
+sample_image &lt;- trainX[1:4,]
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Then, visualize these sample digits using the following code:</li>
+</ol>
+<pre class="calibre23">
+mw=melt(sample_image) <br class="title-page-tagline"/>mw$X3=floor((mw$X2-1)/28)+1 <br class="title-page-tagline"/>mw$X2=(mw$X2-1)%%28 + 1; <br class="title-page-tagline"/>mw$X3=29-mw$X3 <br class="title-page-tagline"/>ggplot(data=mw)+geom_tile(aes(X2,X3,fill=value))+facet_wrap(~X1,nrow=2)+ <br class="title-page-tagline"/>  scale_fill_continuous(low='black',high='white')+coord_fixed(ratio=1)+ <br class="title-page-tagline"/>  labs(x=NULL,y=NULL,)+ <br class="title-page-tagline"/>  theme(legend.position="none")+ <br class="title-page-tagline"/>  theme(plot.title = element_text(hjust = 0.5)) 
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Now, reconstruct these four sample images using the final weights and biases obtained:</li>
+</ol>
+<pre class="calibre23">
+hh0 = tf$nn$sigmoid(tf$matmul(X, W) + hb) <br class="title-page-tagline"/>vv1 = tf$nn$sigmoid(tf$matmul(hh0, tf$transpose(W)) + vb) <br class="title-page-tagline"/>feed = sess$run(hh0, feed_dict=dict( X= sample_image, W= prv_w, hb= prv_hb)) <br class="title-page-tagline"/>rec = sess$run(vv1, feed_dict=dict( hh0= feed, W= prv_w, vb= prv_vb)) 
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Then, visualize the reconstructed sample digits using the following code:</li>
+</ol>
+<pre class="calibre23">
+mw=melt(rec) <br class="title-page-tagline"/>mw$X3=floor((mw$X2-1)/28)+1 <br class="title-page-tagline"/>mw$X2=(mw$X2-1)%%28 + 1 <br class="title-page-tagline"/>mw$X3=29-mw$X3 <br class="title-page-tagline"/>ggplot(data=mw)+geom_tile(aes(X2,X3,fill=value))+facet_wrap(~X1,nrow=2)+ <br class="title-page-tagline"/>  scale_fill_continuous(low='black',high='white')+coord_fixed(ratio=1)+ <br class="title-page-tagline"/>  labs(x=NULL,y=NULL,)+ <br class="title-page-tagline"/>  theme(legend.position="none")+ <br class="title-page-tagline"/>  theme(plot.title = element_text(hjust = 0.5)) 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6QCGQ1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The following image illustrates a raw image of the four sample digits:</p>
+<div class="cdpaligncenter"><img class="image-border74" src="../images/00152.jpeg"/></div>
+<p class="calibre2">The reconstructed images seemed to have had their noise removed, especially in the case of digits <strong class="calibre1">3</strong> and <strong class="calibre1">6</strong>.</p>
+<p class="calibre2">The following image illustrates a reconstructed image of the same four digits:</p>
+<div class="cdpaligncenter"><img class="image-border75" src="../images/00069.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6RB1C1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Setting up a Restricted Boltzmann machine for Collaborative Filtering</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, you will learn how to build a collaborative-filtering-based recommendation system using an RBM. Here, for every user, the RBM tries to identify similar users based on their past behavior of rating various items, and then tries to recommend the next best item.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6S9HU1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, we will use the movielens dataset from the Grouplens research organization. The datasets (<kbd class="calibre10">movies.dat</kbd> and <kbd class="calibre10">ratings.dat</kbd>) can be downloaded from the following link. <kbd class="calibre10">Movies.dat</kbd> contains information of 3,883 movies and <kbd class="calibre10">Ratings.dat</kbd> contains information of 1,000,209 user ratings for these movies. The ratings range from 1 to 5, with 5 being the highest.</p>
+<p class="calibre2"><a href="http://files.grouplens.org/datasets/movielens/ml-1m.zip" class="calibre4"><span>http://files.grouplens.org/datasets/movielens/ml-1m.zip</span></a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6T82G1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This recipe covers the steps for setting up collaborative filtering using an RBM.</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Read the <kbd class="calibre10">movies.dat</kbd> datasets in R:</li>
+</ol>
+<pre class="calibre23">
+txt &lt;- readLines("movies.dat", encoding = "latin1") <br class="title-page-tagline"/>txt_split &lt;- lapply(strsplit(txt, "::"), function(x) as.data.frame(t(x), stringsAsFactors=FALSE)) <br class="title-page-tagline"/>movies_df &lt;- do.call(rbind, txt_split) <br class="title-page-tagline"/>names(movies_df) &lt;- c("MovieID", "Title", "Genres") <br class="title-page-tagline"/>movies_df$MovieID &lt;- as.numeric(movies_df$MovieID) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Add a new column (<kbd class="calibre10">id_order</kbd>) to the movies dataset, as the current ID column (<kbd class="calibre10">UserID</kbd>) cannot be used to index movies because they range from 1 to 3,952:</li>
+</ol>
+<pre class="calibre23">
+movies_df$id_order &lt;- 1:nrow(movies_df) 
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Read the <kbd class="calibre10">ratings.dat</kbd> dataset in R:</li>
+</ol>
+<pre class="calibre23">
+ratings_df &lt;- read.table("ratings.dat", sep=":",header=FALSE,stringsAsFactors = F) <br class="title-page-tagline"/>ratings_df &lt;- ratings_df[,c(1,3,5,7)] <br class="title-page-tagline"/>colnames(ratings_df) &lt;- c("UserID","MovieID","Rating","Timestamp")
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Merge the movies and ratings datasets with <kbd class="calibre10">all=FALSE</kbd>:</li>
+</ol>
+<pre class="calibre23">
+merged_df &lt;- merge(movies_df, ratings_df, by="MovieID",all=FALSE) 
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Remove the non-required columns:</li>
+</ol>
+<pre class="calibre23">
+merged_df[,c("Timestamp","Title","Genres")] &lt;- NULL 
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Convert the ratings to percentages:</li>
+</ol>
+<pre class="calibre23">
+merged_df$rating_per &lt;- merged_df$Rating/5 
+</pre>
+<ol start="7" class="calibre15">
+<li value="7" class="calibre13">Generate a matrix of ratings across all the movies for a sample of 1,000 users:</li>
+</ol>
+<pre class="calibre23">
+num_of_users &lt;- 1000 <br class="title-page-tagline"/>num_of_movies &lt;- length(unique(movies_df$MovieID)) <br class="title-page-tagline"/>trX &lt;- matrix(0,nrow=num_of_users,ncol=num_of_movies) <br class="title-page-tagline"/>for(i in 1:num_of_users){ <br class="title-page-tagline"/>  merged_df_user &lt;- merged_df[merged_df$UserID %in% i,] <br class="title-page-tagline"/>  trX[i,merged_df_user$id_order] &lt;- merged_df_user$rating_per <br class="title-page-tagline"/>} 
+</pre>
+<ol start="8" class="calibre15">
+<li value="8" class="calibre13">Look at the distribution of the <kbd class="calibre10">trX</kbd> training dataset. It seems to follow a Bernoulli distribution (values in the range of 0 to 1):</li>
+</ol>
+<pre class="calibre23">
+summary(trX[1,]); summary(trX[2,]); summary(trX[3,]) 
+</pre>
+<ol start="9" class="calibre15">
+<li value="9" class="calibre13">Define the input model parameters:</li>
+</ol>
+<pre class="calibre23">
+num_hidden = 20 <br class="title-page-tagline"/>num_input = nrow(movies_df)<strong class="calibre1"> </strong>
+</pre>
+<ol start="10" class="calibre15">
+<li value="10" class="calibre13">Start a new TensorFlow session:</li>
+</ol>
+<pre class="calibre23">
+sess$run(tf$global_variables_initializer()) <br class="title-page-tagline"/>output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(v0=trX, <br class="title-page-tagline"/>                                                                          W = prv_w$eval(), <br class="title-page-tagline"/>                                                                          vb = prv_vb$eval(), <br class="title-page-tagline"/>                                                                          hb = prv_hb$eval())) <br class="title-page-tagline"/>prv_w &lt;- output[[1]]  <br class="title-page-tagline"/>prv_vb &lt;- output[[2]] <br class="title-page-tagline"/>prv_hb &lt;-  output[[3]] <br class="title-page-tagline"/>sess$run(err_sum, feed_dict=dict(v0=trX, W= prv_w, vb= prv_vb, hb= prv_hb))
+</pre>
+<ol start="11" class="calibre15">
+<li value="11" class="calibre13">Train the RBM using 500 epoch iterations and a batch size of 100:</li>
+</ol>
+<pre class="calibre23">
+epochs= 500 <br class="title-page-tagline"/>errors &lt;- list() <br class="title-page-tagline"/>weights &lt;- list() <br class="title-page-tagline"/> <br class="title-page-tagline"/>for(ep in 1:epochs){ <br class="title-page-tagline"/>  for(i in seq(0,(dim(trX)[1]-100),100)){ <br class="title-page-tagline"/>    batchX &lt;- trX[(i+1):(i+100),] <br class="title-page-tagline"/>    output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(v0=batchX, <br class="title-page-tagline"/>                                                                              W = prv_w, <br class="title-page-tagline"/>                                                                              vb = prv_vb, <br class="title-page-tagline"/>                                                                              hb = prv_hb)) <br class="title-page-tagline"/>    prv_w &lt;- output[[1]]  <br class="title-page-tagline"/>    prv_vb &lt;- output[[2]] <br class="title-page-tagline"/>    prv_hb &lt;-  output[[3]] <br class="title-page-tagline"/>    if(i%%1000 == 0){ <br class="title-page-tagline"/>      errors &lt;- c(errors,sess$run(err_sum, feed_dict=dict(v0=batchX, W= prv_w, vb= prv_vb, hb= prv_hb))) <br class="title-page-tagline"/>      weights &lt;- c(weights,output[[1]]) <br class="title-page-tagline"/>      cat(i , " : ") <br class="title-page-tagline"/>    } <br class="title-page-tagline"/>  } <br class="title-page-tagline"/>  cat("epoch :", ep, " : reconstruction error : ", errors[length(errors)][[1]],"\n") <br class="title-page-tagline"/>} 
+</pre>
+<ol start="12" class="calibre15">
+<li value="12" class="calibre13">Plot reconstruction mean squared errors:</li>
+</ol>
+<pre class="calibre23">
+error_vec &lt;- unlist(errors) <br class="title-page-tagline"/>plot(error_vec,xlab="# of batches",ylab="mean squared reconstruction error",main="RBM-Reconstruction MSE plot") 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6U6J21-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Performing a full run of training an RBM</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Using the same RBM setup mentioned in the preceding recipe, train the RBM on the user ratings dataset (<kbd class="calibre10">trX</kbd>) using 20 hidden nodes. To keep a track of the optimization, the MSE is calculated after every batch of 1,000 rows. The following image shows the declining trend of mean squared reconstruction errors computed for 500 batches (equal to epochs):</p>
+<div class="cdpaligncenter"><img class="alignnone" src="../images/00027.jpeg"/></div>
+<p class="calibre2"><strong class="calibre1">Looking into RBM recommendations</strong>: Let's now look into the recommendations generated by RBM-based collaborative filtering for a given user ID. Here, we will look into the top-rated genres and top-recommended genres of this user ID, along with the top 10 movie recommendations.</p>
+<p class="calibre2">The following image illustrates a list of top-rated genres:</p>
+<div class="cdpaligncenter"><img class="image-border76" src="../images/00119.jpeg"/></div>
+<p class="calibre2">The following image illustrates a list of top-recommended genres:</p>
+<div class="cdpaligncenter"><img class="image-border77" src="../images/00145.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="6V53K1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for collaborative filtering the output evaluation:</p>
+<ul class="calibre12">
+<li class="calibre13">TensorFlow in R is installed and set up</li>
+<li class="calibre13">The <kbd class="calibre10">movies.dat</kbd> and <kbd class="calibre10">ratings.dat</kbd> datasets are loaded in environment</li>
+<li class="calibre13">The recipe <em class="calibre9">Setting up a Restricted Boltzmann machine for Collaborative Filtering</em> has been executed</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="703K61-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This recipe covers the steps for evaluating the output from RBM-based collaborative filtering:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Select the ratings of a user:</li>
+</ol>
+<pre class="calibre23">
+inputUser = as.matrix(t(trX[75,]))<br class="title-page-tagline"/>names(inputUser) &lt;- movies_df$id_order
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Remove the movies that were not rated by the user (assuming that they have yet to be seen):</li>
+</ol>
+<pre class="calibre23">
+inputUser &lt;- inputUser[inputUser&gt;0]
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Plot the top genres seen by the user:</li>
+</ol>
+<pre class="calibre23">
+top_rated_movies &lt;- movies_df[as.numeric(names(inputUser)[order(inputUser,decreasing = TRUE)]),]$Title<br class="title-page-tagline"/>top_rated_genres &lt;- movies_df[as.numeric(names(inputUser)[order(inputUser,decreasing = TRUE)]),]$Genres<br class="title-page-tagline"/>top_rated_genres &lt;- as.data.frame(top_rated_genres,stringsAsFactors=F)<br class="title-page-tagline"/>top_rated_genres$count &lt;- 1<br class="title-page-tagline"/>top_rated_genres &lt;- aggregate(count~top_rated_genres,FUN=sum,data=top_rated_genres)<br class="title-page-tagline"/>top_rated_genres &lt;- top_rated_genres[with(top_rated_genres, order(-count)), ]<br class="title-page-tagline"/>top_rated_genres$top_rated_genres &lt;- factor(top_rated_genres$top_rated_genres, levels = top_rated_genres$top_rated_genres)<br class="title-page-tagline"/>ggplot(top_rated_genres[top_rated_genres$count&gt;1,],aes(x=top_rated_genres,y=count))+<br class="title-page-tagline"/>geom_bar(stat="identity")+<br class="title-page-tagline"/>theme_bw()+<br class="title-page-tagline"/>theme(axis.text.x = element_text(angle = 90, hjust = 1))+<br class="title-page-tagline"/>labs(x="Genres",y="count",)+<br class="title-page-tagline"/>theme(plot.title = element_text(hjust = 0.5))
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Reconstruct the input vector to obtain the recommendation percentages for all the genres/movies:</li>
+</ol>
+<pre class="calibre23">
+hh0 = tf$nn$sigmoid(tf$matmul(v0, W) + hb)<br class="title-page-tagline"/>vv1 = tf$nn$sigmoid(tf$matmul(hh0, tf$transpose(W)) + vb)<br class="title-page-tagline"/>feed = sess$run(hh0, feed_dict=dict( v0= inputUser, W= prv_w, hb= prv_hb))<br class="title-page-tagline"/>rec = sess$run(vv1, feed_dict=dict( hh0= feed, W= prv_w, vb= prv_vb))<br class="title-page-tagline"/>names(rec) &lt;- movies_df$id_order
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Plot the top-recommended genres:</li>
+</ol>
+<pre class="calibre23">
+top_recom_genres &lt;- movies_df[as.numeric(names(rec)[order(rec,decreasing = TRUE)]),]$Genres<br class="title-page-tagline"/>top_recom_genres &lt;- as.data.frame(top_recom_genres,stringsAsFactors=F)<br class="title-page-tagline"/>top_recom_genres$count &lt;- 1<br class="title-page-tagline"/>top_recom_genres &lt;- aggregate(count~top_recom_genres,FUN=sum,data=top_recom_genres)<br class="title-page-tagline"/>top_recom_genres &lt;- top_recom_genres[with(top_recom_genres, order(-count)), ]<br class="title-page-tagline"/>top_recom_genres$top_recom_genres &lt;- factor(top_recom_genres$top_recom_genres, levels = top_recom_genres$top_recom_genres)<br class="title-page-tagline"/>ggplot(top_recom_genres[top_recom_genres$count&gt;20,],aes(x=top_recom_genres,y=count))+<br class="title-page-tagline"/>geom_bar(stat="identity")+<br class="title-page-tagline"/>theme_bw()+<br class="title-page-tagline"/>theme(axis.text.x = element_text(angle = 90, hjust = 1))+<br class="title-page-tagline"/>labs(x="Genres",y="count",)+<br class="title-page-tagline"/>theme(plot.title = element_text(hjust = 0.5))
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Find the top 10 recommended movies:</li>
+</ol>
+<pre class="calibre23">
+top_recom_movies &lt;- movies_df[as.numeric(names(rec)[order(rec,decreasing = TRUE)]),]$Title[1:10]
+</pre>
+<p class="calibre2">The following image shows the top 10 recommended movies:</p>
+<div class="cdpaligncenter"><img class="image-border78" src="../images/00126.gif"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="7124O1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Setting up a Deep Belief Network</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Deep belief networks are a type of <strong class="calibre1">Deep Neural Network</strong> (<strong class="calibre1">DNN</strong>), and are composed of multiple hidden layers (or latent variables). Here, the connections are present only between the layers and not within the nodes of each layer. The DBN can be trained both as an unsupervised and supervised model.</p>
+<div class="packt_infobox">The unsupervised model is used to reconstruct the input with noise removal and the supervised model (after pretraining) is used to perform classification. As there are no connections within the nodes in each layer, the DBNs can be considered as a set of unsupervised RBMs or autoencoders, where each hidden layer serves as a visible layer to its subsequent connected hidden layer.</div>
+<p class="calibre2">This kind of stacked RBM enhances the performance of input reconstruction where CD is applied across all layers, starting from the actual input training layer and finishing at the last hidden (or latent) layer.</p>
+<p class="calibre2">DBNs are a type of graphical model that train the stacked RBMs in a greedy manner. Their networks tend to learn the deep hierarchical representation using joint distributions between the input feature vector <em class="calibre9">i</em> and hidden layers <em class="calibre9">h<sub class="calibre30">1,2....m</sub></em>:</p>
+<div class="cdpaligncenter"><img src="../images/00117.gif" class="calibre39"/></div>
+<p class="calibre2">Here, <em class="calibre9">i</em> = <em class="calibre9">h<sub class="calibre30">0</sub></em> ; <em class="calibre9">P(h<sub class="calibre30">k-1</sub>|h<sub class="calibre30">k</sub>)</em> is a conditional distribution of reconstructed visible units on the hidden layers of the RBM at level <em class="calibre9">k</em>; <em class="calibre9">P(h<sub class="calibre30">m-1</sub>,h<sub class="calibre30">m</sub>)</em> is the joint distribution of hidden and visible units (reconstructed) at the final RBM layer of the DBN. The following image illustrates a DBN of four hidden layers, where <strong class="calibre1">W</strong> represents the weight matrix:</p>
+<div class="cdpaligncenter"><img class="image-border79" src="../images/00142.gif"/></div>
+<p class="calibre2">DBNs can also be used to enhance the robustness of DNNs. DNNs face an issue of local optimization while implementing backpropagation. This is possible in scenarios where an error surface features numerous troughs, and the gradient descent, due to backpropagation occurs inside a local deep trough (not a global deep trough). DBNs, on the other hand, perform pretraining of the input features, which helps the optimization direct toward the global deepest trough, and then use backpropagation, to perform a gradient descent to gradually minimize the error rate.</p>
+<p class="calibre2"><strong class="calibre1">Training a stack of three RBMs</strong>: In this recipe, we will train a DBN using three stacked RBMs, where the first hidden layer will have 900 nodes, the second hidden layer will have 500 nodes, and the third hidden layer will have 300 nodes.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="720LA1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><span>This section provides the requirements for TensorFlow.</span></p>
+<ul class="calibre12">
+<li class="calibre13">The dataset is loaded and set up</li>
+<li class="calibre13">Load the <kbd class="calibre10">TensorFlow</kbd> package using the following script:</li>
+</ul>
+<pre class="calibre23">
+require(tensorflow)
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="72V5S1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This recipe covers the steps for setting up <strong class="calibre1">Deep belief network</strong> (<strong class="calibre1">DBM</strong>):</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Define the number of nodes in each hidden layer as a vector:</li>
+</ol>
+<pre class="calibre23">
+RBM_hidden_sizes = c(900, 500 , 300 )
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Generate an RBM function leveraging the codes illustrated in the <em class="calibre9">Setting up a Restricted Boltzmann Machine for Bernoulli distribution input</em> recipe with the following input and output parameters mentioned:</li>
+</ol>
+<div class="cdpaligncenter"><img class="image-border80" src="../images/00153.jpeg"/></div>
+<p class="calibre24">Here is the function for setting up up the RBM:</p>
+<pre class="calibre23">
+RBM &lt;- function(input_data, num_input, num_output, epochs = 5, alpha = 0.1, batchsize=100){<br class="title-page-tagline"/># Placeholder variables<br class="title-page-tagline"/>vb &lt;- tf$placeholder(tf$float32, shape = shape(num_input))<br class="title-page-tagline"/>hb &lt;- tf$placeholder(tf$float32, shape = shape(num_output))<br class="title-page-tagline"/>W &lt;- tf$placeholder(tf$float32, shape = shape(num_input, num_output))<br class="title-page-tagline"/># Phase 1 : Forward Phase<br class="title-page-tagline"/>X = tf$placeholder(tf$float32, shape=shape(NULL, num_input))<br class="title-page-tagline"/>prob_h0= tf$nn$sigmoid(tf$matmul(X, W) + hb) #probabilities of the hidden units<br class="title-page-tagline"/>h0 = tf$nn$relu(tf$sign(prob_h0 - tf$random_uniform(tf$shape(prob_h0)))) #sample_h_given_X<br class="title-page-tagline"/># Phase 2 : Backward Phase<br class="title-page-tagline"/>prob_v1 = tf$nn$sigmoid(tf$matmul(h0, tf$transpose(W)) + vb)<br class="title-page-tagline"/>v1 = tf$nn$relu(tf$sign(prob_v1 - tf$random_uniform(tf$shape(prob_v1))))<br class="title-page-tagline"/>h1 = tf$nn$sigmoid(tf$matmul(v1, W) + hb)<br class="title-page-tagline"/># calculate gradients<br class="title-page-tagline"/>w_pos_grad = tf$matmul(tf$transpose(X), h0)<br class="title-page-tagline"/>w_neg_grad = tf$matmul(tf$transpose(v1), h1)<br class="title-page-tagline"/>CD = (w_pos_grad - w_neg_grad) / tf$to_float(tf$shape(X)[0])<br class="title-page-tagline"/>update_w = W + alpha * CD<br class="title-page-tagline"/>update_vb = vb + alpha * tf$reduce_mean(X - v1)<br class="title-page-tagline"/>update_hb = hb + alpha * tf$reduce_mean(h0 - h1)<br class="title-page-tagline"/># Objective function<br class="title-page-tagline"/>err = tf$reduce_mean(tf$square(X - v1))<br class="title-page-tagline"/># Initialize variables<br class="title-page-tagline"/>cur_w = tf$Variable(tf$zeros(shape = shape(num_input, num_output), dtype=tf$float32))<br class="title-page-tagline"/>cur_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32))<br class="title-page-tagline"/>cur_hb = tf$Variable(tf$zeros(shape = shape(num_output), dtype=tf$float32))<br class="title-page-tagline"/>prv_w = tf$Variable(tf$random_normal(shape=shape(num_input, num_output), stddev=0.01, dtype=tf$float32))<br class="title-page-tagline"/>prv_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32))<br class="title-page-tagline"/>prv_hb = tf$Variable(tf$zeros(shape = shape(num_output), dtype=tf$float32))<br class="title-page-tagline"/># Start tensorflow session<br class="title-page-tagline"/>sess$run(tf$global_variables_initializer())<br class="title-page-tagline"/>output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=input_data,<br class="title-page-tagline"/>W = prv_w$eval(),<br class="title-page-tagline"/>vb = prv_vb$eval(),<br class="title-page-tagline"/>hb = prv_hb$eval()))<br class="title-page-tagline"/>prv_w &lt;- output[[1]]<br class="title-page-tagline"/>prv_vb &lt;- output[[2]]<br class="title-page-tagline"/>prv_hb &lt;- output[[3]]<br class="title-page-tagline"/>sess$run(err, feed_dict=dict(X= input_data, W= prv_w, vb= prv_vb, hb= prv_hb))<br class="title-page-tagline"/>errors &lt;- weights &lt;- list()<br class="title-page-tagline"/>u=1<br class="title-page-tagline"/>for(ep in 1:epochs){<br class="title-page-tagline"/>for(i in seq(0,(dim(input_data)[1]-batchsize),batchsize)){<br class="title-page-tagline"/>batchX &lt;- input_data[(i+1):(i+batchsize),]<br class="title-page-tagline"/>output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=batchX,<br class="title-page-tagline"/>W = prv_w,<br class="title-page-tagline"/>vb = prv_vb,<br class="title-page-tagline"/>hb = prv_hb))<br class="title-page-tagline"/>prv_w &lt;- output[[1]]<br class="title-page-tagline"/>prv_vb &lt;- output[[2]]<br class="title-page-tagline"/>prv_hb &lt;- output[[3]]<br class="title-page-tagline"/>if(i%%10000 == 0){<br class="title-page-tagline"/>errors[[u]] &lt;- sess$run(err, feed_dict=dict(X= batchX, W= prv_w, vb= prv_vb, hb= prv_hb))<br class="title-page-tagline"/>weights[[u]] &lt;- output[[1]]<br class="title-page-tagline"/>u=u+1<br class="title-page-tagline"/>cat(i , " : ")<br class="title-page-tagline"/>}<br class="title-page-tagline"/>}<br class="title-page-tagline"/>cat("epoch :", ep, " : reconstruction error : ", errors[length(errors)][[1]],"\n")<br class="title-page-tagline"/>}<br class="title-page-tagline"/>w &lt;- prv_w<br class="title-page-tagline"/>vb &lt;- prv_vb<br class="title-page-tagline"/>hb &lt;- prv_hb<br class="title-page-tagline"/># Get the output<br class="title-page-tagline"/>input_X = tf$constant(input_data)<br class="title-page-tagline"/>ph_w = tf$constant(w)<br class="title-page-tagline"/>ph_hb = tf$constant(hb)<br class="title-page-tagline"/>out = tf$nn$sigmoid(tf$matmul(input_X, ph_w) + ph_hb)<br class="title-page-tagline"/>sess$run(tf$global_variables_initializer())<br class="title-page-tagline"/>return(list(output_data = sess$run(out),<br class="title-page-tagline"/>error_list=errors,<br class="title-page-tagline"/>weight_list=weights,<br class="title-page-tagline"/>weight_final=w,<br class="title-page-tagline"/>bias_final=hb))<br class="title-page-tagline"/>}
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Train the RBM for all three different types of hidden nodes in a sequence. In other words, first train RBM1 with 900 hidden nodes, then use the output of RBM1 as an input for RBM2 with 500 hidden nodes and train RBM2, then use the output of RBM2 as an input for RBM3 with 300 hidden nodes and train RBM3. Store the outputs of all three RBMs as a list, <kbd class="calibre10">RBM_output</kbd>:</li>
+</ol>
+<pre class="calibre23">
+inpX = trainX<br class="title-page-tagline"/>RBM_output &lt;- list()<br class="title-page-tagline"/>for(i in 1:length(RBM_hidden_sizes)){<br class="title-page-tagline"/>size &lt;- RBM_hidden_sizes[i]<br class="title-page-tagline"/># Train the RBM<br class="title-page-tagline"/>RBM_output[[i]] &lt;- RBM(input_data= inpX,<br class="title-page-tagline"/>num_input= ncol(trainX),<br class="title-page-tagline"/>num_output=size,<br class="title-page-tagline"/>epochs = 5,<br class="title-page-tagline"/>alpha = 0.1,<br class="title-page-tagline"/>batchsize=100)<br class="title-page-tagline"/># Update the input data<br class="title-page-tagline"/>inpX &lt;- RBM_output[[i]]$output_data<br class="title-page-tagline"/># Update the input_size<br class="title-page-tagline"/>num_input = size<br class="title-page-tagline"/>cat("completed size :", size,"\n")<br class="title-page-tagline"/>}<strong class="calibre1"><br class="title-page-tagline"/></strong>
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Create a data frame of batch errors across three hidden layers:</li>
+</ol>
+<pre class="calibre23">
+error_df &lt;- data.frame("error"=c(unlist(RBM_output[[1]]$error_list),unlist(RBM_output[[2]]$error_list),unlist(RBM_output[[3]]$error_list)),<br class="title-page-tagline"/>"batches"=c(rep(seq(1:length(unlist(RBM_output[[1]]$error_list))),times=3)),<br class="title-page-tagline"/>"hidden_layer"=c(rep(c(1,2,3),each=length(unlist(RBM_output[[1]]$error_list)))),<br class="title-page-tagline"/>stringsAsFactors = FALSE)
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Plot reconstruction mean squared errors:</li>
+</ol>
+<pre class="calibre23">
+plot(error ~ batches,<br class="title-page-tagline"/>xlab = "# of batches",<br class="title-page-tagline"/>ylab = "Reconstruction Error",<br class="title-page-tagline"/>pch = c(1, 7, 16)[hidden_layer],<br class="title-page-tagline"/>main = "Stacked RBM-Reconstruction MSE plot",<br class="title-page-tagline"/>data = error_df)<br class="title-page-tagline"/>legend('topright',<br class="title-page-tagline"/>c("H1_900","H2_500","H3_300"),<br class="title-page-tagline"/>pch = c(1, 7, 16))
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="73TME1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><strong class="calibre1">Assessing the performance of training three stacked RBMs</strong>: Here, we will run five epochs (or iterations) for each RBM. Each epoch will perform batchwise (size = 100) optimization. In each batch, CD is computed and, accordingly, weights and biases are updated.</p>
+<p class="calibre2">To keep a track of optimization, the MSE is calculated after every batch of 10,000 rows. The following image shows the declining trend of mean squared reconstruction errors computed for 30 batches for three RBMs separately:</p>
+<div class="cdpaligncenter"><img class="image-border81" src="../images/00041.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="74S701-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Implementing a feed-forward backpropagation Neural Network</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, we will implement a willow neural network with backpropagation. The input of the neural network is the outcome of the third (or last) RBM. In other words, the reconstructed raw data (<kbd class="calibre10">trainX</kbd>) is actually used to train the neural network as a supervised classifier of (10) digits. The backpropagation technique is used to further fine-tune the performance of classification.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="75QNI1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><span>This section provides the requirements for TensorFlow.</span></p>
+<ul class="calibre12">
+<li class="calibre13">The dataset is loaded and set up</li>
+<li class="calibre13">The <kbd class="calibre10">TensorFlow</kbd> package is set up and loaded</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="76P841-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section covers the steps for setting up a feed-forward backpropagation Neural Network:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Let's define the input parameters of the neural network as function parameters. The following table describes each parameter:
+<div class="cdpaligncenter"><img class="image-border82" src="../images/00047.jpeg"/></div>
+</li>
+</ol>
+<p class="calibre24">The neural network function will have a structure as shown in the following script:</p>
+<pre class="calibre23">
+NN_train &lt;- function(Xdata,Ydata,Xtestdata,Ytestdata,input_size,<br class="title-page-tagline"/>learning_rate=0.1,momentum = 0.1,epochs=10,<br class="title-page-tagline"/>batchsize=100,rbm_list,dbn_sizes){<br class="title-page-tagline"/>library(stringi)<br class="title-page-tagline"/><em class="calibre9">## insert all the codes mentioned in next 11 points<br class="title-page-tagline"/></em>}
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Initialize a weight and bias list of length 4, with the first being a tensor of random normal distribution (with a standard deviation of 0.01) of dimensions 784 x 900, the second being 900 x 500, the third being 500 x 300, and the fourth being 300 x 10:</li>
+</ol>
+<pre class="calibre23">
+weight_list &lt;- list()<br class="title-page-tagline"/>bias_list &lt;- list()<br class="title-page-tagline"/># Initialize variables<br class="title-page-tagline"/>for(size in c(dbn_sizes,ncol(Ydata))){<br class="title-page-tagline"/>#Initialize weights through a random uniform distribution<br class="title-page-tagline"/>weight_list &lt;- c(weight_list,tf$random_normal(shape=shape(input_size, size), stddev=0.01, dtype=tf$float32))<br class="title-page-tagline"/>#Initialize bias as zeroes<br class="title-page-tagline"/>bias_list &lt;- c(bias_list, tf$zeros(shape = shape(size), dtype=tf$float32))<br class="title-page-tagline"/>input_size = size<br class="title-page-tagline"/>}
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Check whether the outcome of the stacked RBM conforms to the sizes of the hidden layers mentioned in the <kbd class="calibre10">dbn_sizes</kbd> parameter:</li>
+</ol>
+<pre class="calibre23">
+#Check if expected dbn_sizes are correct<br class="title-page-tagline"/>if(length(dbn_sizes)!=length(rbm_list)){<br class="title-page-tagline"/>stop("number of hidden dbn_sizes not equal to number of rbm outputs generated")<br class="title-page-tagline"/># check if expected sized are correct<br class="title-page-tagline"/>for(i in 1:length(dbn_sizes)){<br class="title-page-tagline"/>if(dbn_sizes[i] != dbn_sizes[i])<br class="title-page-tagline"/>stop("Number of hidden dbn_sizes do not match")<br class="title-page-tagline"/>}<br class="title-page-tagline"/>}
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Now, place the weights and biases in suitable positions within <kbd class="calibre10">weight_list</kbd> and <kbd class="calibre10">bias_list</kbd>:</li>
+</ol>
+<pre class="calibre23">
+for(i in 1:length(dbn_sizes)){<br class="title-page-tagline"/>weight_list[[i]] &lt;- rbm_list[[i]]$weight_final<br class="title-page-tagline"/>bias_list[[i]] &lt;- rbm_list[[i]]$bias_final<br class="title-page-tagline"/>}
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Create placeholders for the input and output data:</li>
+</ol>
+<pre class="calibre23">
+input &lt;- tf$placeholder(tf$float32, shape = shape(NULL,ncol(Xdata)))<br class="title-page-tagline"/>output &lt;- tf$placeholder(tf$float32, shape = shape(NULL,ncol(Ydata)))
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Now, use the weights and biases obtained from the stacked RBM to reconstruct the input data and store each RBM's reconstructed data in the list <kbd class="calibre10">input_sub</kbd>:</li>
+</ol>
+<pre class="calibre23">
+input_sub &lt;- list()<br class="title-page-tagline"/>weight &lt;- list()<br class="title-page-tagline"/>bias &lt;- list()<br class="title-page-tagline"/>for(i in 1:(length(dbn_sizes)+1)){<br class="title-page-tagline"/>weight[[i]] &lt;- tf$cast(tf$Variable(weight_list[[i]]),tf$float32)<br class="title-page-tagline"/>bias[[i]] &lt;- tf$cast(tf$Variable(bias_list[[i]]),tf$float32)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>input_sub[[1]] &lt;- tf$nn$sigmoid(tf$matmul(input, weight[[1]]) + bias[[1]])<br class="title-page-tagline"/>for(i in 2:(length(dbn_sizes)+1)){<br class="title-page-tagline"/>input_sub[[i]] &lt;- tf$nn$sigmoid(tf$matmul(input_sub[[i-1]], weight[[i]]) + bias[[i]])<br class="title-page-tagline"/>}
+</pre>
+<ol start="7" class="calibre15">
+<li value="7" class="calibre13">Define the cost function--that is, the mean squared error of difference between prediction and actual digits:</li>
+</ol>
+<pre class="calibre23">
+cost = tf$reduce_mean(tf$square(input_sub[[length(input_sub)]] - output))
+</pre>
+<ol start="8" class="calibre15">
+<li value="8" class="calibre13">Implement backpropagation for the purpose of minimizing the cost:</li>
+</ol>
+<pre class="calibre23">
+train_op &lt;- tf$train$MomentumOptimizer(learning_rate, momentum)$minimize(cost)
+</pre>
+<ol start="9" class="calibre15">
+<li value="9" class="calibre13">Generate the prediction results:</li>
+</ol>
+<pre class="calibre23">
+predict_op = tf$argmax(input_sub[[length(input_sub)]],axis=tf$cast(1.0,tf$int32))
+</pre>
+<ol start="10" class="calibre15">
+<li value="10" class="calibre13">Perform iterations of training:</li>
+</ol>
+<pre class="calibre23">
+train_accuracy &lt;- c()<br class="title-page-tagline"/>test_accuracy &lt;- c()<br class="title-page-tagline"/>for(ep in 1:epochs){<br class="title-page-tagline"/>for(i in seq(0,(dim(Xdata)[1]-batchsize),batchsize)){<br class="title-page-tagline"/>batchX &lt;- Xdata[(i+1):(i+batchsize),]<br class="title-page-tagline"/>batchY &lt;- Ydata[(i+1):(i+batchsize),]<br class="title-page-tagline"/>#Run the training operation on the input data<br class="title-page-tagline"/>sess$run(train_op,feed_dict=dict(input = batchX,<br class="title-page-tagline"/>output = batchY))<br class="title-page-tagline"/>}<br class="title-page-tagline"/>for(j in 1:(length(dbn_sizes)+1)){<br class="title-page-tagline"/># Retrieve weights and biases<br class="title-page-tagline"/>weight_list[[j]] &lt;- sess$run(weight[[j]])<br class="title-page-tagline"/>bias_list[[j]] &lt;- sess$ run(bias[[j]])<br class="title-page-tagline"/>}<br class="title-page-tagline"/>train_result &lt;- sess$run(predict_op, feed_dict = dict(input=Xdata, output=Ydata))+1<br class="title-page-tagline"/>train_actual &lt;- as.numeric(stringi::stri_sub(colnames(as.data.frame(Ydata))[max.col(as.data.frame(Ydata),ties.method="first")],2))<br class="title-page-tagline"/>test_result &lt;- sess$run(predict_op, feed_dict = dict(input=Xtestdata, output=Ytestdata))+1<br class="title-page-tagline"/>test_actual &lt;- as.numeric(stringi::stri_sub(colnames(as.data.frame(Ytestdata))[max.col(as.data.frame(Ytestdata),ties.method="first")],2))<br class="title-page-tagline"/>train_accuracy &lt;- c(train_accuracy,mean(train_actual==train_result))<br class="title-page-tagline"/>test_accuracy &lt;- c(test_accuracy,mean(test_actual==test_result))<br class="title-page-tagline"/>cat("epoch:", ep, " Train Accuracy: ",train_accuracy[ep]," Test Accuracy : ",test_accuracy[ep],"\n")<br class="title-page-tagline"/>}
+</pre>
+<ol start="11" class="calibre15">
+<li value="11" class="calibre13">Finally, return a list of four outcomes, which are train accuracy (<kbd class="calibre10">train_accuracy</kbd>), test accuracy (<kbd class="calibre10">test_accuracy</kbd>), a list of weight matrices generated in each iteration (<kbd class="calibre10">weight_list</kbd>), and a list of bias vectors generated in each iteration (<kbd class="calibre10">bias_list</kbd>):</li>
+</ol>
+<pre class="calibre23">
+return(list(train_accuracy=train_accuracy,<br class="title-page-tagline"/>test_accuracy=test_accuracy,<br class="title-page-tagline"/>weight_list=weight_list,<br class="title-page-tagline"/>bias_list=bias_list))
+</pre>
+<ol start="12" class="calibre15">
+<li value="12" class="calibre13">Run the iterations for the defined neural network for training:</li>
+</ol>
+<pre class="calibre23">
+NN_results &lt;- NN_train(Xdata=trainX,<br class="title-page-tagline"/>Ydata=trainY,<br class="title-page-tagline"/>Xtestdata=testX,<br class="title-page-tagline"/>Ytestdata=testY,<br class="title-page-tagline"/>input_size=ncol(trainX),<br class="title-page-tagline"/>rbm_list=RBM_output,<br class="title-page-tagline"/>dbn_sizes = RBM_hidden_sizes)<strong class="calibre1"><br class="title-page-tagline"/></strong>
+</pre>
+<ol start="13" class="calibre15">
+<li value="13" class="calibre13">The following code is used to plot the train and test accuracy:</li>
+</ol>
+<pre class="calibre23">
+accuracy_df &lt;- data.frame("accuracy"=c(NN_results$train_accuracy,NN_results$test_accuracy),<br class="title-page-tagline"/>"epochs"=c(rep(1:10,times=2)),<br class="title-page-tagline"/>"datatype"=c(rep(c(1,2),each=10)),<br class="title-page-tagline"/>stringsAsFactors = FALSE)<br class="title-page-tagline"/>plot(accuracy ~ epochs,<br class="title-page-tagline"/>xlab = "# of epochs",<br class="title-page-tagline"/>ylab = "Accuracy in %",<br class="title-page-tagline"/>pch = c(16, 1)[datatype],<br class="title-page-tagline"/>main = "Neural Network - Accuracy in %",<br class="title-page-tagline"/>data = accuracy_df)<br class="title-page-tagline"/>legend('bottomright',<br class="title-page-tagline"/>c("train","test"),<br class="title-page-tagline"/>pch = c( 16, 1))
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="77NOM1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><strong class="calibre1">Assessing the train and test performance of the neural network</strong>: The following image shows the increasing trend of train and test accuracy observed while training the neural network:</p>
+<div class="cdpaligncenter"><img class="image-border83" src="../images/00068.jpeg"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="78M981-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Setting up a Deep Restricted Boltzmann Machine</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Unlike DBNs, <strong class="calibre1">Deep Restricted Boltzmann Machines</strong> (<strong class="calibre1">DRBM</strong>) are undirected networks of interconnected hidden layers with the capability to learn joint probabilities over these connections. In the current setup, centering is performed where visible and hidden variables are subtracted from offset bias vectors after every iteration. Research has shown that centering optimizes the performance of DRBMs and can reach higher log-likelihood values in comparison with traditional RBMs.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="79KPQ1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section provides the requirements for setting up a DRBM:</p>
+<ul class="calibre12">
+<li class="calibre13">The <kbd class="calibre10">MNIST</kbd> dataset is loaded and set up</li>
+<li class="calibre13">The <kbd class="calibre10">tensorflow</kbd> package is set up and loaded</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header id="7AJAC2-a0a93989f17f4d6cb68b8cfd331bc5ab">
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This section covers detailed the steps for setting up the DRBM model using TensorFlow in R:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Define the parameters for the DRBM:</li>
+</ol>
+<pre class="calibre23">
+learning_rate = 0.005<br class="title-page-tagline"/>momentum = 0.005<br class="title-page-tagline"/>minbatch_size = 25<br class="title-page-tagline"/>hidden_layers = c(400,100)<br class="title-page-tagline"/>biases = list(-1,-1)
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Define a sigmoid function using a hyperbolic arc tangent <em class="calibre9">[(log(1+x) -log(1-x))/2]</em>:</li>
+</ol>
+<pre class="calibre23">
+arcsigm &lt;- function(x){<br class="title-page-tagline"/>return(atanh((2*x)-1)*2)<br class="title-page-tagline"/>}
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Define a sigmoid function using only a hyperbolic tangent <em class="calibre9">[(e<sup class="calibre46">x</sup>-e<sup class="calibre46">-x</sup>)/(e<sup class="calibre46">x</sup>+e<sup class="calibre46">-x</sup>)]</em>:</li>
+</ol>
+<pre class="calibre23">
+sigm &lt;- function(x){<br class="title-page-tagline"/>return(tanh((x/2)+1)/2)<br class="title-page-tagline"/>}
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Define a <kbd class="calibre10">binarize</kbd> function to return a matrix of binary values (0,1):</li>
+</ol>
+<pre class="calibre23">
+binarize &lt;- function(x){<br class="title-page-tagline"/># truncated rnorm<br class="title-page-tagline"/>trnrom &lt;- function(n, mean, sd, minval = -Inf, maxval = Inf){<br class="title-page-tagline"/>qnorm(runif(n, pnorm(minval, mean, sd), pnorm(maxval, mean, sd)), mean, sd)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>return((x &gt; matrix( trnrom(n=nrow(x)*ncol(x),mean=0,sd=1,minval=0,maxval=1), nrow(x), ncol(x)))*1)<br class="title-page-tagline"/>}
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Define a <kbd class="calibre10">re_construct</kbd> function to return a matrix of pixels:</li>
+</ol>
+<pre class="calibre23">
+re_construct &lt;- function(x){<br class="title-page-tagline"/>x = x - min(x) + 1e-9<br class="title-page-tagline"/>x = x / (max(x) + 1e-9)<br class="title-page-tagline"/>return(x*255)<br class="title-page-tagline"/>}
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Define a function to perform <kbd class="calibre10">gibbs</kbd> activation for a given layer:</li>
+</ol>
+<pre class="calibre23">
+gibbs &lt;- function(X,l,initials){<br class="title-page-tagline"/>if(l&gt;1){<br class="title-page-tagline"/>bu &lt;- (X[l-1][[1]] - matrix(rep(initials$param_O[[l-1]],minbatch_size),minbatch_size,byrow=TRUE)) %*%<br class="title-page-tagline"/>initials$param_W[l-1][[1]]<br class="title-page-tagline"/>} else {<br class="title-page-tagline"/>bu &lt;- 0<br class="title-page-tagline"/>}<br class="title-page-tagline"/>if((l+1) &lt; length(X)){<br class="title-page-tagline"/>td &lt;- (X[l+1][[1]] - matrix(rep(initials$param_O[[l+1]],minbatch_size),minbatch_size,byrow=TRUE))%*%<br class="title-page-tagline"/>t(initials$param_W[l][[1]])<br class="title-page-tagline"/>} else {<br class="title-page-tagline"/>td &lt;- 0<br class="title-page-tagline"/>}<br class="title-page-tagline"/>X[[l]] &lt;- binarize(sigm(bu+td+matrix(rep(initials$param_B[[l]],minbatch_size),minbatch_size,byrow=TRUE)))<br class="title-page-tagline"/>return(X[[l]])<br class="title-page-tagline"/>}
+</pre>
+<ol start="7" class="calibre15">
+<li value="7" class="calibre13">Define a function to perform the reparameterization of bias vectors:</li>
+</ol>
+<pre class="calibre23">
+reparamBias &lt;- function(X,l,initials){<br class="title-page-tagline"/>if(l&gt;1){<br class="title-page-tagline"/>bu &lt;- colMeans((X[[l-1]] - matrix(rep(initials$param_O[[l-1]],minbatch_size),minbatch_size,byrow=TRUE))%*%<br class="title-page-tagline"/>initials$param_W[[l-1]])<br class="title-page-tagline"/>} else {<br class="title-page-tagline"/>bu &lt;- 0<br class="title-page-tagline"/>}<br class="title-page-tagline"/>if((l+1) &lt; length(X)){<br class="title-page-tagline"/>td &lt;- colMeans((X[[l+1]] - matrix(rep(initials$param_O[[l+1]],minbatch_size),minbatch_size,byrow=TRUE))%*%<br class="title-page-tagline"/>t(initials$param_W[[l]]))<br class="title-page-tagline"/>} else {<br class="title-page-tagline"/>td &lt;- 0<br class="title-page-tagline"/>}<br class="title-page-tagline"/>initials$param_B[[l]] &lt;- (1-momentum)*initials$param_B[[l]] + momentum*(initials$param_B[[l]] + bu + td)<br class="title-page-tagline"/>return(initials$param_B[[l]])<br class="title-page-tagline"/>}
+</pre>
+<ol start="8" class="calibre15">
+<li value="8" class="calibre13">Define a function to perform the reparameterization of offset bias vectors:</li>
+</ol>
+<pre class="calibre23">
+reparamO &lt;- function(X,l,initials){<br class="title-page-tagline"/>initials$param_O[[l]] &lt;- colMeans((1-momentum)*matrix(rep(initials$param_O[[l]],minbatch_size),minbatch_size,byrow=TRUE) + momentum*(X[[l]]))<br class="title-page-tagline"/>return(initials$param_O[[l]])<br class="title-page-tagline"/>}
+</pre>
+<ol start="9" class="calibre15">
+<li value="9" class="calibre13">Define a function to initialize weights, biases, offset biases, and input matrices:</li>
+</ol>
+<pre class="calibre23">
+DRBM_initialize &lt;- function(layers,bias_list){<br class="title-page-tagline"/># Initialize model parameters and particles<br class="title-page-tagline"/>param_W &lt;- list()<br class="title-page-tagline"/>for(i in 1:(length(layers)-1)){<br class="title-page-tagline"/>param_W[[i]] &lt;- matrix(0L, nrow=layers[i], ncol=layers[i+1])<br class="title-page-tagline"/>}<br class="title-page-tagline"/>param_B &lt;- list()<br class="title-page-tagline"/>for(i in 1:length(layers)){<br class="title-page-tagline"/>param_B[[i]] &lt;- matrix(0L, nrow=layers[i], ncol=1) + bias_list[[i]]<br class="title-page-tagline"/>}<br class="title-page-tagline"/>param_O &lt;- list()<br class="title-page-tagline"/>for(i in 1:length(param_B)){<br class="title-page-tagline"/>param_O[[i]] &lt;- sigm(param_B[[i]])<br class="title-page-tagline"/>}<br class="title-page-tagline"/>param_X &lt;- list()<br class="title-page-tagline"/>for(i in 1:length(layers)){<br class="title-page-tagline"/>param_X[[i]] &lt;- matrix(0L, nrow=minbatch_size, ncol=layers[i]) + matrix(rep(param_O[[i]],minbatch_size),minbatch_size,byrow=TRUE)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>return(list(param_W=param_W,param_B=param_B,param_O=param_O,param_X=param_X))<br class="title-page-tagline"/>}<strong class="calibre1"><br class="title-page-tagline"/></strong>
+</pre>
+<ol start="10" class="calibre15">
+<li value="10" class="calibre13">Use the MNIST train data (<kbd class="calibre10">trainX</kbd>) introduced in the previous recipes. Standardize the <kbd class="calibre10">trainX</kbd> data by dividing it by 255:</li>
+</ol>
+<pre class="calibre23">
+X &lt;- trainX/255
+</pre>
+<ol start="11" class="calibre15">
+<li value="11" class="calibre13">Generate the initial weight matrices, bias vectors, offset bias vectors, and input matrices:</li>
+</ol>
+<pre class="calibre23">
+layers &lt;- c(784,hidden_layers)<br class="title-page-tagline"/>bias_list &lt;- list(arcsigm(pmax(colMeans(X),0.001)),biases[[1]],biases[[2]])<br class="title-page-tagline"/>initials &lt;-DRBM_initialize(layers,bias_list)
+</pre>
+<ol start="12" class="calibre15">
+<li value="12" class="calibre13">Subset a sample (<kbd class="calibre10">minbatch_size</kbd>) of the input data <kbd class="calibre10">X</kbd>:</li>
+</ol>
+<pre class="calibre23">
+batchX &lt;- X[sample(nrow(X))[1:minbatch_size],]
+</pre>
+<ol start="13" class="calibre15">
+<li value="13" class="calibre13">Perform a set of 1,000 iterations. Within each iteration, update the initial weights and biases 100 times and plot the images of the weight matrices:</li>
+</ol>
+<pre class="calibre23">
+for(iter in 1:1000){<br class="title-page-tagline"/><br class="title-page-tagline"/># Perform some learnings<br class="title-page-tagline"/>for(j in 1:100){<br class="title-page-tagline"/># Initialize a data particle<br class="title-page-tagline"/>dat &lt;- list()<br class="title-page-tagline"/>dat[[1]] &lt;- binarize(batchX)<br class="title-page-tagline"/>for(l in 2:length(initials$param_X)){<br class="title-page-tagline"/>dat[[l]] &lt;- initials$param_X[l][[1]]*0 + matrix(rep(initials$param_O[l][[1]],minbatch_size),minbatch_size,byrow=TRUE)<br class="title-page-tagline"/>}<br class="title-page-tagline"/><br class="title-page-tagline"/># Alternate gibbs sampler on data and free particles<br class="title-page-tagline"/>for(l in rep(c(seq(2,length(initials$param_X),2), seq(3,length(initials$param_X),2)),5)){<br class="title-page-tagline"/>dat[[l]] &lt;- gibbs(dat,l,initials)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>for(l in rep(c(seq(2,length(initials$param_X),2), seq(1,length(initials$param_X),2)),1)){<br class="title-page-tagline"/>initials$param_X[[l]] &lt;- gibbs(initials$param_X,l,initials)<br class="title-page-tagline"/>}<br class="title-page-tagline"/><br class="title-page-tagline"/># Parameter update<br class="title-page-tagline"/>for(i in 1:length(initials$param_W)){<br class="title-page-tagline"/>initials$param_W[[i]] &lt;- initials$param_W[[i]] + (learning_rate*((t(dat[[i]] - matrix(rep(initials$param_O[i][[1]],minbatch_size),minbatch_size,byrow=TRUE)) %*%<br class="title-page-tagline"/>(dat[[i+1]] - matrix(rep(initials$param_O[i+1][[1]],minbatch_size),minbatch_size,byrow=TRUE))) -<br class="title-page-tagline"/>(t(initials$param_X[[i]] - matrix(rep(initials$param_O[i][[1]],minbatch_size),minbatch_size,byrow=TRUE)) %*%<br class="title-page-tagline"/>(initials$param_X[[i+1]] - matrix(rep(initials$param_O[i+1][[1]],minbatch_size),minbatch_size,byrow=TRUE))))/nrow(batchX))<br class="title-page-tagline"/>}<br class="title-page-tagline"/><br class="title-page-tagline"/>for(i in 1:length(initials$param_B)){<br class="title-page-tagline"/>initials$param_B[[i]] &lt;- colMeans(matrix(rep(initials$param_B[[i]],minbatch_size),minbatch_size,byrow=TRUE) + (learning_rate*(dat[[i]] - initials$param_X[[i]])))<br class="title-page-tagline"/>}<br class="title-page-tagline"/><br class="title-page-tagline"/># Reparameterization<br class="title-page-tagline"/>for(l in 1:length(initials$param_B)){<br class="title-page-tagline"/>initials$param_B[[l]] &lt;- reparamBias(dat,l,initials)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>for(l in 1:length(initials$param_O)){<br class="title-page-tagline"/>initials$param_O[[l]] &lt;- reparamO(dat,l,initials)<br class="title-page-tagline"/>}<br class="title-page-tagline"/>}<br class="title-page-tagline"/><br class="title-page-tagline"/># Generate necessary outputs<br class="title-page-tagline"/>cat("Iteration:",iter," ","Mean of W of VL-HL1:",mean(initials$param_W[[1]])," ","Mean of W of HL1-HL2:",mean(initials$param_W[[2]]) ,"\n")<br class="title-page-tagline"/>cat("Iteration:",iter," ","SDev of W of VL-HL1:",sd(initials$param_W[[1]])," ","SDev of W of HL1-HL2:",sd(initials$param_W[[2]]) ,"\n")<br class="title-page-tagline"/><br class="title-page-tagline"/># Plot weight matrices<br class="title-page-tagline"/>W=diag(nrow(initials$param_W[[1]]))<br class="title-page-tagline"/>for(l in 1:length(initials$param_W)){<br class="title-page-tagline"/>W = W %*% initials$param_W[[l]]<br class="title-page-tagline"/>m = dim(W)[2] * 0.05<br class="title-page-tagline"/>w1_arr &lt;- matrix(0,28*m,28*m)<br class="title-page-tagline"/>i=1<br class="title-page-tagline"/>for(k in 1:m){<br class="title-page-tagline"/>for(j in 1:28){<br class="title-page-tagline"/>vec &lt;- c(W[(28*j-28+1):(28*j),(k*m-m+1):(k*m)])<br class="title-page-tagline"/>w1_arr[i,] &lt;- vec<br class="title-page-tagline"/>i=i+1<br class="title-page-tagline"/>}<br class="title-page-tagline"/>}<br class="title-page-tagline"/>w1_arr = re_construct(w1_arr)<br class="title-page-tagline"/>w1_arr &lt;- floor(w1_arr)<br class="title-page-tagline"/>image(w1_arr,axes = TRUE, col = grey(seq(0, 1, length = 256)))<br class="title-page-tagline"/>}<br class="title-page-tagline"/>}
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="7BHQU1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How it works...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">As the preceding DRBM is trained using two hidden layers, we generate two weight matrices. The first weight matrix defines the connection between the visible layer and the first hidden layer. The second weight matrix defines the connection between the first and second hidden layer. The following image shows pixel images of the first weight matrices:</p>
+<div class="cdpaligncenter"><img class="image-border84" src="../images/00006.jpeg"/></div>
+<p class="calibre2">The following image shows the second pixel images of the second weight matrix:</p>
+<div class="cdpaligncenter"><img class="image-border85" src="../images/00116.gif"/></div>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

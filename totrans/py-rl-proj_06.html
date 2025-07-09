@@ -1,0 +1,775 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Learning to Play Go</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">When considering the capabilities of AI, we often compare its performance for a particular task with what humans can achieve. AI agents are now able to surpass human-level competency in more complex tasks. In this chapter, we will build an agent that learns how to play what is considered the most complex board game of all time: Go. We will become familiar with the latest deep reinforcement learning algorithms that achieve superhuman performances, namely AlphaGo, and AlphaGo Zero, both of which were developed by Google's DeepMind. We will also learn about Monte Carlo tree search, a popular tree-searching algorithm that is an integral component of turn-based game agents.</p>
+<p>This chapter will cover the following topics:</p>
+<ul>
+<li>Introduction to Go and relevant research in AI</li>
+<li>Overview of AlphaGo and AlphaGo Zero</li>
+<li>The Monte Carlo tree search algorithm</li>
+<li>Implementation of AlphaGo Zero</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">A brief introduction to Go</h1>
+                </header>
+            
+            <article>
+                
+<p>Go is a board game that was first recorded in China two millennia ago. Similar to other common board games, such as chess, shogi, and Othello, Go involves two players alternately placing black and white stones on a 19x19 board with the objective of capturing as much territory as possible by surrounding a larger total area of the board. One can capture their opponent's pieces by surrounding the opponent's pieces with their own pieces. Captured stones are removed from the board, thereby creating a void in which the opponent can no longer place stones unless the territory is captured back.</p>
+<p>A game ends when both players refuse to place a stone or either player resigns. Upon the termination of a game, the winner is decided by counting each player's territory and the number of captured stones.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Go and other board games</h1>
+                </header>
+            
+            <article>
+                
+<p>Researchers have already created AI programs that outperform the best human players in board games such as chess and backgammon. In 1992, researchers from IBM developed TD-Gammon, which used classic reinforcement learning algorithms and an artificial neural network to play backgammon at the level of a top player. In 1997, Deep Blue, a chess-playing program developed by IBM and Carnegie Mellon University, defeated then world champion Garry Kasparov in a six-game face off. This was the first time that a computer program defeated the world champion in chess.</p>
+<p>Developing Go playing agents is not a new topic, and hence one may wonder what took so long for researchers to replicate such successes in Go. The answer is simple—Go, despite its simple rules, is a far more complex game than chess. Imagine representing a board game as a tree, where each node is a snapshot of the board (which we also refer to as the <strong>board state</strong>) and its child nodes are possible moves the opponent can make. The height of the tree is essentially the number of moves a game lasts. A typical chess game lasts 80 moves, whereas a game in Go lasts 150; almost twice as long. Moreover, while the average number of possible moves in a chess turn is 35, a Go player has 250 possible plays per move. Based on these numbers, Go has 10<sup>761</sup> total possible games, compared to 10<sup>120</sup> games in chess. It is impossible to enumerate every possible state in Go in a computer, and the sheer complexity of the game has made it difficult for researchers to develop an agent that can play the game at a world-class level.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Go and AI research</h1>
+                </header>
+            
+            <article>
+                
+<p>In 2015, researchers from Google's DeepMind published a paper in Nature that detailed a novel reinforcement learning agent for Go called <strong>AlphaGo</strong>. In October of that year, AlphaGo beat Fan Hui, the European champion, 5-0. In 2016, AlphaGo challenged Lee Sedol, who, with 18 world championship titles, is considered one of the greatest players in modern history. AlphaGo won 4-1, marking a watershed moment in deep learning research and the game's history. In the following year, DeepMind published an updated version of AlphaGo, AlphaGo Zero, which defeated its predecessor 100 times in 100 games. In just a matter of days of training, AlphaGo and AlphaGo Zero were able to learn and surpass the wisdom that mankind has accumulated over the thousands of years of the game's existence.</p>
+<p>The following sections will discuss how AlphaGo and AlphaGo Zero work, including the algorithms and techniques that they use to learn and play the game. This will be followed by an implementation of AlphaGo Zero. Our exploration begins with Monte Carlo tree search, an algorithm that is integral to both AlphaGo and AlphaGo Zero for making decisions on where to place stones.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Monte Carlo tree search</h1>
+                </header>
+            
+            <article>
+                
+<p>In games such as Go and chess, players have perfect information, meaning they have access to the full game state (the board and the positions of the pieces). Moreover, there lacks an element of chance that can affect the game state; only the players' decisions can affect the board. Such games are also referred to as perfect-information games. In perfect-information games, it is theoretically possible to enumerate all possible game states. As discussed earlier, this would look such as a tree, where each child node (a game state) is a possible outcome of the parent. In two-player games, alternating levels of this tree represent moves produced by the two competitors. Finding the best possible move for a given state is simply a matter of traversing the tree and finding which sequence of moves leads to a win. We can also store the value, or the expected outcome or reward (a win or a loss) of a given state, at each node.</p>
+<p>However, constructing a perfect tree is impractical in practice for games such as Go. So how can an agent learn how to play the game without such knowledge? The <strong>Monte Carlo tree-search</strong> (<strong>MCTS</strong>) algorithm provides an efficient approximation of this complete tree. In a nutshell, MCTS involves playing a game iteratively, keeping statistics on states that were visited, and learning which moves are more favorable/likely to lead to a win. The goal of MCTS is to build a tree that approximates the aforementioned perfect tree as much as possible. Each move in a game corresponds to an iteration of the MCTS algorithm. There are four main steps in the algorithm: Selection, Expansion, Simulation, and Update (also known as <strong>backpropagation</strong>). We will briefly detail each procedure.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Selection</h1>
+                </header>
+            
+            <article>
+                
+<p>The first step of MCTS involves playing the game intelligently. That means the algorithm has enough experience to determine the next move given a state. One method for determining the next move is called <strong>Upper Confidence Bound 1 Applied to Trees</strong> (<strong>UCT</strong>). In short, this formula rates moves based on the following:</p>
+<ul>
+<li>The mean reward of games where a given move was made</li>
+<li>How often the move was selected</li>
+</ul>
+<p>Each node's rating can be expressed as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/cecb71cb-1964-4f40-8585-975998119ce6.png" style="width:6.92em;height:3.33em;"/></div>
+<p class="mce-root"/>
+<p>Where:</p>
+<ul>
+<li><img class="fm-editor-equation" src="assets/d7a90243-d2e5-4856-a8bc-7be435a50380.png" style="width:1.08em;height:1.25em;"/>: Is the mean reward for choosing move <img class="fm-editor-equation" src="assets/1159d5da-b57a-4100-bc50-0ced1d628aa7.png" style="width:0.50em;height:1.33em;"/> (for example, the win-rate)</li>
+<li><img class="fm-editor-equation" src="assets/f01de5bf-f163-448a-9240-44f4d726173e.png" style="width:1.17em;height:1.00em;"/>: Is the number of times the algorithm selected move <img class="fm-editor-equation" src="assets/4e52a294-85a6-468c-b216-55895ca828fc.png" style="width:0.50em;height:1.33em;"/></li>
+<li><img class="fm-editor-equation" src="assets/924f7580-5cb7-4e68-9357-81c4368bbe22.png" style="width:0.67em;height:0.75em;"/>: Is the total number of moves made after the current state (including move <img class="fm-editor-equation" src="assets/071de01b-39e6-43cb-aa23-fb2e9a87c9fe.png" style="width:0.50em;height:1.33em;"/>)</li>
+<li><img class="fm-editor-equation" src="assets/993dec34-0edf-4931-9cdd-c418896d1933.png" style="width:0.42em;height:0.58em;"/>: Is an exploration parameter</li>
+</ul>
+<p>The following diagram shows an example of selecting the next node. In each node, the left number represents the node's rating, and the right number represents the number of times the node was visited. The color of the node indicates which player's turn it is:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-686 image-border" src="assets/722ce601-b57d-4f8d-bb83-180e5deeff89.png" style="width:29.00em;height:18.33em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 1: Selection in MCTS</div>
+<p>In selection, the algorithm chooses the move that has the highest value for the preceding expression. The keen reader may notice that, while moves with a high mean reward, <img class="fm-editor-equation" src="assets/d7a90243-d2e5-4856-a8bc-7be435a50380.png" style="width:1.25em;height:1.42em;"/>, are rated highly, so too are moves with fewer numbers of visits, <img class="fm-editor-equation" src="assets/f01de5bf-f163-448a-9240-44f4d726173e.png" style="width:1.50em;height:1.25em;"/>. Why is this so? In MCTS, we not only want the algorithm to choose moves that most likely result in wins but also to try less-often-selected moves. This is commonly referred to as the balance between exploitation and exploration. If the algorithm solely resorted to exploitation, the resulting tree would be very narrow and ill-experienced. Encouraging exploration allows the algorithm to learn from a broader set of experiences and simulations. In the preceding example, we simply select the node with a rating of <span class="packt_screen">7</span> and subsequently the node with a rating of <span class="packt_screen">4</span>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Expansion</h1>
+                </header>
+            
+            <article>
+                
+<p>We apply selection to decide moves until the algorithm can no longer apply UCT to rate the next set of moves. In particular, we can no longer apply UCT when not all of the child nodes of a given state have records (number of visits, mean reward). This is when the second phase of MCTS, expansion, occurs. Here, we simply look at all possible new moves (unvisited child nodes) of a given state and randomly choose one. We then update the tree to record this new child node. The following diagram illustrates this:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-687 image-border" src="assets/2956a245-b179-4673-918e-8d25522514a3.png" style="width:23.83em;height:19.92em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 2: Expansion</div>
+<p>You may be wondering from the preceding diagram why we initialize the visit count as zero rather than one. The visit count of this new node as well as the statistics of the nodes we have traversed so far will be incremented during the update step, which is the final step of an MCTS iteration.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Simulation</h1>
+                </header>
+            
+            <article>
+                
+<p>After expansion, the rest of the game is played by randomly choosing subsequent moves. This is also commonly referred to as the <strong>playout</strong> or <strong>rollout</strong>. Depending on the game, some heuristics may be applied to choose the next move. For example, in DeepBlue, simulations rely on handcrafted heuristics to select the next move intelligently rather than randomly. This is also called <strong>heavy rollouts</strong>. While such rollouts provide more realistic games, they are often computationally expensive, which can slow down the learning of the MCTS tree:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-688 image-border" src="assets/632c53ab-457e-4ac8-aaed-59ffba21fb7e.png" style="width:30.00em;height:27.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 3: Simulation</div>
+<p>In our preceding toy example, we expand a node and play until the very end of the game (represented by the dotted line), which results in either a win or loss. Simulation yields a reward, which in this case is either <span class="packt_screen">1</span> or <span class="packt_screen">0</span>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Update</h1>
+                </header>
+            
+            <article>
+                
+<p>Finally, the update step happens when the algorithm reaches a terminal state, or when either player wins or the game culminates in a draw. For each node/state of the board that was visited during this iteration, the algorithm updates the mean reward and increments the visit count of that state. This is also called <strong>backpropagation</strong>:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-689 image-border" src="assets/0dfe452d-2e94-4838-8ac8-8998c1683ae9.png" style="width:25.17em;height:23.33em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 4: Update</div>
+<p>In the preceding diagram, since we reached a terminal state that returned <span class="packt_screen">1</span> (a win), we increment the visit count and reward accordingly for each node along the path from the root node accordingly.</p>
+<p>That concludes the four steps that occur in one MCTS iteration. As the name Monte Carlo suggests, we conduct this search multiple times before we decide the next move to take. The number of iterations is configurable, and often depends on time/resources available. Over time, the tree learns a structure that approximates a perfect tree and can be used to guide agents to make decisions.</p>
+<p>AlphaGo and AlphaGo Zero, DeepMind's revolutionary Go playing agents, rely on MCTS to select moves. In the next section, we will explore the two algorithms to understand how they combine neural networks and MCTS to play Go at a superhuman level of proficiency.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">AlphaGo</h1>
+                </header>
+            
+            <article>
+                
+<p>AlphaGo's main innovation is how it combines deep learning and Monte Carlo tree search to play Go. The AlphaGo architecture consists of four neural networks: a small supervised learning policy network, a large supervised-learning policy network, a reinforcement learning policy network, and a value network. We train all four of these networks plus the MCTS tree. <span>The following sections will cover each training step.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Supervised learning policy networks</h1>
+                </header>
+            
+            <article>
+                
+<p>The first step in training AlphaGo involves training policy networks on games played by two professionals (in board games such as chess and Go, it is common to keep records of historical games, the board state, and the moves made by each player at every turn). The main idea is to make AlphaGo learn and understand how human experts play Go. More formally, given a board state, <img class="fm-editor-equation" src="assets/55d32f25-c70f-44f0-9035-4a54c2afda6c.png" style="width:0.75em;height:1.00em;"/>, and set of actions, <img class="fm-editor-equation" src="assets/65c7bea2-8bc3-4a04-93cd-ffc0fafed904.png" style="width:0.83em;height:0.92em;"/>, we would like a policy network, <img class="fm-editor-equation" src="assets/b2ac07b7-e049-481e-b9b8-8b7e30fbd8ab.png" style="width:4.08em;height:1.83em;"/>, to predict the next move the human makes. The data consists of pairs of <img class="fm-editor-equation" src="assets/5dc1ab94-90ee-4e0b-85ad-3c3e9ab3ca19.png" style="width:2.58em;height:1.42em;"/> sampled from over 30,000,000 historical games from the KGS Go server. The input to the network consists of the board state as well as metadata. AlphaGo has two supervised learning policy networks of varying sizes. The large network<span> is a 13-layer convolutional neural network with ReLU activation functions in the hidden layers, while the smaller one is a single-layer softmax network.</span></p>
+<p>Why do we train two similar networks? The larger policy network initializes the weights of the reinforcement learning policy network, which gets further refined through an RL approach called <strong>policy gradients</strong>. The smaller network is used during the simulation step of MCTS. Remember, while most simulations in MCTS rely on the randomized selection of moves, one can also utilize light or heavy heuristics to have more intelligent simulations. The smaller network, which lacks the accuracy of the larger supervised network yet yields much faster inference, provides light heuristics for rollout.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Reinforcement learning policy networks</h1>
+                </header>
+            
+            <article>
+                
+<p>Once the larger supervised learning policy network is trained, we further improve the model by having the RL policy network play against a previous version of itself. The weights of the network are updated using a method called <strong>policy gradients</strong>, which is a variant of gradient descent for vanilla neural networks. Formally speaking, the gradient update rule for the weights of our RL policy network can be expressed as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/0dfc1d79-0fe2-45ac-9778-c5dcc3c7aeff.png" style="width:12.42em;height:2.83em;"/></div>
+<p>Here, <img class="fm-editor-equation" src="assets/6e728664-0539-498d-bc13-7174e4fa7568.png" style="width:1.08em;height:1.00em;"/> are the weights of the RL policy network, <img class="fm-editor-equation" src="assets/b804e251-7fe6-4692-ade3-371872ad9257.png" style="width:1.50em;height:1.00em;"/>, and <img class="fm-editor-equation" src="assets/5597f3a0-4409-453c-a487-aac612537815.png" style="width:0.83em;height:0.75em;"/> is the expected reward at timestep <img class="fm-editor-equation" src="assets/1b2a4aa3-d94d-45d7-a7c5-9d8ab755638c.png" style="width:0.50em;height:1.08em;"/>. The reward is simply the outcome of the game, where a win results in +1 and a loss results in -1. Herein lies the main difference between the supervised learning policy network and the reinforcement learning policy network. For the former network, the objective is to maximize the likelihood of choosing a particular action given a state, or, in other words, to simply mimic the moves of the historical games. Since there is no reward function involved, it does not care about the eventual outcome of the game.</p>
+<p>On the other hand, the reinforcement learning policy network incorporates the final outcome when updating the weights. More specifically, it is trying to maximize the log likelihood of the moves that contribute to higher rewards (that is, winning moves). This is because we are multiplying the gradient of the log-likelihood with the reward (either +1 or -1), which essentially determines the direction in which to move the weights. The weights of a poor move will be moved in the opposite direction, for we will likely be multiplying the gradients with -1. To summarize, the network not only tries to figure out the most likely move, but also one that helps it win. According to DeepMind's paper, the reinforcement learning policy network won the vast majority (80%~85%) of its games against its supervised counterpart and other Go playing programs, such as Pachi.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Value network</h1>
+                </header>
+            
+            <article>
+                
+<p>The last step of the pipeline involves training a value network to evaluate the board state, or in other words, to determine how favorable a particular board state is for winning the game. Formally speaking, given a particular policy, <img class="fm-editor-equation" src="assets/58974947-3e71-4976-8efc-db7dd55a5c42.png" style="width:0.75em;height:0.75em;"/>, and state, <img class="fm-editor-equation" src="assets/73b29631-b660-499b-a22f-8f143b56c3b0.png" style="width:1.00em;height:1.00em;"/>, we would like to predict the expected reward, <img class="fm-editor-equation" src="assets/82c5ab93-2ac7-4f69-952b-8a47b220d1d8.png" style="width:0.75em;height:0.92em;"/>. The network is trained by minimizing the <strong>mean-squared error</strong> (<strong>MSE</strong>) between the predicted value, <img class="fm-editor-equation" src="assets/07eab5f4-2e49-46e9-bea2-6d0a8e36c28e.png" style="width:2.33em;height:1.33em;"/>, and the final outcome:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/072044d5-075f-42ad-83e2-098429dae709.png" style="width:11.25em;height:2.50em;"/></div>
+<p>Where <img class="fm-editor-equation" src="assets/a231bccc-4eeb-4129-9a6a-96928ad23a2a.png" style="width:1.08em;height:1.00em;"/> are the parameters of the network. In practice, the network is trained on 30,000,000 state-reward pairs, each coming from a distinct game. The dataset is constructed in this way because the board states from the same game can be highly correlated, potentially leading to overfitting.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Combining neural networks and MCTS</h1>
+                </header>
+            
+            <article>
+                
+<p>In AlphaGo, the policy and value networks are combined with MCTS to provide a look-ahead search when selecting actions in a game. Previously, we discussed how MCTS keeps track of the mean reward and number of visits made to each node. In AlphaGo, we have a few more values to keep track of:</p>
+<ul>
+<li><img class="fm-editor-equation" src="assets/41233493-8215-4815-97a8-376962fd52f7.png" style="width:3.33em;height:1.17em;"/>: Which is the mean action value of choosing a particular action</li>
+<li><img class="fm-editor-equation" src="assets/52b25710-26ed-4cdb-bdea-c51bb2815c41.png" style="width:3.08em;height:1.08em;"/>: The probability of taking an action for a given board state given by the larger supervised learning policy network</li>
+<li><img class="fm-editor-equation" src="assets/1245e894-e2e0-404d-b1fc-d123dde71296.png" style="width:3.25em;height:1.17em;"/>: The value evaluation of a state that is not explored yet (a leaf node)</li>
+<li><img class="fm-editor-equation" src="assets/656ba1c3-6860-4c72-a5e6-49fe02f998f5.png" style="width:3.67em;height:1.25em;"/>: The number of times a particular action was chosen given a state</li>
+</ul>
+<p>During a single simulation of our tree search, the algorithm selects an action, <img class="fm-editor-equation" src="assets/91a9e2e5-c0c5-4a2e-9762-b5287ffd8c8a.png" style="width:1.08em;height:0.92em;"/>, for a given state, <img class="fm-editor-equation" src="assets/32013526-a1b9-4f4e-9af7-1d02f257b604.png" style="width:1.00em;height:1.00em;"/>, at a particular timestep, <img class="fm-editor-equation" src="assets/d0e8dd3c-9f2d-4d7c-932a-d837b365612f.png" style="width:0.58em;height:1.25em;"/>, according to the following formula:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/be45ffe6-9f2f-4c75-b709-fd02fb21f9a2.png" style="width:16.58em;height:1.42em;"/></div>
+<p>Where</p>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/095003e3-4162-4d5d-9e10-2dc9b2f02489.png" style="width:11.00em;height:2.83em;"/></div>
+<p>Hence <img class="fm-editor-equation" src="assets/2baa0841-0bac-4d33-a16c-205f1bf23094.png" style="width:3.83em;height:1.42em;"/> is a value that favors moves determined to be more likely by the larger policy network, but also supports exploration by penalizing those that have been visited more frequently.</p>
+<p>During expansion, when we don't have the preceding statistics for a given board state and move, we use the value network and the simulation to evaluate the leaf node. In particular, we take a weighted sum of the expected value given by the value network and outcome of the rollout:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/13475d29-0672-4385-9fbf-0d0d84fbcafc.png" style="width:17.75em;height:1.50em;"/></div>
+<p>Where <img class="fm-editor-equation" src="assets/3920ccc3-88bf-431a-ba9d-4e0254796706.png" style="width:3.58em;height:1.42em;"/> is the evaluation of the value network, <img class="fm-editor-equation" src="assets/63d5932c-a701-4f61-a14d-d3fc26ecbe4d.png" style="width:2.42em;height:1.17em;"/> is the eventual reward of the search, and <img class="fm-editor-equation" src="assets/17a3ae17-897c-41d6-bbae-bc37fe27647d.png" style="width:0.92em;height:1.42em;"/> is the weighting term that is often referred to as the mixing parameter. <img class="fm-editor-equation" src="assets/92e980c9-584c-42e2-aeea-58255101c7af.png" style="width:2.42em;height:1.17em;"/> is obtained after rollout, where the simulations are conducted using the smaller and faster supervised learning policy network. Having fast rollouts is important, especially in situations where decisions are time-boxed, hence the need for the smaller policy network.</p>
+<p>Finally, during the update step of MCTS, visit counts for each node are updated. Moreover, the action values are recalculated by taking the mean reward of all simulations that included a given node:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/61660467-4290-470b-90f8-844776c2edc1.png" style="width:9.50em;height:2.83em;"/></div>
+<p>Where <img class="fm-editor-equation" src="assets/7987e8fa-4eba-4e2c-a3fa-614c174658d8.png" style="width:3.33em;height:1.08em;"/> is the total reward across the <img class="fm-editor-equation" src="assets/3e5634d9-6a12-41bd-963e-585d0ed1d738.png" style="width:3.17em;height:1.08em;"/> times MCTS took action <img class="fm-editor-equation" src="assets/7f52dd4f-a2be-40a4-857d-53c7c1db0517.png" style="width:0.83em;height:0.92em;"/> at node <img class="fm-editor-equation" src="assets/58c868cd-4e72-47fb-b2bc-a4edee1333dc.png" style="width:1.25em;height:1.25em;"/>. After the MCTS search, the model chooses the most frequently-visited move when actually playing the game.</p>
+<p>And that concludes a rudimentary overview of AlphaGo. While an in-depth exposition of the architecture and methodology is beyond the scope of this book, this hopefully serves as an introductory guide to what makes AlphaGo work.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">AlphaGo Zero</h1>
+                </header>
+            
+            <article>
+                
+<p>We will cover AlphaGo Zero, the upgraded version of its predecessor before we finally get into some coding. The main features of AlphaGo Zero address some of the drawbacks of AlphaGo, including its dependency on a large corpus of games played by human experts.</p>
+<p>The main differences between AlphaGo Zero and AlphaGo are the following:</p>
+<ul>
+<li>AlphaGo Zero is trained solely with self-play reinforcement learning, meaning it does not rely on any human-generated data or supervision that is used to train AlphaGo</li>
+<li>Policy and value networks are represented as one network with two heads rather than two separate ones</li>
+<li>The input to the network is the board itself as an image, such as a 2D grid; the network does not rely on heuristics and instead uses the raw board state itself</li>
+<li>In addition to finding the best move, Monte Carlo tree search is also used for policy iteration and evaluation; moreover, AlphaGo Zero does not conduct rollouts during a search</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training AlphaGo Zero</h1>
+                </header>
+            
+            <article>
+                
+<p>Since we don't use human-generated data for training or supervision, how does AlphaGo Zero learn at all? The novel reinforcement learning algorithm developed by DeepMind involves using MCTS as a teacher for the neural network, which represents both policy and value functions.</p>
+<p>In particular, the outputs of MCTS are 1) probabilities, <img class="fm-editor-equation" src="assets/e48da246-32de-4d29-b9d0-3a65e7588e9d.png" style="width:0.67em;height:0.67em;"/>, for each selecting move during the simulation, and 2) the final outcome of the game, <img class="fm-editor-equation" src="assets/897a684f-b5a8-4dbe-9014-1863ce47bf8c.png" style="width:0.58em;height:0.75em;"/>. The neural network, <img class="fm-editor-equation" src="assets/79b7bae6-1046-4d6a-b961-ea90110b351d.png" style="width:0.67em;height:1.33em;"/>, takes in a board state, <img class="fm-editor-equation" src="assets/4d6629c8-5c12-4d6d-8e30-0e1b28b860af.png" style="width:0.75em;height:1.00em;"/>, and also outputs a tuple of <img class="fm-editor-equation" src="assets/f9317109-5594-4918-b190-83b7c3b2ee4d.png" style="width:2.42em;height:1.33em;"/>, where <img class="fm-editor-equation" src="assets/878389a6-6a3f-4251-becf-9b44229edc92.png" style="width:0.42em;height:0.58em;"/> is a vector of move probabilities and <img class="fm-editor-equation" src="assets/a39cf6dc-f0bb-494e-9c41-3fd3fc62dd18.png" style="width:0.75em;height:1.00em;"/> is the value of <img class="fm-editor-equation" src="assets/c08e5d8e-5979-4d19-9180-d0a7f38267b2.png" style="width:0.75em;height:1.00em;"/>. Given these outputs, we want to train our network such that the network's policy, <img class="fm-editor-equation" src="assets/decbf228-08ff-4b95-bc2c-f3bab09d6567.png" style="width:0.58em;height:0.92em;"/>, moves closer to the policy, <img class="fm-editor-equation" src="assets/68757487-064a-4362-91d5-d7a3929882b3.png" style="width:0.58em;height:0.58em;"/>, that is produced by MCTS, and the network's value, <img class="fm-editor-equation" src="assets/a9fcbc11-93db-43da-a80e-5e190e5f2409.png" style="width:0.50em;height:0.67em;"/>, moves closer to the eventual outcome, <img class="fm-editor-equation" src="assets/ccdb6cfe-0bc7-4695-bb97-2767238495d6.png" style="width:0.75em;height:0.92em;"/>, of the search. Note that in MCTS, the algorithm does not conduct rollouts, but instead relies on <img class="fm-editor-equation" src="assets/380539fe-4b9d-4287-8c85-a27b1c37538b.png" style="width:0.58em;height:1.17em;"/> for expansion and simulating the whole game until termination. Hence by the end of MCTS, the algorithm improves the policy from <img class="fm-editor-equation" src="assets/f482b125-f84b-4abd-9d79-f8cad3b93f82.png" style="width:0.58em;height:0.92em;"/> to <img class="fm-editor-equation" src="assets/3ceede97-6c8b-42af-a1db-a7ebe7a45499.png" style="width:0.58em;height:0.58em;"/> and is able to act as a teacher for <img class="fm-editor-equation" src="assets/f7031eb4-7f9a-4d2f-bd44-a3ad3715ffae.png" style="width:0.58em;height:1.17em;"/>. The loss function for the network consists of two parts: one is the cross-entropy between <img class="fm-editor-equation" src="assets/27c7bb97-71b9-45a5-a51f-5b7771099f6f.png" style="width:0.58em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/eb6e827b-6d49-4227-af78-ee15d7694596.png" style="width:0.67em;height:0.67em;"/>, and the other is the mean-squared error between <img class="fm-editor-equation" src="assets/d87448fc-eecf-4a64-b380-457b29317672.png" style="width:0.75em;height:1.00em;"/> and <img class="fm-editor-equation" src="assets/3e5d6fd5-c669-48f9-9e1d-0b427543cad5.png" style="width:0.75em;height:0.92em;"/>. This joint loss function looks as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/75b49656-2540-45e0-8980-c91de70527a4.png" style="width:18.00em;height:1.75em;"/></div>
+<p>Where <img class="fm-editor-equation" src="assets/79027252-9b97-46a5-8e84-c198ebc1c929.png" style="width:0.58em;height:1.08em;"/> is network parameters and <img class="fm-editor-equation" src="assets/bb1f525f-491c-420e-85cd-3e9577cc9a9d.png" style="width:0.67em;height:1.00em;"/> is a parameter for L2-regularization.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Comparison with AlphaGo</h1>
+                </header>
+            
+            <article>
+                
+<p>According to DeepMind's paper, AlphaGo Zero was able to outperform AlphaGo in 36 hours, whereas the latter took months to train. In a head-to-head competition with the version of AlphaGo that defeated Lee Sedol, AlphaGo Zero won 100 games out of 100. What's significant about these results is that, even without initial human supervision, a Go playing program can reach superhuman-level proficiency more efficiently and is able to discover much of the knowledge and wisdom that humanity spent thousands of years and millions of games cultivating.</p>
+<p>In the following sections, we will finally implement this powerful algorithm. Additional technical details of AlphaGo Zero will be covered as we go through the code.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Implementing AlphaGo Zero</h1>
+                </header>
+            
+            <article>
+                
+<p>At last, we will implement AlphaGo Zero in this section. In addition to achieving better performance than AlphaGo, it is in fact relatively easier to implement. This is because, as discussed, AlphaGo Zero only relies on <kbd>selfplay</kbd> data for learning, and thus relieves us from the burden of searching for large amounts of historical data. Moreover, we only need to implement one neural network that serves as both the policy and value function. The following implementation makes some further simplifications—for example, we assume that the Go board size is 9 instead of 19. This is to allow for faster training.</p>
+<p>The directory structure of our implementation looks such as the following:</p>
+<pre><span>alphago_zero/</span><br/><span>|-- __init__.py</span><br/><span>|-- config.py</span><br/><span>|-- constants.py</span><br/><span>|-- controller.py</span><br/><span>|-- features.py</span><br/><span>|-- go.py</span><br/><span>|-- </span>mcts<span>.py</span><br/><span>|-- alphagozero_agent.py</span><br/><span>|-- network.py</span><br/><span>|-- preprocessing.py</span><br/><span>|-- train.py</span><br/><span>`-- utils.py</span></pre>
+<p>We will especially pay attention to <kbd>network.py</kbd> and <kbd>mcts.py</kbd>, which contain the implementations for the dual network and the MCTS algorithm. Moreover, <kbd>alphagozero_agent.py</kbd> contains the implementation for combining the dual network and MCTS to create a Go playing agent.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Policy and value networks</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's get started with implementing the dual network, which we will call <kbd>PolicyValueNetwork</kbd>. First, we will create a few modules that contain configurations and constants that our <kbd>PolicyValueNetwork</kbd> will use.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">preprocessing.py</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>preprocessing.py</kbd> module mainly deals with reading from and writing to <kbd>TFRecords</kbd> files, which is TensorFlow's native data-representation file format. When training AlphaGo Zero, we store MCTS self-play results and moves. As discussed, these then become the ground truths from which <kbd>PolicyValueNetwork</kbd> learns. <kbd>TFRecords</kbd> provides a convenient way to save historical moves and results from MCTS. When reading these from disk, <kbd>preprocessing.py</kbd> turns <kbd>TFRecords</kbd> into <kbd>tf.train.Example</kbd>, an in-memory representation of data that can be directly fed into <kbd>tf.estimator.Estimator</kbd>.</p>
+<div class="packt_tip"> <kbd>tf_records</kbd> usually have filenames that end with <kbd>*.tfrecord.zz</kbd>.</div>
+<div>
+<p>The following function reads from a<span> </span><kbd>TFRecords</kbd><span> </span>file. We first turn a given list of <kbd>TFRecords</kbd> into <kbd>tf.data.TFRecordDataset</kbd>, an intermediate representation before we turn them into <kbd>tf.train.Example</kbd>:</p>
+</div>
+<pre><span>def </span><span>process_tf_records</span>(<span>list_tf_records</span>, <span>shuffle_records</span>=<span>True</span>,<br/>                       <span>buffer_size</span>=GLOBAL_PARAMETER_STORE.SHUFFLE_BUFFER_SIZE,<br/>                       <span>batch_size</span>=GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE):<br/><br/>    <span>if </span><span>shuffle_records</span>:<br/>        random.shuffle(<span>list_tf_records</span>)<br/><br/>    list_dataset = tf.data.Dataset.from_tensor_slices(<span>list_tf_records</span>)<br/><br/>    tensors_dataset = list_dataset.interleave(<span>map_func</span>=<span>lambda </span><span>x</span>: tf.data.TFRecordDataset(x, <span>compression_type</span>=<span>'ZLIB'</span>),<br/>                                             <span>cycle_length</span>=GLOBAL_PARAMETER_STORE.CYCLE_LENGTH,<br/>                                             <span>block_length</span>=GLOBAL_PARAMETER_STORE.BLOCK_LENGTH)<br/>    tensors_dataset = tensors_dataset.repeat(<span>1</span>).shuffle(<span>buffer_siz</span>=<span>buffer_size</span>).batch(<span>batch_size</span>)<br/><br/>    <span>return </span>tensors_dataset</pre>
+<p>The next step involves parsing this dataset so that we can feed the values into <kbd>PolicyValueNetwork</kbd>. There are three values we care about: the input, which we call either <kbd>x</kbd> or <kbd>board_state</kbd> throughout the implementation, the policy, <kbd>pi</kbd>, and the outcome, <kbd>z</kbd>, both of which are outputted by the MCTS algorithm:</p>
+<pre><span>def </span><span>parse_batch_tf_example</span>(<span>example_batch</span>):<br/>    features = {<br/>        <span>'x'</span>: tf.FixedLenFeature([], tf.string),<br/>        <span>'pi'</span>: tf.FixedLenFeature([], tf.string),<br/>        <span>'z'</span>: tf.FixedLenFeature([], tf.float32),<br/>    }<br/>    parsed_tensors = tf.parse_example(<span>example_batch</span>, features)<br/><br/>    <span># Get the board state<br/></span><span>    </span>x = tf.cast(tf.decode_raw(parsed_tensors[<span>'x'</span>], tf.uint8), tf.float32)<br/>    x = tf.reshape(x, [GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE, GOPARAMETERS.N,<br/>                       GOPARAMETERS.N, FEATUREPARAMETERS.NUM_CHANNELS])<br/><br/>    <span># Get the policy target, which is the distribution of possible moves<br/></span><span>    # Each target is a vector of length of board * length of board + 1<br/></span><span>    </span>distribution_of_moves = tf.decode_raw(parsed_tensors[<span>'pi'</span>], tf.float32)<br/>    distribution_of_moves = tf.reshape(distribution_of_moves,<br/>                                       [GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE, GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>])<br/><br/>    <span># Get the result of the game<br/></span><span>    # The result is simply a scalar<br/></span><span>    </span>result_of_game = parsed_tensors[<span>'z'</span>]<br/>    result_of_game.set_shape([GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE])<br/><br/>    <span>return </span>(x, {<span>'pi_label'</span>: distribution_of_moves, <span>'z_label'</span>: result_of_game})</pre>
+<p>The preceding two functions are combined in the following function to construct the input tensors to be fed into the network:</p>
+<pre><span>def </span><span>get_input_tensors</span>(<span>list_tf_records</span>, <span>buffer_size</span>=GLOBAL_PARAMETER_STORE.SHUFFLE_BUFFER_SIZE):<br/>    logger.info(<span>"Getting input data and tensors"</span>)<br/>    dataset = process_tf_records(<span>list_tf_records</span>=<span>list_tf_records</span>,<br/>                                 <span>buffer_size</span>=<span>buffer_size</span>)<br/>    dataset = dataset.filter(<span>lambda </span><span>input_tensor</span>: tf.equal(tf.shape(input_tensor)[<span>0</span>],<br/>                                                           GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE))<br/>    dataset = dataset.map(parse_batch_tf_example)<br/>    logger.info(<span>"Finished parsing"</span>)<br/>    <span>return </span>dataset.make_one_shot_iterator().get_next()</pre>
+<p>Finally, the following functions are used to write self-play results to disk:</p>
+<pre><span>def </span><span>create_dataset_from_selfplay</span>(<span>data_extracts</span>):<br/>    <span>return </span>(create_tf_train_example(extract_features(board_state), pi, result)<br/>            <span>for </span>board_state, pi, result <span>in </span><span>data_extracts</span>)<br/><br/><br/><span>def </span><span>shuffle_tf_examples</span>(<span>batch_size</span>, <span>records_to_shuffle</span>):<br/>    tf_dataset = process_tf_records(<span>records_to_shuffle</span>, <span>batch_size</span>=<span>batch_size</span>)<br/>    iterator = tf_dataset.make_one_shot_iterator()<br/>    next_dataset_batch = iterator.get_next()<br/>    sess = tf.Session()<br/>    <span>while True</span>:<br/>        <span>try</span>:<br/>            result = sess.run(next_dataset_batch)<br/>            <span>yield </span><span>list</span>(result)<br/>        <span>except </span>tf.errors.OutOfRangeError:<br/>            <span>break<br/></span><span><br/></span><span><br/></span><span>def </span><span>create_tf_train_example</span>(<span>board_state</span>, <span>pi</span>, <span>result</span>):<br/>    board_state_as_tf_feature = tf.train.Feature(<span>bytes_list</span>=tf.train.BytesList(<span>value</span>=[<span>board_state</span>.tostring()]))<br/>    pi_as_tf_feature = tf.train.Feature(<span>bytes_list</span>=tf.train.BytesList(<span>value</span>=[<span>pi</span>.tostring()]))<br/>    value_as_tf_feature = tf.train.Feature(<span>float_list</span>=tf.train.FloatList(<span>value</span>=[<span>result</span>]))<br/><br/>    tf_example = tf.train.Example(<span>features</span>=tf.train.Features(<span>feature</span>={<br/>        <span>'x'</span>: board_state_as_tf_feature,<br/>        <span>'pi'</span>: pi_as_tf_feature,<br/>        <span>'z'</span>: value_as_tf_feature<br/>    }))<br/><br/>    <span>return </span>tf_example<br/><br/><span>def </span><span>write_tf_examples</span>(<span>record_path</span>, <span>tf_examples</span>, <span>serialize</span>=<span>True</span>):<br/>    <span>with </span>tf.python_io.TFRecordWriter(<span>record_path</span>, <span>options</span>=TF_RECORD_CONFIG) <span>as </span>tf_record_writer:<br/>        <span>for </span>tf_example <span>in </span><span>tf_examples</span>:<br/>            <span>if </span><span>serialize</span>:<br/>                tf_record_writer.write(tf_example.SerializeToString())<br/>            <span>else</span>:<br/>                tf_record_writer.write(tf_example)</pre>
+<p>Some of these functions will be used later when we generate training data from self-play results.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">features.py</h1>
+                </header>
+            
+            <article>
+                
+<p>This module contains helper code for turning Go board representations into proper TensorFlow tensors, which can be provided to <kbd>PolicyValueNetwork</kbd>. The main function, <kbd>extract_features</kbd>, takes <kbd>board_state</kbd>, which is our representation of a Go board, and turns it into a tensor of the <kbd>[batch_size, N, N, 17]</kbd> shape, where <kbd>N</kbd> is the shape of the board (which is by default <kbd>9</kbd>), and <kbd>17</kbd> is the number of feature channels, representing the past moves as well as the color to play:</p>
+<pre><span>import </span>numpy <span>as </span>np<br/><br/><span>from </span>config <span>import </span>GOPARAMETERS<br/><br/><span>def </span><span>stone_features</span>(<span>board_state</span>):<br/>    <span># 16 planes, where every other plane represents the stones of a particular color<br/></span><span>    # which means we track the stones of the last 8 moves.<br/></span><span>    </span>features = np.zeros([<span>16</span>, GOPARAMETERS.N, GOPARAMETERS.N], <span>dtype</span>=np.uint8)<br/><br/>    num_deltas_avail = <span>board_state</span>.board_deltas.shape[<span>0</span>]<br/>    cumulative_deltas = np.cumsum(<span>board_state</span>.board_deltas, <span>axis</span>=<span>0</span>)<br/>    last_eight = np.tile(<span>board_state</span>.board, [<span>8</span>, <span>1</span>, <span>1</span>])<br/>    last_eight[<span>1</span>:num_deltas_avail + <span>1</span>] -= cumulative_deltas<br/>    last_eight[num_deltas_avail +<span>1</span>:] = last_eight[num_deltas_avail].reshape(<span>1</span>, GOPARAMETERS.N, GOPARAMETERS.N)<br/><br/>    features[::<span>2</span>] = last_eight == <span>board_state</span>.to_play<br/>    features[<span>1</span>::<span>2</span>] = last_eight == -<span>board_state</span>.to_play<br/>    <span>return </span>np.rollaxis(features, <span>0</span>, <span>3</span>)<br/><br/><span>def </span><span>color_to_play_feature</span>(<span>board_state</span>):<br/>    <span># 1 plane representing which color is to play<br/></span><span>    # The plane is filled with 1's if the color to play is black; 0's otherwise<br/></span><span>    </span><span>if </span><span>board_state</span>.to_play == GOPARAMETERS.BLACK:<br/>        <span>return </span>np.ones([GOPARAMETERS.N, GOPARAMETERS.N, <span>1</span>], <span>dtype</span>=np.uint8)<br/>    <span>else</span>:<br/>        <span>return </span>np.zeros([GOPARAMETERS.N, GOPARAMETERS.N, <span>1</span>], <span>dtype</span>=np.uint8)<br/><br/><span>def </span><span>extract_features</span>(<span>board_state</span>):<br/>    stone_feat = stone_features(<span>board_state</span>=<span>board_state</span>)<br/>    turn_feat = color_to_play_feature(<span>board_state</span>=<span>board_state</span>)<br/>    all_features = np.concatenate([stone_feat, turn_feat], <span>axis</span>=<span>2</span>)<br/>    <span>return </span>all_features</pre>
+<p>The <kbd>extract_features</kbd> function will be used by both the <kbd>preprocessing.py</kbd> and <kbd>network.py</kbd> modules to construct the feature tensors to be either written to a <kbd>TFRecord</kbd> file or fed into a neural network.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">network.py</h1>
+                </header>
+            
+            <article>
+                
+<p>This file contains our implementation of <kbd>PolicyValueNetwork</kbd>. In short, we construct a <kbd>tf.estimator.Estimator</kbd> that is trained using board states, policies, and self-play outcomes produced by MCTS self-play. The network has two heads: one acting as a value function, and the other acting as a policy network.</p>
+<p>First, we define some layers that will be used by <kbd>PolicyValueNetwork</kbd>:</p>
+<pre><span>import </span>functools<br/><span>import </span>logging<br/><span>import </span>os.path<br/><br/><span>import </span>tensorflow <span>as </span>tf<br/><br/><span>import </span>features<br/><span>import </span>preprocessing<br/><span>import </span>utils<br/><span>from </span>config <span>import </span>GLOBAL_PARAMETER_STORE, GOPARAMETERS<br/><span>from </span>constants <span>import </span>*<br/><br/>logger = logging.getLogger(__name__)<br/>logger.setLevel(logging.INFO)<br/><br/><span>def </span><span>create_partial_bn_layer</span>(<span>params</span>):<br/>    <span>return </span>functools.partial(tf.layers.batch_normalization,<br/>        <span>momentum</span>=<span>params</span>[<span>"momentum"</span>],<br/>        <span>epsilon</span>=<span>params</span>[<span>"epsilon"</span>],<br/>        <span>fused</span>=<span>params</span>[<span>"fused"</span>],<br/>        <span>center</span>=<span>params</span>[<span>"center"</span>],<br/>        <span>scale</span>=<span>params</span>[<span>"scale"</span>],<br/>        <span>training</span>=<span>params</span>[<span>"training"</span>]<br/>    )<br/><br/><span>def </span><span>create_partial_res_layer</span>(<span>inputs</span>, <span>partial_bn_layer</span>, <span>partial_conv2d_layer</span>):<br/>    output_1 = <span>partial_bn_layer</span>(<span>partial_conv2d_layer</span>(<span>inputs</span>))<br/>    output_2 = tf.nn.relu(output_1)<br/>    output_3 = <span>partial_bn_layer</span>(<span>partial_conv2d_layer</span>(output_2))<br/>    output_4 = tf.nn.relu(tf.add(<span>inputs</span>, output_3))<br/>    <span>return </span>output_4<br/><br/><span>def </span><span>softmax_cross_entropy_loss</span>(<span>logits</span>, <span>labels</span>):<br/> <span>return </span>tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(<span>logits</span>=<span>logits</span>, <span>labels</span>=<span>labels</span>[<span>'pi_label'</span>]))<br/><br/><span>def </span><span>mean_squared_loss</span>(<span>output_value</span>, <span>labels</span>):<br/> <span>return </span>tf.reduce_mean(tf.square(<span>output_value </span>- <span>labels</span>[<span>'z_label'</span>]))<br/><br/><span>def </span><span>get_losses</span>(<span>logits</span>, <span>output_value</span>, <span>labels</span>):<br/> ce_loss = softmax_cross_entropy_loss(<span>logits</span>, <span>labels</span>)<br/> mse_loss = mean_squared_loss(<span>output_value</span>, <span>labels</span>)<br/> <span>return </span>ce_loss, mse_loss<br/><br/><span>def </span><span>create_metric_ops</span>(<span>labels</span>, <span>output_policy</span>, <span>loss_policy</span>, <span>loss_value</span>, <span>loss_l2</span>, <span>loss_total</span>):<br/> <span>return </span>{<span>'accuracy'</span>: tf.metrics.accuracy(<span>labels</span>=<span>labels</span>[<span>'pi_label'</span>], <span>predictions</span>=<span>output_policy</span>, <span>name</span>=<span>'accuracy'</span>),<br/> <span>'loss_policy'</span>: tf.metrics.mean(<span>loss_policy</span>),<br/> <span>'loss_value'</span>: tf.metrics.mean(<span>loss_value</span>),<br/> <span>'loss_l2'</span>: tf.metrics.mean(<span>loss_l2</span>),<br/> <span>'loss_total'</span>: tf.metrics.mean(<span>loss_total</span>)}</pre>
+<p>Next, we have a function that is used to create <kbd>tf.estimator.Estimator</kbd>. While TensorFlow provides several prebuilt estimators, such as <kbd>tf.estimator.DNNClassifier</kbd>, our architecture is rather unique, which is why we need to build our own <kbd>Estimator</kbd>. This can be done by creating <kbd>tf.estimator.EstimatorSpec</kbd>, a skeleton class where we can define things such as the output tensors, network architecture, the loss functions, and the evaluation metrics:</p>
+<pre><span>def </span><span>generate_network_specifications</span>(<span>features</span>, <span>labels</span>, <span>mode</span>, <span>params</span>, <span>config=None</span>):<br/> batch_norm_params = {<span>"epsilon"</span>: <span>1e-5</span>, <span>"fused"</span>: <span>True</span>, <span>"center"</span>: <span>True</span>, <span>"scale"</span>: <span>True</span>, <span>"momentum"</span>: <span>0.997</span>,<br/> <span>"training"</span>: <span>mode</span>==tf.estimator.ModeKeys.TRAIN<br/> }</pre>
+<p>Our <kbd>generate_network_specifications</kbd> function takes several input:</p>
+<ul>
+<li><kbd>features</kbd>: The tensor representation of the Go board (with the <kbd>[batch_size, 9, 9, 17]</kbd> shape)</li>
+<li><kbd>labels</kbd>: Our <kbd>pi</kbd> and <kbd>z</kbd> tensors</li>
+<li><kbd>mode</kbd>: Here, we can specify whether our network is being instantiated in train or test mode</li>
+<li><kbd>params</kbd>: Additional parameters to specify the network structure (for example, convolutional filter size)</li>
+</ul>
+<p class="mce-root"/>
+<p>We then implement the shared portion of the network, the policy output head, the value output head, and then the loss functions:</p>
+<pre><span>with </span>tf.name_scope(<span>"shared_layers"</span>):<br/>    partial_bn_layer = create_partial_bn_layer(batch_norm_params)<br/>    partial_conv2d_layer = functools.partial(tf.layers.conv2d,<br/>        <span>filters</span>=<span>params</span>[HYPERPARAMS.NUM_FILTERS], <span>kernel_size</span>=[<span>3</span>, <span>3</span>], <span>padding</span>=<span>"same"</span>)<br/>    partial_res_layer = functools.partial(create_partial_res_layer, <span>batch_norm</span>=partial_bn_layer,<br/>                                          <span>conv2d</span>=partial_conv2d_layer)<br/><br/>    output_shared = tf.nn.relu(partial_bn_layer(partial_conv2d_layer(<span>features</span>)))<br/><br/>    <span>for </span>i <span>in </span><span>range</span>(<span>params</span>[HYPERPARAMS.NUMSHAREDLAYERS]):<br/>        output_shared = partial_res_layer(output_shared)<br/><br/><span># Implement the policy network<br/></span><span>with </span>tf.name_scope(<span>"policy_network"</span>):<br/>    conv_p_output = tf.nn.relu(partial_bn_layer(partial_conv2d_layer(output_shared, <span>filters</span>=<span>2</span>,<br/>                                                                          <span>kernel_size</span>=[<span>1</span>, <span>1</span>]),<br/>                                                                          <span>center</span>=<span>False</span>, <span>scale</span>=<span>False</span>))<br/>    logits = tf.layers.dense(tf.reshape(conv_p_output, [-<span>1</span>, GOPARAMETERS.N * GOPARAMETERS.N * <span>2</span>]),<br/>                             <span>units</span>=GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>)<br/>    output_policy = tf.nn.softmax(logits,<br/>                                  <span>name</span>=<span>'policy_output'</span>)<br/><br/><span># Implement the value network<br/></span><span>with </span>tf.name_scope(<span>"value_network"</span>):<br/>    conv_v_output = tf.nn.relu(partial_bn_layer(partial_conv2d_layer(output_shared, <span>filters</span>=<span>1</span>, <span>kernel_size</span>=[<span>1</span>, <span>1</span>]),<br/>        <span>center</span>=<span>False</span>, <span>scale</span>=<span>False</span>))<br/>    fc_v_output = tf.nn.relu(tf.layers.dense(<br/>        tf.reshape(conv_v_output, [-<span>1</span>, GOPARAMETERS.N * GOPARAMETERS.N]),<br/>        <span>params</span>[HYPERPARAMS.FC_WIDTH]))<br/>    fc_v_output = tf.layers.dense(fc_v_output, <span>1</span>)<br/>    fc_v_output = tf.reshape(fc_v_output, [-<span>1</span>])<br/>    output_value = tf.nn.tanh(fc_v_output, <span>name</span>=<span>'value_output'</span>)<br/><br/><span># Implement the loss functions<br/></span><span>with </span>tf.name_scope(<span>"loss_functions"</span>):<br/>    loss_policy, loss_value = get_losses(<span>logits</span>=logits,<br/>                                         <span>output_value</span>=output_value,<br/>                                         <span>labels</span>=<span>labels</span>)<br/>    loss_l2 = <span>params</span>[HYPERPARAMS.BETA] * tf.add_n([tf.nn.l2_loss(v)<br/>        <span>for </span>v <span>in </span>tf.trainable_variables() <span>if not </span><span>'bias' </span><span>in </span>v.name])<br/>    loss_total = loss_policy + loss_value + loss_l2</pre>
+<p>We then specify the optimization algorithm. Here, we use <kbd>tf.train.MomentumOptimizer</kbd>. We also adjust the learning rate during training; because we can't directly alter the learning rate once we create <kbd>Estimator</kbd>, we turn the learning rate update into a TensorFlow operation as well. We also log several metrics to TensorBoard:</p>
+<pre><span># Steps and operations for training<br/></span>global_step = tf.train.get_or_create_global_step()<br/><br/>learning_rate = tf.train.piecewise_constant(global_step, GLOBAL_PARAMETER_STORE.BOUNDARIES,<br/>                                            GLOBAL_PARAMETER_STORE.LEARNING_RATE)<br/><br/>update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)<br/><br/><span>with </span>tf.control_dependencies(update_ops):<br/>    train_op = tf.train.MomentumOptimizer(learning_rate,<br/>                <span>params</span>[HYPERPARAMS.MOMENTUM]).minimize(loss_total, <span>global_step</span>=global_step)<br/><br/>metric_ops = create_metric_ops(<span>labels</span>=<span>labels</span>,<br/>                               <span>output_policy</span>=output_policy,<br/>                               <span>loss_policy</span>=loss_policy,<br/>                               <span>loss_value</span>=loss_value,<br/>                               <span>loss_l2</span>=loss_l2,<br/>                               <span>loss_total</span>=loss_total)<br/><br/><span>for </span>metric_name, metric_op <span>in </span>metric_ops.items():<br/>    tf.summary.scalar(metric_name, metric_op[<span>1</span>])</pre>
+<p>Finally, we create a <kbd>tf.estmator.EstimatorSpec</kbd> object and return it. There are several parameters we need to specify when creating one:</p>
+<ul>
+<li><kbd>mode</kbd>: Train or test, as specified earlier.</li>
+<li><kbd>predictions</kbd>: A dictionary that maps a string (name) to the output operation of the network. Note that we can specify multiple output operations.</li>
+<li><kbd>loss</kbd>: The loss function operation.</li>
+<li><kbd>train_op</kbd>: The optimization operation.</li>
+<li><kbd>eval_metrics_op</kbd>: Operations that are run to store several metrics, such as loss, accuracy, and variable weight values.</li>
+</ul>
+<p>For the <kbd>predictions</kbd> argument, we provide outputs of both the policy and value networks:</p>
+<pre><span>return </span>tf.estimator.EstimatorSpec(<br/>    <span>mode</span>=<span>mode</span>,<br/>    <span>predictions</span>={<br/>        <span>'policy_output'</span>: output_policy,<br/>        <span>'value_output'</span>: output_value,<br/>    },<br/>    <span>loss</span>=loss_total,<br/>    <span>train_op</span>=train_op,<br/>    <span>eval_metric_ops</span>=metric_ops,<br/>)</pre>
+<p>In the very first step of training AlphaGo Zero, we must initialize a model with random weights. The following function implements this:</p>
+<pre><span>def </span><span>initialize_random_model</span>(<span>estimator_dir</span>, <span>**</span>kwargs):<br/>    sess = tf.Session(<span>graph</span>=tf.Graph())<br/>    params = utils.parse_parameters(**<span>kwargs</span>)<br/>    initial_model_path = os.path.join(<span>estimator_dir</span>, PATHS.INITIAL_CHECKPOINT_NAME)<br/><br/>    <span># Create the first model, where all we do is initialize random weights and immediately write them to disk<br/></span><span>    </span><span>with </span>sess.graph.as_default():<br/>        features, labels = get_inference_input()<br/>        generate_network_specifications(features, labels, tf.estimator.ModeKeys.PREDICT, params)<br/>        sess.run(tf.global_variables_initializer())<br/>        tf.train.Saver().save(sess, initial_model_path)</pre>
+<p>We use the following function to create the <kbd>tf.estimator.Estimator</kbd> object based on a given set of parameters:</p>
+<pre><span>def </span><span>get_estimator</span>(<span>estimator_dir</span>, <span>**</span>kwargs):<br/>    params = utils.parse_parameters(**<span>kwargs</span>)<br/>    <span>return </span>tf.estimator.Estimator(generate_network_specifications, <span>model_dir</span>=<span>estimator_dir</span>, <span>params</span>=params)</pre>
+<p><kbd>tf.estimator.Estimator</kbd> expects a function that provides <kbd>tf.estimator.EstimatorSpec</kbd>, which is our <kbd>generate_network_specifications</kbd> function. Here, <kbd>estimator_dir</kbd> refers to a directory in which our network stores checkpoints. By providing this parameter, our <kbd>tf.estimator.Estimator</kbd> object can load weights from a previous iteration of training.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>We also implement functions for training and validating a model:</p>
+<pre><span>def </span><span>train</span>(<span>estimator_dir</span>, <span>tf_records</span>, <span>model_version</span>, <span>**</span>kwargs):<br/>    <span>"""<br/></span><span>    Main training function for the PolicyValueNetwork<br/></span><span>    Args:<br/></span><span>        estimator_dir (str): Path to the estimator directory<br/></span><span>        tf_records (list): A list of TFRecords from which we parse the training examples<br/></span><span>        model_version (int): The version of the model<br/></span><span>    """<br/></span><span>    </span>model = get_estimator(<span>estimator_dir</span>, **<span>kwargs</span>)<br/>    logger.info(<span>"Training model version: {}"</span>.format(<span>model_version</span>))<br/>    max_steps = <span>model_version </span>* GLOBAL_PARAMETER_STORE.EXAMPLES_PER_GENERATION // \<br/>                GLOBAL_PARAMETER_STORE.TRAIN_BATCH_SIZE<br/>    model.train(<span>input_fn</span>=<span>lambda</span>: preprocessing.get_input_tensors(<span>list_tf_records</span>=<span>tf_records</span>),<br/>                <span>max_steps</span>=max_steps)<br/>    logger.info(<span>"Trained model version: {}"</span>.format(<span>model_version</span>))<br/><br/><br/><span>def </span><span>validate</span>(<span>estimator_dir</span>, <span>tf_records</span>, <span>checkpoint_path</span>=<span>None</span>, <span>**</span>kwargs):<br/>    model = get_estimator(<span>estimator_dir</span>, **<span>kwargs</span>)<br/>    <span>if </span><span>checkpoint_path </span><span>is None</span>:<br/>        checkpoint_path = model.latest_checkpoint()<br/>    model.evaluate(<span>input_fn</span>=<span>lambda</span>: preprocessing.get_input_tensors(<br/>        <span>list_tf_records</span>=<span>tf_records</span>,<br/>        <span>buffer_size</span>=GLOBAL_PARAMETER_STORE.VALIDATION_BUFFER_SIZE),<br/>                   <span>steps</span>=GLOBAL_PARAMETER_STORE.VALIDATION_NUMBER_OF_STEPS,<br/>                   <span>checkpoint_path</span>=<span>checkpoint_path</span>)</pre>
+<p>The <kbd>tf.estimator.Estimator.train</kbd> function expects a function that provides the training data in batches (<kbd>input_fn</kbd>). <kbd>input_data</kbd> uses our <kbd>get_input_tensors</kbd> function from the <kbd>preprocessing.py</kbd> module to parse <kbd>TFRecords</kbd> data and turn them into input tensors. The <kbd>tf.estimator.Estimator.evaluate</kbd> function expects the same input function.</p>
+<p>We finally encapsulate our estimator into our <kbd>PolicyValueNetwork</kbd>. This class uses the path to a network (<kbd>model_path</kbd>) and loads its weights. It uses the network to predict the value and most probable next moves of a given board state:</p>
+<pre><span>class </span><span>PolicyValueNetwork</span>():<br/><br/>    <span>def </span>__init__(<span>self</span>, <span>model_path</span>, <span>**</span>kwargs):<br/>        <span>self</span>.model_path = <span>model_path<br/></span><span>        </span><span>self</span>.params = utils.parse_parameters(**<span>kwargs</span>)<br/>        <span>self</span>.build_network()<br/><br/>    <span>def </span><span>build_session</span>(<span>self</span>):<br/>        config = tf.ConfigProto()<br/>        config.gpu_options.allow_growth = <span>True<br/></span><span>        return </span>tf.Session(<span>graph</span>=tf.Graph(), <span>config</span>=config)<br/><br/>    <span>def </span><span>build_network</span>(<span>self</span>):<br/>        <span>self</span>.sess = <span>self</span>.build_session()<br/><br/>        <span>with </span><span>self</span>.sess.graph.as_default():<br/>            features, labels = get_inference_input()<br/>            model_spec = generate_network_specifications(features, labels,<br/>                                                         tf.estimator.ModeKeys.PREDICT, <span>self</span>.params)<br/>            <span>self</span>.inference_input = features<br/>            <span>self</span>.inference_output = model_spec.predictions<br/>            <span>if </span><span>self</span>.model_path <span>is not None</span>:<br/>                <span>self</span>.load_network_weights(<span>self</span>.model_path)<br/>            <span>else</span>:<br/>                <span>self</span>.sess.run(tf.global_variables_initializer())<br/><br/>    <span>def </span><span>load_network_weights</span>(<span>self</span>, <span>save_file</span>):<br/>        tf.train.Saver().restore(<span>self</span>.sess, <span>save_file</span>)</pre>
+<p>The <kbd>model_path</kbd> argument passed to the constructor is the directory of a particular version of the model. When this is <kbd>None</kbd>, we initialize random weights. The following functions are used to predict the probabilities of the next action and the value of a given board state:</p>
+<pre><span>def </span><span>predict_on_single_board_state</span>(<span>self</span>, <span>position</span>):<br/>    probs, values = <span>self</span>.predict_on_multiple_board_states([<span>position</span>])<br/>    prob = probs[<span>0</span>]<br/>    value = values[<span>0</span>]<br/>    <span>return </span>prob, value<br/><br/><span>def </span><span>predict_on_multiple_board_states</span>(<span>self</span>, <span>positions</span>):<br/>    symmetries, processed = utils.shuffle_feature_symmetries(<span>list</span>(<span>map</span>(features.extract_features, <span>positions</span>)))<br/>    network_outputs = <span>self</span>.sess.run(<span>self</span>.inference_output, <span>feed_dict</span>={<span>self</span>.inference_input: processed})<br/>    action_probs, value_pred = network_outputs[<span>'policy_output'</span>], network_outputs[<span>'value_output'</span>]<br/>    action_probs = utils.invert_policy_symmetries(symmetries, action_probs)<br/>    <span>return </span>action_probs, value_pred</pre>
+<p>Do check the GitHub repository for the full implementation of the module.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Monte Carlo tree search</h1>
+                </header>
+            
+            <article>
+                
+<p>The second component of our AlphaGo Zero agent is the MCTS algorithm. In our <kbd>mcts.py</kbd> module, we implement an <kbd>MCTreeSearchNode</kbd> class, which represents each node in an MCTS tree during a search. This is then used by the agent implemented in <kbd>alphagozero_agent.py</kbd> to perform MCTS using <kbd>PolicyValueNetwork</kbd>, which we implemented just now.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">mcts.py</h1>
+                </header>
+            
+            <article>
+                
+<p><kbd>mcts.py</kbd> contains our implementation of Monte Carlo tree search. Our first class is <kbd>RootNode</kbd>, which is meant to represent the root node of the MCTS tree at the start of a simulation. By definition, the root node does not have a parent. Having a separate class for the root node is not absolutely necessary, but it does keep the code cleaner:</p>
+<pre><span>import </span>collections<br/><span>import </span>math<br/><br/><span>import </span>numpy <span>as </span>np<br/><br/><span>import </span>utils<br/><span>from </span>config <span>import </span>MCTSPARAMETERS, GOPARAMETERS<br/><br/><br/><span>class </span><span>RootNode</span>(<span>object</span>):<br/><br/>    <span>def </span>__init__(<span>self</span>):<br/>        <span>self</span>.parent_node = <span>None<br/></span><span>        </span><span>self</span>.child_visit_counts = collections.defaultdict(<span>float</span>)<br/>        <span>self</span>.child_cumulative_rewards = collections.defaultdict(<span>float</span>)</pre>
+<p>Next, we implement the <kbd>MCTreeSearchNode</kbd> class. This class has several attributes, the most important ones being the following:</p>
+<ul>
+<li><kbd>parent_node</kbd>: The parent node</li>
+<li><kbd>previous_move</kbd>: The previous move that led to this node's board state</li>
+</ul>
+<ul>
+<li><kbd>board_state</kbd>: The current board state</li>
+<li><kbd>is_visited</kbd>: Whether the leaves (child nodes) are expanded or not; this is <kbd>False</kbd> when the node is initialized</li>
+<li><kbd>child_visit_counts</kbd>: A <kbd>numpy.ndarray</kbd> representing the visit counts of each child node</li>
+<li><kbd>child_cumulative_rewards</kbd>: A <kbd>numpy.ndarray</kbd> representing the cumulative reward of each child node</li>
+<li><kbd>children_moves</kbd>: A dictionary of children moves</li>
+</ul>
+<p>We also have parameters such as <kbd>loss_counter</kbd>, <kbd>original_prior</kbd>, and <kbd>child_prior</kbd>. These are related to advanced MCTS techniques that AlphaGo Zero implements, such as paralleling the search process as well as adding noise to the search. For the sake of brevity, we won't cover these techniques, so you can ignore them for now.</p>
+<p>Here's the <kbd>__init__</kbd> function of <kbd>MCTreeSearchNode</kbd>:</p>
+<pre><span>class </span><span>MCTreeSearchNode</span>(<span>object</span>):<br/><br/>    <span>def </span>__init__(<span>self</span>, <span>board_state</span>, <span>previous_move</span>=<span>None</span>, <span>parent_node</span>=<span>None</span>):<br/>        <span>"""<br/></span><span>        A node of a MCTS tree. It is primarily responsible with keeping track of its children's scores<br/></span><span>        and other statistics such as visit count. It also makes decisions about where to move next.<br/></span><span><br/></span><span>        board_state (go.BoardState): The Go board<br/></span><span>        fmove (int): A number which represents the coordinate of the move that led to this board state. None if pass<br/></span><span>        parent (MCTreeSearchNode): The parent node<br/></span><span>        """<br/></span><span>        </span><span>if </span><span>parent_node </span><span>is None</span>:<br/>            parent_node = RootNode()<br/>        <span>self</span>.parent_node = <span>parent_node<br/></span><span>        </span><span>self</span>.previous_move = <span>previous_move<br/></span><span>        </span><span>self</span>.board_state = <span>board_state<br/></span><span>        </span><span>self</span>.is_visited = <span>False<br/></span><span>        </span><span>self</span>.loss_counter = <span>0<br/></span><span>        </span><span>self</span>.illegal_moves = <span>1000 </span>* (<span>1 </span>- <span>self</span>.board_state.enumerate_possible_moves())<br/>        <span>self</span>.child_visit_counts = np.zeros([GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>], <span>dtype</span>=np.float32)<br/>        <span>self</span>.child_cumulative_rewards = np.zeros([GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>], <span>dtype</span>=np.float32)<br/>        <span>self</span>.original_prior = np.zeros([GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>], <span>dtype</span>=np.float32)<br/>        <span>self</span>.child_prior = np.zeros([GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>], <span>dtype</span>=np.float32)<br/>        <span>self</span>.children_moves = {}</pre>
+<p class="mce-root"/>
+<p>Each node keeps track of the mean reward and action value of every child node. We set these as properties:</p>
+<pre><span>@property<br/></span><span>def </span><span>child_action_score</span>(<span>self</span>):<br/>    <span>return </span><span>self</span>.child_mean_rewards * <span>self</span>.board_state.to_play + <span>self</span>.child_node_scores - <span>self</span>.illegal_moves<br/><br/><span>@</span><span>property<br/></span><span>def </span><span>child_mean_rewards</span>(<span>self</span>):<br/>    <span>return </span><span>self</span>.child_cumulative_rewards / (<span>1 </span>+ <span>self</span>.child_visit_counts)<br/><br/><span>@</span><span>property<br/></span><span>def </span><span>child_node_scores</span>(<span>self</span>):<br/>    <span># This scores each child according to the UCT scoring system<br/></span><span>    </span><span>return </span>(MCTSPARAMETERS.c_PUCT * math.sqrt(<span>1 </span>+ <span>self</span>.node_visit_count) * <span>self</span>.child_prior / <br/>            (<span>1 </span>+ <span>self</span>.child_visit_counts))</pre>
+<p>And of course, we keep track of the action value, visit count, and cumulative reward of the node itself. Remember, <kbd>child_mean_rewards</kbd> is the mean reward, <span><span><kbd>child_visit_counts</kbd></span></span> is the number of times a child node was visited, and <kbd>child_cumulative_rewards</kbd> is the total reward of a node. We implement getters and setters for each attribute by adding the <kbd>@property</kbd> and <kbd>@*.setter</kbd> decorators:</p>
+<pre><span>@</span><span>property<br/></span><span>def </span><span>node_mean_reward</span>(<span>self</span>):<br/>    <span>return </span><span>self</span>.node_cumulative_reward / (<span>1 </span>+ <span>self</span>.node_visit_count)<br/><br/><span>@</span><span>property<br/></span><span>def </span><span>node_visit_count</span>(<span>self</span>):<br/>    <span>return </span><span>self</span>.parent_node.child_visit_counts[<span>self</span>.previous_move]<br/><br/><span>@node_visit_count.setter<br/></span><span>def </span><span>node_visit_count</span>(<span>self</span>, <span>value</span>):<br/>    <span>self</span>.parent_node.child_visit_counts[<span>self</span>.previous_move] = <span>value<br/></span><span><br/></span><span>@</span><span>property<br/></span><span>def </span><span>node_cumulative_reward</span>(<span>self</span>):<br/>    <span>return </span><span>self</span>.parent_node.child_cumulative_rewards[<span>self</span>.previous_move]<br/><br/><span>@node_cumulative_reward.setter<br/></span><span>def </span><span>node_cumulative_reward</span>(<span>self</span>, <span>value</span>):<br/>    <span>self</span>.parent_node.child_cumulative_rewards[<span>self</span>.previous_move] = <span>value<br/></span><span><br/></span><span>@</span><span>property<br/></span><span>def </span><span>mean_reward_perspective</span>(<span>self</span>):<br/><span>    </span><span>return </span><span>self</span>.node_mean_reward * <span>self</span>.board_state.to_play</pre>
+<p>During the selection step of MCTS, the algorithm chooses the child node with the greatest action value. This can be easily done by calling <kbd>np.argmax</kbd> on the matrix of child action scores:</p>
+<pre><span>def </span><span>choose_next_child_node</span>(<span>self</span>):<br/>    current = <span>self<br/></span><span>    </span>pass_move = GOPARAMETERS.N * GOPARAMETERS.N<br/>    <span>while True</span>:<br/>        current.node_visit_count += <span>1<br/></span><span>        </span><span># We stop searching when we reach a new leaf node<br/></span><span>        </span><span>if not </span>current.is_visited:<br/>            <span>break<br/></span><span>        if </span>(current.board_state.recent<br/>            <span>and </span>current.board_state.recent[-<span>1</span>].move <span>is None<br/></span><span>                and </span>current.child_visit_counts[pass_move] == <span>0</span>):<br/>            current = current.record_child_node(pass_move)<br/>            <span>continue<br/></span><span><br/></span><span>        </span>best_move = np.argmax(current.child_action_score)<br/>        current = current.record_child_node(best_move)<br/>    <span>return </span>current<br/><br/><span>def </span><span>record_child_node</span>(<span>self</span>, <span>next_coordinate</span>):<br/>    <span>if </span><span>next_coordinate </span><span>not in </span><span>self</span>.children_moves:<br/>        new_board_state = <span>self</span>.board_state.play_move(<br/>            utils.from_flat(<span>next_coordinate</span>))<br/>        <span>self</span>.children_moves[<span>next_coordinate</span>] = MCTreeSearchNode(<br/>            new_board_state, <span>previous_move</span>=<span>next_coordinate</span>, <span>parent_node</span>=<span>self</span>)<br/>    <span>return </span><span>self</span>.children_moves[<span>next_coordinate</span>]</pre>
+<p>As discussed in our section about AlphaGo Zero, <kbd>PolicyValueNetwork</kbd> is used to conduct simulations in an MCTS iteration. Again, the output of the network are the probabilities and the predicted value of the node, which we then reflect in the MCTS tree itself. In particular, the predicted value is propagated throughout the tree via the <kbd>back_propagate_result</kbd> function:</p>
+<pre><span>def </span><span>incorporate_results</span>(<span>self</span>, <span>move_probabilities</span>, <span>result</span>, <span>start_node</span>):<br/>    <span>if </span><span>self</span>.is_visited:<br/>        <span>self</span>.revert_visits(<span>start_node</span>=<span>start_node</span>)<br/>        <span>return<br/></span><span>    </span><span>self</span>.is_visited = <span>True<br/></span><span>    </span><span>self</span>.original_prior = <span>self</span>.child_prior = <span>move_probabilities<br/></span><span>    </span><span>self</span>.child_cumulative_rewards = np.ones([GOPARAMETERS.N * GOPARAMETERS.N + <span>1</span>], <span>dtype</span>=np.float32) * <span>result<br/></span><span>    </span><span>self</span>.back_propagate_result(<span>result</span>, <span>start_node</span>=<span>start_node</span>)<br/><br/><span>def </span><span>back_propagate_result</span>(<span>self</span>, <span>result</span>, <span>start_node</span>):<br/>    <span>"""<br/></span><span>    This function back propagates the result of a match all the way to where the search started from<br/></span><span><br/></span><span>    Args:<br/></span><span>        result (int): the result of the search (1: black, -1: white won)<br/></span><span>        start_node (MCTreeSearchNode): the node to back propagate until<br/></span><span>    """<br/></span><span>    </span><span># Keep track of the cumulative reward in this node<br/></span><span>    </span><span>self</span>.node_cumulative_reward += <span>result<br/></span><span><br/></span><span>    </span><span>if </span><span>self</span>.parent_node <span>is None or </span><span>self </span><span>is </span><span>start_node</span>:<br/>        <span>return<br/></span><span><br/></span><span>    </span><span>self</span>.parent_node.back_propagate_result(<span>result</span>, <span>start_node</span>)</pre>
+<p>Refer to the GitHub repository for a full implementation of our <kbd>MCTreeSearchNode</kbd> class and its functions.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Combining PolicyValueNetwork and MCTS</h1>
+                </header>
+            
+            <article>
+                
+<p>We combine our <kbd>PolicyValueNetwork</kbd> and MCTS implementations in <kbd>alphagozero_agent.py</kbd>. This module implements <kbd>AlphaGoZeroAgent</kbd>, which is the main AlphaGo Zero that conducts MCTS search and inference using <kbd>PolicyValueNetwork</kbd> to play games.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">alphagozero_agent.py</h1>
+                </header>
+            
+            <article>
+                
+<p>Finally, we implement the agent that acts as the interface between the Go games and the algorithms. The main class we will implement is called <kbd>AlphaGoZeroAgent</kbd>. Again, this class combines <kbd>PolicyValueNetwork</kbd> with our MCTS module, as is done in AlphaGo Zero, to select moves and simulate games. Note that any missing modules (for example, <kbd>go.py</kbd>, which implements the game of Go itself) can be found in the main GitHub repository:</p>
+<pre><span>import </span>logging<br/><span>import </span>os<br/><span>import </span>random<br/><span>import </span>time<br/><br/><span>import </span>numpy <span>as </span>np<br/><br/><span>import </span>go<br/><span>import </span>utils<br/><span>from </span>config <span>import </span>GLOBAL_PARAMETER_STORE, GOPARAMETERS<br/><span>from </span>mcts <span>import </span>MCTreeSearchNode<br/><span>from </span>utils <span>import </span>make_sgf<br/><br/>logger = logging.getLogger(__name__)<br/><br/><span>class </span><span>AlphaGoZeroAgent</span>:<br/><br/>    <span>def </span>__init__(<span>self</span>, <span>network</span>, <span>player_v_player</span>=<span>False</span>, <span>workers</span>=GLOBAL_PARAMETER_STORE.SIMULTANEOUS_LEAVES):<br/>        <span>self</span>.network = <span>network<br/></span><span>        </span><span>self</span>.player_v_player = <span>player_v_player<br/></span><span>        </span><span>self</span>.workers = <span>workers<br/></span><span>        </span><span>self</span>.mean_reward_store = []<br/>        <span>self</span>.game_description_store = []<br/>        <span>self</span>.child_probability_store = []<br/>        <span>self</span>.root = <span>None<br/></span><span>        </span><span>self</span>.result = <span>0<br/></span><span>        </span><span>self</span>.logging_buffer = <span>None<br/></span><span>        </span><span>self</span>.conduct_exploration = <span>True<br/></span><span>        if </span><span>self</span>.player_v_player:<br/>            <span>self</span>.conduct_exploration = <span>True<br/></span><span>        else</span>:<br/>            <span>self</span>.conduct_exploration = <span>False</span></pre>
+<p class="mce-root"/>
+<p>We start a Go game by initializing our agent and the game itself. This is done via the <kbd>initialize_game</kbd> method, which initializes <kbd>MCTreeSearchNode</kbd> and buffers that keep track of move probabilities and action values outputted by the network:</p>
+<pre><span>def </span><span>initialize_game</span>(<span>self</span>, <span>board_state</span>=<span>None</span>):<br/>    <span>if </span><span>board_state </span><span>is None</span>:<br/>        board_state = go.BoardState()<br/>    <span>self</span>.root = MCTreeSearchNode(<span>board_state</span>)<br/>    <span>self</span>.result = <span>0<br/></span><span>    </span><span>self</span>.logging_buffer = <span>None<br/></span><span>    </span><span>self</span>.game_description_store = []<br/>    <span>self</span>.child_probability_store = []<br/>    <span>self</span>.mean_reward_store = []</pre>
+<p>In each turn, our agent conducts MCTS and picks a move using the <kbd>select_move</kbd> function. Notice that we allow for some exploration in the early stages of the game by selecting a random node.</p>
+<p>The <kbd>play_move(coordinates)</kbd> method takes in a coordinate returned by <kbd>select_move</kbd> and updates the MCTS tree and board states:</p>
+<pre><span>def </span><span>play_move</span>(<span>self</span>, <span>coordinates</span>):<br/>    <span>if not </span><span>self</span>.player_v_player:<br/>       <span>self</span>.child_probability_store.append(<span>self</span>.root.get_children_as_probability_distributions())<br/>    <span>self</span>.mean_reward_store.append(<span>self</span>.root.node_mean_reward)<br/>    <span>self</span>.game_description_store.append(<span>self</span>.root.describe())<br/>    <span>self</span>.root = <span>self</span>.root.record_child_node(utils.to_flat(<span>coordinates</span>))<br/>    <span>self</span>.board_state = <span>self</span>.root.board_state<br/>    <span>del </span><span>self</span>.root.parent_node.children_moves<br/>    <span>return True<br/></span><span><br/></span><span>def </span><span>select_move</span>(<span>self</span>):<br/>    <span># If we have conducted enough moves and this is single player mode, we turn off exploration<br/></span><span>    </span><span>if </span><span>self</span>.root.board_state.n &gt; GLOBAL_PARAMETER_STORE.TEMPERATURE_CUTOFF <span>and not </span><span>self</span>.player_v_player:<br/>        <span>self</span>.conduct_exploration = <span>False<br/></span><span><br/></span><span>    if </span><span>self</span>.conduct_exploration:<br/>        child_visits_cum_sum = <span>self</span>.root.child_visit_counts.cumsum()<br/>        child_visits_cum_sum /= child_visits_cum_sum[-<span>1</span>]<br/>        coorindate = child_visits_cum_sum.searchsorted(random.random())<br/>    <span>else</span>:<br/>        coorindate = np.argmax(<span>self</span>.root.child_visit_counts)<br/><br/>    <span>return </span>utils.from_flat(coorindate)</pre>
+<p>These functions are encapsulated in the <kbd>search_tree</kbd> method, which conducts an iteration of MCTS using the network to select the next move:</p>
+<pre><span>def </span><span>search_tree</span>(<span>self</span>):<br/>    child_node_store = []<br/>    iteration_count = <span>0<br/></span><span>    </span><span>while </span><span>len</span>(child_node_store) &lt; <span>self</span>.workers <span>and </span>iteration_count &lt; <span>self</span>.workers * <span>2</span>:<br/>        iteration_count += <span>1<br/></span><span>        </span>child_node = <span>self</span>.root.choose_next_child_node()<br/>        <span>if </span>child_node.is_done():<br/>            result = <span>1 </span><span>if </span>child_node.board_state.score() &gt; <span>0 </span><span>else </span>-<span>1<br/></span><span>            </span>child_node.back_propagate_result(result, <span>start_node</span>=<span>self</span>.root)<br/>            <span>continue<br/></span><span>        </span>child_node.propagate_loss(<span>start_node</span>=<span>self</span>.root)<br/>        child_node_store.append(child_node)<br/>    <span>if </span><span>len</span>(child_node_store) &gt; <span>0</span>:<br/>        move_probs, values = <span>self</span>.network.predict_on_multiple_board_states(<br/>            [child_node.board_state <span>for </span>child_node <span>in </span>child_node_store])<br/>        <span>for </span>child_node, move_prob, result <span>in </span><span>zip</span>(child_node_store, move_probs, values):<br/>            child_node.revert_loss(<span>start_node</span>=<span>self</span>.root)<br/>            child_node.incorporate_results(move_prob, result, <span>start_node</span>=<span>self</span>.root)</pre>
+<p>Notice that once we have leaf nodes (where we can no longer select a node based on visit count), we use the <kbd>PolicyValueNetwork.predict_on_multiple_board_states(board_states)</kbd> function to output the next move probabilities and value of each leaf node. This <kbd>AlphaGoZeroAgent</kbd> is then used for either playing against another network or against itself for self-play. We implement separate functions for each. For <kbd>play_match</kbd>, we first start by initializing an agent each for black and white pieces:</p>
+<pre><span>def </span><span>play_match</span>(<span>black_net</span>, <span>white_net</span>, <span>games</span>, <span>readouts</span>, <span>sgf_dir</span>):<br/><br/>    <span># Create the players for the game<br/></span><span>    </span>black = AlphaGoZeroAgent(<span>black_net</span>, <span>player_v_player</span>=<span>True</span>, <span>workers</span>=GLOBAL_PARAMETER_STORE.SIMULTANEOUS_LEAVES)<br/>    white = AlphaGoZeroAgent(<span>white_net</span>, <span>player_v_player</span>=<span>True</span>, <span>workers</span>=GLOBAL_PARAMETER_STORE.SIMULTANEOUS_LEAVES)<br/><br/>    black_name = os.path.basename(<span>black_net</span>.model_path)<br/>    white_name = os.path.basename(<span>white_net</span>.model_path)</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>During the game, we keep track of the number of moves made, which also informs us which agent's turn it is. During each agent's turn, we use MCTS and the network to choose the next move:</p>
+<pre><span>for </span>game_num <span>in </span><span>range</span>(<span>games</span>):<br/>    <span># Keep track of the number of moves made in the game<br/></span><span>    </span>num_moves = <span>0<br/></span><span><br/></span><span>    </span>black.initialize_game()<br/>    white.initialize_game()<br/><br/>    <span>while True</span>:<br/>        start = time.time()<br/>        active = white <span>if </span>num_moves % <span>2 </span><span>else </span>black<br/>        inactive = black <span>if </span>num_moves % <span>2 </span><span>else </span>white<br/><br/>        current_readouts = active.root.node_visit_count<br/>        <span>while </span>active.root.node_visit_count &lt; current_readouts + <span>readouts</span>:<br/>            active.search_tree()</pre>
+<p>Once the tree search is done, we see whether the agent has resigned or the game has ended by other means. If so, we write the results and end the game itself:</p>
+<pre>logger.info(active.root.board_state)<br/><br/><span># Check whether a player should resign<br/></span><span>if </span>active.should_resign():<br/>    active.set_result(-<span>1 </span>* active.root.board_state.to_play, <span>was_resign</span>=<span>True</span>)<br/>    inactive.set_result(active.root.board_state.to_play, <span>was_resign</span>=<span>True</span>)<br/><br/><span>if </span>active.is_done():<br/>    sgf_file_path = <span>"{}-{}-vs-{}-{}.sgf"</span>.format(<span>int</span>(time.time()), white_name, black_name, game_num)<br/>    <span>with </span><span>open</span>(os.path.join(<span>sgf_dir</span>, sgf_file_path), <span>'w'</span>) <span>as </span>fp:<br/>        game_as_sgf_string = make_sgf(active.board_state.recent, active.logging_buffer,<br/>                          <span>black_name</span>=black_name,<br/>                          <span>white_name</span>=white_name)<br/>        fp.write(game_as_sgf_string)<br/>    <span>print</span>(<span>"Game Over"</span>, game_num, active.logging_buffer)<br/>    <span>break<br/></span><span><br/></span>move = active.select_move()<br/>active.play_move(move)<br/>inactive.play_move(move)</pre>
+<p>The <kbd>make_sgf</kbd> method writes the outcome of the game in a format that is commonly used in other Go AIs and computer programs. In other words, the output of this module are compatible with other Go software! Although we won't delve into the technicalities, this would help you create a Go playing bot that can play other agents and even human players.</p>
+<div class="packt_infobox"><strong>SGF</strong> stands for <strong>Smart Game Format</strong>, and is a popular way of storing the results of board games such as Go. You can find more information here: <a href="https://senseis.xmp.net/?SmartGameFormat">https://senseis.xmp.net/?SmartGameFormat</a>.</div>
+<p>The <kbd>play_against_self()</kbd> is used during the self-play simulations of training, while <kbd>play_match()</kbd> is used to evaluate the latest model against an earlier version of the model. Again, for a full implementation of the module, please refer to the codebase.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Putting everything together</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have implemented the two main components of AlphaGo Zero—the <kbd>PolicyValueNetwork</kbd> and the MCTS algorithm—we can build the controller that handles training. At the very beginning of the training procedure, we initialize a model with random weights. Next, we generate 100 self-play games. Five percent of those games and their results are held out for validation. The rest are kept for training the network. After the first initialization and self-play iteration, we essentially loop through the following steps:</p>
+<ol>
+<li>Generate self-play data</li>
+<li>Collate self-play data to create <kbd>TFRecords</kbd></li>
+<li>Train network using collated self-play data</li>
+<li>Validate on <kbd>holdout</kbd> dataset</li>
+</ol>
+<p>After every step 3, the resulting model is stored in a directory as the latest version. The training procedure and logic are handled by <kbd>controller.py</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">controller.py</h1>
+                </header>
+            
+            <article>
+                
+<p>First, we start with some import statements and helper functions that help us check directory paths and find the latest model version:</p>
+<pre><span>import </span>argparse<br/><span>import </span>logging<br/><span>import </span>os<br/><span>import </span>random<br/><span>import </span>socket<br/><span>import </span>sys<br/><span>import </span>time<br/><br/><span>import </span>argh<br/><span>import </span>tensorflow <span>as </span>tf<br/><span>from </span>tensorflow <span>import </span>gfile<br/><span>from </span>tqdm <span>import </span>tqdm<br/><span><br/>import </span>alphagozero_agent<br/><span>import </span>network<br/><span>import </span>preprocessing<br/><span>from </span>config <span>import </span>GLOBAL_PARAMETER_STORE<br/><span>from </span>constants <span>import </span>PATHS<br/><span>from </span>alphagozero_agent <span>import </span>play_match<br/><span>from </span>network <span>import </span>PolicyValueNetwork<br/><span>from </span>utils <span>import </span>logged_timer <span>as </span>timer<br/><span>from </span>utils <span>import </span>print_flags, generate, detect_model_name, detect_model_version<br/><br/>logging.basicConfig(<br/> <span>level</span>=logging.DEBUG,<br/> <span>handlers</span>=[logging.StreamHandler(sys.stdout)],<br/> <span>format</span>=<span>'%(asctime)s %(name)-12s %(levelname)-8s %(message)s'</span>,<br/>)<br/><br/>logger = logging.getLogger(__name__)<span><br/></span><span><br/></span><span>def </span><span>get_models</span>():<br/> <span>"""<br/></span><span> Get all model versions<br/></span><span> """<br/></span><span> </span>all_models = gfile.Glob(os.path.join(PATHS.MODELS_DIR, <span>'*.meta'</span>))<br/> model_filenames = [os.path.basename(m) <span>for </span>m <span>in </span>all_models]<br/> model_versionbers_names = <span>sorted</span>([<br/> (detect_model_version(m), detect_model_name(m))<br/> <span>for </span>m <span>in </span>model_filenames])<br/> <span>return </span>model_versionbers_names<br/><br/><span>def </span><span>get_latest_model</span>():<br/> <span>"""<br/></span><span> Get the latest model<br/></span><span><br/></span><span> Returns:<br/></span><span> Tuple of &lt;int, str&gt;, or &lt;model_version, model_name&gt;<br/></span><span> """<br/></span><span> </span><span>return </span>get_models()[-<span>1</span>]</pre>
+<p>The first step of every training run is to initialize a random model. Note that we store model definitions and weights in the <kbd>PATHS.MODELS_DIR</kbd> directory, while checkpoint results outputted by the estimator object are stored in <kbd>PATHS.ESTIMATOR_WORKING_DIR</kbd>:</p>
+<pre><span>def </span><span>initialize_random_model</span>():<br/>    bootstrap_name = generate(<span>0</span>)<br/>    bootstrap_model_path = os.path.join(PATHS.MODELS_DIR, bootstrap_name)<br/>    logger.info(<span>"Bootstrapping with working dir {}</span><span>\n</span><span> Model 0 exported to {}"</span>.format(<br/>        PATHS.ESTIMATOR_WORKING_DIR, bootstrap_model_path))<br/>    maybe_create_directory(PATHS.ESTIMATOR_WORKING_DIR)<br/>    maybe_create_directory(os.path.dirname(bootstrap_model_path))<br/>    network.initialize_random_model(PATHS.ESTIMATOR_WORKING_DIR)<br/>    network.export_latest_checkpoint_model(PATHS.ESTIMATOR_WORKING_DIR, bootstrap_model_path)</pre>
+<p>We next implement the function for executing self-play simulations. As mentioned earlier, the output of a self-play consist of each board state and the associated moves and game outcomes produced by the MCTS algorithm. Most output are stored in <kbd>PATHS.SELFPLAY_DIR</kbd>, while some are stored in <kbd>PATHS.HOLDOUT_DIR</kbd> for validation. Self-play involves initializing one <kbd>AlphaGoZeroAgent</kbd> and having it play against itself. This is where we use the <kbd>play_against_self</kbd> function that we implemented in <kbd>alphagozero_agent.py</kbd>. In our implementation, we conduct self-play games according to the <kbd>GLOBAL_PARAMETER_STORE.NUM_SELFPLAY_GAMES</kbd> parameter specified. More self-play games allow our neural network to learn from more experience, but do bear in mind that the training time increases accordingly:</p>
+<pre><span>def </span><span>selfplay</span>():<br/>    _, model_name = get_latest_model()<br/>    <span>try</span>:<br/>        games = gfile.Glob(os.path.join(PATHS.SELFPLAY_DIR, model_name, <span>'*.zz'</span>))<br/>        <span>if </span><span>len</span>(games) &gt; GLOBAL_PARAMETER_STORE.MAX_GAMES_PER_GENERATION:<br/>            logger.info(<span>"{} has enough games ({})"</span>.format(model_name, <span>len</span>(games)))<br/>            time.sleep(<span>600</span>)<br/>            sys.exit(<span>1</span>)<br/>    <span>except</span>:<br/>        <span>pass<br/></span><span><br/></span><span>    for </span>game_idx <span>in </span><span>range</span>(GLOBAL_PARAMETER_STORE.NUM_SELFPLAY_GAMES):<br/>        logger.info(<span>'================================================'</span>)<br/>        logger.info(<span>"Playing game {} with model {}"</span>.format(game_idx, model_name))<br/>        logger.info(<span>'================================================'</span>)<br/>        model_save_path = os.path.join(PATHS.MODELS_DIR, model_name)<br/>        game_output_dir = os.path.join(PATHS.SELFPLAY_DIR, model_name)<br/>        game_holdout_dir = os.path.join(PATHS.HOLDOUT_DIR, model_name)<br/>        sgf_dir = os.path.join(PATHS.SGF_DIR, model_name)<br/><br/>        clean_sgf = os.path.join(sgf_dir, <span>'clean'</span>)<br/>        full_sgf = os.path.join(sgf_dir, <span>'full'</span>)<br/>        os.makedirs(clean_sgf, <span>exist_ok</span>=<span>True</span>)<br/>        os.makedirs(full_sgf, <span>exist_ok</span>=<span>True</span>)<br/>        os.makedirs(game_output_dir, <span>exist_ok</span>=<span>True</span>)<br/>        os.makedirs(game_holdout_dir, <span>exist_ok</span>=<span>True</span>)</pre>
+<p>During self-play, we instantiate an agent with weights of a previously-generated model and make it play against itself for a number of games defined by <kbd>GLOBAL_PARAMETER_STORE.NUM_SELFPLAY_GAMES</kbd>:</p>
+<pre><span>with </span>timer(<span>"Loading weights from %s ... " </span>% model_save_path):<br/>    network = PolicyValueNetwork(model_save_path)<br/><br/><span>with </span>timer(<span>"Playing game"</span>):<br/>    agent = alphagozero_agent.play_against_self(network, GLOBAL_PARAMETER_STORE.SELFPLAY_READOUTS)<br/><br/></pre>
+<p>After the agent plays against itself, we store the moves it has generated as game data, which we use to train our policy and value networks:</p>
+<pre>output_name = <span>'{}-{}'</span>.format(<span>int</span>(time.time()), socket.gethostname())<br/>game_play = agent.extract_data()<br/><span>with </span>gfile.GFile(os.path.join(clean_sgf, <span>'{}.sgf'</span>.format(output_name)), <span>'w'</span>) <span>as </span>f:<br/>    f.write(agent.to_sgf(<span>use_comments</span>=<span>False</span>))<br/><span>with </span>gfile.GFile(os.path.join(full_sgf, <span>'{}.sgf'</span>.format(output_name)), <span>'w'</span>) <span>as </span>f:<br/>    f.write(agent.to_sgf())<br/><br/>tf_examples = preprocessing.create_dataset_from_selfplay(game_play)<br/><br/><span># We reserve 5% of games played for validation<br/></span>holdout = random.random() &lt; GLOBAL_PARAMETER_STORE.HOLDOUT<br/><span>if </span>holdout:<br/>    to_save_dir = game_holdout_dir<br/><span>else</span>:<br/>    to_save_dir = game_output_dir<br/>tf_record_path = os.path.join(to_save_dir, <span>"{}.tfrecord.zz"</span>.format(output_name))<br/><br/>preprocessing.write_tf_examples(tf_record_path, tf_examples)</pre>
+<p>Notice that we reserve a percentage of the games played as the validation set.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>After generating self-play data, we expect roughly five percent of the self-play games to be in the <kbd>holdout</kbd> directory, to be used in validation. The majority of self-play data is used to train the neural network. We add another step, called <strong>aggregate</strong>, which takes the latest model version and its self-play data to construct <kbd>TFRecords</kbd> with the format that our neural network specifies. This is where we use the functions we implemented in <kbd>preprocessing.py</kbd>:</p>
+<pre><span>def </span><span>aggregate</span>():<br/>    logger.info(<span>"Gathering game results"</span>)<br/><br/>    os.makedirs(PATHS.TRAINING_CHUNK_DIR, <span>exist_ok</span>=<span>True</span>)<br/>    os.makedirs(PATHS.SELFPLAY_DIR, <span>exist_ok</span>=<span>True</span>)<br/>    models = [model_dir.strip(<span>'/'</span>)<br/>              <span>for </span>model_dir <span>in </span><span>sorted</span>(gfile.ListDirectory(PATHS.SELFPLAY_DIR))[-<span>50</span>:]]<br/><br/>    <span>with </span>timer(<span>"Finding existing tfrecords..."</span>):<br/>        model_gamedata = {<br/>            model: gfile.Glob(<br/>                os.path.join(PATHS.SELFPLAY_DIR, model, <span>'*.zz'</span>))<br/>            <span>for </span>model <span>in </span>models<br/>        }<br/>    logger.info(<span>"Found %d models" </span>% <span>len</span>(models))<br/>    <span>for </span>model_name, record_files <span>in </span><span>sorted</span>(model_gamedata.items()):<br/>        logger.info(<span>"    %s: %s files" </span>% (model_name, <span>len</span>(record_files)))<br/><br/>    meta_file = os.path.join(PATHS.TRAINING_CHUNK_DIR, <span>'meta.txt'</span>)<br/>    <span>try</span>:<br/>        <span>with </span>gfile.GFile(meta_file, <span>'r'</span>) <span>as </span>f:<br/>            already_processed = <span>set</span>(f.read().split())<br/>    <span>except </span>tf.errors.NotFoundError:<br/>        already_processed = <span>set</span>()<br/><br/>    num_already_processed = <span>len</span>(already_processed)<br/><br/>    <span>for </span>model_name, record_files <span>in </span><span>sorted</span>(model_gamedata.items()):<br/>        <span>if </span><span>set</span>(record_files) &lt;= already_processed:<br/>            <span>continue<br/></span><span>        </span>logger.info(<span>"Gathering files for %s:" </span>% model_name)<br/>        <span>for </span>i, example_batch <span>in </span><span>enumerate</span>(<br/>                tqdm(preprocessing.shuffle_tf_examples(GLOBAL_PARAMETER_STORE.EXAMPLES_PER_RECORD, record_files))):<br/>            output_record = os.path.join(PATHS.TRAINING_CHUNK_DIR,<br/>                                         <span>'{}-{}.tfrecord.zz'</span>.format(model_name, <span>str</span>(i)))<br/>            preprocessing.write_tf_examples(<br/>                output_record, example_batch, <span>serialize</span>=<span>False</span>)<br/>        already_processed.update(record_files)<br/><br/>    logger.info(<span>"Processed %s new files" </span>%<br/>          (<span>len</span>(already_processed) - num_already_processed))<br/>    <span>with </span>gfile.GFile(meta_file, <span>'w'</span>) <span>as </span>f:<br/>        f.write(<span>'</span><span>\n</span><span>'</span>.join(<span>sorted</span>(already_processed)))</pre>
+<p>After we generate the training data, we train a new version of the neural network. We search for the latest version of the model, load an estimator using the weights of the latest version, and execute another iteration of training:</p>
+<pre><span>def </span><span>train</span>():<br/>    model_version, model_name = get_latest_model()<br/>    logger.info(<span>"Training on gathered game data, initializing from {}"</span>.format(model_name))<br/>    new_model_name = generate(model_version + <span>1</span>)<br/>    logger.info(<span>"New model will be {}"</span>.format(new_model_name))<br/>    save_file = os.path.join(PATHS.MODELS_DIR, new_model_name)<br/><br/>    <span>try</span>:<br/>        logger.info(<span>"Getting tf_records"</span>)<br/>        tf_records = <span>sorted</span>(gfile.Glob(os.path.join(PATHS.TRAINING_CHUNK_DIR, <span>'*.tfrecord.zz'</span>)))<br/>        tf_records = tf_records[<br/>                     -<span>1 </span>* (GLOBAL_PARAMETER_STORE.WINDOW_SIZE // GLOBAL_PARAMETER_STORE.EXAMPLES_PER_RECORD):]<br/><br/>        <span>print</span>(<span>"Training from:"</span>, tf_records[<span>0</span>], <span>"to"</span>, tf_records[-<span>1</span>])<br/><br/>        <span>with </span>timer(<span>"Training"</span>):<br/>            network.train(PATHS.ESTIMATOR_WORKING_DIR, tf_records, model_version+<span>1</span>)<br/>            network.export_latest_checkpoint_model(PATHS.ESTIMATOR_WORKING_DIR, save_file)<br/><br/>    <span>except</span>:<br/>        logger.info(<span>"Got an error training"</span>)<br/>        logging.exception(<span>"Train error"</span>)</pre>
+<p>Finally, after every training iteration, we would like to validate the model with the <kbd>holdout</kbd> dataset. When enough data is available, we take the <kbd>holdout</kbd> data from the last five versions:</p>
+<pre><span>def </span><span>validate</span>(<span>model_version</span>=<span>None</span>, <span>validate_name</span>=<span>None</span>):<br/>    <span>if </span><span>model_version </span><span>is None</span>:<br/>        model_version, model_name = get_latest_model()<br/>    <span>else</span>:<br/>        model_version = <span>int</span>(<span>model_version</span>)<br/>        model_name = get_model(<span>model_version</span>)<br/><br/>    models = <span>list</span>(<br/>        <span>filter</span>(<span>lambda </span><span>num_name</span>: num_name[<span>0</span>] &lt; (<span>model_version </span>- <span>1</span>), get_models()))<br/><br/>    <span>if </span><span>len</span>(models) == <span>0</span>:<br/>        logger.info(<span>'Not enough models, including model N for validation'</span>)<br/>        models = <span>list</span>(<br/>            <span>filter</span>(<span>lambda </span><span>num_name</span>: num_name[<span>0</span>] &lt;= <span>model_version</span>, get_models()))<br/>    <span>else</span>:<br/>        logger.info(<span>'Validating using data from following models: {}'</span>.format(models))<br/><br/>    tf_record_dirs = [os.path.join(PATHS.HOLDOUT_DIR, pair[<span>1</span>])<br/>                    <span>for </span>pair <span>in </span>models[-<span>5</span>:]]<br/><br/>    working_dir = PATHS.ESTIMATOR_WORKING_DIR<br/>    checkpoint_name = os.path.join(PATHS.MODELS_DIR, model_name)<br/><br/>    tf_records = []<br/>    <span>with </span>timer(<span>"Building lists of holdout files"</span>):<br/>        <span>for </span>record_dir <span>in </span>tf_record_dirs:<br/>            tf_records.extend(gfile.Glob(os.path.join(record_dir, <span>'*.zz'</span>)))<br/><br/>    <span>with </span>timer(<span>"Validating from {} to {}"</span>.format(os.path.basename(tf_records[<span>0</span>]), os.path.basename(tf_records[-<span>1</span>]))):<br/>        network.validate(working_dir, tf_records, <span>checkpoint_path</span>=checkpoint_name, <span>name</span>=<span>validate_name</span>)</pre>
+<p>Lastly, we implement the <kbd>evaluate</kbd> function, which has one model play multiple games against another:</p>
+<pre><span>def </span><span>evaluate</span>(<span>black_model</span>, <span>white_model</span>):<br/>    os.makedirs(PATHS.SGF_DIR, <span>exist_ok</span>=<span>True</span>)<br/><br/>    <span>with </span>timer(<span>"Loading weights"</span>):<br/>        black_net = network.PolicyValueNetwork(<span>black_model</span>)<br/>        white_net = network.PolicyValueNetwork(<span>white_model</span>)<br/><br/>    <span>with </span>timer(<span>"Playing {} games"</span>.format(GLOBAL_PARAMETER_STORE.EVALUATION_GAMES)):<br/>        play_match(black_net, white_net, GLOBAL_PARAMETER_STORE.EVALUATION_GAMES,<br/>                   GLOBAL_PARAMETER_STORE.EVALUATION_READOUTS, PATHS.SGF_DIR)</pre>
+<p><span><span>The <kbd>evaluate</kbd> method takes two parameters, <kbd>black_model</kbd> and <kbd>white_model</kbd>, where each argument refers to the path of the agent used to play a game. We use <kbd>black_model</kbd> and <kbd>white_model</kbd> to instantiate two <kbd>PolicyValueNetworks</kbd>. </span></span>Typically, we want to evaluate the latest model version, which would play as either black or white.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">train.py</h1>
+                </header>
+            
+            <article>
+                
+<p>Finally, <kbd>train.py</kbd> is where all the functions we implemented in the controller are called and coordinated. More specifically, we execute each step as <kbd>subprocess</kbd>:</p>
+<pre><span>import </span>subprocess<br/><span>import </span>sys<br/><span>from </span>utils <span>import </span>timer<br/><br/><span>import </span>os<br/><br/><span>from </span>constants <span>import </span>PATHS<br/><br/><span>import </span>logging<br/><br/>logger = logging.getLogger(__name__)<br/><br/><span>def </span><span>main</span>():<br/><br/>    <span>if not </span>os.path.exists(PATHS.SELFPLAY_DIR):<br/>        <span>with </span>timer(<span>"Initialize"</span>):<br/>            logger.info(<span>'=========================================='</span>)<br/>            logger.info(<span>"============ Initializing...=============="</span>)<br/>            logger.info(<span>'=========================================='</span>)<br/>            <span>res </span>= subprocess.call(<span>"python controller.py initialize-random-model"</span>, <span>shell</span>=<span>True</span>)<br/><br/>        <span>with </span>timer(<span>'Initial Selfplay'</span>):<br/>            logger.info(<span>'======================================='</span>)<br/>            logger.info(<span>'============ Selplaying...============='</span>)<br/>            logger.info(<span>'======================================='</span>)<br/>            subprocess.call(<span>'python controller.py selfplay'</span>, <span>shell</span>=<span>True</span>)</pre>
+<p>Assuming that no model has been trained yet, we initialize a model with random weights and make it play against itself to generate some data for our policy and value networks. After rewards, we repeat the following:</p>
+<ol>
+<li>Aggregate data self-play data</li>
+<li>Train networks</li>
+</ol>
+<ol start="3">
+<li>Make the agent play against itself</li>
+<li>Validate on validation data</li>
+</ol>
+<p>This is implemented as follows:</p>
+<pre><span>while True</span>:<br/>    <span>with </span>timer(<span>"Aggregate"</span>):<br/>        logger.info(<span>'========================================='</span>)<br/>        logger.info(<span>"============ Aggregating...=============="</span>)<br/>        logger.info(<span>'========================================='</span>)<br/>        res = subprocess.call(<span>"python controller.py aggregate"</span>, <span>shell</span>=<span>True</span>)<br/>        <span>if </span>res != <span>0</span>:<br/>            logger.info(<span>"Failed to gather"</span>)<br/>            sys.exit(<span>1</span>)<br/><br/>    <span>with </span>timer(<span>"Train"</span>):<br/>        logger.info(<span>'======================================='</span>)<br/>        logger.info(<span>"============ Training...==============="</span>)<br/>        logger.info(<span>'======================================='</span>)<br/>        subprocess.call(<span>"python controller.py train"</span>, <span>shell</span>=<span>True</span>)<br/><br/>    <span>with </span>timer(<span>'Selfplay'</span>):<br/>        logger.info(<span>'======================================='</span>)<br/>        logger.info(<span>'============ Selplaying...============='</span>)<br/>        logger.info(<span>'======================================='</span>)<br/>        subprocess.call(<span>'python controller.py selfplay'</span>, <span>shell</span>=<span>True</span>)<br/><br/>    <span>with </span>timer(<span>"Validate"</span>):<br/>        logger.info(<span>'======================================='</span>)<br/>        logger.info(<span>"============ Validating...============="</span>)<br/>        logger.info(<span>'======================================='</span>)<br/>        subprocess.call(<span>"python controller.py validate"</span>, <span>shell</span>=<span>True</span>)</pre>
+<p>Finally, since this is the main module, we add the following at the end of the file:</p>
+<pre><span>if </span>__name__ == <span>'__main__'</span>:<br/>    main()</pre>
+<p>And at long last, we're done!</p>
+<p>To run the training of AlphaGo Zero, all you need to do is call this command:</p>
+<pre class="packt_figref"><strong>$ python train.py</strong></pre>
+<p class="mce-root"/>
+<p>If everything has been implemented correctly, you should start to see the model train. However, the reader is to be warned that training will take a long, long time. To put things into perspective, DeepMind used 64 GPU workers and 19 CPU servers to train AlphaGo Zero <span><span>for 40 days</span></span>. If you wish to see your model attain a high level of proficiency, expect to wait a long time.</p>
+<div class="packt_infobox">Note that training AlphaGo Zero takes a very long time. Do not expect the model to reach professional-level proficiency any time soon!</div>
+<p>You should be able to see output that looks such as the following:</p>
+<pre>2<strong>018-09-14 03:41:27,286 utils INFO Playing game: 342.685 seconds</strong><br/><strong>2018-09-14 03:41:27,332 __main__ INFO ================================================</strong><br/><strong>2018-09-14 03:41:27,332 __main__ INFO Playing game 9 with model 000010-pretty-tetra</strong><br/><strong>2018-09-14 03:41:27,332 __main__ INFO ================================================</strong><br/><strong>INFO:tensorflow:Restoring parameters from models/000010-pretty-tetra</strong><br/><strong>2018-09-14 03:41:32,352 tensorflow INFO Restoring parameters from models/000010-pretty-tetra</strong><br/><strong>2018-09-14 03:41:32,624 utils INFO Loading weights from models/000010-pretty-tetra ... : 5.291 seconds</strong></pre>
+<p>You will also be able to see the board state as the agent plays against itself or against other agents:</p>
+<pre><strong>   A B C D E F G H J</strong><br/><strong> 9 . . . . . . . . X 9</strong><br/><strong> 8 . . . X . . O . . 8</strong><br/><strong> 7 . . . . X O O . . 7</strong><br/><strong> 6 O . X X X&lt;. . . . 6</strong><br/><strong> 5 X . O O . . O X . 5</strong><br/><strong> 4 . . X X . . . O . 4</strong><br/><strong> 3 . . X . X . O O . 3</strong><br/><strong> 2 . . . O . . . . X 2</strong><br/><strong> 1 . . . . . . . . . 1</strong><br/><strong>   A B C D E F G H J</strong><br/><strong>Move: 25. Captures X: 0 O: 0</strong><br/><strong> -5.5</strong><br/><strong>   A B C D E F G H J</strong><br/><strong> 9 . . . . . . . . X 9</strong><br/><strong> 8 . . . X . . O . . 8</strong><br/><strong> 7 . . . . X O O . . 7</strong><br/><strong> 6 O . X X X . . . . 6</strong><br/><strong> 5 X . O O . . O X . 5</strong><br/><strong> 4 . . X X . . . O . 4</strong><br/><strong> 3 . . X . X . O O . 3</strong><br/><strong> 2 . . . O . . . . X 2</strong><br/><strong> 1 . . . . . . . . . 1</strong><br/><strong>   A B C D E F G H J</strong><br/><strong>Move: 26. Captures X: 0 O: 0</strong></pre>
+<p>If you want to play one model against another, you can run the following command (assuming that the models are stored in <kbd>models/</kbd>):</p>
+<pre><strong>python controller.py evaluate models/{model_name_1} models/{model_name_2}</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we studied reinforcement learning algorithms for one of the most complex and difficult games in the world, Go. In particular, we explored Monte Carlo tree search, a popular algorithm that learns the best moves over time. In AlphaGo, we observed how MCTS can be combined with deep neural networks to make learning more efficient and powerful. Then we investigated how AlphaGo Zero revolutionized Go agents by learning solely and entirely from self-play experience while outperforming all existing Go software and players. We then implemented this algorithm from scratch.</p>
+<p>We also implemented AlphaGo Zero, which is the lighter version of AlphaGo since it does not depend on human game data. However, as noted, AlphaGo Zero requires enormous amounts of computational resources. Moreover, as you may have noticed, AlphaGo Zero depends on a myriad of hyperparameters, all of which require fine-tuning. In short, training AlphaGo Zero fully is a prohibitive task. We don't expect the reader to implement a state-of-the-art Go agent; rather, we hope that through this chapter, the reader has a better understanding of how Go playing deep reinforcement learning algorithms work. A firmer comprehension of these techniques and algorithms is already a valuable takeaway and outcome from this chapter. But of course, we encourage the reader to continue their exploration on this topic and build an even better version of AlphaGo Zero.</p>
+<p>For more in-depth information and resources on the topics we covered in this chapter, please refer to the following links:</p>
+<ul>
+<li><strong>AlphaGo home page</strong>: <a href="https://deepmind.com/research/alphago/%E2%80%8B">https://deepmind.com/research/alphago/</a></li>
+<li><strong>AlphaGo paper</strong>: <a href="https://storage.googleapis.com/deepmind-media/alphago/AlphaGoNaturePaper.pdf">https://storage.googleapis.com/deepmind-media/alphago/AlphaGoNaturePaper.pdf</a></li>
+<li><strong>AlphaGo Zero paper</strong>: <a href="https://www.nature.com/articles/nature24270">https://www.nature.com/articles/nature24270</a></li>
+<li><strong>AlphaGo Zero blog post by DeepMind</strong>: <a href="https://deepmind.com/blog/alphago-zero-learning-scratch/">https://deepmind.com/blog/alphago-zero-learning-scratch/</a></li>
+<li><strong>A survey of MCTS methods</strong>: <a href="http://mcts.ai/pubs/mcts-survey-master.pdf">http://mcts.ai/pubs/mcts-survey-master.pdf</a></li>
+</ul>
+<p>Now that computers have surpassed human performance in board games, one may ask, What's next? What are the implications of these results? There remains much to be done; Go, which has complete information and is played turn by turn, is still considered simple compared to many real-life situations. One can imagine that the problem of self-driving cars poses a more difficult challenge given the lack of complete information and a larger number of variables. Nevertheless, AlphaGo and AlphaGo Zero have provided a crucial step toward achieving these tasks, and one can surely be excited about further developments in this field.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">References</h1>
+                </header>
+            
+            <article>
+                
+<ol>
+<li><span>Silver, D., Huang, A., Maddison, C. J., Guez, A., Sifre, L., Van Den Driessche, G., ... and Dieleman, S. (2016). M<em>astering the game of Go with deep neural networks and tree search</em>. N</span>ature<span>, </span>529<span>(7587), 484.</span></li>
+<li><span>Silver, D., Schrittwieser, J., Simonyan, K., Antonoglou, I., Huang, A., Guez, A., ... and Chen, Y. (2017). <em>Mastering the game of Go without human knowledge</em>. </span>Nature<span>, </span>550<span>(7676), 354.</span></li>
+<li><span>Browne, C. B., Powley, E., Whitehouse, D., Lucas, S. M., Cowling, P. I., Rohlfshagen, P., ... and Colton, S. (2012). <em>A survey of Monte Carlo tree search methods</em>. </span>IEEE Transactions on Computational Intelligence and AI in games<span>, </span>4<span>(1), 1-43.</span></li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

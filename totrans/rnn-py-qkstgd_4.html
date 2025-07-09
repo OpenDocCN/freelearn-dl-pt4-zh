@@ -1,0 +1,392 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating a Spanish-to-English Translator</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter will push your neural network knowledge even further by introducing state-of-the-art concepts at the core of today's most powerful language translation systems. You will build a simple version of a Spanish-to-English translator, which accepts a sentence in Spanish and outputs its English equivalent.</p>
+<p>This chapter includes the following sections:</p>
+<ul>
+<li><strong>Understanding the translation model</strong>: This section is entirely focused on the theory behind this system.</li>
+<li><strong>What an LSTM network is</strong>: We'll be understanding what sits behind this advanced version of recurrent neural networks.</li>
+<li><strong>Understanding sequence-to-sequence network with attention</strong>: You will grasp the theory behind this powerful model, get to know what it actually does, and why it is so widely used for different problems.</li>
+<li><strong>Building the Spanish-to-English translator</strong>: This section is entirely focused on implementing the knowledge acquired up to this point in a working program. It includes the following:
+<ul>
+<li>Training the model</li>
+<li>Predicting English translations</li>
+<li>Evaluating the accuracy of the model</li>
+</ul>
+</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Understanding the translation model</h1>
+                </header>
+            
+            <article>
+                
+<p>Machine translation is often done using so-called <strong>s</strong><strong>tatistical machine translation</strong>, based on statistical models. This approach works very well, but a key issue is that, for every pair of languages, we need to rebuild the architecture. Thankfully, in 2014, Cho <em>et al.</em> (<a href="https://arxiv.org/pdf/1406.1078.pdf" target="_blank">https://arxiv.org/pdf/1406.1078.pdf</a>)<em> </em>came out with a paper that aims to solve this, and other problems, using the increasingly popular recurrent neural networks. The model is called sequence-to-sequence, and has the ability to be trained on any pair of languages <span>by just providing the right amount of data. In addition,</span><sup> </sup><span>its power lies in its ability to match sequences of different lengths, such as in machine translation, where a sentence in English may have a different size when compared to a sentence in Spanish. Let's examine how these tasks are achieved.</span></p>
+<p>First, we will introduce the following diagram and explain what it consists of:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/981ef83f-adec-4c07-9927-b41712890193.png" style="width:31.67em;height:10.58em;"/></p>
+<p>The architecture has three major parts: the <strong>encoder</strong> RNN network (on the left side), the intermediate state (marked by the middle arrow), and the <strong>decoder</strong> RNN network (on the right side). The flow of actions for translating the sentence <strong>Como te llamas?</strong> (Spanish) into <strong>What is your name?</strong> (English) is as follows:</p>
+<ul>
+<li>Encode the Spanish sentence, using the encoder RNN, into the intermediate state</li>
+<li>Using that state and the decoder RNN, generate the output sentence in English </li>
+</ul>
+<p>This simple approach works with short and simple sentences, but, in practice, the true use of translation models lies in longer and more complicated sequences. That is why we are going to extend our basic approach using the powerful LSTM network and an attention mechanism. Let's explore these techniques in the following sections. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">What is an LSTM network?</h1>
+                </header>
+            
+            <article>
+                
+<p><strong>LSTM</strong> (<strong>l<span>ong short-term memory</span></strong>) network is an advanced RNN network that aims to solve the vanishing gradient problem and yield excellent results on longer sequences. In the previous chapter, we introduced the GRU network, which is a simpler version of LSTM. Both include memory states that determine what information should be propagated further at each timestep. The LSTM cell looks as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/2f02d3d2-2e2a-4177-9787-45d5e99c23ba.png" style="width:36.25em;height:25.50em;"/></p>
+<p class="mce-root">Let's introduce the main equations that will clarify the preceding diagram. They are similar to the ones for gated recurrent units (see Chapter 3, <em>Generating Your Own Book Chapter</em>). Here is what happens at every given timestep, <em>t</em>:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/eeb8f477-3a8f-418c-a545-825e7c96e300.png" style="width:14.92em;height:1.83em;"/></p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f4ce6068-3740-40a2-9081-bc7f0746839f.png" style="width:15.00em;height:1.92em;"/></p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/1047d7e8-d38d-4fbb-8591-b8be9e8cb6eb.png" style="width:14.58em;height:1.58em;"/></p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/c39b96fc-5442-468d-93b6-33812680f2d9.png" style="width:14.33em;height:1.75em;"/></p>
+<p><span><img class="fm-editor-equation" src="assets/fb3c19d6-f261-4bbe-8f5d-44ed6b423c95.png" style="width:1.08em;height:0.92em;"/> is the <strong>output gate</strong>, which determines what exactly is important for the current prediction and what information should be kept around for the future. </span><img class="fm-editor-equation" src="assets/71bed47a-6af5-4de0-b6d6-cb66d91d5f71.png" style="width:0.83em;height:1.17em;"/><span> is called the </span><strong>input gate</strong>,<strong><span> </span></strong><span>and determines how much we concern ourselves about the current vector (cell). <img class="fm-editor-equation" src="assets/47e80fed-2cd6-4481-8026-85b010ad2923.png" style="width:0.83em;height:1.08em;"/> is the value for the new memory cell. </span><img class="fm-editor-equation" src="assets/620e6cb2-41f7-47e9-a74d-8310ddbe0434.png" style="width:1.00em;height:1.17em;"/><span> is the </span><strong>forget gate</strong>, which<span> determines how much to forget from the current vector (if the forget gate is 0, we are entirely forgetting the past). </span><span>All four, </span><img class="fm-editor-equation" src="assets/5a99b695-5381-4fe9-a35b-6b8a13e62382.png" style="width:4.83em;height:1.17em;"/>,<span> have the same equation insight (with its corresponding weights), but </span><img class="fm-editor-equation" src="assets/8ca58d2c-6eb8-4453-a095-c854fd500779.png" style="width:1.00em;height:1.25em;"/><span> uses tanh and the others use sigmoid. </span></p>
+<p>Finally, we have the final memory cell <img class="fm-editor-equation" src="assets/9746266a-3ec5-4578-a4ab-3bd7afd9212d.png" style="width:0.92em;height:0.83em;"/> and final hidden state <img class="fm-editor-equation" src="assets/6eb5c720-0596-4ce1-b080-53203eb34616.png" style="width:0.83em;height:0.92em;"/> :</p>
+<p class="CDPAlignCenter CDPAlign"><img style="font-size: 1em;width:10.67em;height:1.25em;" class="fm-editor-equation" src="assets/b1c7944b-3570-49b1-a2e5-2ee45c1b1044.png"/></p>
+<p>The final memory cell separates the input and forget gate, and decides how much of the previous output <img class="fm-editor-equation" src="assets/6d088790-6135-49a9-ab92-2791362fee23.png" style="width:1.83em;height:0.92em;"/> should be kept and how much of the current output <img class="fm-editor-equation" src="assets/30fc84a3-1fb1-4717-ab07-fb6220f19c01.png" style="width:1.00em;height:1.17em;"/> should be propagated forward (in simple terms, this means: <em>forget the past or not, take the input or not</em>). The <em>dot</em> sign is called the Hadamard product—if <kbd>x = [1, 2, 3]</kbd> and <kbd>y = [4, 5, 6]</kbd>, then <kbd>x dot y = [1*4, 2*5, 3*6] = [4, 10, 18]</kbd>.</p>
+<p>The final hidden state is defined as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/79f2f536-370c-4a5d-86a2-02a4b0e0756c.png" style="width:9.42em;height:1.50em;"/></p>
+<p>It decides whether to expose the content of the cell at this particular timestep. Since some of the information <img class="fm-editor-equation" src="assets/5b11a50f-f52d-4ec5-a98c-816ab2cbc644.png" style="width:1.00em;height:0.92em;"/> from the current cell may be omitted in <img class="fm-editor-equation" src="assets/a48ef98c-e704-4c47-84f9-d5fa7d16e68b.png" style="width:0.92em;height:1.00em;"/>, we are passing <img class="fm-editor-equation" src="assets/45f013f4-0b4a-4eea-96f8-09c281f006fb.png" style="width:0.92em;height:0.83em;"/> forward to be used in the next timesteps.</p>
+<p>This same system is repeated multiple times through the neural network. Often, it is the case that several LSTM cells are stacked together and use shared weights and biases. </p>
+<p>Two great sources for enhancing your knowledge on LSTMs are Colah's article <em>Understanding LSTM Network</em> (<a href="http://colah.github.io/posts/2015-08-Understanding-LSTMs/" target="_blank">http://colah.github.io/posts/2015-08-Understanding-LSTMs/</a>)<em> </em>and the Stanford University lecture on LSTM (<a href="https://www.youtube.com/watch?v=QuELiw8tbx8" target="_blank">https://www.youtube.com/watch?v=QuELiw8tbx8</a>) by Richard Socher. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Understanding the sequence-to-sequence network with attention</h1>
+                </header>
+            
+            <article>
+                
+<p>Since you have already understood how the LSTM network works, let's take a step back and look at the full network architecture. As we said before, we are using a sequence-to-sequence model with an attention mechanism. This model consists of LSTM units grouped together, forming the encoder and decoder parts of the network. </p>
+<p>In a simple sequence-to-sequence model, we input a sentence of a given length and create a vector that captures all the information in that particular sentence. After that, we use the vector to predict the translation. You can read more about how this works in a wonderful <span>Google </span>paper (<a href="https://arxiv.org/pdf/1409.3215.pdf" target="_blank">https://arxiv.org/pdf/1409.3215.pdf</a>) <span>in the <em>External links</em> section at the end of this chapter</span>. </p>
+<p>That approach is fine, but, as in every situation, we can and must do better. In that case, a better approach would be to use an attention mechanism. This is motivated by the way a person does language translation. A person doesn't read the input sentence, then hide the text while they try to write down the output sentence. They are continuously keeping track of the original sentence while making the translation. This is how the attention mechanism works. At every timestep of the decoder, the network decides what and how many of the encoder inputs to use. To make that decision, special weights are attached to every encoder word. In practice, the attention mechanism tries to solve a fundamental problem with recurrent neural networks—the ability to remember long-term dependencies. </p>
+<p>A good illustration of the attention mechanism can be seen here: </p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-454 image-border" src="assets/289240d8-82af-410f-85b0-e22669837ed6.png" style="width:28.42em;height:20.17em;"/></p>
+<p><img class="fm-editor-equation" src="assets/b1d42841-3e87-4dc1-909a-d0310e15516b.png" style="width:9.50em;height:1.00em;"/> are the inputs and <img class="fm-editor-equation" src="assets/f54afd71-65ef-4d8d-9072-191e1b8cc407.png" style="width:7.50em;height:1.00em;"/> are the predicted outputs. You can see the attention weights represented as <img class="fm-editor-equation" src="assets/a7d1e9fe-65a0-4df6-adb4-851fa68bc28e.png" style="width:10.50em;height:1.00em;"/>, each one attached to its corresponding input. These weights are learned during training and they decide the influence of a particular input on the final output. This makes every output <img class="fm-editor-equation" src="assets/ce6d88ba-ffb0-47cc-9dba-ac31d4c71d8d.png" style="width:0.92em;height:0.92em;"/> <span>dependent on a </span>weighted combination of all the input states.</p>
+<p>Unfortunately, the attention mechanism comes with a cost. Consider the following, from a WildML article (<a href="http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/" target="_blank">http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/</a>): </p>
+<div class="packt_quote">If we look a bit more closely at the equation for attention, we can see that attention comes at a cost. We need to calculate an attention value for each combination of input and output word. If you have a 50-word input sequence and generate a 50-word output sequence, that would be 2500 attention values. That's not too bad, but if you do character-level computations and deal with sequences consisting of hundreds of tokens, the above attention mechanisms can become prohibitively expensive.</div>
+<p>Despite this, the attention mechanism remains a state-of-the-art model for machine translation that produces excellent results. The preceding statement only shows that there is plenty of room for improvement, so we should try to contribute to its development as much as possible.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building the Spanish-to-English translator</h1>
+                </header>
+            
+            <article>
+                
+<p>I hope the previous sections left you with a good understanding of the model we are about to build. Now, we are going to get practical and write the code behind our translation system. We should end up with a trained network capable of predicting the English version of any sentence in Spanish. Let's dive into programming.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Preparing the data</h1>
+                </header>
+            
+            <article>
+                
+<p>The first step, as always, is to collect the needed data and prepare it for training. The more complicated our systems become, the more complex it is to massage the data and reform it into the right shape. We are going to use Spanish-to-English phrases from the OpenSubtitles free data source (<a href="http://opus.nlpl.eu/OpenSubtitles.php" target="_blank">http://opus.nlpl.eu/OpenSubtitles.php</a>). We will accomplish that task using the <kbd>data_utils.py</kbd> script, which you can find on the provided GitHub repo (<a href="https://github.com/simonnoff/Recurrent-Neural-Networks-with-Python-Quick-Start-Guide">https://github.com/simonnoff/Recurrent-Neural-Networks-with-Python-Quick-Start-Guide</a>). There you can also find more details on which datasets to download from OpenSubtitles. The file calculates the following properties, which could be used further in our model:</p>
+<ul>
+<li><kbd>spanish_vocab</kbd>: A <span>collection of all words in the Spanish training set, ordered by </span>frequency</li>
+<li><kbd>english_vocab</kbd><span>: </span>A<span> collection of all words in the English training set, ordered by frequency</span></li>
+<li><kbd>spanish_idx2word</kbd><span>: </span>A dictionary of key and word, where the key is the order of the word in <kbd>spanish_vocab</kbd></li>
+<li><kbd>spanish_word2idx</kbd><span>: </span>A reversed version of <kbd>spanish_idx2word</kbd></li>
+<li><kbd>english_idx2word</kbd>: <span>A dictionary of key and word, where the key is the order of the word in <kbd>english_vocab</kbd></span></li>
+<li><kbd>english_word2idx</kbd>: <span>A reversed version of the <kbd>english_idx2word</kbd></span></li>
+</ul>
+<ul>
+<li><kbd>X</kbd><span>: </span>An array of arrays of numbers. We produce that array by first reading the Spanish text file line by line, and storing these lines of words in separate arrays. Then, we encode each array of a sentence into an array of numbers where each word in the sentence is replaced with its index, based on <kbd>spanish_word2idx</kbd></li>
+<li><kbd>Y</kbd><span>: </span><span>An array of arrays of numbers. We produce that array by first reading the English text file line by line and storing these lines of words in separate arrays. Then, we encode each array of a sentence</span><span> into an array of numbers where each word in the sentence is replaced with its index, based on <kbd>english_word2idx</kbd></span></li>
+</ul>
+<p>You will see, in the following sections, how these collections are used during the training and testing of the model. The next step is to construct the TensorFlow graph.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Constructing the TensorFlow graph</h1>
+                </header>
+            
+            <article>
+                
+<p>As an initial step, we import the required Python libraries (you can see this in the <kbd>neural_machine_translation.py</kbd> file):</p>
+<div>
+<pre><span>import</span><span> tensorflow </span><span>as</span><span> tf<br/></span>import<span> numpy </span><span>as</span><span> np<br/></span>from<span> sklearn.model_selection </span><span>import</span><span> train_test_split<br/></span>import<span> data_utils<br/></span>import<span> matplotlib.pyplot </span><span>as</span><span> plt</span></pre></div>
+<p><kbd>tensorflow</kbd> and <kbd>numpy</kbd> should already be familiar to you. <kbd>matplotlib</kbd> is a handy python library used for visualizing data (you will see how we use it shortly). Then, we use the <kbd>train_test_split</kbd> function of <span><kbd>sklearn</kbd> </span>to split the data into random train and test arrays.</p>
+<p>We also import <kbd>data_utils</kbd>, which is used to access the data collections mentioned in the previous section.</p>
+<p>An important modification to do before splitting the data is making sure each of the arrays in <em>X</em> and <em>Y</em> is padded to indicate the start of a new sequence:</p>
+<div>
+<pre><span>def</span><span> data_padding(x, y, length </span><span>=</span><span> </span><span>15</span><span>):<br/>    </span><span>for</span><span> i </span><span>in</span><span> range(len(X)):<br/>        </span><span>x[i] </span><span>=</span><span> x[i] </span><span>+</span><span> (length </span><span>-</span><span> len(x[i])) </span><span>*</span><span> [spanish_word2idx[</span><span>'&lt;pad&gt;'</span><span>]]<br/>        </span><span>y[i] </span><span>=</span><span> [english_word2idx[</span><span>'&lt;go&gt;'</span><span>]] </span><span>+</span><span> y[i] </span><span>+</span><span> (length </span><span>-</span><span> len(y[i])) </span><span>*</span><span> [english_word2idx[</span><span>'&lt;pad&gt;'</span><span>]]</span></pre></div>
+<p>Then, we split the data as follows:</p>
+<pre>X_train,  X_test, Y_train, Y_test = train_test_split(X, Y, <span>test_size </span>= <span>0.1</span>)</pre>
+<p>Now, it is time to define the actual TensorFlow graph. We start with the variables that determine the input and output sequence length:</p>
+<pre>input_sequence_length = 15<br/>output_sequence_length = 16</pre>
+<p>Then, we calculate the size of each vocabulary:</p>
+<div>
+<pre><span>spanish_vocab_size </span><span>=</span><span> len(spanish_vocab) </span><span>+</span><span> </span><span>2</span><span> </span><span># + &lt;pad&gt;, &lt;unk&gt;<br/></span><span>english_vocab_size </span><span>=</span><span> len(english_vocab) </span><span>+</span><span> </span><span>4</span><span> </span><span># + &lt;pad&gt;, &lt;eos&gt;, &lt;go&gt;</span></pre></div>
+<p>The <kbd>&lt;pad&gt;</kbd> symbol is used to align the time steps, <kbd>&lt;go&gt;</kbd> is used to indicate beginning of decoder sequence, and <kbd>&lt;eos&gt;</kbd> indicates empty spaces. </p>
+<p>After that, we initialize our TensorFlow placeholders:</p>
+<div>
+<pre><span>encoder_inputs </span><span>=</span><span> [tf.placeholder(dtype</span><span>=</span><span>tf.int32, shape</span><span>=</span><span>[</span><span>None</span><span>], name</span><span>=</span><span>"encoder{}"</span><span>.format(i)) </span><span>for</span><span> i </span><span>in</span><span> range(input_sequence_length)]<br/><br/></span><span>decoder_inputs </span><span>=</span><span> [tf.placeholder(dtype</span><span>=</span><span>tf.int32, shape</span><span>=</span><span>[</span><span>None</span><span>], name</span><span>=</span><span>"decoder{}"</span><span>.format(i)) </span><span>for</span><span> i </span><span>in</span><span> range(output_sequence_length)]<br/><br/></span><span>targets </span><span>=</span><span> [decoder_inputs[i] </span><span>for</span><span> i </span><span>in</span><span> range(output_sequence_length </span><span>-</span><span> </span><span>1</span><span>)]<br/></span><span>targets.append(tf.placeholder(dtype </span><span>=</span><span> tf.int32, shape</span><span>=</span><span>[</span><span>None</span><span>], name</span><span>=</span><span>"last_output"</span><span>))<br/><br/></span><span>target_weights </span><span>=</span><span> [tf.placeholder(dtype </span><span>=</span><span> tf.float32, shape </span><span>=</span><span> [</span><span>None</span><span>], name</span><span>=</span><span>"target_w{}"</span><span>.format(i)) </span><span>for</span><span> i </span><span>in</span><span> range(output_sequence_length)]</span></pre></div>
+<ul>
+<li><kbd>encoder_inputs</kbd>: This holds values for the Spanish training input words.</li>
+<li><kbd>decoder_inputs</kbd>: This holds values for the English training input words.</li>
+<li><kbd>target</kbd>: This holds the real values of the English predictions. It has the same length as the <kbd>decoder_inputs</kbd>, where every word is the next predicted.</li>
+<li><kbd>target_weights</kbd>: This is a tensor that gives weights to all predictions.</li>
+</ul>
+<p>The final two steps of building the graph are generating the outputs and optimizing the weights and biases of the network. </p>
+<p>The former uses the handy TensorFlow function, <kbd>tf.contrib.legacy_seq2seq.embedding_attention_seq2seq</kbd> (<a href="https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq" target="_blank">https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq</a>)<span>,</span> which builds a sequence-to-sequence network with attention mechanism and returns the generated outputs from the decoder network. The implementation is as follows:</p>
+<div>
+<pre><span>size </span><span>=</span><span> </span><span>512</span><span> </span><span># num_hidden_units<br/></span><span>embedding_size </span><span>=</span><span> </span><span>100<br/><br/></span><span>with</span><span> tf.variable_scope(</span><span>"model_params"</span><span>):<br/>    </span><span>w_t </span><span>=</span><span> tf.get_variable(</span><span>'proj_w'</span><span>, [english_vocab_size, size], tf.float32)<br/>    </span><span>b </span><span>=</span><span> tf.get_variable(</span><span>'proj_b'</span><span>, [english_vocab_size], tf.float32)<br/>    </span><span>w </span><span>=</span><span> tf.transpose(w_t)<br/>    </span><span>output_projection </span><span>=</span><span> (w, b)<br/>    <br/>    </span><span>outputs, states </span><span>=</span><span> tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(<br/>                      </span><span>encoder_inputs,<br/>                      </span><span>decoder_inputs,<br/>                      </span><span>tf.contrib.rnn.BasicLSTMCell(size),<br/>                      </span><span>num_encoder_symbols</span><span>=</span><span>spanish_vocab_size,<br/></span><span>                      num_decoder_symbols</span><span>=</span><span>english_vocab_size,<br/>                      </span><span>embedding_size</span><span>=</span><span>embedding_size,<br/>                      </span><span>feed_previous</span><span>=</span><span>False</span><span>,<br/>                      </span><span>output_projection</span><span>=</span><span>output_projection,<br/>                      </span><span>dtype</span><span>=</span><span>tf.float32)</span></pre></div>
+<p>Let's discuss the function's parameters:</p>
+<ul>
+<li><kbd>encoder_inputs</kbd> and <kbd>decoder_inputs</kbd> contain values for each training pair of Spanish and English sentences.</li>
+<li><kbd>tf.contrib.rnn.BasicLSTMCell(size)</kbd> is the RNN cell used for the sequence model. This is an LSTM cell with <kbd>size</kbd> (<kbd>=512</kbd>) number of hidden units.</li>
+<li><kbd>num_encoder_symbols</kbd> and <kbd>num_decoder_symbols</kbd> are the Spanish and English dictionaries for the model.</li>
+<li><kbd>embedding_size</kbd> represents <span>the length of the embedding vector for each word. This vector can be obtained using the <kbd>word2vec</kbd> algorithm and helps the network in learning during backpropagation.</span></li>
+<li><kbd>feed_previous</kbd> is a Boolean value that indicates whether or not to use the previous output at a certain timestep as the next decoder input.</li>
+</ul>
+<ul>
+<li><kbd>output_projection</kbd> contains a pair of the network's weights and biases. As you can see from the preceding code block, the weights have the <kbd>[english_vocab_size, size]</kbd> <span>shape </span>and the biases have the <kbd>[english_vocab_size]</kbd> <span>shape</span>.</li>
+</ul>
+<p>After computing the outputs, we need to optimize <span>these weights and biases by minimizing the loss function of that model. For that purpose, we will be using the </span><kbd>tf.contrib.legacy_seq2seq.sequence_loss</kbd><span> </span><span>TensorFlow function, as follows:</span></p>
+<div>
+<pre><span>loss </span><span>=</span><span> tf.contrib.legacy_seq2seq.sequence_loss(outputs, targets, target_weights, softmax_loss_function </span><span>=</span><span> sampled_loss)<br/><br/></span>learning_rate = <span>5e-3 (5*10^(-3) = 0.005)<br/></span>optimizer = tf.train.AdamOptimizer(learning_rate).minimize(loss)</pre></div>
+<p>We supply the predicted <kbd>outputs</kbd>, along with the actual values, <kbd>targets</kbd>, of the network. In addition, we provide a slight modification of the standard softmax loss function. </p>
+<p>Finally, we define the optimizer that aims to minimize the loss function. </p>
+<p>To clarify the confusion around the <kbd>sample_loss</kbd> variable, we will give its definition as follows:</p>
+<pre><span>def </span>sampled_loss(labels, logits):<br/>    <span>return </span>tf.nn.sampled_softmax_loss(<br/>        <span>weights</span>=w_t,<br/>        <span>biases</span>=b,<br/>        <span>labels</span>=tf.reshape(labels, [-<span>1</span>, <span>1</span>]),<span><br/></span><span>        </span><span>inputs</span>=logits,<br/>        <span>num_sampled</span>=size,<br/>        <span>num_classes</span>=english_vocab_size<br/>    )</pre>
+<p>This <kbd>softmax</kbd> function is used only for training. You can learn more about it through the TensorFlow documentation (<a href="https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss" target="_blank">https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss</a><a href="https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss" target="_blank">).</a></p>
+<p>These equations result in a fully functional TensorFlow graph for our sequence-to-sequence model with attention mechanism. Once again, you may be amazed how little code is required to build a powerful neural network that yields excellent results. </p>
+<p>Next, we will plug the data collections into this graph and actually train the model. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the model</h1>
+                </header>
+            
+            <article>
+                
+<p>Training the neural network is accomplished using the same pattern as before:</p>
+<pre><span>def</span><span> train():<br/>    </span><span>init </span><span>=</span><span> tf.global_variables_initializer()<br/>    </span><span>saver </span><span>=</span><span> tf.train.Saver()<br/>    <br/>    </span><span>with</span><span> tf.Session() </span><span>as</span><span> sess:<br/>        </span><span>sess.run(init)<br/>        </span><span>for</span><span> step </span><span>in</span><span> range(steps):<br/>            </span><span>feed </span><span>=</span><span> feed_dictionary_values(X_train, Y_train)<br/>            </span><span>sess.run(optimizer, feed_dict</span><span>=</span><span>feed)<br/>            </span><span>if</span><span> step </span><span>%</span><span> </span><span>5</span><span> </span><span>==</span><span> </span><span>4</span><span> </span><span>or</span><span> step </span><span>==</span><span> </span><span>0</span><span>:<br/>                </span><span>loss_value </span><span>=</span><span> sess.run(loss, feed_dict </span><span>=</span><span> feed)<br/>                </span><span>losses.append(loss_value)<br/>                </span><span>print</span><span>(</span><span>"Step {0}/{1} Loss {2}"</span><span>.format(step, steps, <br/>                loss_value))<br/>            </span><span>if</span><span> step </span><span>%</span><span> </span><span>20</span><span> </span><span>==</span><span> </span><span>19</span><span>:<br/>                </span><span>saver.save(sess, </span><span>'ckpt/'</span><span>, global_step </span><span>=</span><span> step)</span></pre>
+<p>The interesting part from the preceding implementation is the <kbd>feed_dictionary_values</kbd> function, which forms the placeholders from the <kbd>X_train</kbd> and <kbd>Y_train</kbd>:</p>
+<pre><span>def </span>feed_dictionary_values(x, y, batch_size):<br/>    feed = {}<br/>    indices_x = np.random.choice(<span>len</span>(x), <span>size</span>=batch_size, <span>replace</span>=<span>False</span>)<br/>    indices_y = np.random.choice(<span>len</span>(y), <span>size</span>=batch_size, <span>replace</span>=<span>False</span>)<br/><br/>    <span>for </span>i <span>in </span><span>range</span>(input_sequence_length):<br/>        feed[encoder_inputs[i].name] = np.array([x[j][i] <span>for </span>j <span>in indices_x</span>], <span>dtype</span>=np.int32)<br/><br/>    <span>for </span>i <span>in </span><span>range</span>(output_sequence_length):<br/>        feed[decoder_inputs[i].name] = np.array([y[j][i] <span>for </span>j <span>in </span>indices_y], <span>dtype</span>=np.int32)<br/><br/>    feed[targets[<span>len</span>(targets)-<span>1</span>].name] = np.full(<span>shape </span>= [batch_size], <span>fill_value</span>=english_word2idx[<span>'&lt;pad&gt;'</span>], <span>dtype</span>=np.int32)<br/><br/>    <span>for </span>i <span>in </span><span>range</span>(output_sequence_length - <span>1</span>):<br/>        batch_weights = np.ones(batch_size, <span>dtype</span>=np.float32)<br/>        target = feed[decoder_inputs[i+<span>1</span>].name]<br/>        <span>for </span>j <span>in </span><span>range</span>(batch_size):<br/>            <span>if </span>target[j] == english_word2idx[<span>'&lt;pad&gt;'</span>]:<br/>                batch_weigths[j] = <span>0.0<br/></span><span>        </span>feed[target_weights[i].name] = batch_weigths<br/><br/>    feed[target_weights[output_sequence_length - <span>1</span>].name] = np.zeros(batch_size, <span>dtype</span>=np.float32)<br/><br/>    <span>return </span>feed</pre>
+<p>Let's break down the above function<span> line by line</span>. </p>
+<p>It needs to return a dictionary with the values of all placeholders. Recall that their names are:</p>
+<pre>"encoder0", "encoder1", ..., "encoder14" (input_sequence_length=15), "decoder0", "decoder1" through to "decoder15" (output_sequence_length=16), "last_output", "target_w0", "target_w1", and so on, through to "target_w15" </pre>
+<p><kbd>indices_x</kbd> is an array of 64 (<kbd>batch_size</kbd>) randomly selected indices in the range of <kbd>0</kbd> and <kbd>len(X_train)</kbd>. </p>
+<p><kbd>indices_y</kbd> is an array of 64 (<kbd>batch_size</kbd>) randomly selected indices in the range of <kbd>0</kbd> and <kbd>len(Y_train)</kbd>.</p>
+<p><span>The <kbd>"encoder-"</kbd> values are obtained by finding the array at each index from <kbd>indices_x</kbd> and collecting the values for the specific encoder. </span></p>
+<p><span>Similarly, the <kbd>"decoder-"</kbd> values are obtained by finding the array at each index from <kbd>indices_y</kbd> and collecting the values for the specific decoder.</span></p>
+<p><span>Consider the following example: Let's say our <kbd>X_train</kbd> is <kbd>[[x11, x12, ...], [x21, x22, ...], ...], indices_x</kbd> is <kbd>[1, 0, ...]</kbd>, then <kbd>"encoder0"</kbd> will be <kbd>[x21, x11, ...]</kbd> and will contain the 0-th element of all arrays from <kbd>X_train</kbd> that have their index stored in <kbd>indices_x</kbd>. </span></p>
+<p>The value of <kbd>last_output</kbd> is an array of the <kbd>batch_size</kbd> size filled only with the number 3 (the associated index of the symbol <kbd>"&lt;pad&gt;"</kbd>). </p>
+<p>Finally, the <kbd>"target_w-"</kbd> elements are arrays of 1's and 0's of the <kbd>batch_size</kbd> <span>size.</span> These arrays contain 0 at the indices of <kbd>"&lt;pad&gt;"</kbd> values from the decoder arrays. Let's illustrate this statement with the example:</p>
+<p>If the value of <kbd>"decoder0"</kbd> is <kbd>[10, 8, 3, ...]</kbd> where 3 is the index of <kbd>"&lt;pad&gt;"</kbd> from the <kbd>en_idx2word</kbd> array, our <kbd>"target0"</kbd> would be <kbd>[1, 1, 0, ...]</kbd>.</p>
+<p>The last <kbd>"target15"</kbd> is an array with only 0's. </p>
+<p>Having the preceding calculations in mind, we can start training our network. The process will take some time, since we need to iterate over 1,000 steps. Meanwhile, we will be storing the trained parameters at every 20 steps, so we can use them later for prediction. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Predicting the translation</h1>
+                </header>
+            
+            <article>
+                
+<p>After we have trained the model, we will use its parameters to translate some sentences from Spanish to English. Let's create a new file called <kbd>predict.py</kbd> and write our prediction code there. The logic will work as follows:</p>
+<ul>
+<li>Define exactly the same sequence-to-sequence model architecture as used during training</li>
+<li>Use the already trained weights and biases to produce an output</li>
+<li>Encode a set of Spanish sentences, ready for translation</li>
+<li>Predict the final results and print the equivalent English sentences</li>
+</ul>
+<p>As you can see, this flow is pretty straightforward: </p>
+<ol>
+<li>To implement it, we first import two Python libraries together with the <kbd>neural_machine_translation.py</kbd> file (used for training):</li>
+</ol>
+<pre><span>          import </span>tensorflow <span>as </span>tf<br/><span>          import </span>numpy <span>as </span>np<br/><span>          import </span>neural_machine_translation <span>as </span>nmt</pre>
+<ol start="2">
+<li>Then, we define the model with the associated placeholders:</li>
+</ol>
+<pre><span>          # Placeholders<br/></span>          encoder_inputs = [tf.placeholder(<span>dtype </span>= tf.int32, <span>shape </span>= <br/>          [<span>None</span>],   <br/><span>          name </span>= <span>'encoder{}'</span>.format(i)) <span>for </span>i <span>in   <br/></span><span>          range</span>(nmt.input_sequence_length)]<br/>          decoder_inputs = [tf.placeholder(<span>dtype </span>= tf.int32, <span>shape </span>= <br/>          [<span>None</span>],   <br/><span>          name </span>= <span>'decoder{}'</span>.format(i)) <span>for </span>i <span>in   <br/></span><span>          range</span>(nmt.output_sequence_length)]<br/>          with<span> tf.variable_scope(</span><span>"model_params"</span><span>, reuse</span><span>=</span><span>True</span><span>):<br/>              </span>w_t <span>=</span><span> tf.get_variable(</span><span>'proj_w'</span><span>, [nmt.english_vocab_size, <br/>              nmt.size], tf.float32)<br/>              </span>b <span>=</span><span> tf.get_variable(</span><span>'proj_b'</span><span>, [nmt.english_vocab_size], <br/>               tf.float32)<br/>              </span>w <span>=</span><span> tf.transpose(w_t)<br/>               </span>output_projection <span>=</span><span> (w, b)<br/>    <br/>              </span>outputs, states <span>= <br/></span><span>               tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(<br/>                        </span>encoder_inputs,<br/>                        decoder_inputs,<br/>                        tf.contrib.rnn.BasicLSTMCell(nmt.size),<br/>                        num_encoder_symbols <span>=</span><span> nmt.spanish_vocab_size,<br/>                        </span>num_decoder_symbols <span>=</span><span> nmt.english_vocab_size,<br/>                        </span>embedding_size <span>=</span><span> nmt.embedding_size,<br/>                        </span>feed_previous <span>=</span><span> </span><span>True</span><span>,<br/>                        </span>output_projection <span>=</span><span> output_projection,<br/>                        </span>dtype <span>=</span><span> tf.float32)</span></pre>
+<ol start="3">
+<li>Using the outputs from the TensorFlow function, we calculate the final translations as follows:</li>
+</ol>
+<pre>        outputs_proj = [tf.matmul(outputs[i], output_projection[<span>0</span>]) +   <br/>        output_projection <span>for </span>i <span>in </span><span>range</span>(nmt.output_sequence_length)]</pre>
+<ol start="4">
+<li>The next step is to define the input sentences and encode them using the encoding dictionary:</li>
+</ol>
+<pre>       spanish_sentences = [<span>"Como te llamas"</span>, "<span>Mi nombre es"</span>, "Estoy <br/>         leyendo un libro<span>"</span>,"Que tal<span>"</span>, "Estoy bien<span>"</span>, "Hablas espanol<span>"</span>, <br/>         "Que hora es<span>"</span>, "Hola<span>"</span>, "Adios<span>"</span>, "Si<span>"</span>, "<span>No"</span>]<br/><br/>         spanish_sentences_encoded = [[nmt.spanish_word2idx.get(word, <br/><span>          0</span>) <span>for </span>word <span>in </span>sentence.split()] <span>for </span>sentence <span>in <br/>          spanish</span>_sentences]<br/><span><br/></span><span>       for </span>i <span>in </span><span>range</span>(<span>len</span>(spanish_sentences_encoded)):<br/>           spanish_sentences_encoded[i] += (nmt.input_sequence_length -<br/><span>           len</span>(spanish_sentences_encoded[i])) * <br/>           [nmt.spanish_word2idx[<span>'&lt;pad&gt;'</span>]]</pre>
+<p style="padding-left: 60px">As you can see, we are also padding the input sentences so they match the length of the placeholder (<kbd>nmt.input_sequence_length</kbd>).</p>
+<ol start="5">
+<li>Finally, we will be using <kbd>spanish_sentences_encoded</kbd> with the preceding TensorFlow model to calculate the value of <kbd>outputs_proj</kbd> and yield our results:</li>
+</ol>
+<pre><span>          saver = tf.train.Saver()<br/>          path = tf.train.latest_checkpoint('ckpt')<br/>          with </span>tf.Session() <span>as </span>sess:<span><br/></span><span>             </span>saver.restore(sess, path)<br/><span><br/></span><span>           </span>feed = {}<br/>                <span>for </span>i <span>in </span><span>range</span>(nmt.input_sequence_length):<br/>                  feed[encoder_inputs[i].name] =   <br/>            np.array([spanish_sentences_encoded[j][i] <span>for </span>j <span>in    <br/></span><span>            range</span>(<span>len</span>(spanish_sentences_encoded))], <span>dtype </span>= np.int32)<br/><br/>             feed[decoder_inputs[<span>0</span>].name] =  <br/>           np.array([nmt.english_word2idx[<span>'&lt;go&gt;'</span>]] *     <br/><span>          len</span>(spanish_sentences_encoded), <span>dtype </span>= np.int32)<br/>    <br/><span>            </span>output_sequences = sess.run(outputs_proj, <span>feed_dict </span>= feed)<br/><span><br/></span><span>              </span><span>for </span>i <span>in </span><span>range</span>(<span>len</span>(english_sentences_encoded)):<br/>                   ouput_seq = [output_sequences[j][i] <span>for </span>j <span>in <br/></span><span>                    range</span>(nmt.output_sequence_length)]<span><br/></span><span>                    </span>words = decode_output(ouput_seq)<br/>        <br/>                <span>for j</span> <span>in </span><span>range</span>(<span>len</span>(words)):<br/>                   <span>if </span>words[j] <span>not in </span>[<span>'&lt;eos&gt;'</span>, <span>'&lt;pad&gt;'</span>, <span>'&lt;go&gt;'</span>]:<br/>                       <span>print</span>(words[j], <span>end</span>=<span>" "</span>)<br/>           <br/>                 print('\n--------------------------------')</pre>
+<ol start="6">
+<li>Now, we define the <kbd>decode_output</kbd> function, together with a detailed explanation of its functionality:</li>
+</ol>
+<pre><span>         def </span>decode_output(output_sequence):<br/>             words = []<br/>            <span>for </span>i <span>in </span><span>range</span>(nmt.output_sequence_length):<br/>                smax = nmt.softmax(output_sequence[i])<br/>                maxId = np.argmax(smax)<br/>               words.append(nmt.english_idx2word[maxId])<br/>              <span>return </span>words</pre>
+<ol start="7">
+<li>We prepare the feed dictionary in the same way as using the placeholders' names. For <kbd>encoder_inputs</kbd>, we use values from <kbd>spanish_sentences_encoded</kbd>. For <kbd>decoder_inputs</kbd>, we use the values saved in our model's checkpoint folder. </li>
+<li>Using the preceding data, our model calculates the <kbd>output_sentences</kbd>. </li>
+<li>Finally, we use the <kbd>decode_output</kbd> function to convert the predicted <kbd>output_sentences</kbd> matrix into an actual sentence. For that, we use the <kbd>english_idx2word</kbd> dictionary. </li>
+</ol>
+<p>After running the preceding code, you should see the original sentence in Spanish, together with its translation in English. The correct output is as follows:</p>
+<pre><span>1--------------------------------<br/>Como te llamas<br/>What's your name<br/></span></pre>
+<pre><span>2--------------------------------<br/></span>Mi nombre es<br/>My name is</pre>
+<pre><span>3--------------------------------<br/></span>Estoy leyendo un libro<br/>I am reading a book</pre>
+<pre><span>4--------------------------------<br/></span>Que tal<br/>How are you</pre>
+<pre><span>5--------------------------------<br/></span>Estoy bien<br/>I am good</pre>
+<pre><span>6--------------------------------<br/></span>Hablas espanol<br/>Do you speak Spanish</pre>
+<pre><span>7--------------------------------<br/></span>Que hora es<br/>What time is it</pre>
+<pre><span>8--------------------------------<br/></span>Hola<br/>Hi</pre>
+<pre><span>9--------------------------------<br/></span>Adios<br/>Goodbye</pre>
+<pre><span>10</span><span>--------------------------------<br/></span>Si <br/>Yes</pre>
+<pre><span>11</span><span>--------------------------------<br/></span>No<br/>No</pre>
+<p>Next, we will see how to evaluate our results and identify how well our translation model has performed.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the final results</h1>
+                </header>
+            
+            <article>
+                
+<p>Translation models are typically evaluated using the so-called BLEU score (<a href="https://www.youtube.com/watch?v=DejHQYAGb7Q" target="_blank">https://www.youtube.com/watch?v=DejHQYAGb7Q</a>). This is an automatically generated score that compares a human-generated translation with the prediction. It looks for the presence and absence of particular words, their ordering, and any distortion—that is, how much they are separated in the output.</p>
+<p>A BLEU score varies between <kbd>0</kbd> and <kbd>1</kbd>, where <kbd>0</kbd> is produced if there are no matching words between the prediction and the human-generated sentence, and 1 when both sentences match perfectly. </p>
+<p>Unfortunately, this score can be sensitive about word breaks. If the word breaks are positioned differently, the score may be completely off. </p>
+<p>A good machine translation model, such as Google's Multilingual Neural Machine Translation System, achieves score of around <kbd>38.0 (0.38*100)</kbd> on Spanish-to-English translation. This is an example of an exceptionally performing model. The result is pretty remarkable but, as you can see, there is a lot of room for improvement. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter walked you through building a fairly sophisticated neural network model using the sequence-to-sequence model implemented with the TensorFlow library.</p>
+<p>First, you went through the theoretical part, gain an understanding of how the model works under the hood and why its application has resulted in remarkable achievements. In addition, you learned how an LSTM network works and why it is easily considered the best RNN model. </p>
+<p>Second, you saw how you can put the knowledge acquired here into practice using just several lines of code. In addition, you gain an understanding of how to prepare your data to fit the sequence-to-sequence model. Finally, you were able to successfully translate Spanish sentences into English. </p>
+<p>I really hope this chapter left you more confident in your deep learning knowledge and armed you with new skills that you can apply to future applications.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">External links</h1>
+                </header>
+            
+            <article>
+                
+<ul>
+<li>Sequence to Sequence model (Cho et al. 2014): <a href="https://arxiv.org/pdf/1406.1078.pdf">https://arxiv.org/pdf/1406.1078.pdf</a></li>
+<li>Understanding LSTM Network: <a href="http://colah.github.io/posts/2015-08-Understanding-LSTMs/">http://colah.github.io/posts/2015-08-Understanding-LSTMs/</a></li>
+<li>Stanford University lecture on LSTM: <a href="https://www.youtube.com/watch?v=QuELiw8tbx8">https://www.youtube.com/watch?v=QuELiw8tbx8</a></li>
+<li>Sequence to sequence learning using Neural Network: <a href="https://arxiv.org/pdf/1409.3215.pdf">https://arxiv.org/pdf/1409.3215.pdf</a></li>
+<li>WildML article on<span> </span><em>Attention and Memory in Deep Learning and NLP</em>: <a href="http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/">http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/</a></li>
+<li>OpenSubtitles: <a href="http://opus.nlpl.eu/OpenSubtitles.php">http://opus.nlpl.eu/OpenSubtitles.php</a></li>
+<li><kbd>tf.contrib.legacy_seq2seq.embedding_attention_seq2seq</kbd>: <a href="https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq">https://www.tensorflow.org/api_docs/python/tf/contrib/legacy_seq2seq/embedding_attention_seq2seq</a></li>
+<li><kbd>tf.nn.sampled_softmax_loss</kbd>: <a href="https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss">https://www.tensorflow.org/api_docs/python/tf/nn/sampled_softmax_loss</a></li>
+<li>BLEU score: <a href="https://www.youtube.com/watch?v=DejHQYAGb7Q">https://www.youtube.com/watch?v=DejHQYAGb7Q</a></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

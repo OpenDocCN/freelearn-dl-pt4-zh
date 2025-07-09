@@ -1,0 +1,339 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating Your Own Book Chapter</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we will take a step further into exploring the TensorFlow library and how it can be leveraged to solve complex tasks. In particular, you will build a neural network that generates a new (non-existing) chapter of a book by learning patterns from the existing chapters. In addition, you will grasp more of the TensorFlow functionalities, such as saving/restoring a model, and so on. </p>
+<p>This chapter will also introduce a new and more powerful recurrent neural network model called the <strong>gated recurrent unit</strong> (<strong>GRU</strong>). You will learn how it works and why we are choosing it over the simple RNN. </p>
+<p>In summary, the topics of the chapter include the following:</p>
+<ul>
+<li>Why use the GRU network? You will learn how the GRU network works, what problems it solves, and what its benefits are.</li>
+<li>Generating your book chapter<span>—</span>you will go step by step over the process of generating a book chapter. This includes collecting and formatting the training data, building the TensorFlow graph of the GRU model, training the network and, finally, generating the text word by word.</li>
+</ul>
+<p>By the end of the chapter, you should have gained both a theoretical and a practical knowledge that will give you the freedom to experiment with any problems of medium difficulty. </p>
+<p class="mceNonEditable"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Why use the GRU network?</h1>
+                </header>
+            
+            <article>
+                
+<p>In recent years, the recurrent neural network model has presented fascinating results which can even be seen in real-life applications like language translation, speech synthesis and more. A phenomenal application of GRUs happens to be text generation. With the current state-of-the-art models, we can see results which, a decade ago, were just a dream. If you want to truly appreciate these results, I strongly recommend you read Andrej Karpathy's article on <em>The</em> <em>Unreasonable Effectiveness of Recurrent Neural Networks</em> (<a href="http://karpathy.github.io/2015/05/21/rnn-effectiveness/" target="_blank">http://karpathy.github.io/2015/05/21/rnn-effectiveness/</a>). </p>
+<p>Having said that, we can introduce the <strong>Gated Recurrent Unit (GRU)</strong> as a model which sits behind these exceptional outcomes. Another model of that kind is the <strong>Long Short-Term Memory</strong> (<strong>LSTM</strong>) which is slightly more advanced. Both architectures aim to solve the vanishing gradient problem—a major issue with the simple RNN model. If you recall from <a href="d6266376-9b8b-4d69-925b-a4e56307951b.xhtml" target="_blank">Chapter 1</a>, <em>Introducing Recurrent Neural Networks</em>, the problem represents the network's inability to learn long-distance dependencies and, thus, it cannot make accurate predictions on complex tasks. </p>
+<p>Both the GRU and LSTM deal with that problem using, so-called, gates. These gates decide what information to erase or propagate towards the prediction.</p>
+<p>We will first focus on the GRU model since it is simpler and easier to understand and, then, you will have the chance to explore the LSTM model in the upcoming chapters.</p>
+<p>As mentioned above, the GRU's main objective is to yield excellent results on long sequences. It achieves this by modifying the standard RNN cell with the introduction of update and reset gates. This network works the same way as a normal RNN model in terms of inputs, memory states and outputs. The key difference lies in the specifics of the cell at each time step. You will understand that better by using the following graph:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/34bf213e-0f04-4a82-8680-d019e77a8248.png" style="width:40.17em;height:28.42em;"/></div>
+<div>These are the notations for the preceding graph:</div>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-354 image-border" src="assets/3367b79b-0983-499a-bd31-dcf67a4b1300.png" style="width:50.33em;height:6.08em;"/></div>
+<p>The illustration presents a single GRU cell. The cell accepts <img class="fm-editor-equation" src="assets/376c7374-119e-4882-8e0e-e6edde065f0d.png" style="width:1.17em;height:1.00em;"/> and <img class="fm-editor-equation" src="assets/58fd635b-13c4-4f8c-8847-f8d078355acd.png" style="width:1.92em;height:1.08em;"/> as inputs where <img class="fm-editor-equation" src="assets/ea13db01-634b-4c38-8897-72dda90f8db7.png" style="width:0.92em;height:0.75em;"/> is a vector representation of the input word at time step, <img class="fm-editor-equation" src="assets/a633c7ef-850b-49e5-9f1e-c34302133b36.png" style="width:0.42em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/dea74485-61fb-4fe2-ab27-d5404c1f9936.png" style="width:1.67em;height:1.00em;"/> is the memory state from the previous step <em>t-1</em>. Furthermore, the cell outputs the calculated memory state of the current step t. If you recall from before, the aim of this intermediate memory state is to pass information through all time steps and keep or discard knowledge. The preceding process should already <span>be </span>familiar to you from the RNN explanation in <a href="d6266376-9b8b-4d69-925b-a4e56307951b.xhtml" target="_blank">Chapter 1</a>, <em>Introducing Recurrent Neural Networks</em>. </p>
+<p>The new and interesting thing is what happens inside this GRU cell. The calculations aim to decide what information from <img class="fm-editor-equation" src="assets/376c7374-119e-4882-8e0e-e6edde065f0d.png" style="width:1.17em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/58fd635b-13c4-4f8c-8847-f8d078355acd.png" style="width:1.83em;height:1.08em;"/> should be passed forward or eliminated. That decision-making process is handled by the following set of equations:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/574c4ece-0b28-4c0b-bb8d-8cdda14722ee.png" style="width:12.83em;height:1.58em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/5732ef56-46ed-4801-bf9f-72e1625a47be.png" style="width:12.17em;height:1.50em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/04af8703-339a-4251-b772-b6834530e305.png" style="width:14.25em;height:1.42em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f705c042-f50c-4db3-b991-888eb786689f.png" style="width:13.25em;height:1.33em;"/></div>
+<ul>
+<li>The first equation presents the update gate. Its purpose is to determine how much of the past information should be propagated in the future. To do that, first we multiple the input <img class="fm-editor-equation" src="assets/727a3c6c-9f10-4487-8068-c6616e116751.png" style="width:1.00em;height:0.83em;"/> with its own weight <img class="fm-editor-equation" src="assets/5df3e75c-160a-493a-969b-a8e051e64588.png" style="width:1.83em;height:1.00em;"/> and then sum the result with the other multiplication between the memory state from the last step <img class="fm-editor-equation" src="assets/8343eb22-4e2c-4f1c-8afc-02d384a7635b.png" style="width:2.00em;height:1.17em;"/> and its weight <img class="fm-editor-equation" src="assets/300602e0-d0f3-47ab-9aa6-6cb1cd548489.png" style="width:2.00em;height:1.25em;"/>. The exact values of these weights are determined during training. This is shown in the following screenshot:</li>
+</ul>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-355 image-border" src="assets/4b067bd3-8ad5-4fbc-902f-37413a26239b.png" style="width:31.58em;height:22.33em;"/></p>
+<ul>
+<li>The second equation presents the reset gate. As the name states, this gate is used to decide how much of the past information should be omitted. Again, using   <img class="fm-editor-equation" src="assets/be09906d-c9b4-49df-8dfe-4c378ca26248.png" style="width:1.00em;height:0.83em;"/>  and  <img class="fm-editor-equation" src="assets/ca4e3868-54fe-4ed0-8c05-d8d5df3b458e.png" style="width:1.75em;height:1.00em;"/>  we calculate its value. The difference is that instead of using the same weights, our network learns a different set of weights—<img class="fm-editor-equation" src="assets/2bbec3e4-f7cb-4176-b093-8a9aa1ce2203.png" style="width:1.83em;height:1.00em;"/>  and   <img class="fm-editor-equation" src="assets/bb7dc14b-2f49-4a2c-a580-a37ec718e6b2.png" style="width:2.00em;height:1.25em;"/>. This is shown in the following screenshot: </li>
+</ul>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-357 image-border" src="assets/f9b70fa5-9fe4-4e28-a940-3e5bdc7d1a57.png" style="width:34.92em;height:24.67em;"/></p>
+<p>Both the update and reset gate us the sigmoid as a final step when producing the value. If you recall from <a href="d6266376-9b8b-4d69-925b-a4e56307951b.xhtml" target="_blank">Chapter 1</a>, <em>Introducing Recurrent Neural Networks</em>, the sigmoid (<a href="https://www.youtube.com/watch?v=WcDtwxi7Ick&amp;t=3s" target="_blank">https://www.youtube.com/watch?v=WcDtwxi7Ick&amp;t=3s</a>) is a type of activation function which squashes the input between <kbd>0</kbd> and <kbd>1</kbd>:</p>
+<ul>
+<li>The third equation is a temporary internal memory state which uses the input <img class="fm-editor-equation" src="assets/60f41a34-e946-43d1-94b4-82ee799159a1.png" style="width:1.08em;height:0.92em;"/> and the reset gate <img class="fm-editor-equation" src="assets/d5b59ad5-b909-4204-ba05-d16c4cddb85b.png" style="width:0.83em;height:0.83em;"/> to store the relevant information from the past. Here we use a <em>tanh</em> activation function which is similar to a sigmoid, but instead squashes the output between <kbd>-1</kbd> and <kbd>1</kbd>. Here (<a href="https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function" target="_blank">https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function</a>) is a good explanation of the difference between both activations. <span>As you can see, we use a different notation </span><img class="fm-editor-equation" src="assets/9b13810b-264c-4404-b677-1eb4d81018d6.png" style="width:1.00em;height:1.00em;"/> <span>called element-wise or Hadamard multiplication (<a href="https://www.youtube.com/watch?v=2GPZlRVhQWY">https://www.youtube.com/watch?v=2GPZlRVhQWY</a>).</span><span> </span></li>
+</ul>
+<p style="padding-left: 60px"><span>If you have the vectors <kbd>[1, 2, 3]</kbd> and <kbd>[0, -1, 4]</kbd> the Hadamard product will be <kbd>[1*0, 2*(-1), 3*4] = [0, -2, 12]</kbd>. This is shown in the following screenshot: </span></p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-358 image-border" src="assets/135941cc-6c9a-490d-b046-afa3d9258010.png" style="width:35.00em;height:24.75em;"/></p>
+<ul>
+<li>The final equation calculates memory state  <img class="fm-editor-equation" src="assets/5784b329-ace9-438e-ac39-d9393cc0306b.png" style="width:0.92em;height:1.08em;"/> at the current time step t. To do this, we use the temporary internal memory state <img class="fm-editor-equation" src="assets/648f9972-eec8-444f-a618-5e19d4321085.png" style="width:0.92em;height:1.33em;"/> , the previous memory state  <img class="fm-editor-equation" src="assets/d87bf251-5cbd-4639-8587-ecfb7db7213a.png" style="width:1.67em;height:1.00em;"/> and the update gate <img class="fm-editor-equation" src="assets/2ea4af13-4ae7-4f8a-8d65-b43dce7c5b3b.png" style="width:1.00em;height:0.92em;"/>. Again, we are using the element-wise multiplication which makes the update gate decide how much information to propagate forward. Let's illustrate this with an example: </li>
+</ul>
+<p>Imagine you want to do sentiment analysis on a book review to determine how people feel about a certain book. Let's say that the review starts like this: <em>The book was super exciting and I liked it a lot. It reveals the story of a young woman...</em>. Here we want to keep the first part of the review until the end, so that we make an accurate prediction. In that case, the network will learn to make <img class="fm-editor-equation" src="assets/8797dd6d-8b8f-4a0d-934c-a577a9082175.png" style="width:1.00em;height:0.92em;"/> close to 1, so that <img class="fm-editor-equation" src="assets/be8b30c1-a821-4e1a-80ad-d5934acd0632.png" style="width:2.42em;height:0.92em;"/> is close to 0. This way all future memory states will hold mostly information about this first part (<em>The book was super exciting and I liked it a lot.</em>) and won't take into account any irrelevant information that comes next.</p>
+<p>Combining the above equations results in a powerful model, which can learn to keep full or partial information at any step, and enhance the final prediction. You can easily see how this solution solves the vanishing gradient problem by letting the network (based on the weights) decide what should influence the predictions.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating your book chapter</h1>
+                </header>
+            
+            <article>
+                
+<p>After going through the theoretical part of this chapter, we are ready to dive into coding. I hope you grasp the fundamental behind the GRU model and will feel comfortable seeing the notations in the TensorFlow program. It consists of five parts, most of which may be familiar to you from <a href="c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml" target="_blank">Chapter 2</a>, <em>Building Your First RNN with TensorFlow</em>:</p>
+<ul>
+<li><strong>Obtaining the book text</strong>: this one is really straightforward. Your task is to assure a lot of plain text is ready for training. </li>
+<li><strong>Encoding the text</strong>: this one can be challenging, since we need to accommodate the encoding with the proper dimensions. Sometimes, this operation can take more time than expected but it is a requirement for compiling the program flawlessly. There are different types of encoding algorithms and we will choose a fairly simple one so you fully understand its true essence.</li>
+<li><strong>Building the TensorFlow graph</strong>: this operation should be familiar to you from <a href="c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml" target="_blank">Chapter 2</a>, <em>Building Your First RNN with TensorFlo</em>w. We will use similar steps with the difference that now the operational cell is a GRU instead of a normal RNN.</li>
+<li><strong>Training the network</strong><span>: </span>this step should also be familiar to you from <a href="c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml" target="_blank">Chapter 2</a>, <em>Building Your First RNN with TensorFlow</em>. We will again use batches to make our training faster and occupy less memory.</li>
+<li><strong>Generating your new text</strong><span>: </span>this is the new and unique step in our program. We will use the already trained weights and biases to predict the sequences of words. Using appropriate hyperparameters with a large set of data can yield understandable paragraphs which one can easily assume are real.</li>
+</ul>
+<p>You will be writing the code in a new file called <kbd>ch3_task.py</kbd>. First, install the Python libraries using the following code:</p>
+<pre><strong>pip3 install tensorflow</strong><br/><strong>pip3 install numpy</strong></pre>
+<p>Then, open <kbd>ch3_task.py</kbd> and import the preceding libraries, as shown in the following code:</p>
+<pre><strong>import numpy as np</strong><br/><strong>import <span>tensorflow as tf<br/>import sys<br/>import collections</span></strong></pre>
+<p>Now it is time to explore the steps. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Obtaining the book text</h1>
+                </header>
+            
+            <article>
+                
+<p>The first step in building any machine learning task is to obtain the data. In a professional environment you would divide it into training, validation and testing data. Normally the distribution is 60%, 20%, 20% People often confuse validation with test data or even omit using the former. The validation data is used to evaluate the model while tuning the hyperparameters. In contrast, the test data is used only to give an overall evaluation of the model. You SHOULD NOT use the test data to make changes on your model. Since the task is to generate text, our data will be used only for training. Then, we can leverage the model to guess words one by one.</p>
+<p>Our aim is to yield a meaningful new chapter based on the <em>The Hunger Games</em> books. We should store the text in a new file called <kbd>the_hunger_games.txt</kbd>.</p>
+<p>First, we need to build our dictionary using that file. This will happen using the two functions called <kbd>get_words(file_name)</kbd> and <kbd>build_dictionary(words)</kbd>as shown in the following example:</p>
+<pre>def get_words(file_name):<br/>    with open(file_name) as file:<br/>        all_lines = file.readlines()<br/>    lines_without_spaces = [x.strip() for x in all_lines]<br/>    words = []<br/>    for line in lines_without_spaces:<br/>        words.extend(line.split())<br/>    words = np.array(words)<br/>    return words</pre>
+<p>The previous function aims to create a list of all the words in <kbd>the_hunger_games.txt</kbd>. Now let's build the actual dictionary using the following code:</p>
+<pre>def build_dictionary(words):<br/>    most_common_words = collections.Counter(words).most_common()<br/>    word2id = dict((word, id) for (id, (word, _)) in enumerate(most_common_words))<br/>    id2word = dict((id, word) for (id, (word, _)) in enumerate(most_common_words))<br/>    return most_common_words, word2id, id2word</pre>
+<p>Here we use the Python built-in library collections. It can easily create a list of tuples where each tuple is formed of a string (word) and time of occurrences of this word in the list <kbd>words</kbd>. Thus, <kbd>most_common_words</kbd> does not contain any duplicate elements. </p>
+<p>The dictionaries <kbd>word2id</kbd> and <kbd>id2word</kbd> associate a number with each word which ensures a straightforward access to all words. </p>
+<p>Finally, we execute the <kbd>get_words()</kbd> and <kbd>build_dictionary()</kbd> functions, so that the words and dictionaries can be accessed <span>globally, as shown in the following example</span>:</p>
+<div>
+<pre><span>words = get_words("the_hunger_games.txt")<br/>most_common_words, word2id, id2word = build_dictionary(words)<br/>most_common_words_length = len(most_common_words)</span></pre></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Encoding the text</h1>
+                </header>
+            
+            <article>
+                
+<p>This part shows how to encode our dataset using the popular one-hot encoding. The reason behind this operation lies in the fact that any neural network operates using some sort of numerical representation of strings. </p>
+<p>First, we declare <kbd>section_length = 20</kbd> which represents the length of a single section in our encoded dataset. This dataset is a collection of sections where each section has 20 one-hot encoded words.</p>
+<p>Then, we store the sections of 20 words in the<span> </span><kbd>input_values</kbd><span> </span>array. The 21st word is used as the output value for that particular section. This means that, during training, the network learns that the words <em>I love reading non-fiction...I can find these type of</em> (example sequence of 20 words extracted from the training set) are followed by <em>book</em>. </p>
+<p>After that, comes the one-hot encoding which is also quite straightforward. We create two arrays of zeros with dimensions<span> </span><kbd>(num_sections, section_length, most_common_words_length)</kbd>—for the inputs and <span><kbd>(num_sections, most_common_words_length)</kbd></span>—<span>for the outputs. We iterate over the <kbd>input_values</kbd> and find the index of each word in each section. Using these indices, we replace the values in the one-hot arrays with <kbd>1</kbd>. </span></p>
+<p>The code for this is in the following example:</p>
+<pre>section_length = 20<br/><br/>def input_output_values(words):<br/>    input_values = []<br/>    output_values = []<br/>    num_sections = 0<br/>    for i in range(len(words) - section_length):<br/>        input_values.append(words[i: i + section_length])<br/>        output_values.append(words[i + section_length])<br/>        num_sections += 1<br/><br/>    one_hot_inputs = np.zeros((num_sections, section_length, most_common_words_length))<br/>    one_hot_outputs = np.zeros((num_sections, most_common_words_length))<br/><br/>    for s_index, section in enumerate(input_values):<br/>        for w_index, word in enumerate(section):<br/>            one_hot_inputs[s_index, w_index, word2id[word]] = 1.0<br/>        one_hot_outputs[s_index, word2id[output_values[s_index]]] = 1.0<br/><br/>    return one_hot_inputs, one_hot_outputs   </pre>
+<p>Finally, we store the encoded words in two global variables (we also use the parameter <kbd>words</kbd> from the previous part of that chapter), as shown in the following example:</p>
+<pre>training_X, training_y = input_output_values(words)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building the TensorFlow graph</h1>
+                </header>
+            
+            <article>
+                
+<p>This step builds the most fundamental part of our program—the neural network graph.</p>
+<p>First, we start by initializing the hyperparameters of the model, as shown in the following example:</p>
+<pre>learning_rate = 0.001<br/>batch_size = 512<br/>number_of_iterations = 100000<br/>number_hidden_units = 1024</pre>
+<p>One often experiments with the above values until the model receives decent results:</p>
+<ul>
+<li>The <kbd>learning_rate</kbd> (<a href="https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10" target="_blank">https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10</a>) is used in backpropagation and should have a fairly small value.</li>
+<li>The <kbd>batch_size</kbd> determines how many elements each batch should have. The data is often divided into batches so that training is faster and requires less memory. You will see more about the usage of batches later.</li>
+<li> <kbd>number_of_iterations</kbd> is how many training steps we should take. A training step includes picking one batch from the data and performing forward and then backward propagation, which updates the weights and biases.</li>
+<li><kbd>number_hidden_units</kbd> (<a href="https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell" target="_blank">https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell</a>) is the number of units used in any RNN cell. There is actually a pretty neat formula (<a href="https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network" target="_blank">https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network</a><a href="https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell" target="_blank">)</a> which calculates that number based on the input and output neurons of the network. </li>
+</ul>
+<p>After we have defined the above parameters, it is time to specify our graph. This is demonstrated in the following snippets of code:</p>
+<ul>
+<li>We start with the TensorFlow placeholder X which holds the training data at that current batch, and Y<span>—</span>which holds the predicted data at that current batch. This is shown in the following code:</li>
+</ul>
+<pre>      X = tf.placeholder(tf.float32, shape=[batch_size, section_length,                                most_common_words_length])<br/>      y = tf.placeholder(tf.float32, shape=[batch_size, most_common_words_length])</pre>
+<ul>
+<li>Then, we initialize our weights and biases using a normal distribution. The dimensions of weights is<span> </span><kbd>[number_hidden_units, most_common_words_length]</kbd> which assures correct multiplication in our prediction. The same logic goes for biases with dimensions<span> </span><kbd>[most_common_words_length]</kbd>. This is shown in the following example:</li>
+</ul>
+<pre>      weights = tf.Variable(tf.truncated_normal([num_hidden_units, <br/>      most_common_words_length]))<br/>      biases = <br/>      tf.Variable(tf.truncated_normal([most_common_words_length]))</pre>
+<ul>
+<li>Next, we specify the GRU cell. All the complex logic learned<span> </span>in the first section of that chapter is hidden behind the previous line of code. <span><a href="c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml" target="_blank">Chapter 2</a>, <em>Building Your First RNN with TensorFlow</em>, explained why </span>we then pass the parameter<span> </span><kbd>num_units</kbd>, which is shown in the following example: </li>
+</ul>
+<pre>      gru_cell = tf.contrib.rnn.GRUCell(num_units=num_hidden_units)</pre>
+<ul>
+<li><span>Then, we calculate the outputs using the GRU cell and the inputs X. An important step is to transpose those outputs with [1, 0, 2] permutations.</span></li>
+</ul>
+<pre>      outputs, state = tf.nn.dynamic_rnn(gru_cell, inputs=X, <br/>       dtype=tf.float32)<br/>      outputs = tf.transpose(outputs, perm=[1, 0, 2])<br/><br/>      last_output = tf.gather(outputs, int(outputs.get_shape()[0]) - 1)</pre>
+<p>Let's review the following illustration to understand how this<span> </span><kbd>last_output</kbd><span> </span><span>is obtained:</span></p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-447 image-border" src="assets/cf3fa029-3080-498d-adfc-4747035c567f.png" style="width:24.25em;height:14.33em;"/></div>
+<p>The illustration shows how one input example of <kbd>section_length</kbd> steps is plugged into the network. This operation should be done <kbd>batch_size</kbd> times for each individual example having <kbd><span>section_length</span></kbd> steps, but, for the sake of simplicity, we are showing only one example. </p>
+<p>After iteratively going through each time step, we produce a <kbd><span>section_length</span></kbd> number of outputs, each one having the dimensions <kbd>[<span>most_common_words_length</span>, 1]</kbd>. So, for one example of the <kbd><span>section_length</span></kbd> input time steps, we produce <kbd><span>section_length</span></kbd> output steps. Presenting all outputs mathematically results in a <kbd><span>[batch_size, section_length, most_common_words_length]</span></kbd> matrix. The height of the matrix is <kbd>batch_size</kbd> - the number of individual examples in a single batch. The width of the matrix is <kbd>section_length</kbd> - the number of time steps for each example. The depth of the matrix is <kbd><span>most_common_words_length</span></kbd> - the dimension of each element. </p>
+<p>To make a prediction, we are only concerned about the<span> </span><kbd>output_last</kbd><span> </span>at each example and, since the number of examples is <kbd>batch_size</kbd>, we only need the <kbd>batch_size</kbd> output values. As seen previously, we reshape the matrix <span><kbd>[batch_size, section_length, most_common_words_length]</kbd> </span>into <kbd><span>[section_length, batch_size, most_common_words_length]</span></kbd> which will make it easier to get the<span> </span><kbd>output_last</kbd><span> </span>from each example. Then, we use<span> </span><kbd>tf.gather</kbd><span> </span>to obtain the<span> </span><kbd>last_output</kbd><span> </span>tensor. </p>
+<p><span>Below is a code implementation of the above explanation:</span></p>
+<ul>
+<li>As we now have the array with these final step values, we can make our prediction and use it (in a combination with the label values as seen on the fourth line of the previous example) to find the loss at this training step. Since the loss has the same dimensions as the labels (expected output values) and logits (predicted output values), we use<span> </span><kbd>tf.reduce_mean</kbd><span> </span>to produce a single<span> </span><kbd>total_loss</kbd>. This is demonstrated in the following code:</li>
+</ul>
+<pre>      prediction = tf.matmul(last_output, weights) + biases<br/><br/>      loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, <br/>      logits=prediction)<br/>      total_loss = tf.reduce_mean(loss)</pre>
+<ul>
+<li>Finally, the<span> </span><kbd>total_loss</kbd><span> </span>is used during backpropagation, with the aim of improving the model's performance by adjusting its weights and biases. This is done through <kbd>tf.train.AdamOptimizer</kbd><span> </span>which is run during training, and that is detailed in the following section:</li>
+</ul>
+<pre>      optimizer = <br/>     tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(<br/>     loss=total_loss)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the network</h1>
+                </header>
+            
+            <article>
+                
+<p>Once the model is built, we need to train it using the pre-collected data. This operation follows the code snippets below:</p>
+<ul>
+<li>We start by initializing all the TensorFlow variables. Then, we have the<span> </span><kbd>iter_offset</kbd><span> </span>which makes sure the right batch is extracted from the data. This is shown in the following code:</li>
+</ul>
+<pre><span>      with </span>tf.Session() <span>as </span>sess:<br/>          sess.run(tf.global_variables_initializer())<br/>          iter_offset = <span>0</span></pre>
+<ul>
+<li>Next, the<span> </span><kbd>tf.train.Saver()</kbd> creates a saver object which periodically saves the model locally. This helps us in case something happens and our training is interrupted. Also, it helps us during the prediction phase to look up the pre-trained parameters and so we do not have to run the training every time we want to make a prediction:</li>
+</ul>
+<pre>      saver = tf.train.Saver()</pre>
+<p>Now, comes the time for the actual training. We loop through the training data while calculating the optimizer using the individual batches. These calculations will minimize the loss function and we can see it decreasing by printing its value, as shown in the snippets as follows:</p>
+<ul>
+<li>First, we need to divide the data into batches. This is done with the help of the<span> </span><kbd>iter_offset</kbd><span> </span>parameter. It keeps track of the lower bound of each batch so we always get the next batch from the training set, as shown in the following code:</li>
+</ul>
+<pre><span>      for </span>iter <span>in </span><span>range</span>(number_of_iterations):<br/>          length_X = <span>len</span>(training_X)<br/><br/>          <span>if </span>length_X != <span>0</span>:<br/>              iter_offset = iter_offset % length_X<br/>   <br/>          <span>if </span>iter_offset &lt;= length_X - batch_size:<br/>              training_X_batch = training_X[iter_offset: iter_offset +               <br/>                batch_size]<br/>              training_y_batch = training_y[iter_offset: iter_offset + <br/>               batch_size]<br/>              iter_offset += batch_size<br/>          <span>else</span>:<br/>              add_from_the_beginning = batch_size - (length_X - <br/>               iter_offset)<br/>              training_X_batch = <br/>               np.concatenate((training_X[iter_offset: length_X], X[<span>0</span>:                         <br/>               add_from_the_beginning]))<br/>              training_y_batch = <br/>               np.concatenate((training_y[iter_offset:  <br/>              length_X], y[<span>0</span>: add_from_the_beginning]))<br/>              iter_offset = add_from_the_beginning</pre>
+<ul>
+<li>Next, we should perform the training by calculating the<span> </span><kbd>optimizer</kbd><span> </span>and<span> </span><kbd>total_loss</kbd>. We can run a TensorFlow session with the current batch input and output. Finally, we should print the loss function, so we can keep track of our progress. If our network is training successfully, the value of the loss function should decrease at each step:</li>
+</ul>
+<pre>        _, training_loss = sess.run([optimizer, total_loss], <span>feed_dict</span>=<br/>         {X: training_X_batch, y: training_y_batch})<br/>        <span>if </span>iter % <span>10 </span>== <span>0</span>:<br/>            <span>print</span>(<span>"Loss:"</span>, training_loss)<br/>            saver.save(sess, <span>'ckpt/model'</span>, <span>global_step</span>=iter)</pre>
+<p>Normally, this training takes several hours to finish. You can speed up the process by increasing your computational power. We will discuss some techniques to do that in <a href="c57a4667-7e5a-49ad-9cab-ad32989a5878.xhtml">Chapter 6</a>, <em>Improve Your RNN Performance</em>. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating your new text</h1>
+                </header>
+            
+            <article>
+                
+<p>After you have successfully trained your model, it is time to generate your new <em>The Hunger Games</em> chapter. <span><br/></span></p>
+<p>The preceding code can be divided into two parts: </p>
+<ul>
+<li>Training the model using a custom input</li>
+<li>Predicting the next 1,000 words in the sequence</li>
+</ul>
+<p>Let's explore the code snippets below:</p>
+<ul>
+<li>In the beginning, we initialized a custom input of 21 words (we used the (<kbd>section_length + 1</kbd>) in order to match the model's dimensions). This input is used to give a starting point on our prediction. Next, we will train the existing network with it, so that the weight and biases are optimized for the upcoming predictions, as shown in the following example:</li>
+</ul>
+<pre><span>      starting_sentence </span><span>=</span><span> </span><span>'I plan to make the world a better place <br/>       because I love seeing how people grow and do in their lives '</span></pre>
+<ul>
+<li>Then, we can restore the saved model from the <kbd>ckpt</kbd><span> </span>folder in order to train it using the newest input, as demonstrated in the following code:</li>
+</ul>
+<pre><span>      with</span><span> tf.Session() </span><span>as</span><span> sess:<br/>          </span><span>sess.run(tf.global_variables_initializer())<br/>          </span><span>model </span><span>=</span><span> tf.train.latest_checkpoint('ckpt')<br/>          </span><span>saver </span><span>=</span><span> tf.train.Saver()<br/>          </span><span>saver.restore(sess, model)</span></pre>
+<ul>
+<li>We should then encode that input in a one-hot vector with dimensions<span> </span><kbd>[1, section_length, most_common_words_length]</kbd>. That array should be fed into our model so that the predicted words follow the sequence. You may notice that we omit the last word and add it later on to produce the<span> </span><kbd>text_next_X</kbd><span> </span>array (see the following code). We do that in order to give an unbiased head start to our text generation. This is demonstrated in the following example: </li>
+</ul>
+<pre><span>      generated_text </span><span>=</span><span> starting_sentence<br/>      </span><span>words_in_starting_sentence </span><span>=</span><span> starting_sentence.split()<br/>      </span><span>test_X </span><span>=</span><span> np.zeros((</span><span>1</span><span>, section_length, <br/>      most_common_words_length))<br/><br/>      </span><span>for</span><span> index, word </span><span>in</span><span> enumerate(words_in_starting_sentence[:</span><span>-</span><span>1</span><span>]):<br/>          </span><span>if</span><span> index </span><span>&lt;</span><span> section_length:<br/>              </span><span>test_X[</span><span>0</span><span>, index, word2id[word]] </span><span>=</span><span> </span><span>1</span></pre>
+<ul>
+<li>Finally, we should train the network using the encoded input sentence. To maintain an unbiased head start of the training, we need to add the last word from the sentence before starting the prediction shown in the following example. <span>A slightly confusing part can be the </span><kbd>np.concatenate</kbd><span> method. We should first reshape the </span><kbd>text_X</kbd><span> to easily append the last section and then reshape the result to accommodate the </span><span>prediction </span><span>evaluation. This is shown in the following example:</span></li>
+</ul>
+<pre><span>        </span><span>_ </span><span>=</span><span> sess.run(prediction, feed_dict</span><span>=</span><span>{</span><span>X</span><span>: test_X})<br/>    <br/>        </span><span>test_last_X </span><span>=</span><span> np.zeros((</span><span>1</span><span>, </span><span>1</span><span>, most_common_words_length))<br/>        </span><span>test_last_X[</span><span>0</span><span>, </span><span>0</span><span>, word2id[words_in_starting_sentence[</span><span>-</span><span>1</span><span>]]] </span><span>=</span><span> </span><span>1<br/>        </span><span>test_next_X </span><span>=</span><span> np.reshape(np.concatenate((test_X[</span><span>0</span><span>, </span><span>1</span><span>:], <br/>        test_last_X[</span><span>0</span><span>])), (</span><span>1</span><span>, section_length, most_common_words_length)</span></pre>
+<ul>
+<li>The last part is actually generating the words. At each step (of 1,000 steps) we can calculate the prediction using the current<span> </span><kbd>test_next_X</kbd>. Then, we can remove the first character from the current<span> </span><kbd>test_next_X</kbd><span> </span>and append the prediction. This way we constantly keep a set of 20 words where the last element is a fresh new prediction. <span>This is shown in the following example:</span></li>
+</ul>
+<pre><span>         for</span><span> i </span><span>in</span><span> range(10</span><span>00</span><span>):</span><span><br/>             </span><span>test_prediction </span><span>=</span><span> prediction.eval({</span><span>X</span><span>: test_next_X})[</span><span>0</span><span>]<br/>             </span><span>next_word_one_hot </span><span>=</span><span> prediction_to_one_hot(test_prediction)<br/>             </span><span>next_word </span><span>=</span><span> id2word[np.argmax(next_word_one_hot)]<br/>             </span><span>generated_text </span><span>+=</span><span> next_word </span><span>+</span><span> </span><span>" "<br/></span><span>             test_next_X </span><span>=</span><span> <br/>              np.reshape(np.concatenate((test_next_X[</span><span>0</span><span>,</span><span>1</span><span>:],<br/>                                np.reshape(next_word_one_hot, (</span><span>1</span><span>, <br/>                                most_common_words_length)))),<br/>                                (</span><span>1</span><span>, section_length,   <br/>                                 most_common_words_length))<br/>                 </span><span>print</span><span>(</span><span>"Generated text: "</span><span>, generated_text)</span></pre>
+<p>The method <kbd>prediction_to_one_hot</kbd> encodes the prediction into a one hot encoding array. This is defined in the following example:</p>
+<div>
+<pre><span>    def</span><span> prediction_to_one_hot(prediction):<br/></span><span>        zero_array </span><span>=</span><span> np.zeros(np.shape(prediction))<br/>        </span><span>zero_array[np.argmax(prediction)] </span><span>=</span><span> </span><span>1<br/>        </span><span>return</span><span> zero_array</span></pre></div>
+<p>After running the code, you should see the final chapter printed out in the console. If there is inconsistency among the words, you need to tweak some of the hyperparameters. I will explain in the last chapter how you can optimize your model and receive good performance. Train a network with the snippets above and keep me updated about your performance. I would be really happy to see your end results.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p> </p>
+<p>In this chapter, you went through the process of building a book chapter generator using a Gated Recurrent Unit neural network. You understood what sits behind this powerful model and how you can put it into practice with a handful of lines of code using TensorFlow. In addition, you faced the challenge of preparing and clearing your data so that your model is trained correctly. </p>
+<p>In the next chapter, you will fortify your skills by implementing your first real-life practical application—a language translator. You have probably faced the online Google Translate software and were amazed by how well it worked. In the next chapter, you will understand what sits behind a sophisticated system like that and why its level of accuracy has increased drastically in recent years. </p>
+<p>I hope the current chapter advanced your deep learning knowledge and that you are excited to be exploring more from the world of recurrent neural networks. I cannot wait for you to start the next section. </p>
+<p class="mceNonEditable"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">External links</h1>
+                </header>
+            
+            <article>
+                
+<ul>
+<li>The Unreasonable Effectiveness of Recurrent Neural Networks—<a href="http://karpathy.github.io/2015/05/21/rnn-effectiveness/">http://karpathy.github.io/2015/05/21/rnn-effectiveness/</a></li>
+<li>Sigmoid activation function<span>—</span><a href="https://www.youtube.com/watch?v=WcDtwxi7Ick&amp;t=3s">https://www.youtube.com/watch?v=WcDtwxi7Ick&amp;t=3s</a></li>
+<li>The difference between sigmoid and tanh activation function<span>—</span><a href="https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function">https://stats.stackexchange.com/questions/101560/tanh-activation-function-vs-sigmoid-activation-function</a></li>
+<li>Element-wise multiplication—<a href="https://www.youtube.com/watch?v=2GPZlRVhQWY">https://www.youtube.com/watch?v=2GPZlRVhQWY</a></li>
+<li>Learning rate in the neural network<span>—</span><a href="https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10">https://towardsdatascience.com/understanding-learning-rates-and-how-it-improves-performance-in-deep-learning-d0d4059c1c10</a></li>
+<li>The number of hidden units in TensorFlow<span>—</span><a href="https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell">https://stackoverflow.com/questions/37901047/what-is-num-units-in-tensorflow-basiclstmcell</a></li>
+<li>The formula for calculating the number of hidden units<span>—</span><a href="https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network">https://stats.stackexchange.com/questions/181/how-to-choose-the-number-of-hidden-layers-and-nodes-in-a-feedforward-neural-network</a></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

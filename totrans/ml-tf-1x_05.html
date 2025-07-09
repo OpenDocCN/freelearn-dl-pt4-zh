@@ -1,0 +1,276 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Sequence to Sequence Models-Parlez-vous Français?</h1>
+                </header>
+            
+            <article>
+                
+<p>Thus far, much of our work was with images. Working with images is helpful as the results are almost uncanny in how quickly and succinctly progress can be made. However, the world of machine learning is broader and the next several chapters will cover these other aspects. We will start with sequence-to-sequence models. The results are just as uncanny, though the setup is a bit more involved and training datasets are much larger.</p>
+<p>In this chapter, we will focus on several areas, which are as follows:</p>
+<ul>
+<li>Understanding how sequence-to-sequence models work</li>
+<li>Understanding the setup required to feed a sequence-to-sequence model</li>
+<li>Writing an English to French translator using sequence-to-sequence models</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">A quick preview</h1>
+                </header>
+            
+            <article>
+                
+<p>Yes, you read that correctly...we will be writing an English to French translator. The pre-machine learning world might have approached this with a series of parsers and rules on how to translate words and phrases to others, but our approach will be far more elegant, generalizable, and quick. We will just use examples, many examples, to train our translator.</p>
+<p>The game here will be finding a dataset with enough English sentences translated into French (actually, it will work in any language). Translated essays and news articles will not be as helpful as we won't necessarily be able to place specific sentences from one language to another side by side. So, we will need to be more creative. Fortunately, organizations such as the United Nations often need to do exactly this—they need to do line by line translations to meet the needs of their diverse constituencies. How convenient for us!</p>
+<p>The <em>Workshop on Statistical Machine Translation</em> had a conference in 2010 that released a nice packaged training set, which can be used. The full details are available at <a href="http://www.statmt.org/wmt10/"><span class="URLPACKT">http://www.statmt.org/wmt10/</span></a>.</p>
+<p>We will be using specific files just for French, as follows:</p>
+<ul>
+<li><a href="http://www.statmt.org/wmt10/training-giga-fren.tar">http://www.statmt.org/wmt10/training-giga-fren.tar</a></li>
+<li><a href="http://www.statmt.org/wmt15/dev-v2.tgz"><span class="URLPACKT">http://www.statmt.org/wmt15/dev-v2.tgz</span></a></li>
+</ul>
+<p>The following is an excerpt of what the source data looks like on the English side:</p>
+<ul>
+<li>Food, where European inflation slipped up</li>
+<li>The skyward zoom in food prices is the dominant force behind the speed up in eurozone inflation</li>
+<li>November price hikes were higher than expected in the 13 eurozone countries, with October's 2.6 percent yr/yr inflation rate followed by 3.1 percent in November, the EU's Luxembourg-based statistical office reported</li>
+<li>Official forecasts predicted just three percent, Bloomberg said</li>
+<li>As opposed to the US, UK, and Canadian central banks, the <strong>European Central Bank</strong> (<strong>ECB</strong>) did not cut interest rates, arguing that a rate drop combined with rising raw material prices and declining unemployment would trigger an inflationary spiral</li>
+<li>The ECB wants to hold inflation to under two percent, or somewhere in that vicinity</li>
+<li>According to one analyst, ECB has been caught in a Catch-22, and it needs to <strong>talk down</strong> inflation, to keep from having to take action to push it down later in the game</li>
+</ul>
+<p>And, here is the French equivalent:</p>
+<ul>
+<li>L'inflation, en Europe, a dérapé sur l'alimentation</li>
+<li>L'inflation accélérée, mesurée dans la zone euro, est due principalement à l'augmentation rapide des prix de l'alimentation</li>
+<li>En novembre, l'augmentation des prix, dans les 13 pays de la zone euro, a été plus importante par rapport aux prévisions, après un taux d'inflation de 2,6 pour cent en octobre, une inflation annuelle de 3,1 pour cent a été enregistrée, a indiqué le bureau des statistiques de la Communauté Européenne situé à Luxembourg</li>
+<li>Les prévisions officielles n'ont indiqué que 3 pour cent, a communiqué Bloomberg</li>
+<li>Contrairement aux banques centrales américaine, britannique et canadienne, la Banque centrale européenne (BCE) n'a pas baissé le taux d'intérêt directeur en disant que la diminution des intérêts, avec la croissance des prix des matières premières et la baisse du taux de chômage, conduirait à la génération d'une spirale inflationniste</li>
+<li>La BCE souhaiterait maintenir le taux d'inflation au-dessous mais proche de deux pour cent</li>
+<li>Selon un analyste, c'est le Catch 22 pour la BCE-: "il faut dissuader" l'inflation afin de ne plus avoir à intervenir sur ce sujet ultérieurement</li>
+</ul>
+<p>It is usually good to do a quick sanity check, when possible, to ensure that the files do actually line up. We can see the <kbd>Catch 22</kbd> phrase on line 7 of both files, which gives us comfort.</p>
+<p>Of course, 7 lines are far from sufficient for a statistical approach. We will achieve an elegant, generalizable solution only with mounds of data. And the mounds of data we will get for our training set will consist of 20 gigabytes of text, translated line by line very much like the preceding excerpts.</p>
+<p>Just as we did with images, we'll use subsets for training, validation, and testing. We will also define a loss function and attempt to minimize that loss. Let's start with the data though.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Drinking from the firehose</h1>
+                </header>
+            
+            <article>
+                
+<p>As you did earlier, you should grab the code from <a href="https://github.com/mlwithtf/MLwithTF/"><span class="URLPACKT">https://github.com/mlwithtf/MLwithTF/</span></a>.</p>
+<p>We will be focusing on the <kbd>chapter_05</kbd> subfolder that has the following three files:</p>
+<ul>
+<li><kbd>data_utils.py</kbd></li>
+<li><kbd>translate.py</kbd></li>
+<li><kbd>seq2seq_model.py</kbd></li>
+</ul>
+<p>The first file handles our data, so let's start with that. The <kbd>prepare_wmt_dataset</kbd> function handles that. It is fairly similar to how we grabbed image datasets in the past, except now we're grabbing two data subsets:</p>
+<ul>
+<li><kbd>giga-fren.release2.fr.gz</kbd></li>
+<li><kbd>giga-fren.release2.en.gz</kbd></li>
+</ul>
+<p>Of course, these are the two languages we want to focus on. The beauty of our soon-to-be-built translator will be that the approach is entirely generalizable, so we can just as easily create a translator for, say, German or Spanish.</p>
+<p>The following screenshot is the specific subset of code:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/6a0c104a-e823-49f9-94af-80994af1b221.png"/></div>
+<p>Next, we will run through the two files of interest from earlier line by line and do two things—create vocabularies and tokenize the individual words. These are done with the <kbd>create_vocabulary</kbd> and <kbd>data_to_token_ids</kbd> functions, which we will get to in a moment. For now, let's observe how to create the vocabulary and tokenize on our massive training set as well as a small development set, <kbd>newstest2013.fr</kbd> and <kbd>dev/newstest2013.en</kbd>:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="965" width="616" class=" image-border" src="assets/0449ecaa-9e2d-41fa-bdcb-a9a1178d8e61.png"/></div>
+<p>We created a vocabulary earlier using the following <kbd>create_vocabulary</kbd> function. We will start with an empty vocabulary map, <kbd>vocab = {}</kbd>, and run through each line of the data file and for each line, create a bucket of words using a basic tokenizer. (Warning: this is not to be confused with the more important token in the following ID function.)</p>
+<p>If we encounter a word we already have in our vocabulary, we will increment it as follows:</p>
+<pre>    vocab[word] += 1 </pre>
+<p>Otherwise, we will initialize the count for that word, as follows:</p>
+<pre>    vocab[word] += 1 </pre>
+<p>We will keep doing this until we run out of lines on our training dataset. Next, we will sort our vocabulary by order of frequency using <kbd>sorted(vocab</kbd>, <kbd>key=vocab.get</kbd>, and <kbd>reverse=True)</kbd>.</p>
+<p>This is important because we won't keep every single word, we'll only keep the <em>k</em> most frequent words, where <em>k</em> is the vocabulary size we defined (we had defined this to 40,000 but you can choose different values and see how the results are affected):</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="386" width="642" class=" image-border" src="assets/b8b6bf07-d504-41c8-a06a-f4b76beab673.png"/></div>
+<p>While working with sentences and vocabularies is intuitive, this will need to get more abstract at this point—we'll temporarily translate each vocabulary word we've learned into a simple integer. We will do this line by line using the <kbd>sequence_to_token_ids</kbd> function:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="186" width="563" class=" image-border" src="assets/c1a33035-42f6-4cab-8e14-f78af870c26f.png"/></div>
+<p>We will apply this approach to the entire data file using the <kbd>data_to_token_ids</kbd> function, which reads our training file, iterates line by line, and runs the <kbd>sequence_to_token_ids</kbd> function, which then uses our vocabulary listing to translate individual words in each sentence to integers:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="237" width="536" class=" image-border" src="assets/eb56f8d6-2c8a-4747-9554-dad5f6898326.png"/></div>
+<p>Where does this leave us? With two datasets of just numbers. We have just temporarily translated our English to French problem to a numbers to numbers problem with two sequences of sentences consisting of numbers mapping to vocabulary words.</p>
+<p>If we start with <kbd>["Brooklyn", "has", "lovely", "homes"]</kbd> and generate a <kbd>{"Brooklyn": 1, "has": 3, "lovely": 8, "homes": 17"}</kbd> vocabulary, we will end up with <kbd>[1, 3, 8, 17]</kbd>.</p>
+<p>What does the output look like? The following typical file downloads:</p>
+<pre>    <strong>ubuntu@ubuntu-PC:~/github/mlwithtf/chapter_05$: python translate.py</strong>
+    <strong>Attempting to download http://www.statmt.org/wmt10/training-giga-  <br/>    fren.tar</strong>
+    <strong>File output path:   <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/training-giga-fren.tar</strong>
+    <strong>Expected size: 2595102720</strong>
+    <strong>File already downloaded completely!</strong>
+    <strong>Attempting to download http://www.statmt.org/wmt15/dev-v2.tgz</strong>
+    <strong>File output path: /home/ubuntu/github/mlwithtf/datasets/WMT/dev- <br/>    v2.tgz</strong>
+    <strong>Expected size: 21393583</strong>
+    <strong>File already downloaded completely!</strong>
+    <strong>/home/ubuntu/github/mlwithtf/datasets/WMT/training-giga-fren.tar <br/>    already extracted to  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train</strong>
+    <strong>Started extracting /home/ubuntu/github/mlwithtf/datasets/WMT/dev- <br/>    v2.tgz to /home/ubuntu/github/mlwithtf/datasets/WMT</strong>
+    <strong>Finished extracting /home/ubuntu/github/mlwithtf/datasets/WMT/dev-  <br/>    v2.tgz to /home/ubuntu/github/mlwithtf/datasets/WMT</strong>
+    <strong>Started extracting  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/giga- <br/>    fren.release2.fixed.fr.gz to  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga- <br/>    fren.release2.fixed.fr</strong>
+    <strong>Finished extracting  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/giga-<br/>    fren.release2.fixed.fr.gz to <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga-  <br/>    fren.release2.fixed.fr</strong>
+    <strong>Started extracting  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/giga-<br/>    fren.release2.fixed.en.gz to <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga- <br/>    fren.release2.fixed.en</strong>
+    <strong>Finished extracting  <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/giga-<br/>    fren.release2.fixed.en.gz to <br/>    /home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga- <br/>    fren.release2.fixed.en</strong>
+    <strong>Creating vocabulary  <br/></strong>    <strong>/home/ubuntu/github/mlwithtf/datasets/WMT/train/data/vocab40000.fr <br/>    from <br/>    data /home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga- <br/>    fren.release2.fixed.fr</strong>
+    <strong>  processing line 100000</strong>
+    <strong>  processing line 200000</strong>
+    <strong>  processing line 300000</strong>
+     <strong>...</strong>
+    <strong>  processing line 22300000</strong>
+    <strong>  processing line 22400000</strong>
+    <strong>  processing line 22500000</strong>
+     <strong>Tokenizing data in </strong>
+     <strong>/home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga-</strong>
+     <strong>fren.release2.fr</strong>
+    <strong>  tokenizing line 100000</strong>
+    <strong>  tokenizing line 200000</strong>
+    <strong>  tokenizing line 300000</strong>
+     <strong>...</strong>
+    <strong>  tokenizing line 22400000</strong>
+    <strong>  tokenizing line 22500000</strong>
+     <strong>Creating vocabulary </strong>
+     <strong>/home/ubuntu/github/mlwithtf/datasets/WMT/train/data/vocab</strong>
+     <strong>40000.en from data </strong>
+     <strong>/home/ubuntu/github/mlwithtf/datasets/WMT/train/data/giga-</strong>
+     <strong>fren.release2.en</strong>
+    <strong>  processing line 100000</strong>
+    <strong>  processing line 200000</strong>
+    <strong>  ...</strong></pre>
+<p>I won't repeat the English section of the dataset processing as it is exactly the same. We will read the gigantic file line by line, create a vocabulary, and tokenize the words line by line for each of the two language files.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training day</h1>
+                </header>
+            
+            <article>
+                
+<p>The crux of our effort will be the training, which is shown in the second file we encountered earlier—<kbd>translate.py</kbd>. The <kbd>prepare_wmt_dataset</kbd> function we reviewed earlier is, of course, the starting point as it creates our two datasets and tokenizes them into nice clean numbers.</p>
+<p>The training starts as follows:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="297" width="615" class=" image-border" src="assets/66bd8fe5-2f96-47ac-aba9-0056eb700c57.png"/></div>
+<p>After preparing the data, we will create a TensorFlow session, as usual, and construct our model. We'll get to the model later; for now, let's look at our preparation and training loop.</p>
+<p>We will define a dev set and a training set later, but for now, we will define a scale that is a floating point score ranging from 0 to 1. Nothing complex here; the real work comes in the following training loop. This is very different from what we've done in previous chapters, so close attention is required.</p>
+<p>Our main training loop is seeking to minimize our error. There are two key statements. Here's the first one:</p>
+<pre>    encoder_inputs, decoder_inputs, target_weights = <br/>     model.get_batch(train_set, bucket_id)</pre>
+<p>And, the second key is as follows:</p>
+<pre>    _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs, <br/>     target_weights, bucket_id, False)</pre>
+<p>The <kbd>get_batch</kbd> function is essentially used to convert the two sequences into batch-major vectors and associated weights. These are then used on the model step, which returns our loss.</p>
+<p>We don't deal with the loss though, we will use <kbd>perplexity</kbd>, which is <kbd>e</kbd> raised to the power of the loss:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="440" width="464" class=" image-border" src="assets/41bc47dd-7cb9-4fb6-aa62-ce0db0ea3d45.png"/></div>
+<p>At every <em>X</em> steps, we will save our progress using <kbd>previous_losses.append(loss)</kbd>, which is important because we will compare our current batch's loss to previous losses. When losses start going up, we will reduce our learning rate using:</p>
+<p><kbd>sess.run(model.learning_rate_decay_op)</kbd>, and evaluate the loss on our <kbd>dev_set</kbd>, much like we used our validation set in earlier chapters:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="160" width="474" class=" image-border" src="assets/03519901-49f4-4a9b-92c7-6f1d57294cff.png"/></div>
+<p>We will get the following output when we run it:</p>
+<pre>    <strong>put_count=2530 evicted_count=2000 eviction_rate=0.790514 and <br/>     unsatisfied allocation rate=0</strong>
+    <strong>global step 200 learning rate 0.5000 step-time 0.94 perplexity <br/>     1625.06</strong>
+    <strong>  eval: bucket 0 perplexity 700.69</strong>
+    <strong>  eval: bucket 1 perplexity 433.03</strong>
+    <strong>  eval: bucket 2 perplexity 401.39</strong>
+    <strong>  eval: bucket 3 perplexity 312.34</strong>
+    <strong>global step 400 learning rate 0.5000 step-time 0.91 perplexity   <br/>     384.01</strong>
+    <strong>  eval: bucket 0 perplexity 124.89</strong>
+    <strong>  eval: bucket 1 perplexity 176.36</strong>
+    <strong>  eval: bucket 2 perplexity 207.67</strong>
+    <strong>  eval: bucket 3 perplexity 239.19</strong>
+    <strong>global step 600 learning rate 0.5000 step-time 0.87 perplexity   <br/>     266.71</strong>
+    <strong>  eval: bucket 0 perplexity 75.80</strong>
+    <strong>  eval: bucket 1 perplexity 135.31</strong>
+    <strong>  eval: bucket 2 perplexity 167.71</strong>
+    <strong>  eval: bucket 3 perplexity 188.42</strong>
+    <strong>global step 800 learning rate 0.5000 step-time 0.92 perplexity  <br/>     235.76</strong>
+    <strong>  eval: bucket 0 perplexity 107.33</strong>
+    <strong>  eval: bucket 1 perplexity 159.91</strong>
+    <strong>  eval: bucket 2 perplexity 177.93</strong>
+    <strong>  eval: bucket 3 perplexity 263.84</strong>  </pre>
+<p>We will see outputs at every 200 steps. This is one of about a dozen settings we're using, which we defined at the top of the file:</p>
+<pre style="padding-left: 60px"> tf.app.flags.DEFINE_float("learning_rate"", 0.5, ""Learning  <br/>                             rate."") 
+ tf.app.flags.DEFINE_float("learning_rate_decay_factor"", 0.99, 
+                          "Learning rate decays by this much."") 
+ tf.app.flags.DEFINE_float("max_gradient_norm"", 5.0, 
+                          "Clip gradients to this norm."") 
+ tf.app.flags.DEFINE_integer("batch_size"", 64, 
+                            "Batch size to use during training."") 
+ tf.app.flags.DEFINE_integer("en_vocab_size"", 40000, ""Size ...."") 
+ tf.app.flags.DEFINE_integer("fr_vocab_size"", 40000, ""Size  <br/>                              of...."") 
+ tf.app.flags.DEFINE_integer("size"", 1024, ""Size of each  <br/>                              model..."") 
+ tf.app.flags.DEFINE_integer("num_layers"", 3, ""#layers in the <br/>                model."")tf.app.flags.DEFINE_string("train_dir"", <br/>  os.path.realpath(''../../datasets/WMT''), ""Training directory."") 
+ tf.app.flags.DEFINE_integer("max_train_data_size"", 0, 
+                            "Limit size of training data "") 
+ tf.app.flags.DEFINE_integer("steps_per_checkpoint"", 200, 
+                            "Training steps to do per <br/>                             checkpoint."")</pre>
+<p>We will use most of these settings when constructing the model object. That is, the final piece of the puzzle is the model itself, so let's look at that. We'll return to the third and final of the three files in our project—<kbd>seq2seq_model.py</kbd>.</p>
+<p>Recall how we created the model at the start of the training process after creating the TensorFlow session? Most of the parameters we've defined are used to initialize the following model:</p>
+<pre>    model = seq2seq_model.Seq2SeqModel( 
+      FLAGS.en_vocab_size, FLAGS.fr_vocab_size, _buckets, 
+      FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, <br/>       FLAGS.batch_size, 
+      FLAGS.learning_rate, FLAGS.learning_rate_decay_factor, 
+      forward_only=forward_only) </pre>
+<p>However, what the initialize is accomplishing is inside <kbd>seq2seq_model.py</kbd>, so let's jump to that.</p>
+<p>You will find that the model is enormous, which is why we won't explain line by line but instead chunk by chunk.</p>
+<p>The first section is the initialization of the model, demonstrated by the following two figures:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="528" width="409" class=" image-border" src="assets/7e66ffcf-cafd-4922-b7b0-814aa7415731.png"/></div>
+<p>The model starts with an initialization, which sets off the required parameters. We'll skip the setting of these parameters as we're already familiar with them—we initialized these parameters ourselves before the training, by just passing the values into the model construction statement, and they are finally passed into internal variables via <kbd>self.xyz</kbd> assignments.</p>
+<p>Recall how we passed in the size of each model layer (size=1024) and the number of layers (3). These are pretty important as we construct the weights and biases (<kbd>proj_w</kbd> and <kbd>proj_b</kbd>). The weights are <em>A x B</em> where <em>A</em> is the layer size and <em>B</em> is the vocabulary size of the target language. The biases are just passed based on the size of the target vocabulary.</p>
+<p>Finally, the weights and biases from our <kbd>output_project</kbd> tuple - <kbd>output_projection = (w, b)</kbd>- and use the transposed weights and biases to form our <kbd>softmax_loss_function</kbd>, which we'll use over and over to gauge performance:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="501" width="364" class=" image-border" src="assets/cabd2352-cfe1-44fb-b859-e18a47c3196b.png"/></div>
+<p>The next section is the step function, which is shown in the following figure. The first half is just error checking, so we'll skip through it. Most interesting is the construction of the output feed using stochastic gradient descent:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="475" width="432" class=" image-border" src="assets/a210e471-a641-461c-b26f-c0c9030328ec.png"/></div>
+<p>The final section of the model is the <kbd>get_batch</kbd> function, which is shown in the following figure. We will explain the individual parts with inline comments:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="553" width="458" class=" image-border" src="assets/e45db696-3d48-4455-b613-e36fb35ec921.png"/></div>
+<p>When we run this, we can get a perfect training run, as follows:</p>
+<pre><strong>global step 200 learning rate 0.5000 step-time 0.94 perplexity <br/>  1625.06</strong>
+  <strong> eval: bucket 0 perplexity 700.69</strong>
+   <strong>eval: bucket 1 perplexity 433.03</strong>
+  <strong> eval: bucket 2 perplexity 401.39</strong>
+  <strong> eval: bucket 3 perplexity 312.34</strong>
+   <strong>...</strong></pre>
+<p>Alternatively, we may find steps where we have reduced our learning rate after consistent increases in losses. Either way, we will keep testing on our <em>development</em> set until our accuracy increases.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we covered sequence-to-sequence networks and wrote a language translator using a series of known sentence-by-sentence translations as a training set. We were introduced to RNNs as a base for our work and likely crossed the threshold of big data as we trained using a 20 GB set of training data.</p>
+<p>Next, we'll jump into tabular data and make predictions on economic and financial data. We'll use parts of our prior work so we can hit the ground running, namely the initial pipeline work we've written so far to download and prepare training data. However, we'll focus on a time series problem, so it will be quite different from the image and text work we've done to date.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

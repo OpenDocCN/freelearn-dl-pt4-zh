@@ -1,0 +1,456 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Anomaly Detection and Recommendation Systems</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter will look at auto-encoder models and recommendation systems. Although these two use cases may seem very different, they both rely on finding different representations of data. These representations are similar to the embeddings we saw in <a href="03f666ab-60ce-485a-8090-c158b29ef306.xhtml">Chapter 7</a>, <em>Natural Language Processing Using Deep Learning</em>. The first part of this chapter introduces unsupervised learning where there is no specific outcome to be predicted. The next section provides a conceptual overview of auto-encoder models in a machine learning and deep neural network context in particular. We will show you how to build and apply an auto-encoder model to identify anomalous data. Such atypical data may be bad data or outliers, but could also be instances that require further investigation, for example, fraud detection. An example of applying anomaly detection is detecting when an individual's credit card spending pattern differs from their usual behavior. Finally, this chapter closes with a use case on how to apply recommendation systems for cross-sell and up-sell opportunities using the retail dataset that was introduced in <a href="28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml">Chapter 4</a>, <em>Training Deep Prediction Models</em>.</p>
+<p class="mce-root">This chapter will cover the following topics:</p>
+<ul>
+<li class="mce-root">What is unsupervised learning?</li>
+<li class="mce-root">How do auto-encoders work?</li>
+<li class="mce-root">Training an auto-encoder in R</li>
+<li class="mce-root">Using auto-encoders for anomaly detection</li>
+<li class="mce-root">Use case <span>– </span>collaborative filtering</li>
+</ul>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">What is unsupervised learning?</h1>
+                </header>
+            
+            <article>
+                
+<p>So far, we have focused on models and techniques that broadly fall under the category of supervised learning. Supervised learning is supervised because the task is for the machine to learn the relationship between a set of variables or features and one or more outcomes. For example, in <a href="28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml">Chapter 4</a>, <em>Training Deep Prediction Models</em>, we wanted to predict whether someone would visit a store in the next 14 days. In this chapter, we will delve into methods of unsupervised learning. In contrast with supervised learning, where there is an outcome variable(s) or labeled data is being used, unsupervised learning does not use any outcomes or labeled data. Unsupervised learning uses only input features for <span>learning</span>. A common example of unsupervised learning is cluster analysis, such as k-means clustering, where the machine learns hidden or latent clusters in the data to minimize a criterion (for example, the smallest variance within a cluster).</p>
+<p class="mce-root">Another unsupervised <span>learning method is to find another representation of the data</span>, or to reduce the input data into a smaller dataset without losing too much information in the process, this is known as dimensionality reduction. The goal of dimensionality reduction is for a set of <em>p</em> features to find a set of latent variables, <em>k</em>, so that <em>k &lt; p</em>. However, with <em>k</em> latent variables, <em>p</em> raw variables can be reasonably reproduced. We used <strong>p</strong><span><strong>rincipal component analysis</strong> (<strong>PCA</strong>) </span>in t<span>he neural networks example from <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em>. In that example, we saw that </span>there is a trade-off between the number of dimensions and the information loss, as shown in <em>Figure 2.1</em>. Principal component analysis uses an orthogonal transformation to go from the raw data to the principal components. In addition to being uncorrelated, the principal components are ordered from the component that explains the most variance to that which explains the least. Although all principal components can be used (in which case the dimensionality of the data is not reduced), only components that explain a sufficiently large amount of variance (for example, based on high eigenvalues) are included and components that account for relatively little variance are dropped as noise or unnecessary. In the neural networks example in <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em><span>, </span>we had 624 inputs after eliminating the features with zero variance. When we applied PCA, we found that <span>50% of our variance (information) by our data could be represented in just </span>23 principal components.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How do auto-encoders work?</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Auto-encoders are a form of dimensionality reduction technique. When they are used in this manner, they</span> mathematically and conceptually have similarities to other dimensionality reduction techniques such as PCA. Auto-encoders consist of two parts: an encoder which creates a representation of the data, and a decoder which tries to reproduce or predict the inputs. Thus, the hidden layers and neurons are not maps between an input and some other outcome, but are self (auto)-encoding. Given sufficient complexity, auto-encoders can simply learn the identity function, and the hidden neurons will exactly mirror the raw data, resulting in no meaningful benefit. Similarly, in PCA, using all the principal components also provides no benefit. Therefore, the best auto-encoder is not necessarily the most accurate one, but one that reveals some meaningful structure or architecture in the data or one that reduces noise, identifies outliers, or anomalous data, or some other useful side-effect that is not necessarily directly related to accurate predictions of the model inputs.</p>
+<p class="mce-root">Auto-encoders with a lower dimensionality than the raw data are called <strong>undercomplete</strong>; by using an undercomplete auto-encoder, one can force the auto-encoder to learn the most important features of the data. One common application of auto-encoders is to pre-train deep neural networks or other supervised learning models. In addition, it is possible to use the hidden features themselves. We will see this later on for anomaly detection. Using an undercomplete model is effectively a way to regularize the model. However, it is also possible to train overcomplete auto-encoders where the hidden dimensionality is greater than the raw data, so long as some other form of regularization is used.</p>
+<p>There are broadly two parts to auto-encoders:</p>
+<ul>
+<li>First, an encoding function, <em>f()</em><em>,</em> encodes the raw data, <em>x</em>, to the hidden neurons, <em>H</em></li>
+<li>Second, a decoding function, <em>g()</em>, decodes <em>H</em> back to <em>x</em></li>
+</ul>
+<p>The following diagram shows an undercomplete encoder, where we have fewer nodes in the hidden layer. The output layer on the right is the decoded version of the input layer on the left. The task of the hidden layer is to store as much information as possible about the input layer (encode the input layer) so that the input layer can be re-constructed (or decoded):</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-606 image-border" src="assets/a2f06db4-841d-4384-8a9d-f9d534282ecf.png" style="width:14.50em;height:14.67em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 9.1: An example of an auto-encoder</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Regularized auto-encoders</h1>
+                </header>
+            
+            <article>
+                
+<p>An undercomplete auto-encoder is a form of a regularized auto-encoder, where the regularization occurs through using a shallower (or in some other way lower) dimensional representation than the data. However, regularization can be accomplished through other means as well. These are penalized auto-encoders.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Penalized auto-encoders</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root"><span>As we have seen in previous chapters, one approach to preventing overfitting </span>is to use penalties, <span>that is,</span> <span>regularization</span>. In general, our goal is to minimize the reconstruction error. If we have an objective function, <em>F</em>, we may optimize <em>F(y, f(x))</em>, where <em>f()</em> encodes the raw data inputs to generate predicted or expected <em>y</em> values. For auto-encoders, we have <em>F(x, g(f(x)))</em>, so that the machine learns the weights and functional form of <em>f()</em> and <em>g()</em> to minimize the discrepancy between <em>x</em> and the reconstruction of <em>x</em>, namely <em>g(f(x))</em>. If we want to use an overcomplete auto-encoder, we need to introduce some form of regularization to force the machine to learn a representation that does not simply mirror the input. For example, we might add a function that penalizes based on complexity, so that instead of optimizing <em>F(x, g(f(x)))</em>, we optimize <em>F(x, g(f(x))) + P(f(x))</em>, where the penalty function, <em>P</em>, depends on the encoding or the raw inputs, <em>f()</em>.</p>
+<p class="mce-root">Such penalties differ somewhat from those we have seen before, in that the penalty is designed to induce sparseness, not of the parameters but rather of the latent variables, <em>H</em>, which are the encoded representations of the raw data. The goal is to learn a latent representation that captures the essential features of the data.</p>
+<p class="mce-root">Another type of penalty that can be used to provide regularization is one based on the derivative. Whereas sparse auto-encoders have a penalty that induces sparseness of the latent variables, penalizing the derivatives results in the model learning a form of <em>f()</em> that is relatively insensitive to minor perturbations of the raw input data, <em>x</em>. What we mean by this is that it forces a penalty on functions where the encoding varies greatly for changes in <em>x</em>, preferring regions where the gradient is relatively flat.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Denoising auto-encoders</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">Denoising auto-encoders remove noise or denoise data, and are a useful technique for learning a latent representation of raw data (<em>Vincent, P., Larochelle, H., Bengio, Y., and Manzagol, P. A. (2008, July); Bengio, Y.,Courville, A., and Vincent, P. (2013)</em>). We said that the general task of an auto-encoder was to optimize: <em>F(x, g(f(x)))</em>. However, for a denoising auto-encoder, the task is to recover <em>x</em> from a noisy or corrupted version of <em>x</em>. One application of d<span>enoising auto-encoders is to restore old images that may be blurred or corrupted.</span></p>
+<p class="mce-root">Although denoising auto-encoders are used to try and recover the true representation from corrupted data or data with noise, this technique can also be used as a regularization tool. As a method of regularization, rather than having noisy or corrupted data and attempting to recover the truth, the raw data is purposefully corrupted. This forces the auto-encoder to do more than merely learn the identity function, as the raw inputs are no longer identical to the output. This process is shown in the following diagram:</p>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref"><img src="assets/cecb2097-2cdd-4670-b035-d78abdab2adb.png" style="width:14.42em;height:13.67em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref">Figure 9.2: Denoising<span><span> auto-encoders</span></span></div>
+<p class="mce-root">The remaining choice is what the function, <em>N()</em>, which adds the noise or corrupts <em>x</em>, should be. Two choices are to add noise through a stochastic process or for any given training iteration to only include a subset of the raw <em>x</em> inputs. In the next section, we will explore how to actually train auto-encoder models in R.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training an auto-encoder in R</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">In this section, we are going to train an auto-encoder in R and show you that it can be used as a dimensionality reduction technique. We will compare it with the approach we took in <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em><span>, </span>where we used PCA to find the <span>principal components </span>in the image data. In that example, we used PCA and found that 23 factors was sufficient to explain 50% of the variance in the data. We built a neural network model using just these 23 factors to classify a dataset with either <em>5</em> or <em>6</em>. We got 97.86% accuracy in that example.</p>
+<p class="mce-root">We are going to follow a similar process in this example, and we will use the <kbd>MINST</kbd> dataset again. The following code from <kbd>Chapter8/encoder.R</kbd> loads the data. We will use half the data for training an auto-encoder and the other half will be used to build a classification model to evaluate how good the auto-encoder is at dimensionality reduction. The first part of the code is similar to what we have <span>seen in previous examples; it loads and normalizes the data so that the values are between 0.0 and 1.0:</span></p>
+<pre>library(keras)<br/>library(corrplot)<br/>library(neuralnet)<br/>options(width = 70, digits = 2)<br/>options(scipen=999)<br/>dataDirectory &lt;- "../data"<br/>if (!file.exists(paste(dataDirectory,'/train.csv',sep="")))<br/>{<br/> link &lt;- 'https://apache-mxnet.s3-accelerate.dualstack.amazonaws.com/R/data/mnist_csv.zip'<br/> if (!file.exists(paste(dataDirectory,'/mnist_csv.zip',sep="")))<br/> download.file(link, destfile = paste(dataDirectory,'/mnist_csv.zip',sep=""))<br/> unzip(paste(dataDirectory,'/mnist_csv.zip',sep=""), exdir = dataDirectory)<br/> if (file.exists(paste(dataDirectory,'/test.csv',sep="")))<br/> file.remove(paste(dataDirectory,'/test.csv',sep=""))<br/>}<br/><br/>data &lt;- read.csv("../data/train.csv", header=TRUE)<br/>set.seed(42)<br/>sample&lt;-sample(nrow(data),0.5*nrow(data))<br/>test &lt;- setdiff(seq_len(nrow(data)),sample)<br/>train.x &lt;- data[sample,-1]<br/>test.x &lt;- data[test,-1]<br/>train.y &lt;- data[sample,1]<br/>test.y &lt;- data[test,1]<br/>rm(data)<br/>train.x &lt;- train.x/255<br/>test.x &lt;- test.x/255<br/>train.x &lt;- data.matrix(train.x)<br/>test.x &lt;- data.matrix(test.x)<br/>input_dim &lt;- 28*28 #784</pre>
+<p>Now, we will move on to our first auto-encoder. We will use <kbd>16</kbd> hidden neurons in our auto-encoder and use tanh as the activation function. We use 20% of our data as validation to provide an unbiased estimate of how the auto-encoder performs. Here is the code. To keep it concise, we are only showing part of the output:</p>
+<pre># model 1<br/>inner_layer_dim &lt;- 16<br/>input_layer &lt;- layer_input(shape=c(input_dim))<br/>encoder &lt;- layer_dense(units=inner_layer_dim, activation='tanh')(input_layer)<br/>decoder &lt;- layer_dense(units=784)(encoder)<br/>autoencoder &lt;- keras_model(inputs=input_layer, outputs = decoder)<br/>autoencoder %&gt;% compile(optimizer='adam', loss='mean_squared_error',metrics='accuracy')<br/>history &lt;- autoencoder %&gt;% fit(train.x,train.x,<br/> epochs=40, batch_size=128,validation_split=0.2)<br/><br/>Train on 16800 samples, validate on 4200 samples<br/>Epoch 1/40<br/>16800/16800 [==============================] - 1s 36us/step - loss: 0.0683 - acc: 0.0065 - val_loss: 0.0536 - val_acc: 0.0052<br/>Epoch 2/40<br/>16800/16800 [==============================] - 1s 30us/step - loss: 0.0457 - acc: 0.0082 - val_loss: 0.0400 - val_acc: 0.0081<br/>Epoch 3/40<br/>16800/16800 [==============================] - 0s 29us/step - loss: 0.0367 - acc: 0.0101 - val_loss: 0.0344 - val_acc: 0.0121<br/>...<br/>...<br/>Epoch 38/40<br/>16800/16800 [==============================] - 0s 29us/step - loss: 0.0274 - acc: 0.0107 - val_loss: 0.0275 - val_acc: 0.0098<br/>Epoch 39/40</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<pre>16800/16800 [==============================] - 1s 31us/step - loss: 0.0274 - acc: 0.0111 - val_loss: 0.0275 - val_acc: 0.0093<br/>Epoch 40/40<br/>16800/16800 [==============================] - 1s 32us/step - loss: 0.0274 - acc: 0.0120 - val_loss: 0.0275 - val_acc: 0.0095</pre>
+<p class="mce-root">The validation loss is <kbd>0.0275</kbd>, which shows that the model is performing quite well. Another nice feature is that if you run the code in RStudio, it will show the training metrics in graphs, which will automatically update as the model is trained<span>. This is shown in the following screenshot:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b5df9a51-7449-4d84-9866-a936851eaa41.png"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 9.3: Model metrics showing in the Viewer pane in RStudio</div>
+<p>Once the model has completed training, you can also plot the model architecture and model metrics using the following code (the output is also included). By calling the plot function, you can see the plots for the accuracy and the loss on the training and validation datasets:</p>
+<pre>summary(autoencoder)<br/>______________________________________________________________________<br/>Layer (type)               Output Shape                 Param # <br/>======================================================================<br/>input_1 (InputLayer)       (None, 784)                  0 <br/>______________________________________________________________________<br/>dense_1 (Dense)            (None, 16)                   12560 <br/>______________________________________________________________________<br/>dense_2 (Dense)            (None, 784)                  13328 <br/>======================================================================<br/>Total params: 25,888<br/>Trainable params: 25,888<br/>Non-trainable params: 0<br/>______________________________________________________________________<br/><br/>plot(history)</pre>
+<p>This code produces the following plot:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b87e1342-5aa0-4420-9dd2-5f4ee19de801.png"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 9.4: Auto-encoder model metrics</span></div>
+<p>The preceding plots shows that the validation accuracy is relatively stable, but it probably peaked after epoch 20. We will now train a second model with <kbd>32</kbd> hidden nodes instead in the following code:</p>
+<pre># model 2<br/>inner_layer_dim &lt;- 32<br/>input_layer &lt;- layer_input(shape=c(input_dim))<br/>encoder &lt;- layer_dense(units=inner_layer_dim, activation='tanh')(input_layer)<br/>decoder &lt;- layer_dense(units=784)(encoder)<br/>autoencoder &lt;- keras_model(inputs=input_layer, outputs = decoder)<br/>autoencoder %&gt;% compile(optimizer='adam',<br/> loss='mean_squared_error',metrics='accuracy')<br/>history &lt;- autoencoder %&gt;% fit(train.x,train.x,<br/> epochs=40, batch_size=128,validation_split=0.2)<br/><br/>Train on 16800 samples, validate on 4200 samples<br/>Epoch 1/40<br/>16800/16800 [==============================] - 1s 41us/step - loss: 0.0591 - acc: 0.0104 - val_loss: 0.0406 - val_acc: 0.0131<br/>Epoch 2/40<br/>16800/16800 [==============================] - 1s 34us/step - loss: 0.0339 - acc: 0.0111 - val_loss: 0.0291 - val_acc: 0.0093<br/>Epoch 3/40<br/>16800/16800 [==============================] - 1s 33us/step - loss: 0.0262 - acc: 0.0108 - val_loss: 0.0239 - val_acc: 0.0100<br/>...<br/>...<br/>Epoch 38/40<br/>16800/16800 [==============================] - 1s 33us/step - loss: 0.0174 - acc: 0.0130 - val_loss: 0.0175 - val_acc: 0.0095<br/>Epoch 39/40<br/>16800/16800 [==============================] - 1s 31us/step - loss: 0.0174 - acc: 0.0132 - val_loss: 0.0175 - val_acc: 0.0098<br/>Epoch 40/40<br/>16800/16800 [==============================] - 1s 34us/step - loss: 0.0174 - acc: 0.0126 - val_loss: 0.0175 - val_acc: 0.0100</pre>
+<p>Our validation loss has improved to <kbd>0.0175</kbd>, so let's try <kbd>64</kbd> hidden nodes:</p>
+<pre># model 3<br/>inner_layer_dim &lt;- 64<br/>input_layer &lt;- layer_input(shape=c(input_dim))<br/>encoder &lt;- layer_dense(units=inner_layer_dim, activation='tanh')(input_layer)<br/>decoder &lt;- layer_dense(units=784)(encoder)<br/>autoencoder &lt;- keras_model(inputs=input_layer, outputs = decoder)<br/>autoencoder %&gt;% compile(optimizer='adam',<br/> loss='mean_squared_error',metrics='accuracy')<br/>history &lt;- autoencoder %&gt;% fit(train.x,train.x,<br/> epochs=40, batch_size=128,validation_split=0.2)<br/><br/>Train on 16800 samples, validate on 4200 samples<br/>Epoch 1/40<br/>16800/16800 [==============================] - 1s 50us/step - loss: 0.0505 - acc: 0.0085 - val_loss: 0.0300 - val_acc: 0.0138<br/>Epoch 2/40<br/>16800/16800 [==============================] - 1s 39us/step - loss: 0.0239 - acc: 0.0110 - val_loss: 0.0197 - val_acc: 0.0090<br/>Epoch 3/40<br/>16800/16800 [==============================] - 1s 41us/step - loss: 0.0173 - acc: 0.0115 - val_loss: 0.0156 - val_acc: 0.0117<br/>...<br/>...<br/>Epoch 38/40<br/>16800/16800 [==============================] - 1s 41us/step - loss: 0.0094 - acc: 0.0124 - val_loss: 0.0096 - val_acc: 0.0131<br/>Epoch 39/40<br/>16800/16800 [==============================] - 1s 39us/step - loss: 0.0095 - acc: 0.0128 - val_loss: 0.0095 - val_acc: 0.0121<br/>Epoch 40/40<br/>16800/16800 [==============================] - 1s 37us/step - loss: 0.0094 - acc: 0.0126 - val_loss: 0.0098 - val_acc: 0.0133</pre>
+<p>Our validation loss here is <kbd>0.0098</kbd>, which again is an improvement. We have probably got to the stage where adding more hidden nodes will cause the model to overfit because we are only using <kbd>16800</kbd> rows to train the autoencoder. We could look at applying regularization, but since our first models have an accuracy of <kbd>0.01</kbd>, we are doing well enough.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Accessing the features of the auto-encoder model</h1>
+                </header>
+            
+            <article>
+                
+<p>We can extract the deep features from the model, that is, the values for the hidden neurons in the model. For this, we will use the model with 16 hidden nodes. We will examine the distribution of correlations using the <kbd>ggplot2</kbd> package, as shown in the following code. The results are shown in <em>Figure 9.5</em>. The deep features have small correlations, that is, usually with an absolute value of <em>&lt;.20</em>. This is what we expect in order for the auto-encoder to work. This means that the features should not duplicate information between them:</p>
+<pre>encoder &lt;- keras_model(inputs=input_layer, outputs=encoder)<br/>encodings &lt;- encoder %&gt;% predict(test.x)<br/>encodings&lt;-as.data.frame(encodings)<br/>M &lt;- cor(encodings)<br/>corrplot(M, method = "circle", sig.level = 0.1)</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>The preceding code produces the following plot:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-607 image-border" src="assets/03a95bd7-b69b-41c5-8f33-375fb78d513e.png" style="width:28.33em;height:25.50em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 9.5: Correlation between weights in the hidden layer of the auto-encoder</span></div>
+<p>In <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em><span>, </span>we used PCA for dimensionality reduction and found that for a binary classification task of telling the difference between 5 and 6, we could still get 97.86% accuracy, even if we only used <span>23 features as input. These 23 features were the 23 <strong>principal components</strong> and accounted for 50% of the variance in our dataset. We will use the weights in the auto-encoder to perform the same experiment. Note that we trained the auto-encoder on 50% of the data, and that we are using the other 50% of the data for the binary classification task, that is, we do not want to try and build a classification task on data that was used to build the auto-encoder:</span></p>
+<pre>encodings$y &lt;- test.y<br/>encodings &lt;- encodings[encodings$y==5 | encodings$y==6,]<br/>encodings[encodings$y==5,]$y &lt;- 0<br/>encodings[encodings$y==6,]$y &lt;- 1<br/>table(encodings$y)<br/>   0    1 <br/>1852 2075 <br/>nobs &lt;- nrow(encodings)<br/>train &lt;- sample(nobs, 0.9*nobs)<br/>test &lt;- setdiff(seq_len(nobs), train)<br/>trainData &lt;- encodings[train,]<br/>testData &lt;- encodings[test,]<br/>col_names &lt;- names(trainData)<br/>f &lt;- as.formula(paste("y ~", paste(col_names[!col_names %in%"y"],collapse="+")))<br/>nn &lt;- neuralnet(f,data=trainData,hidden=c(4,2),linear.output = FALSE)<br/>preds_nn &lt;- compute(nn,testData[,1:(-1+ncol(testData))])<br/>preds_nn &lt;- ifelse(preds_nn$net.result &gt; 0.5, "1", "0")<br/>t&lt;-table(testData$y, preds_nn,dnn=c("Actual", "Predicted"))<br/>acc&lt;-round(100.0*sum(diag(t))/sum(t),2)<br/>print(t)<br/>      Predicted<br/>Actual 0 1<br/>     0 182 5<br/>     1 3 203<br/>print(sprintf(" accuracy = %1.2f%%",acc))<br/>[1] " accuracy = 97.96%"</pre>
+<p>Our model gets <kbd>97.96%</kbd> accuracy, which is a slight improvement on the <kbd>97.86%</kbd> accuracy we achieved in <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em>. It is not really a surprise that the two models are very similar as the mathematical foundations for PCA involves matrix decomposition, while the auto-encoder uses back-propagation to set the matrix weights for the hidden layer. In fact, if we dropped the non-linear activation function, our encodings would be very similar to PCA. This demonstrates that auto-encoder models can be used effectively as a dimensionality reduction technique.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Using auto-encoders for anomaly detection</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have built an auto-encoder and accessed the features of the inner layers, we will move on to an example of how auto-encoders can be used for anomaly detection. The premise here is quite simple: we take the reconstructed outputs from the decoder and see which instances have the most error, that is, which instances are the most difficult for the decoder to reconstruct. The code that is used here is in <kbd>Chapter9/anomaly.R</kbd>, and we will be using the <kbd>UCI HAR</kbd> dataset that we have already been introduced to in <a href="cb00118a-2bba-4e43-ba55-c4552c508b7e.xhtml">Chapter 2</a>, <em>Training a Prediction Model</em>. If you have not already downloaded the data, go back to that chapter for instructions on how to do so.. The first part of the code loads the data, and we subset the features to only use the ones with mean, sd, and skewness in the feature names:</p>
+<pre>library(keras)<br/>library(ggplot2)<br/>train.x &lt;- read.table("UCI HAR Dataset/train/X_train.txt")<br/>train.y &lt;- read.table("UCI HAR Dataset/train/y_train.txt")[[1]]<br/>test.x &lt;- read.table("UCI HAR Dataset/test/X_test.txt")<br/>test.y &lt;- read.table("UCI HAR Dataset/test/y_test.txt")[[1]]<br/><br/>use.labels &lt;- read.table("UCI HAR Dataset/activity_labels.txt")<br/>colnames(use.labels) &lt;-c("y","label")<br/><br/>features &lt;- read.table("UCI HAR Dataset/features.txt")<br/>meanSD &lt;- grep("mean\\(\\)|std\\(\\)|max\\(\\)|min\\(\\)|skewness\\(\\)", features[, 2])<br/><br/>train.x &lt;- data.matrix(train.x[,meanSD])<br/>test.x &lt;- data.matrix(test.x[,meanSD])<br/>input_dim &lt;- ncol(train.x)</pre>
+<p>Now, we can build our auto-encoder model. This is going to be a stacked auto-encoder with two <kbd>40</kbd> neuron <span>hidden </span>encoder <span>layers</span> and <span>two 40-neuron hidden decoder layers. For conciseness, we have removed some of the output:</span></p>
+<pre># model<br/>inner_layer_dim &lt;- 40<br/>input_layer &lt;- layer_input(shape=c(input_dim))<br/>encoder &lt;- layer_dense(units=inner_layer_dim, activation='tanh')(input_layer)<br/>encoder &lt;- layer_dense(units=inner_layer_dim, activation='tanh')(encoder)<br/>decoder &lt;- layer_dense(units=inner_layer_dim)(encoder)<br/>decoder &lt;- layer_dense(units=inner_layer_dim)(decoder)<br/>decoder &lt;- layer_dense(units=input_dim)(decoder)<br/><br/>autoencoder &lt;- keras_model(inputs=input_layer, outputs = decoder)<br/>autoencoder %&gt;% compile(optimizer='adam',<br/> loss='mean_squared_error',metrics='accuracy')<br/>history &lt;- autoencoder %&gt;% fit(train.x,train.x,<br/> epochs=30, batch_size=128,validation_split=0.2)<br/>Train on 5881 samples, validate on 1471 samples<br/>Epoch 1/30<br/>5881/5881 [==============================] - 1s 95us/step - loss: 0.2342 - acc: 0.1047 - val_loss: 0.0500 - val_acc: 0.1013<br/>Epoch 2/30<br/>5881/5881 [==============================] - 0s 53us/step - loss: 0.0447 - acc: 0.2151 - val_loss: 0.0324 - val_acc: 0.2536<br/>Epoch 3/30<br/>5881/5881 [==============================] - 0s 44us/step - loss: 0.0324 - acc: 0.2772 - val_loss: 0.0261 - val_acc: 0.3413<br/>...<br/>...<br/><br/>Epoch 27/30<br/>5881/5881 [==============================] - 0s 45us/step - loss: 0.0098 - acc: 0.2935 - val_loss: 0.0094 - val_acc: 0.3379<br/>Epoch 28/30<br/>5881/5881 [==============================] - 0s 44us/step - loss: 0.0096 - acc: 0.2908 - val_loss: 0.0092 - val_acc: 0.3215<br/>Epoch 29/30<br/>5881/5881 [==============================] - 0s 44us/step - loss: 0.0094 - acc: 0.2984 - val_loss: 0.0090 - val_acc: 0.3209<br/>Epoch 30/30<br/>5881/5881 [==============================] - 0s 44us/step - loss: 0.0092 - acc: 0.2955 - val_loss: 0.0088 - val_acc: 0.3209<br/><br/></pre>
+<p>We can see the layers and number of parameters for the model by calling the summary function, like so:</p>
+<pre>summary(autoencoder)<br/>_______________________________________________________________________<br/>Layer (type)                 Output Shape                           Param # <br/>=======================================================================<br/>input_4 (InputLayer)         (None, 145)                            0 <br/>_______________________________________________________________________<br/>dense_16 (Dense)             (None, 40)                             5840 <br/>_______________________________________________________________________<br/>dense_17 (Dense)             (None, 40)                             1640 <br/>_______________________________________________________________________<br/>dense_18 (Dense)             (None, 40)                             1640 <br/>_______________________________________________________________________<br/>dense_19 (Dense)             (None, 40)                             1640 <br/>_______________________________________________________________________<br/>dense_20 (Dense)             (None, 145)                            5945 <br/>=======================================================================<br/>Total params: 16,705<br/>Trainable params: 16,705<br/>Non-trainable params: 0<br/>_______________________________________________________________________</pre>
+<p>Our validation loss is <kbd>0.0088</kbd>, which means that our model is good at encoding the data. Now, we will use the test set on the auto-encoder and get the reconstructed data. This will create a dataset with the same size as the test set. We will then select any instance where the sum of the squared error (se) between the predicted values and the test set is greater than 4.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>These are the instances that the auto-encoder had the most trouble in reconstructing, and therefore they are potential anomalies. The limit value of 4 is a hyperparameter; if it is set higher, fewer <span>potential anomalies are detected and if it is set lower, more potential anomalies are detected. This value would be different according to the dataset used.</span></p>
+<p><span>There are 6 classes in this dataset. We want to analyze if the anomalies are spread over all of our classes or if they are specific to some classes. We will print out a table of the frequencies of our classes in our test set, and we will see that the distribution of our classes is fairly even. When printing out a table of the frequencies of our classes of our potential anomalies, we can see that most of them are in the <kbd>WALKING_DOWNSTAIRS</kbd> class. The potential anomalies are shown in <em>Figure 9.6:</em></span></p>
+<pre># anomaly detection<br/>preds &lt;- autoencoder %&gt;% predict(test.x)<br/>preds &lt;- as.data.frame(preds)<br/>limit &lt;- 4<br/>preds$se_test &lt;- apply((test.x - preds)^2, 1, sum)<br/>preds$y_preds &lt;- ifelse(preds$se_test&gt;limit,1,0)<br/>preds$y &lt;- test.y<br/>preds &lt;- merge(preds,use.labels)<br/>table(preds$label)<br/>LAYING SITTING STANDING WALKING WALKING_DOWNSTAIRS WALKING_UPSTAIRS <br/>   537     491      532     496                420              471 <br/><br/>table(preds[preds$y_preds==1,]$label)<br/>LAYING SITTING STANDING WALKING WALKING_DOWNSTAIRS WALKING_UPSTAIRS <br/>    18       7        1      17                 45               11 </pre>
+<p>We can plot this with the following code:</p>
+<pre>ggplot(as.data.frame(table(preds[preds$y_preds==1,]$label)),aes(Var1, Freq)) +<br/> ggtitle("Potential anomalies by activity") +<br/> geom_bar(stat = "identity") +<br/> xlab("") + ylab("Frequency") +<br/> theme_classic() +<br/> theme(plot.title = element_text(hjust = 0.5)) +<br/> theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))</pre>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/85752c3f-a60c-42ca-9ac1-6f3f8d3e92f8.png" style="width:41.42em;height:30.50em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 9.6: Distribution of the anomalies</div>
+<p>In this example, we used a deep auto-encoder model to learn the features of actimetry data from smartphones. Such work can be useful for excluding unknown or unusual activities, rather than incorrectly classifying them. For example, as part of an app that classifies what activity you engaged in for how many minutes, it may be better to simply leave out a few minutes where the model is uncertain or the hidden features do not adequately reconstruct the inputs, rather than to aberrantly call an activity walking or sitting when it was actually walking downstairs.</p>
+<p class="mce-root">Such work can also help to identify where the model tends to have more issues. Perhaps further sensors and additional data are needed to represent walking downstairs or more could be done to understand why walking downstairs tends to produce relatively high error rates.</p>
+<p class="mce-root">These deep auto-encoders are also useful in other contexts where identifying anomalies is important, such as with financial data or credit card usage patterns. Anomalous spending patterns may indicate fraud or that a credit card has been stolen. Rather than attempt to manually search through millions of credit card transactions, one could train an auto-encoder model and use it to identify anomalies for further investigation.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Use case – collaborative filtering</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">This use-case is about collaborative filtering. We are going to bui<span>ld a recommendation system based on embeddings created from a deep learning model. To do this, we are going to use the same dataset we used in <a href="28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml">Chapter 4</a>, <em>Training Deep Prediction Models</em>, which is the retail transactional database. If you have not already downloaded the database, then go to the following link,</span><span> </span><a href="https://www.dunnhumby.com/sourcefiles">https://www.dunnhumby.com/sourcefiles</a><span>, and select <em>Let’s Get Sort-of-Real</em>. Select the option for the smallest dataset, titled <em>All transactions for a randomly selected sample of 5,000 customers</em>. Once you have read the terms and conditions and downloaded the dataset to your computer, unzip it into a directory called <kbd>dunnhumby/in</kbd> under the code folder. Ensure that the files are unzipped directly under this folder, and not a subdirectory, as you may have to copy them after unzipping the data.</span></p>
+<p class="mce-root">The data contains details of retail transactions linked by basket IDs. Each transaction has a date and a store code, and some are also linked to customers. Here are the fields that we will use in this analysis:</p>
+<table border="1" style="border-collapse: collapse;width: 703px;height: 308px">
+<tbody>
+<tr>
+<td style="width: 140px">
+<p><strong>Field-name</strong></p>
+</td>
+<td style="width: 484px">
+<p><strong>Description</strong></p>
+</td>
+<td style="width: 69px">
+<p><strong>Format</strong></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>CUST_CODE</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p>Customer Code. This links the transactions/visits to a customer.</p>
+</td>
+<td style="width: 69px">
+<p>Char</p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>SPEND</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p>Spend associated to the items bought.</p>
+</td>
+<td style="width: 69px">
+<p><span>Numeric</span></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>PROD_CODE</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p>Product Code.</p>
+</td>
+<td style="width: 69px">
+<p><span>Char</span></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>PROD_CODE_10</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p>Product Hierarchy Level 10 Code.</p>
+</td>
+<td style="width: 69px">
+<p><span>Char</span></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>PROD_CODE_20</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p><span>Product Hierarchy </span><span>Level 20 Code.</span></p>
+</td>
+<td style="width: 69px">
+<p><span>Char</span></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>PROD_CODE_30</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p><span>Product Hierarchy </span><span>Level 30 Code.</span></p>
+</td>
+<td style="width: 69px">
+<p><span>Char</span></p>
+</td>
+</tr>
+<tr>
+<td style="width: 140px">
+<p><kbd><span>PROD_CODE_40</span></kbd></p>
+</td>
+<td style="width: 484px">
+<p><span>Product Hierarchy </span><span>Level 40 Code.</span></p>
+</td>
+<td style="width: 69px">
+<p><span>Char</span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<p class="mce-root"><span>If you want more details on the structure of the files, you can go back and re-read the use case in <a href="28315a07-2bf0-45c8-8e6f-0e4f01616ca3.xhtml">Chapter 4</a>, <em>Training Deep Prediction Models</em>. We are going to use this dataset to create a recommendation engine. There are a family of machine learning algorithms called <strong>Market Basket Analysis</strong> that can be used with transactional data, but this use case is based on collaborative filtering. Collaborative filtering are recommendations based on the ratings people give to products. They are commonly used for music and film recommendations, where people rate the items, usually on a scale of 1-5. Perhaps the best known recommendation system is Netflix because of the Netflix prize (<a href="https://en.wikipedia.org/wiki/Netflix_Prize">https://en.wikipedia.org/wiki/Netflix_Prize</a>).</span></p>
+<p class="mce-root"/>
+<p class="mce-root"><span>We are going to use our dataset to create implicit rankings of how much a customer <em>rates</em> an item. If you are not familiar with implicit rankings, then they are rankings that are derived from data rather than explicitly assigned by the user. We will use one of the product codes, <kbd>PROD_CODE_40</kbd>, and calculate the quantiles of the spend for that product code. The q</span>uantiles will divide the fields into 5 roughly equally sized groups. We will use these to assign a rating to each customer for that product based on how much they spent on that product code. The top 20% of customers will get a rating of 5, the next 20% <span>will get a rating of 4, and so on. </span><span>Each customer/product code combination that exists will have a rating from 1-5:</span></p>
+<div class="packt_infobox">There is a rich history of using quantiles in retail loyalty systems. One of the earliest segmentation approaches for retail loyalty data was called <strong>RFM analysis</strong>. RFM is an acronym for Recency, Frequency, and Monetary spend. It gives each customer a ranking 1 (lowest) <span>–</span> 5 (highest) on each of these categories, with an equal number of customers in each <span>ranking. For <em>Recency</em>, the 20% of the customers that visited most recently would be given a 5, the next 20% would be given a 4, and so on. For <em>Frequency</em>, the top 20% of customers with the most transactions would be given a 5, the next 20% would be given a 4, and so on. Similarly for <em>Monetary</em> spend, the top 20% of the customers by revenue would be given a 5, the next 20% would be given a 4, and so on. The numbers would then be concatenated, so a customer with an RFM of 453 would be 4 for Recency, 5 for Frequency, and 3 for Monetary spend. Once the score has been calculated, it can be used for many purposes, for example, cross-sell, churn analysis, and so on.</span> <span>RFM analysis was very popular in the late 1990's / early 2000's with many marketing managers because it is easily implemented and well-understood. However, it is not flexible and is being replaced with machine learning techniques.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Preparing the data</h1>
+                </header>
+            
+            <article>
+                
+<p><span>The code to </span>create our ratings is in <kbd>Chapter9/create_recommend.R</kbd>. The first part of the code runs through the raw transactional data. The data is in separate CSV files, so it processes each file, selects the records that have a customer linked (that is, <kbd>CUST_CODE!=""</kbd>) to them, and then groups the sales by <kbd>CUST_CODE</kbd> and <kbd>PROD_CODE_40</kbd>. It then appends the results to a temporary file and moves on to the next input file:</p>
+<pre>library(magrittr)<br/>library(dplyr)<br/>library(readr)<br/>library(broom)<br/><br/>set.seed(42)<br/>file_list &lt;- list.files("../dunnhumby/in/", "trans*")<br/>temp_file &lt;- "../dunnhumby/temp.csv"<br/>out_file &lt;- "../dunnhumby/recommend.csv"<br/>if (file.exists(temp_file)) file.remove(temp_file)<br/>if (file.exists(out_file)) file.remove(out_file)<br/>options(readr.show_progress=FALSE)<br/><br/>i &lt;- 1<br/>for (file_name in file_list)<br/>{<br/>  file_name&lt;-paste("../dunnhumby/in/",file_name,sep="")<br/>  df&lt;-suppressMessages(read_csv(file_name))<br/> <br/>  df2 &lt;- df %&gt;%<br/>    filter(CUST_CODE!="") %&gt;%<br/>    group_by(CUST_CODE,PROD_CODE_40) %&gt;%<br/>    summarise(sales=sum(SPEND))<br/> <br/>  colnames(df2)&lt;-c("cust_id","prod_id","sales")<br/>  if (i ==1)<br/>    write_csv(df2,temp_file)<br/>  else<br/>    write_csv(df2,temp_file,append=TRUE)<br/>  print (paste("File",i,"/",length(file_list),"processed"))<br/>  i &lt;- i+1<br/>}<br/>[1] "File 1 / 117 processed"<br/>[1] "File 2 / 117 processed"<br/>[1] "File 3 / 117 processed"<br/>...<br/>...<br/>...<br/>[1] "File 115 / 117 processed"<br/>[1] "File 116 / 117 processed"<br/>[1] "File 117 / 117 processed"<br/>rm(df,df2)</pre>
+<p>This section groups by customer and product code for the <kbd>117</kbd> input files. A<span>s we process each file, we rename the customer code to </span><kbd>cust_id</kbd><span> and the product department code to </span><kbd>prod_id</kbd><span>.</span><span> </span>Once we are done, the combined file will <span>obviously </span>have duplicate customer-product code combinations; that is, we need to group again over the combined data. We do that by opening up the temporary file and grouping over the fields again:</p>
+<pre>df_processed&lt;-read_csv(temp_file)<br/>if (file.exists(temp_file)) file.remove(temp_file)<br/><br/>df2 &lt;- df_processed %&gt;%<br/> group_by(cust_id,prod_id) %&gt;%<br/> summarise(sales=sum(sales))</pre>
+<p>We could have tried to load all of the transactional data and run a group on that data, but that would have been memory and computationally expensive. By running it in two steps, we reduce the amount of data we need to process at each stage, which means it is more likely to run on machines with limited memory.</p>
+<p>Once we have the total spend for each customer and product department code combination, we can create the ratings. Thanks to the excellent <kbd>tidyr</kbd> packages, it only takes a few lines to assign a rating to each row. First, we group by the <kbd>prod_id</kbd> field, and use the quantile function to return quantiles for the sales for each product code. These quantiles will return the sales ranges that correspond to splitting the customers into <kbd>5</kbd> equal sized groups. We then use these <span>quantiles to assign rankings:</span></p>
+<pre># create quantiles<br/>dfProds &lt;- df2 %&gt;%<br/> group_by(prod_id) %&gt;%<br/> do( tidy(t(quantile(.$sales, probs = seq(0, 1, 0.2)))) )<br/>colnames(dfProds)&lt;-c("prod_id","X0","X20","X40","X60","X80","X100")<br/>df2&lt;-merge(df2,dfProds)<br/>df2$rating&lt;-0<br/>df2[df2$sales&lt;=df2$X20,"rating"] &lt;- 1<br/>df2[(df2$sales&gt;df2$X20) &amp; (df2$sales&lt;=df2$X40),"rating"] &lt;- 2<br/>df2[(df2$sales&gt;df2$X40) &amp; (df2$sales&lt;=df2$X60),"rating"] &lt;- 3<br/>df2[(df2$sales&gt;df2$X60) &amp; (df2$sales&lt;=df2$X80),"rating"] &lt;- 4<br/>df2[(df2$sales&gt;df2$X80) &amp; (df2$sales&lt;=df2$X100),"rating"] &lt;- 5</pre>
+<p>The only thing remaining is to save the results. Before we do, we do a couple of sanity checks to ensure that our ratings are evenly distributed from 1-5 overall. We then select a random product code and check that <span>our ratings are evenly distributed from 1-5 for those products:</span></p>
+<pre># sanity check, are our ratings spread out relatively evenly<br/>df2 %&gt;%<br/>  group_by(rating) %&gt;%<br/>  summarise(recs=n())<br/>  rating  recs<br/>1      1 68246<br/>2      2 62592<br/>3      3 62162<br/>4      4 63488<br/>5      5 63682<br/>df2 %&gt;%<br/>  filter(prod_id==df2[sample(1:nrow(df2), 1),]$prod_id) %&gt;%<br/>  group_by(prod_id,rating) %&gt;%<br/>  summarise(recs=n())<br/>  prod_id rating recs<br/>1 D00008       1  597<br/>2 D00008       2  596<br/>3 D00008       3  596<br/>4 D00008       4  596<br/>5 D00008       5  596<br/><br/>df2 &lt;- df2[,c("cust_id","prod_id","rating")]<br/>write_csv(df2,out_file)</pre>
+<p>Everything looks good here: the count for <kbd>rating=1</kbd> is higher at <kbd>68246</kbd> against <kbd>62162</kbd> to <kbd>63682</kbd> for ratings <kbd>2</kbd> to <kbd>5</kbd>, but that is not really a concern as collaborative filtering models do not expect an even distribution of ratings. For the individual item (<kbd>D00008</kbd>), the distribution is even at <kbd>596</kbd> or <kbd>597</kbd> for each rating.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building a collaborative filtering model</h1>
+                </header>
+            
+            <article>
+                
+<p>Before we jump into applying a deep learning model, we should follow the same practice as we have done in previous chapters and create a benchmark accuracy score using a standard <span>machine learning algorithm. It is quick, easy, and will give us confidence that our deep learning model is working better than just using <em>normal</em> machine learning. Here are the</span> 20 lines of code to do collaborative filtering in R. This code can be found in <kbd>Chapter8/ml_recommend.R</kbd>:</p>
+<pre>library(readr)<br/>library(recommenderlab)<br/>library(reshape2)<br/><br/>set.seed(42)<br/>in_file &lt;- "../dunnhumby/recommend.csv"<br/>df &lt;- read_csv(in_file)<br/>dfPivot &lt;-dcast(df, cust_id ~ prod_id)<br/>m &lt;- as.matrix(dfPivot[,2:ncol(dfPivot)])<br/><br/>recommend &lt;- as(m,"realRatingMatrix")<br/>e &lt;- evaluationScheme(recommend,method="split",<br/> train=0.9,given=-1, goodRating=5)<br/>e<br/>Evaluation scheme using all-but-1 items<br/>Method: ‘split’ with 1 run(s).<br/>Training set proportion: 0.900<br/>Good ratings: &gt;=5.000000<br/>Data set: 5000 x 9 rating matrix of class ‘realRatingMatrix’ with 25688 ratings.<br/><br/>r1 &lt;- Recommender(getData(e,"train"),"UBCF")<br/>r1<br/>Recommender of type ‘UBCF’ for ‘realRatingMatrix’ <br/>learned using 4500 users.<br/><br/>p1 &lt;- predict(r1,getData(e,"known"),type="ratings")<br/>err1&lt;-calcPredictionAccuracy(p1,getData(e,"unknown"))<br/>print(sprintf(" User based collaborative filtering model MSE = %1.4f",err1[2]))<br/>[1] " User based collaborative filtering model MSE = 0.9748"</pre>
+<p>This code creates a collaborative filtering model, and the MSE for the model is <kbd>0.9748</kbd>. As before, we do this because most of the work for this sample is in data preparation and not model building, so it is relatively easy to use a base machine learning algorithm to compare the performance against a deep learning model. <span>The code here uses standard R libraries to create a recommendation system, and as you can see, it is relatively simple because the data is already in the expected format. </span>If you want more information on this collaborative filtering algorithm, then search for <kbd>user based collaborative filtering in r</kbd>, or go through the doc pages.</p>
+<p>Now lets focus on creating a deep learning model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building a deep learning collaborative filtering model</h1>
+                </header>
+            
+            <article>
+                
+<p>Here, we will see if we can build a deep learning model to beat the previous approach! The following code is in <kbd>Chapter9/keras_<span>recommend.R</span></kbd><span>. The first part loads the dataset and creates new IDs for the customer and product codes. This is because Keras expects the indexes to be sequential, starting at zero, and unique:</span></p>
+<pre>library(readr)<br/>library(keras)<br/><br/>set.seed(42)<br/>use_session_with_seed(42, disable_gpu = FALSE, disable_parallel_cpu = FALSE)<br/><br/>df&lt;-read_csv("recommend.csv")<br/>custs &lt;- as.data.frame(unique(df$cust_id))<br/>custs$cust_id2 &lt;- as.numeric(row.names(custs))<br/>colnames(custs) &lt;- c("cust_id","cust_id2")<br/>custs$cust_id2 &lt;- custs$cust_id2 - 1<br/>prods &lt;- as.data.frame(unique(df$prod_id))<br/>prods$prod_id2 &lt;- as.numeric(row.names(prods))<br/>colnames(prods) &lt;- c("prod_id","prod_id2")<br/>prods$prod_id2 &lt;- prods$prod_id2 - 1<br/>df&lt;-merge(df,custs)<br/>df&lt;-merge(df,prods)<br/>n_custs = length(unique(df$cust_id2))<br/>n_prods = length(unique(df$prod_id2))<br/><br/># shuffle the data<br/>trainData &lt;- df[sample(nrow(df)),]</pre>
+<p>We have 5,000 unique customers and 9 unique product codes. This is not typical of most collaborative filtering examples; usually, the number of products is much higher than the number of customers. The next part creates the model. We will create embedding layers for the customer and the products and then calculate the dot product of those <span>embedding layers. An embedding layer is a lower-order representation of the data and is exactly the same as the encoders in the auto-encoder examples we saw earlier. We will also have a bias term for each customer and product – this performs a sort of normalization on the data. If a particular product is very popular, or a customer has a lot of high ratings, this accounts for this. We will use </span>10 factors in our embedding layer for both customers and products. We will use some L2 regularization in our embeddings to prevent overfitting. The following code defines the model architecture:</p>
+<pre>n_factors&lt;-10<br/># define the model<br/>cust_in &lt;- layer_input(shape = 1)<br/>cust_embed &lt;- layer_embedding(<br/> input_dim = n_custs <br/> ,output_dim = n_factors <br/> ,input_length = 1 <br/> ,embeddings_regularizer=regularizer_l2(0.0001)<br/> ,name = "cust_embed"<br/> )(cust_in)<br/>prod_in &lt;- layer_input(shape = 1)<br/>prod_embed &lt;- layer_embedding(<br/> input_dim = n_prods <br/> ,output_dim = n_factors <br/> ,input_length = 1<br/> ,embeddings_regularizer=regularizer_l2(0.0001)<br/> ,name = "prod_embed"<br/> )(prod_in)<br/><br/>ub = layer_embedding(<br/> input_dim = n_custs, <br/> output_dim = 1, <br/> input_length = 1, <br/> name = "custb_embed"<br/> )(cust_in)<br/>ub_flat &lt;- layer_flatten()(ub)<br/><br/>mb = layer_embedding(<br/> input_dim = n_prods, <br/> output_dim = 1, <br/> input_length = 1, <br/> name = "prodb_embed"<br/> )(prod_in)<br/>mb_flat &lt;- layer_flatten()(mb)<br/><br/>cust_flat &lt;- layer_flatten()(cust_embed)<br/>prod_flat &lt;- layer_flatten()(prod_embed)<br/><br/>x &lt;- layer_dot(list(cust_flat, prod_flat), axes = 1)<br/>x &lt;- layer_add(list(x, ub_flat))<br/>x &lt;- layer_add(list(x, mb_flat))</pre>
+<p>Now, we are ready to build the model. We are going to hold out 10% of our data for validation:</p>
+<pre class="mce-root">model &lt;- keras_model(list(cust_in, prod_in), x)<br/>compile(model,optimizer="adam", loss='mse')<br/><br/>model.optimizer.lr=0.001<br/>fit(model,list(trainData$cust_id2,trainData$prod_id2),trainData$rating,<br/> batch_size=128,epochs=40,validation_split = 0.1 )<br/>Train on 23119 samples, validate on 2569 samples<br/>Epoch 1/40<br/>23119/23119 [==============================] - 1s 31us/step - loss: 10.3551 - val_loss: 9.9817<br/>Epoch 2/40<br/>23119/23119 [==============================] - 0s 21us/step - loss: 8.6549 - val_loss: 7.7826<br/>Epoch 3/40<br/>23119/23119 [==============================] - 0s 20us/step - loss: 6.0651 - val_loss: 5.2164<br/>...<br/>...<br/>...<br/>Epoch 37/40<br/>23119/23119 [==============================] - 0s 19us/step - loss: 0.6674 - val_loss: 0.9575<br/>Epoch 38/40<br/>23119/23119 [==============================] - 0s 18us/step - loss: 0.6486 - val_loss: 0.9555<br/>Epoch 39/40<br/>23119/23119 [==============================] - 0s 19us/step - loss: 0.6271 - val_loss: 0.9547<br/>Epoch 40/40<br/>23119/23119 [==============================] - 0s 20us/step - loss: 0.6023 - val_loss: 0.9508</pre>
+<p>Our model achieved an MSE of <kbd>0.9508</kbd>, which is an improvement on the MSE of <kbd>0.9748</kbd> that we got on our machine learning model. Our deep learning model is overfitting, but one reason for this is because we have a relatively small database. I tried increasing the regularization, but this did not improve the model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Applying the deep learning model to a business problem</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have a model, how can we use it? The most typical example of using a collaborative filtering model is to recommend items to people they have not rated yet. That concept works well in domains such as music and movie recommendations where <span>collaborative filtering models</span> are often applied. However, we are going to use it for a different purpose. One concern of marketing managers is the <strong>Share of wallet</strong> they get from a customer. The definition of this (from <a href="https://en.wikipedia.org/wiki/Share_of_wallet">https://en.wikipedia.org/wiki/Share_of_wallet</a>) is the <em>percentage ('share') of a customer's expenses ('of wallet') for a product that goes to the firm selling the product</em>. It basically measures the value of a customer on the percentage of the potential spend they could have with us. As an example, we may have customers who visit our shop regularly and spend a considerable amount. But are they buying all of their goods from us? Maybe they buy their fresh food elsewhere, that is, they purchase their meat, fruit, vegetables, <span>and so on, </span>at other stores. We can use collaborative filtering to find customers where the collaborative filtering model predicts that they purchase certain products in our store, but in fact they do not. Remember that collaborative filtering works on the basis of making recommendations based on what other similar customers do. So, if customer A does not <span>purchase meat, fruit, vegetables, and so on, at our store when other similar customers do, then we could try and entice them to spend more at our stores by sending them offers for these products.</span></p>
+<p>We will look for customer-product department codes where the prediction is greater than 4, but the actual value is less than 2. These customers should be purchasing these goods from us (according to the model), so by sending them vouchers for items in these departments, we can capture a greater amount of their spending.</p>
+<p class="mce-root"/>
+<p>A collaborative filtering model should work well for this type of analysis. The basis of this algorithm is to find the recommend products based on the activity of similar customers, so it already adjusts for the scale of spend. For example, if the prediction for a customer is that their spend on fresh fruit and vegetables should be 5, that is based on the comparison with other similar customers. Here is the evaluation code, which is also in <kbd>Chapter8/kerarecommend.R</kbd><span>. The first part of the code generates the predictions and links it back. We output a few metrics, which look impressive, but note that they are run on all the data, including the data that the model was trained on, so these metrics are overly optimistic. We make one adjustment to the predictions – some of these values are greater than 5 or less than 1, so we change them back to valid values. This produces a very small improvement on our metrics:</span></p>
+<pre>##### model use-case, find products that customers 'should' be purchasing ######<br/>df$preds&lt;-predict(model,list(df$cust_id2,df$prod_id2))<br/># remove index variables, do not need them anymore<br/>df$cust_id2 &lt;- NULL<br/>df$prod_id2 &lt;- NULL<br/>mse&lt;-mean((df$rating-df$preds)^2)<br/>rmse&lt;-sqrt(mse)<br/>mae&lt;-mean(abs(df$rating-df$preds))<br/>print (sprintf("DL Collaborative filtering model: MSE=%1.3f, RMSE=%1.3f, MAE=%1.3f",mse,rmse,mae))<br/>[1] "DL Collaborative filtering model: MSE=0.478, RMSE=0.691, MAE=0.501"<br/><br/>df &lt;- df[order(-df$preds),]<br/>head(df)<br/>     prod_id        cust_id rating    preds<br/>10017 D00003 CUST0000283274      5 5.519783<br/>4490  D00002 CUST0000283274      5 5.476133<br/>9060  D00002 CUST0000084449      5 5.452055<br/>6536  D00002 CUST0000848462      5 5.447111<br/>10294 D00003 CUST0000578851      5 5.446453<br/>7318  D00002 CUST0000578851      5 5.442836<br/><br/>df[df$preds&gt;5,]$preds &lt;- 5<br/>df[df$preds&lt;1,]$preds &lt;- 1<br/>mse&lt;-mean((df$rating-df$preds)^2)<br/>rmse&lt;-sqrt(mse)<br/>mae&lt;-mean(abs(df$rating-df$preds))<br/>print (sprintf("DL Collaborative filtering model (adjusted): MSE=%1.3f, RMSE=%1.3f, MAE=%1.3f",mse,rmse,mae))<br/>[1] "DL Collaborative filtering model (adjusted): MSE=0.476, RMSE=0.690, MAE=0.493"</pre>
+<p>Now, we can look at the customer-product department codes that have the biggest difference between predicted ratings and actual ratings:</p>
+<pre>df$diff &lt;- df$preds - df$rating<br/>df &lt;- df[order(-df$diff),]<br/>head(df,20)<br/>     prod_id        cust_id rating    preds     diff<br/>3259  D00001 CUST0000375633      1 5.000000 4.000000<br/>12325 D00003 CUST0000038166      1 4.306837 3.306837<br/>14859 D00004 CUST0000817991      1 4.025836 3.025836<br/>15279 D00004 CUST0000620867      1 4.016025 3.016025<br/>22039 D00008 CUST0000588390      1 3.989520 2.989520<br/>3370  D00001 CUST0000530875      1 3.969685 2.969685<br/>22470 D00008 CUST0000209037      1 3.927513 2.927513<br/>22777 D00008 CUST0000873432      1 3.905162 2.905162<br/>13905 D00004 CUST0000456347      1 3.877517 2.877517<br/>18123 D00005 CUST0000026547      1 3.853488 2.853488<br/>24208 D00008 CUST0000732836      1 3.810606 2.810606<br/>22723 D00008 CUST0000872856      1 3.746022 2.746022<br/>22696 D00008 CUST0000549120      1 3.718482 2.718482<br/>15463 D00004 CUST0000035935      1 3.714494 2.714494<br/>24090 D00008 CUST0000643072      1 3.679629 2.679629<br/>21167 D00006 CUST0000454947      1 3.651651 2.651651<br/>23769 D00008 CUST0000314496      1 3.649187 2.649187<br/>14294 D00004 CUST0000127124      1 3.625893 2.625893<br/>22534 D00008 CUST0000556279      1 3.578591 2.578591<br/>22201 D00008 CUST0000453430      1 3.576008 2.576008</pre>
+<p>This gives us a list of customers and the products we should send them offers for. For example, for the second row, the actual rating is <kbd>1</kbd> and the predicted rating is <kbd>4.306837</kbd>. This customer is not purchasing the items for this product code and our model <em>predicts</em> he should be purchasing these items.</p>
+<p>We can also look at cases where the actual rating is much higher than the predicted value. These are customers who are over-spending in that department compared to other similar customers:</p>
+<pre>df &lt;- df[order(df$diff),]<br/>head(df,20)<br/>     prod_id        cust_id rating    preds      diff<br/>21307 D00006 CUST0000555858      5 1.318784 -3.681216<br/>15353 D00004 CUST0000640069      5 1.324661 -3.675339<br/>21114 D00006 CUST0000397007      5 1.729860 -3.270140<br/>23097 D00008 CUST0000388652      5 1.771072 -3.228928<br/>21551 D00006 CUST0000084985      5 1.804969 -3.195031<br/>21649 D00007 CUST0000083736      5 1.979534 -3.020466<br/>23231 D00008 CUST0000917696      5 2.036216 -2.963784<br/>21606 D00007 CUST0000899988      5 2.050258 -2.949742<br/>21134 D00006 CUST0000373894      5 2.071380 -2.928620<br/>14224 D00004 CUST0000541731      5 2.081161 -2.918839<br/>15191 D00004 CUST0000106540      5 2.162569 -2.837431<br/>13976 D00004 CUST0000952727      5 2.174777 -2.825223<br/>21851 D00008 CUST0000077294      5 2.202812 -2.797188<br/>16545 D00004 CUST0000945695      5 2.209504 -2.790496<br/>23941 D00008 CUST0000109728      5 2.224301 -2.775699<br/>24031 D00008 CUST0000701483      5 2.239778 -2.760222<br/>21300 D00006 CUST0000752292      5 2.240073 -2.759927<br/>21467 D00006 CUST0000754753      5 2.240705 -2.759295<br/>15821 D00004 CUST0000006239      5 2.264089 -2.735911<br/>15534 D00004 CUST0000586590      5 2.272885 -2.727115</pre>
+<p>What can we do with these recommendations? <span>Our model assigns a score of 1-5 based on a customers' spend in each product department, so if a customer has a high actual rating compared to the predicted value in general, they are over-spending in these departments compared to similar customers. </span>These people are probably not spending in other departments, so they should be targeted as part of a <span>cross-sell campaign; that is, </span>they should be sent offers for products in other departments to tempt them to purchase there.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p><span>I hope that this chapter has shown you that deep learning is not just about computer vision and NLP problems! </span>In this chapter, we covered using Keras to build auto-encoders and recommendation systems. We saw that auto-encoders can be used as a form of dimensionality reduction and, in their simplest forms with only one layer, they are similar to PCA. We used an <span>auto-encoder model to create an anomaly detection system. If the reconstruction error in the auto-encoder model was over a threshold, then we marked that instance as a potential anomaly. Our second major example in this chapter built a recommendation system using Keras. We constructed a dataset of implicit ratings from transactional data and built a recommendation system. We demonstrated the practical application of this model by showing you how it could be used for cross-sell purposes.</span></p>
+<p>In the next chapter, we will look at various options for training your deep learning model in the cloud. If you do not have a GPU on your local machine, cloud providers such as AWS, Azure, Google Cloud, and Paperspace allow you to access GPU instances cheaply. We will cover all of these options in the next chapter.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

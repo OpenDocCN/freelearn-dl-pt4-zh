@@ -1,0 +1,394 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Automated Image Captioning</h1>
+                </header>
+            
+            <article>
+                
+<p><span>In the previous chapter, we learned about building an object detection and classification model, which was really exciting. But in this chapter, we are going to do something even more impressive by combining current state-of-the-art techniques in both </span>computer vision<em> </em><span>and<em> </em></span>natural language processing<span> to form a complete image description approach (<a href="https://www.cs.cmu.edu/~afarhadi/papers/sentence.pdf">https://www.cs.cmu.edu/~afarhadi/papers/sentence.pdf</a>). </span>This will be responsible for <span>constructing computer-generated natural descriptions of any provided images. </span></p>
+<p>Our team has been asked to build this model to generate natural language descriptions of images to be used as the core intelligence of a company that wants to help the visually impaired take advantage of the explosion of photo sharing that's done on the web. It's exciting to think that this deep learning technology could have the power to effectively bring image content alive to this community. People who are likely to enjoy the outcome of our work are those who are visually impaired from birth right up to our aging population. Each of these user types and many more could use an image captioning bot that could be based on the model in this project so that they can keep up with family by knowing the content of posted images, for example.</p>
+<p class="mce-root">With this in mind, let's look at the deep learning engineering that we need to do. The idea is to replace the encoder (RNN layer) in an encoder-decoder architecture with a deep <strong>convolutional neural network</strong> (<strong>CNN</strong>) trained to classify objects in images.</p>
+<p><span>Normally, the CNN's last layer is the </span>softmax layer,<span> which assigns the probability that each object might be in the image. But if we remove that softmax layer from CNN, we can feed the CNN's rich encoding of the image into the decoder (language generation RNN) designed to produce phrases. We can then train the whole system directly on images and their captions, so it maximizes the likelihood that the descriptions it produces best match the training descriptions for each image.</span></p>
+<p>Here is the small illustration of the <strong>Auto Image Captioning Model</strong>. In the top left corner is the <strong>Encoder-Decoder</strong> architecture for sequence-to-sequence model which is combined with the <strong>Object Detection model</strong> as shown in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1419 image-border" src="assets/ec12594b-416d-4a3e-a4c0-db121bec1eae.png" style="width:51.67em;height:43.75em;"/></p>
+<p>In this implementation, we will be using a pretrained Inception-v3 model as a feature extractor in an encoder trained on the ImageNet dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data preparation</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's import<span> all of the dependencies that we will need to build an auto-captioning model.</span></p>
+<p>All of the Python files and the Jupyter Notebooks for this chapter can be found at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter11" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter11</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Initialization</h1>
+                </header>
+            
+            <article>
+                
+<p>For this implementation, we need a TensorFlow version greater than or equal to 1.9 and we will also enable the eager execution (<a href="https://www.tensorflow.org/guide/eager">https://www.tensorflow.org/guide/eager</a>) mode, which will help us use the debug the code more effectively. Here is the code for this:</p>
+<pre><strong># Import TensorFlow and enable eager execution</strong><br/>import tensorflow as tf<br/>tf.enable_eager_execution()<br/><br/>import matplotlib.pyplot as plt<br/><br/>from sklearn.model_selection import train_test_split<br/>from sklearn.utils import shuffle<br/><br/>import re<br/>import numpy as np<br/>import os<br/>import time<br/>import json<br/>from glob import glob<br/>from PIL import Image<br/>import pickle</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Download and prepare the MS-COCO dataset</h1>
+                </header>
+            
+            <article>
+                
+<p><span>We are going to use the </span>MS-COCO dataset (<a href="http://cocodataset.org/#home">http://cocodataset.org/#home</a>)<span> to train our model. This dataset contains more than 82,000 images, each of which has been annotated with at least five different captions. The following code will download and extract the dataset automatically:</span></p>
+<pre>annotation_zip = tf.keras.utils.get_file('captions.zip', <br/>                                          cache_subdir=os.path.abspath('.'),<br/>                                          origin = 'http://images.cocodataset.org/annotations/annotations_trainval2014.zip',<br/>                                          extract = True)<br/>annotation_file = os.path.dirname(annotation_zip)+'/annotations/captions_train2014.json'<br/><br/>name_of_zip = 'train2014.zip'<br/>if not os.path.exists(os.path.abspath('.') + '/' + name_of_zip):<br/>  image_zip = tf.keras.utils.get_file(name_of_zip, <br/>                                      cache_subdir=os.path.abspath('.'),<br/>                                      origin = 'http://images.cocodataset.org/zips/train2014.zip',<br/>                                      extract = True)<br/>  PATH = os.path.dirname(image_zip)+'/train2014/'<br/>else:<br/>  PATH = os.path.abspath('.')+'/train2014/'</pre>
+<div class="packt_infobox">This involves a large download ahead. We'll use the training set; it's a 13 GB file.</div>
+<p>The following will be the output:</p>
+<pre><strong><span>Downloading data from </span>http://images.cocodataset.org/annotations/annotations_trainval2014.zip<span> <br/>252878848/252872794 [==============================] - 6s 0us/step <br/>Downloading data from </span>http://images.cocodataset.org/zips/train2014.zip<span> <br/>13510574080/13510573713 [==============================] - 322s 0us/step</span></strong></pre>
+<p><span>For this example, we'll select a subset of 40,000 captions and use these and the corresponding images to train our model. As always, captioning quality will improve if you choose to use more data:</span></p>
+<pre><strong># read the json annotation file</strong><br/>with open(annotation_file, 'r') as f:<br/>    annotations = json.load(f)<br/><br/># storing the captions and the image name in vectors<br/>all_captions = []<br/>all_img_name_vector = []<br/><br/>for annot in annotations['annotations']:<br/>    caption = '&lt;start&gt; ' + annot['caption'] + ' &lt;end&gt;'<br/>    image_id = annot['image_id']<br/>    full_coco_image_path = PATH + 'COCO_train2014_' + '%012d.jpg' % (image_id)<br/>    <br/>    all_img_name_vector.append(full_coco_image_path)<br/>    all_captions.append(caption)<br/><br/># shuffling the captions and image_names together<br/># setting a random state<br/>train_captions, img_name_vector = shuffle(all_captions,<br/>                                          all_img_name_vector,<br/>                                          random_state=1)<br/><br/># selecting the first 40000 captions from the shuffled set<br/>num_examples = 40000<br/>train_captions = train_captions[:num_examples]<br/>img_name_vector = img_name_vector[:num_examples]</pre>
+<p>Once the data preparation is completed, we will have all of the image path stored in the <kbd>img_name_vector</kbd> list variable, and the associated captions are stored in <kbd>train_caption,</kbd> as shown in the following screenshot:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8f149cda-f700-48c4-94ef-ebaaa0e549c7.png" style="width:82.42em;height:22.58em;"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data preparation for a deep CNN encoder</h1>
+                </header>
+            
+            <article>
+                
+<p>Next, we will use Inception-v3 (pretrained on ImageNet) to classify each image. We will extract features from the last convolutional layer. We will create a helper function that will transform the input image to the format that is expected by Inception-v3:</p>
+<pre><strong>#Resizing the image to (299, 299)</strong><br/><strong>#Using the<span> </span>preprocess_input<span> </span>method to place the pixels in the range of -1 to 1.</strong><br/><br/>def load_image(image_path):<br/>    img = tf.read_file(image_path)<br/>    img = tf.image.decode_jpeg(img, channels=3)<br/>    img = tf.image.resize_images(img, (299, 299))<br/>    img = tf.keras.applications.inception_v3.preprocess_input(img)<br/>    return img, image_path<br/><br/></pre>
+<p class="text-cell-section-header">Now let's initialize the Inception-v3 model and load the pretrained ImageNet weights. To do so, we'll create a <kbd>tf.keras</kbd> model where the output layer is the last convolutional layer in the Inception-v3 architecture.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>While creating the <kbd>keras</kbd> model, you can see a parameter called <kbd>include_top=False</kbd> that indicates <span>whether to include the fully connected layer at the top of the network or not:</span></p>
+<pre>image_model = tf.keras.applications.InceptionV3(include_top=False, <br/>                                                weights='imagenet')<br/>new_input = image_model.input<br/>hidden_layer = image_model.layers[-1].output<br/><br/>image_features_extract_model = tf.keras.Model(new_input, hidden_layer)</pre>
+<p>The output is as follows:</p>
+<pre><strong>Downloading data from https://github.com/fchollet/deep-learning-models/releases/download/v0.5/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5
+87916544/87910968 [==============================] - 40s 0us/step</strong></pre>
+<p>So, the <kbd>image_features_extract_model</kbd> is our deep CNN encoder, which is responsible for learning the features from the given image.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Performing feature extraction</h1>
+                </header>
+            
+            <article>
+                
+<p>Now we will pre-process each image with the deep CNN encoder and dump the output to the disk:</p>
+<ol>
+<li>We will load the images in batches using the <span><kbd>load_image()</kbd> </span>helper function that we created before</li>
+<li>We will feed the images into the encoder to extract the features</li>
+<li>Dump the features as a <kbd>numpy</kbd> array:</li>
+</ol>
+<pre style="padding-left: 90px">encode_train = sorted(set(img_name_vector))<br/><strong>#Load images</strong><br/>image_dataset = tf.data.Dataset.from_tensor_slices(<br/>                                encode_train).map(load_image).batch(16)<br/><strong># Extract features</strong><br/>for img, path in image_dataset:<br/>  batch_features = image_features_extract_model(img)<br/>  batch_features = tf.reshape(batch_features, <br/>                              (batch_features.shape[0], -1, batch_features.shape[3]))<br/><strong>#Dump into disk</strong><br/>  for bf, p in zip(batch_features, path):<br/>    path_of_feature = p.numpy().decode("utf-8")<br/>    np.save(path_of_feature, bf.numpy())</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data prep for a language generation (RNN) decoder</h1>
+                </header>
+            
+            <article>
+                
+<p class="text-cell-section-header">The first step is to pre-process the captions.</p>
+<p>We will perform a few basic pre-processing steps on the captions, such as the following:</p>
+<ul>
+<li>First, we'll tokenize the captions (for example, by splitting on spaces). This will help us to build a vocabulary of all the unique words in the data (for example, "playing", "football", and so on).</li>
+<li>Next, we'll limit the vocabulary size to the top 5,000 words to save memory. We'll replace all other words with the token <kbd>unk</kbd> (for unknown). You can obviously optimize that according to the use case.</li>
+<li>Finally, we will create a word --&gt; index mapping and vice versa.</li>
+<li>We will then pad all sequences to be the same length as the longest one.</li>
+</ul>
+<p>Here is the code for that:</p>
+<pre><strong># Helper func to find the maximum length of any caption in our dataset</strong><br/><br/>def calc_max_length(tensor):<br/>    return max(len(t) for t in tensor)<br/><br/><br/><strong># Performing tokenization on the top 5000 words from the vocabulary</strong><br/>top_k = 5000<br/>tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=top_k, <br/>                                                  oov_token="&lt;unk&gt;", <br/>                                                  filters='!"#$%&amp;()*+.,-/:;=?@[\]^_`{|}~ ')<br/><br/><strong># Converting text into sequence of numbers</strong><br/>tokenizer.fit_on_texts(train_captions)<br/>train_seqs = tokenizer.texts_to_sequences(train_captions)<br/><br/>tokenizer.word_index = {key:value for key, value in tokenizer.word_index.items() if value &lt;= top_k}<br/><br/><strong># putting &lt;unk&gt; token in the word2idx dictionary</strong><br/>tokenizer.word_index[tokenizer.oov_token] = top_k + 1<br/>tokenizer.word_index['&lt;pad&gt;'] = 0<br/><br/><strong># creating the tokenized vectors</strong><br/>train_seqs = tokenizer.texts_to_sequences(train_captions)<br/><br/><strong># creating a reverse mapping (index -&gt; word)</strong><br/>index_word = {value:key for key, value in tokenizer.word_index.items()}<br/><br/><strong># padding each vector to the max_length of the captions</strong><br/>cap_vector = tf.keras.preprocessing.sequence.pad_sequences(train_seqs, padding='post')<br/><br/># calculating the max_length <br/># used to store the attention weights<br/>max_length = calc_max_length(train_seqs)<br/><br/></pre>
+<p>So, the end result will be an array of a sequence of integers, as shown in the following screenshot:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/15faa166-9e04-4e32-b06f-28c4c2650c4d.png"/></p>
+<p class="text-cell-section-header">Now, we will split the data into training and validation samples using an 80:20 split ratio:</p>
+<pre>img_name_train, img_name_val, cap_train, cap_val = train_test_split(img_name_vector,cap_vector,test_size=0.2,random_state=0)<br/><br/># Checking the sample counts<br/>print ("No of Training Images:",len(img_name_train))<br/>print ("No of Training Caption: ",len(cap_train) )<br/>print ("No of Training Images",len(img_name_val))<br/>print ("No of Training Caption:",len(cap_val) )<br/><br/>No of Training Images: 24000
+No of Training Caption:  24000
+No of Training Images 6000
+No of Training Caption: 6000</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Setting up the data pipeline</h1>
+                </header>
+            
+            <article>
+                
+<p class="text-cell-section-header">Our images and captions are ready! Next, let's create a <kbd>tf.data</kbd> dataset (<a href="https://www.tensorflow.org/api_docs/python/tf/data/Dataset" target="_blank">https://www.tensorflow.org/api_docs/python/tf/data/Dataset</a>) to use for training our model. Now we will prepare t<span>he pipeline for an image and the text model by performing transformations and batching on them:</span></p>
+<pre><strong># Defining parameters</strong><br/>BATCH_SIZE = 64<br/>BUFFER_SIZE = 1000<br/>embedding_dim = 256<br/>units = 512<br/>vocab_size = len(tokenizer.word_index)<br/><br/><strong># shape of the vector extracted from Inception-V3 is (64, 2048)</strong><br/><strong># these two variables represent that</strong><br/>features_shape = 2048<br/>attention_features_shape = 64<br/><br/><strong># loading the numpy files</strong> <br/>def map_func(img_name, cap):<br/>    img_tensor = np.load(img_name.decode('utf-8')+'.npy')<br/>    return img_tensor, cap<br/><br/><strong>#We use the from_tensor_slices to load the raw data and transform them into the tensors</strong><br/><br/>dataset = tf.data.Dataset.from_tensor_slices((img_name_train, cap_train))<br/><br/><strong># Using the map() to load the numpy files in parallel</strong><br/># NOTE: Make sure to set num_parallel_calls to the number of CPU cores you have<br/># https://www.tensorflow.org/api_docs/python/tf/py_func<br/>dataset = dataset.map(lambda item1, item2: tf.py_func(<br/>          map_func, [item1, item2], [tf.float32, tf.int32]), num_parallel_calls=8)<br/><br/><strong># shuffling and batching</strong><br/>dataset = dataset.shuffle(BUFFER_SIZE)<br/>dataset = dataset.batch(BATCH_SIZE)<br/>dataset = dataset.prefetch(1)</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the captioning model</h1>
+                </header>
+            
+            <article>
+                
+<p>The model architecture we are using to build the auto captioning is inspired by the<span> </span><em>Show, Attend and Tell</em><span> </span>paper (<a href="https://arxiv.org/pdf/1502.03044.pdf" target="_blank">https://arxiv.org/pdf/1502.03044.pdf</a>). The features that we extracted from the lower convolutional layer of Inception-v3 gave us a vector of a shape of (8, 8, 2048). Then, we squash that to a shape of (64, 2048).</p>
+<p>This vector is then passed through the CNN encoder, which consists of a single fully connected layer. The RNN (GRU in our case) attends over the image to predict the next word:</p>
+<pre>def gru(units):<br/>  if tf.test.is_gpu_available():<br/>    return tf.keras.layers.CuDNNGRU(units, <br/>                                    return_sequences=True, <br/>                                    return_state=True, <br/>                                    recurrent_initializer='glorot_uniform')<br/>  else:<br/>    return tf.keras.layers.GRU(units, <br/>                               return_sequences=True, <br/>                               return_state=True, <br/>                               recurrent_activation='sigmoid', <br/>                               recurrent_initializer='glorot_uniform')</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Attention</h1>
+                </header>
+            
+            <article>
+                
+<p>Now we will define the attention mechanism popularly known as Bahdanau attention (<a href="https://arxiv.org/pdf/1409.0473.pdf" target="_blank">https://arxiv.org/pdf/1409.0473.pdf</a>). We will need the features from the CNN encoder of a shape of (<kbd>batch_size</kbd>, <kbd>64</kbd>, <kbd>embedding_dim</kbd>). This attention mechanism will return the context vector and the attention weights over the time axis:</p>
+<pre>class BahdanauAttention(tf.keras.Model):<br/>  def __init__(self, units):<br/>    super(BahdanauAttention, self).__init__()<br/>    self.W1 = tf.keras.layers.Dense(units)<br/>    self.W2 = tf.keras.layers.Dense(units)<br/>    self.V = tf.keras.layers.Dense(1)<br/>  <br/>  def call(self, features, hidden):<br/>    # hidden_with_time_axis shape == (batch_size, 1, hidden_size)<br/>    hidden_with_time_axis = tf.expand_dims(hidden, 1)<br/>    <br/>    # score shape == (batch_size, 64, hidden_size)<br/>    score = tf.nn.tanh(self.W1(features) + self.W2(hidden_with_time_axis))<br/>    <br/>    # attention_weights shape == (batch_size, 64, 1)<br/>    # we get 1 at the last axis because we are applying score to self.V<br/>    attention_weights = tf.nn.softmax(self.V(score), axis=1)<br/>    <br/>    # context_vector shape after sum == (batch_size, hidden_size)<br/>    context_vector = attention_weights * features<br/>    context_vector = tf.reduce_sum(context_vector, axis=1)<br/>    <br/>    return context_vector, attention_weights<br/><br/></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">CNN encoder</h1>
+                </header>
+            
+            <article>
+                
+<p>Now let's define the CNN encoder that will be the single, fully connected layer followed by the ReLU activation:</p>
+<pre>class CNN_Encoder(tf.keras.Model):<br/>    # Since we have already extracted the features and dumped it using pickle<br/>    # This encoder passes those features through a Fully connected layer<br/>    def __init__(self, embedding_dim):<br/>        super(CNN_Encoder, self).__init__()<br/>        # shape after fc == (batch_size, 64, embedding_dim)<br/>        self.fc = tf.keras.layers.Dense(embedding_dim)<br/>        <br/>    def call(self, x):<br/>        x = self.fc(x)<br/>        x = tf.nn.relu(x)<br/>        return x</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">RNN decoder</h1>
+                </header>
+            
+            <article>
+                
+<p>Here, we will define the RNN decoder which will take the encoded features from the encoder. The features are fed into the attention layer, which is concatenated with the input embedding vector. Then, the <span>concatenated</span> vector is passed into the GRU module, which is further passed through two fully connected layers:</p>
+<pre>class RNN_Decoder(tf.keras.Model):<br/>  def __init__(self, embedding_dim, units, vocab_size):<br/>    super(RNN_Decoder, self).__init__()<br/>    self.units = units<br/><br/>    self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)<br/>    self.gru = gru(self.units)<br/>    self.fc1 = tf.keras.layers.Dense(self.units)<br/>    self.fc2 = tf.keras.layers.Dense(vocab_size)<br/>    <br/>    self.attention = BahdanauAttention(self.units)<br/>        <br/>  def call(self, x, features, hidden):<br/>    # defining attention as a separate model<br/>    context_vector, attention_weights = self.attention(features, hidden)<br/>    <br/>    # x shape after passing through embedding == (batch_size, 1, embedding_dim)<br/>    x = self.embedding(x)<br/>    <br/>    # x shape after concatenation == (batch_size, 1, embedding_dim + hidden_size)<br/>    x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)<br/>    <br/>    # passing the concatenated vector to the GRU<br/>    output, state = self.gru(x)<br/>    <br/>    # shape == (batch_size, max_length, hidden_size)<br/>    x = self.fc1(output)<br/>    <br/>    # x shape == (batch_size * max_length, hidden_size)<br/>    x = tf.reshape(x, (-1, x.shape[2]))<br/>    <br/>    # output shape == (batch_size * max_length, vocab)<br/>    x = self.fc2(x)<br/><br/>    return x, state, attention_weights<br/><br/>  def reset_state(self, batch_size):<br/>    return tf.zeros((batch_size, self.units))<br/><br/>encoder = CNN_Encoder(embedding_dim)<br/>decoder = RNN_Decoder(embedding_dim, units, vocab_size)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Loss function</h1>
+                </header>
+            
+            <article>
+                
+<p>We are using the <kbd>Adam</kbd> optimizer to train the model and masking the loss calculated for the <kbd>&lt;PAD&gt;</kbd> key:</p>
+<pre>optimizer = tf.train.AdamOptimizer()<br/><br/># We are masking the loss calculated for padding<br/>def loss_function(real, pred):<br/>    mask = 1 - np.equal(real, 0)<br/>    loss_ = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=real, logits=pred) * mask<br/>    return tf.reduce_mean(loss_)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the captioning model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's train the model. The first thing we need to do is to extract the features stored in the respective <kbd>.npy</kbd> files and then pass those features through the CNN encoder.</p>
+<p>The encoder output, hidden state (initialized to 0) and the decoder input (which is the start token) are passed to the decoder. The decoder returns the predictions and the decoder hidden state.</p>
+<p>The decoder hidden state is then passed back into the model and the predictions are used to calculate the loss. While training, we use the <strong>teacher forcing technique</strong> to decide the next input to the decoder.</p>
+<div class="packt_infobox">Teacher forcing is the technique where the target word is passed as the next input to the decoder. This technique helps to <span>learn the correct sequence or correct statistical properties for the sequence, quickly.</span></div>
+<div>
+<p class="p1">The final step is to calculate the gradient and apply it to the optimizer and backpropagate:</p>
+</div>
+<pre>EPOCHS = 20<br/>loss_plot = []<br/><br/>for epoch in range(EPOCHS):<br/>    start = time.time()<br/>    total_loss = 0<br/>    <br/>    for (batch, (img_tensor, target)) in enumerate(dataset):<br/>        loss = 0<br/>        <br/>        # initializing the hidden state for each batch<br/>        # because the captions are not related from image to image<br/>        hidden = decoder.reset_state(batch_size=target.shape[0])<br/><br/>        dec_input = tf.expand_dims([tokenizer.word_index['&lt;start&gt;']] * BATCH_SIZE, 1)<br/>        <br/>        with tf.GradientTape() as tape:<br/>            features = encoder(img_tensor)<br/>            <br/>            for i in range(1, target.shape[1]):<br/>                # passing the features through the decoder<br/>                predictions, hidden, _ = decoder(dec_input, features, hidden)<br/><br/>                loss += loss_function(target[:, i], predictions)<br/>                <br/>                # using teacher forcing<br/>                dec_input = tf.expand_dims(target[:, i], 1)<br/>        <br/>        total_loss += (loss / int(target.shape[1]))<br/>        <br/>        variables = encoder.variables + decoder.variables<br/>        <br/>        gradients = tape.gradient(loss, variables) <br/>        <br/>        optimizer.apply_gradients(zip(gradients, variables), tf.train.get_or_create_global_step())<br/>        <br/>        if batch % 100 == 0:<br/>            print ('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1, <br/>                                                          batch, <br/>                                                          loss.numpy() / int(target.shape[1])))<br/>    # storing the epoch end loss value to plot later<br/>    loss_plot.append(total_loss / len(cap_vector))<br/>    <br/>    print ('Epoch {} Loss {:.6f}'.format(epoch + 1, <br/>                                         total_loss/len(cap_vector)))<br/>    print ('Time taken for 1 epoch {} sec\n'.format(time.time() - start))<br/><br/></pre>
+<p>The following is the output:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/c5a47375-df57-44ad-99fd-06addbe5908f.png" style="width:34.50em;height:24.42em;"/></p>
+<p>After performing the training process over few epochs lets plot the <kbd>Epoch</kbd> vs <kbd>Loss</kbd> graph:</p>
+<pre>plt.plot(loss_plot)<br/>plt.xlabel('Epochs')<br/>plt.ylabel('Loss')<br/>plt.title('Loss Plot')<br/>plt.show()</pre>
+<p class="mce-root"/>
+<p>The output is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1464 image-border" src="assets/c859ad39-eb10-4791-9641-d43a4bc2a54a.png" style="width:33.50em;height:23.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The loss vs Epoch plot during training process</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the captioning model</h1>
+                </header>
+            
+            <article>
+                
+<p>The evaluation function is similar to the training loop, except we don't use teacher forcing here. The input to the decoder at each time step is its previous predictions, along with the hidden state and the encoder output.</p>
+<p>A few key points to remember while making predictions:</p>
+<ul>
+<li>Stop predicting when the model predicts the end token </li>
+<li>Store the attention weights for every time step</li>
+</ul>
+<p class="mce-root">Let’s define the <kbd>evaluate()</kbd> function:</p>
+<pre>def evaluate(image):<br/> attention_plot = np.zeros((max_length, attention_features_shape))<br/><br/> hidden = decoder.reset_state(batch_size=1)<br/><br/> temp_input = tf.expand_dims(load_image(image)[0], 0)<br/> img_tensor_val = image_features_extract_model(temp_input)<br/> img_tensor_val = tf.reshape(img_tensor_val, (img_tensor_val.shape[0], -1, img_tensor_val.shape[3]))<br/><br/> features = encoder(img_tensor_val)<br/><br/> dec_input = tf.expand_dims([tokenizer.word_index['&lt;start&gt;']], 0)<br/> result = []<br/><br/> for i in range(max_length):<br/> predictions, hidden, attention_weights = decoder(dec_input, features, hidden)<br/><br/> attention_plot[i] = tf.reshape(attention_weights, (-1, )).numpy()<br/><br/> predicted_id = tf.argmax(predictions[0]).numpy()<br/> result.append(index_word[predicted_id])<br/><br/> if index_word[predicted_id] == '&lt;end&gt;':<br/> return result, attention_plot<br/><br/> dec_input = tf.expand_dims([predicted_id], 0)<br/><br/> attention_plot = attention_plot[:len(result), :]<br/> return result, attention_plot</pre>
+<p>Also, let's create a <kbd>helper</kbd> function to visualize the attention points that predict the words:</p>
+<pre>def plot_attention(image, result, attention_plot):<br/>    temp_image = np.array(Image.open(image))<br/><br/>    fig = plt.figure(figsize=(10, 10))<br/>    <br/>    len_result = len(result)<br/>    for l in range(len_result):<br/>        temp_att = np.resize(attention_plot[l], (8, 8))<br/>        ax = fig.add_subplot(len_result//2, len_result//2, l+1)<br/>        ax.set_title(result[l])<br/>        img = ax.imshow(temp_image)<br/>        ax.imshow(temp_att, cmap='gray', alpha=0.6, extent=img.get_extent())<br/><br/>    plt.tight_layout()<br/>    plt.show()<br/><br/># captions on the validation set<br/>rid = np.random.randint(0, len(img_name_val))<br/>image = img_name_val[rid]<br/>real_caption = ' '.join([index_word[i] for i in cap_val[rid] if i not in [0]])<br/>result, attention_plot = evaluate(image)<br/><br/>print ('Real Caption:', real_caption)<br/>print ('Prediction Caption:', ' '.join(result))<br/>plot_attention(image, result, attention_plot)<br/># opening the image<br/>Image.open(img_name_val[rid])</pre>
+<p class="mce-root"><span>The output is as follows:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/9edc8d8c-9af0-4bf5-a0df-1fc5f89145f1.png"/></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ccb51a85-bbc0-4031-8da8-bfaa6b5d147e.png"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deploying the captioning model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now let's deploy the complete module as a RESTful service. To do so, we will write an inference code that loads the latest checkpoint and makes the prediction on the given image.</p>
+<p>Look into the <kbd>inference.py</kbd> file in the repository. All the code is similar to the training loop <span>except we don't use teacher forcing here. The input to the decoder at each time step is its previous predictions, along with the hidden state and the encoder output.</span></p>
+<p>One important part is to load the model in memory for which we are using the <kbd>tf.train.Checkpoint()</kbd> method, which loads all of the learned weights for <kbd>optimizer</kbd>, <kbd>encoder</kbd>, <kbd>decoder</kbd> into the memory. Here is the code for that:</p>
+<pre>checkpoint_dir = './my_model'<br/>checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")<br/>checkpoint = tf.train.Checkpoint(<br/>                                 optimizer=optimizer,<br/>                                 encoder=encoder,<br/>                                 decoder=decoder,<br/>                                )<br/><br/>checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))</pre>
+<p><span>So, we will create an <kbd>evaluate()</kbd> function, which defines the prediction loop. </span>To make sure that the prediction ends after certain words, we will stop predicting when the model predicts the end token, <kbd>&lt;end&gt;</kbd>:</p>
+<pre>def evaluate(image):<br/>    attention_plot = np.zeros((max_length, attention_features_shape))<br/><br/>    hidden = decoder.reset_state(batch_size=1)<br/><br/>    temp_input = tf.expand_dims(load_image(image)[0], 0)<br/><strong>    # Extract features from the test image</strong><br/>    img_tensor_val = image_features_extract_model(temp_input)<br/>    img_tensor_val = tf.reshape(img_tensor_val, (img_tensor_val.shape[0], -1, img_tensor_val.shape[3]))<br/><strong>    # Feature is fed into the encoder</strong><br/>    features = encoder(img_tensor_val)<br/><br/>    dec_input = tf.expand_dims([tokenizer.word_index['&lt;start&gt;']], 0)<br/>    result = []<br/><strong>    # Prediction loop</strong><br/>    for i in range(max_length):<br/>        predictions, hidden, attention_weights = decoder(dec_input, features, hidden)<br/><br/>        attention_plot[i] = tf.reshape(attention_weights, (-1, )).numpy()<br/><br/>        predicted_id = tf.argmax(predictions[0]).numpy()<br/>        result.append(index_word[predicted_id])<br/><strong>        # Hard stop when end token is predicted</strong><br/>        if index_word[predicted_id] == '&lt;end&gt;':<br/>            return result, attention_plot<br/><br/>        dec_input = tf.expand_dims([predicted_id], 0)<br/><br/>    attention_plot = attention_plot[:len(result), :]<br/>    return result, attention_plot</pre>
+<p>Now let's use this <kbd>evaluate()</kbd> function in our web application code:</p>
+<pre>#!/usr/bin/env python2<br/># -*- coding: utf-8 -*-<br/>"""<br/>@author: rahulkumar<br/>"""<br/><br/>from flask import Flask , request, jsonify<br/><br/>import time<br/>from inference import evaluate<br/>import tensorflow as tf<br/><br/>app = Flask(__name__)<br/><br/>@app.route("/wowme")<br/>def AutoImageCaption():<br/>    image_url=request.args.get('image')<br/>    print('image_url')<br/>    image_extension = image_url[-4:]<br/>    image_path = tf.keras.utils.get_file(str(int(time.time()))+image_extension, origin=image_url)<br/>    result, attention_plot = evaluate(image_path)<br/>    data = {'Prediction Caption:': ' '.join(result)}<br/>    <br/>    return jsonify(data)<br/><br/> <br/>if __name__ == "__main__":<br/>    app.run(host = '0.0.0.0',port=8081)</pre>
+<p class="mce-root"/>
+<p>Execute the following command in the Terminal to run the web app:</p>
+<pre class="p1"><strong><span class="s1">python caption_deploy_api.py <br/></span></strong></pre>
+<p>You should get the following output:</p>
+<pre class="p1"><strong>* Running on http://0.0.0.0:8081/ (Press CTRL+C to quit)</strong></pre>
+<p>Now we request the API, as follows:</p>
+<pre><strong>curl <span>0.0.0.0:8081/wowme?image=https://www.beautifulpeopleibiza.com/images/BPI/img_bpi_destacada.jpg<br/></span></strong></pre>
+<p>We should get our caption predicted, as shown in the following screenshot:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8becf540-8d9a-4cd4-89b5-dba2bd53f48e.png"/></p>
+<p>Make sure to train the model on the large image to get better predictions.</p>
+<p>Voila! We just deployed the state-of-the-art automatic captioning module.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">In this implementation, we used a pretrained Inception-v3 model as a feature extractor in an encoder trained on the ImageNet dataset as part of a deep learning solution. This solution <span>combines current state-of-the-art techniques in both <em>computer vision </em>and<em> natural language processing,</em> to form a complete image description </span><span>approach </span><span>(<a href="https://www.cs.cmu.edu/~afarhadi/papers/sentence.pdf" target="_blank">https://www.cs.cmu.edu/~afarhadi/papers/sentence.pdf</a>) </span><span>able to </span><span>construct computer-generated natural descriptions of any provided images. We've effectively broken the barrier between images and language with this trained model and we've provided a technology that could be used as part of an application, helping the visually impaired enjoy the benefits of the megatrend of photo sharing! Great work!</span></p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

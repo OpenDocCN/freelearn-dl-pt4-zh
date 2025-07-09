@@ -1,0 +1,342 @@
+<html><head></head><body>
+        <section id="8EQVO1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Application of Deep Learning to Signal processing</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The current chapter will present a case study of creating new music notes using generative modeling techniques such as RBM. In this chapter, we will cover the following topics:</p>
+<ul class="calibre12">
+<li class="calibre13">Introducing and preprocessing music MIDI files</li>
+<li class="calibre13">Building an RBM model</li>
+<li class="calibre13">Generating new music notes</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8FPGA1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Introducing and preprocessing music MIDI files</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, we will read a repository of <strong class="calibre1">Musical Instrument Digital Interface</strong> (<strong class="calibre1">MIDI</strong>) files and preprocess them into a suitable format for an RBM. MIDI is one of the formats of storing musical notes, which can be converted to other formats such as <kbd class="calibre10">.wav</kbd>, <kbd class="calibre10">.mp3</kbd>, <kbd class="calibre10">.mp4</kbd>, and so on. MIDI file formats store various kinds of events such as Note-on, Note-off, Tempo, Time Signature, End of track, and so on. However, we will primarily be focusing on the type of note--when it was turned <strong class="calibre1">on</strong>, and when it was turned <strong class="calibre1">off</strong>.</p>
+<p class="calibre2">Each song is encoded into a binary matrix, where rows represent time, and columns represent both turned on and turned off notes. At each time, a note is turned on and the same note is turned off. Suppose that, out of <em class="calibre9">n</em> notes, note <em class="calibre9">i</em> is turned on and turned off at time <em class="calibre9">j</em>, then positions <em class="calibre9">Mji = 1</em> and <em class="calibre9">Mj(n+i) = 1</em>, and the rest <em class="calibre9">Mj = 0</em>.</p>
+<p class="calibre2">All the rows together form a song. Currently, in this chapter, we will be leveraging Python codes to encode MIDI songs into binary matrices, which can later be used in a Restricted Boltzmann Machine (RBM).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8GO0S1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Let's look at the prerequisites to preprocess MIDI files:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Download the MIDI song repository:</li>
+</ol>
+<p class="calibre24"><a href="https://github.com/dshieble/Music_RBM/tree/master/Pop_Music_Midi" class="calibre4"><span>https://github.com/dshieble/Music_RBM/tree/master/Pop_Music_Midi</span></a></p>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Download the Python codes to manipulate MIDI songs:</li>
+</ol>
+<p class="calibre24"><a href="https://github.com/dshieble/Music_RBM/blob/master/midi_manipulation.py" class="calibre4"><span>https://github.com/dshieble/Music_RBM/blob/master/midi_manipulation.py</span></a></p>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Install the <kbd class="calibre10">"reticulate"</kbd> package, which provides the R interface to Python:</li>
+</ol>
+<pre class="calibre23">
+Install.packages("reticulate") 
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Import Python libraries:</li>
+</ol>
+<pre class="calibre23">
+use_condaenv("python27") 
+midi &lt;- import_from_path("midi",path="C:/ProgramData/Anaconda2/Lib/site-packages") 
+np &lt;- import("numpy") 
+msgpack &lt;- import_from_path("msgpack",path="C:/ProgramData/Anaconda2/Lib/site-packages") 
+psys &lt;- import("sys") 
+tqdm &lt;- import_from_path("tqdm",path="C:/ProgramData/Anaconda2/Lib/site-packages") 
+midi_manipulation_updated &lt;- import_from_path("midi_manipulation_updated",path="C:/Music_RBM") 
+glob &lt;- import("glob") 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8HMHE1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Now that we have set up all the essentials, let's look at the function to define MIDI files:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Define the function to read the MIDI files and encode them into a binary matrix:</li>
+</ol>
+<pre class="calibre23">
+get_input_songs &lt;- function(path){ 
+  files = glob$glob(paste0(path,"/*mid*")) 
+  songs &lt;- list() 
+  count &lt;- 1 
+  for(f in files){ 
+    songs[[count]] &lt;- np$array(midi_manipulation_updated$midiToNoteStateMatrix(f)) 
+    count &lt;- count+1 
+  } 
+  return(songs) 
+} 
+path &lt;- 'Pop_Music_Midi' 
+input_songs &lt;- get_input_songs(path) 
+ 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8IL201-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Building an RBM model</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, we will build an RBM model as discussed (in detail) in <a href="part0204.html#62HIO1-a0a93989f17f4d6cb68b8cfd331bc5ab" target="_blank" class="calibre4">Chapter 5</a>, <em class="calibre9">Generative Models in Deep Learning</em>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8JJII1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Getting ready</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Let's set up our system for the model:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">In Piano, the lowest note is 24 and the highest is 102; hence, the range of notes is 78. Thus, the number of columns in the encoded matrix is 156 (that is, 78 for note-on and 78 for note-off):</li>
+</ol>
+<pre class="calibre23">
+lowest_note = 24L 
+highest_note = 102L 
+note_range = highest_note-lowest_note 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">We will create notes for 15 number of steps at a time with 2,340 nodes in the input layer and 50 nodes in the hidden layer:</li>
+</ol>
+<pre class="calibre23">
+num_timesteps  = 15L 
+num_input      = 2L*note_range*num_timesteps 
+num_hidden       = 50L 
+ 
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">The learning rate (alpha) is 0.1:</li>
+</ol>
+<pre class="calibre23">
+alpha&lt;-0.1 
+ 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8KI341-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Looking into the steps of building an RBM model:</p>
+<ol class="calibre15">
+<li value="1" class="calibre13">Define the <kbd class="calibre10">placeholder</kbd> variables:</li>
+</ol>
+<pre class="calibre23">
+vb &lt;- tf$placeholder(tf$float32, shape = shape(num_input)) 
+hb &lt;- tf$placeholder(tf$float32, shape = shape(num_hidden)) 
+W &lt;- tf$placeholder(tf$float32, shape = shape(num_input, num_hidden)) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Define a forward pass:</li>
+</ol>
+<pre class="calibre23">
+X = tf$placeholder(tf$float32, shape=shape(NULL, num_input)) 
+prob_h0= tf$nn$sigmoid(tf$matmul(X, W) + hb)   
+h0 = tf$nn$relu(tf$sign(prob_h0 - tf$random_uniform(tf$shape(prob_h0)))) 
+</pre>
+<ol start="3" class="calibre15">
+<li value="3" class="calibre13">Then, define a backward pass:</li>
+</ol>
+<pre class="calibre23">
+prob_v1 = tf$matmul(h0, tf$transpose(W)) + vb 
+v1 = prob_v1 + tf$random_normal(tf$shape(prob_v1), mean=0.0, stddev=1.0, dtype=tf$float32) 
+h1 = tf$nn$sigmoid(tf$matmul(v1, W) + hb)     
+</pre>
+<ol start="4" class="calibre15">
+<li value="4" class="calibre13">Calculate positive and negative gradients accordingly:</li>
+</ol>
+<pre class="calibre23">
+w_pos_grad = tf$matmul(tf$transpose(X), h0) 
+w_neg_grad = tf$matmul(tf$transpose(v1), h1) 
+CD = (w_pos_grad - w_neg_grad) / tf$to_float(tf$shape(X)[0]) 
+update_w = W + alpha * CD 
+update_vb = vb + alpha * tf$reduce_mean(X - v1) 
+update_hb = hb + alpha * tf$reduce_mean(h0 - h1) 
+</pre>
+<ol start="5" class="calibre15">
+<li value="5" class="calibre13">Define the objective function:</li>
+</ol>
+<pre class="calibre23">
+err = tf$reduce_mean(tf$square(X - v1)) 
+</pre>
+<ol start="6" class="calibre15">
+<li value="6" class="calibre13">Initialize the current and previous variables:</li>
+</ol>
+<pre class="calibre23">
+cur_w = tf$Variable(tf$zeros(shape = shape(num_input, num_hidden), dtype=tf$float32)) 
+cur_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32)) 
+cur_hb = tf$Variable(tf$zeros(shape = shape(num_hidden), dtype=tf$float32)) 
+prv_w = tf$Variable(tf$random_normal(shape=shape(num_input, num_hidden), stddev=0.01, dtype=tf$float32)) 
+prv_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32)) 
+prv_hb = tf$Variable(tf$zeros(shape = shape(num_hidden), dtype=tf$float32)) 
+</pre>
+<ol start="7" class="calibre15">
+<li value="7" class="calibre13">Start a TensorFlow session:</li>
+</ol>
+<pre class="calibre23">
+sess$run(tf$global_variables_initializer()) 
+song = np$array(trainX) 
+song = song[1:(np$floor(dim(song)[1]/num_timesteps)*num_timesteps),] 
+song = np$reshape(song, newshape=shape(dim(song)[1]/num_timesteps, dim(song)[2]*num_timesteps)) 
+output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=song, 
+                                                                          W = prv_w$eval(), 
+                                                                          vb = prv_vb$eval(), 
+                                                                          hb = prv_hb$eval())) 
+prv_w &lt;- output[[1]]  
+prv_vb &lt;- output[[2]] 
+prv_hb &lt;-  output[[3]] 
+sess$run(err, feed_dict=dict(X= song, W= prv_w, vb= prv_vb, hb= prv_hb)) 
+</pre>
+<ol start="8" class="calibre15">
+<li value="8" class="calibre13">Run <kbd class="calibre10">200</kbd> training epochs:</li>
+</ol>
+<pre class="calibre23">
+epochs=200 
+errors &lt;- list() 
+weights &lt;- list() 
+u=1 
+for(ep in 1:epochs){ 
+  for(i in seq(0,(dim(song)[1]-100),100)){ 
+    batchX &lt;- song[(i+1):(i+100),] 
+    output &lt;- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(X=batchX, 
+                                                                              W = prv_w, 
+                                                                              vb = prv_vb, 
+                                                                              hb = prv_hb)) 
+    prv_w &lt;- output[[1]]  
+    prv_vb &lt;- output[[2]] 
+    prv_hb &lt;-  output[[3]] 
+    if(i%%500 == 0){ 
+      errors[[u]] &lt;- sess$run(err, feed_dict=dict(X= song, W= prv_w, vb= prv_vb, hb= prv_hb)) 
+      weights[[u]] &lt;- output[[1]] 
+      u &lt;- u+1 
+      cat(i , " : ") 
+    } 
+  } 
+  cat("epoch :", ep, " : reconstruction error : ", errors[length(errors)][[1]],"\n") 
+} 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8LGJM1-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Generating new music notes</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this recipe, we will generate new sample music notes. New musical notes can be generated by altering parameter <kbd class="calibre10">num_timesteps</kbd>. However, one should keep in mind to increase the timesteps, as it can become computationally inefficient to handle increased dimensionality of vectors in the current setup of RBM. These RBMs can be made efficient in learning by creating their stacks (namely <strong class="calibre1">Deep Belief Networks</strong>). Readers can leverage the DBN codes of <a href="part0204.html#62HIO1-a0a93989f17f4d6cb68b8cfd331bc5ab" target="_blank" class="calibre4">Chapter 5</a>, <em class="calibre9">Generative Models in Deep Learning,</em> to generate new musical notes.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section id="8MF481-a0a93989f17f4d6cb68b8cfd331bc5ab">
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">How to do it...</h1>
+                
+            
+            <article>
+                
+<ol class="calibre15">
+<li value="1" class="calibre13">Create new sample music:</li>
+</ol>
+<pre class="calibre23">
+hh0 = tf$nn$sigmoid(tf$matmul(X, W) + hb) 
+vv1 = tf$nn$sigmoid(tf$matmul(hh0, tf$transpose(W)) + vb) 
+feed = sess$run(hh0, feed_dict=dict( X= sample_image, W= prv_w, hb= prv_hb)) 
+rec = sess$run(vv1, feed_dict=dict( hh0= feed, W= prv_w, vb= prv_vb)) 
+S = np$reshape(rec[1,],newshape=shape(num_timesteps,2*note_range)) 
+</pre>
+<ol start="2" class="calibre15">
+<li value="2" class="calibre13">Regenerate the MIDI file:</li>
+</ol>
+<pre class="calibre23">
+midi_manipulation$noteStateMatrixToMidi(S, name=paste0("generated_chord_1")) 
+generated_chord_1 
+</pre>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

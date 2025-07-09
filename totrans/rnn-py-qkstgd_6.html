@@ -1,0 +1,462 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving Your RNN Performance</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter goes through some techniques for improving your recurrent neural network model. Often, the initial results from your model can be disappointing, so you need to find ways of improving them. This can be done with various methods and tools, but we will focus on two main areas:</p>
+<ul>
+<li>Improving the RNN model performance with data and tuning</li>
+<li>Optimizing the TensorFlow library for better results</li>
+</ul>
+<p>First, we will see how more data, as well as tuning the hyperparameters, can yield significantly better results. Then our focus will shift to getting the most out of the built-in TensorFlow functionality. Both approaches are applicable to any task that involves the neural network model, so the next time you want to do image recognition with convolutional networks or fix a rescaled image with GAN, you can apply the same techniques for perfecting your model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving your RNN model</h1>
+                </header>
+            
+            <article>
+                
+<p>When working on a problem using RNN (or any other network), your process looks like this:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f0060b1e-ad15-412c-97bd-61882cb9331a.png" style="width:15.83em;height:12.25em;"/></p>
+<p>First, you come up with an <strong>idea for the model</strong>, its hyperparameters, the number of layers, how deep the network should be, and so on. Then the model is <strong>implemented and trained</strong> in order to produce some results. Finally, these results are <strong>assessed</strong> and the necessary modifications are made. It is rarely the case that you'll receive meaningful results from the first run. This cycle may occur multiple times until you are satisfied with the outcome. </p>
+<p>Considering this approach, one important question comes to mind: <em>How can we change the model so the next cycle produces better results?</em></p>
+<p>This question is tightly connected to your understanding of the network's results. Let's discuss that now. </p>
+<p>As you already know, in the beginning of each model training, you need to prepare lots of quality data. This step should happen before the <strong>Idea</strong> part of the aforementioned cycle. Then, during the <span class="packt_screen">Idea</span> stage, you should come up with the actual neural network and its characteristics. After that comes the <span class="packt_screen">Code</span> stage, where you use your data to supply the model and perform the actual training. There is something important to keep in mind—<em>once your data is collected, you need to split it into 3 parts: training (80%), validation (10%) and testing (10%)</em>.</p>
+<p>The <span class="packt_screen">Code</span> stage only uses the training part of your data. Then, the <span class="packt_screen">Experiment </span>stage uses the validation part to evaluate the model. Based on the results of these two operations, we will make the necessary changes. </p>
+<div class="packt_tip">You should use the testing data <strong>only</strong> after you have gone through all the necessary cycles and have identified that your model is performing well. The testing data will help you understand the rate of accuracy you are receiving on unseen data. </div>
+<p>At the end of each cycle, you need to determine how good your model is. Based on the results, you will see that your model is always either <strong>underfitting</strong> (<strong>high bias</strong>) or <strong>overfitting</strong> (<strong>high variance</strong>) the data (by varying degrees). You should aim for both the bias and variance to be low, so there is almost no underfitting or overfitting. The next diagram may help you understand this concept better:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/cf47792e-c51b-4d37-b84f-97657b1f4f3d.png" style="width:37.58em;height:14.58em;"/></p>
+<p>Examining the preceding diagram, we can state the following definitions:</p>
+<ul>
+<li><strong>Underfitting (high bias)</strong>: This occurs when the network is not influenced enough by the training data, and generalizes the prediction</li>
+<li><strong>Just Right (low bias, low variance)</strong>: This occurs when the network makes quality predictions, both during training and in the general case during testing</li>
+<li><strong>Overfitting (high variance)</strong>: This occurs when the network is influenced by the training data too much, and makes false decisions on new entries.</li>
+</ul>
+<p>The preceding diagram may be helpful to understand the concepts of high bias and high variance, but it is difficult to apply this to real examples. The problem is that we normally deal with data of more than two dimensions. That is why we will be using the <span>loss (error) function values produced by the model to make the same evaluation for higher dim</span><span>ensional data.</span></p>
+<p>Let's say we are evaluating the <span>Spanish-to-English translator </span>neural network from <a href="982f956b-d1b6-446c-85b1-71f55faf114f.xhtml" target="_blank">Chapter 4</a>, <em>Creating a Spanish-to-English Translator</em>. We can assume that the lowest possible error on that task can be produced by a human, and it is 1.5%. Now we will evaluate the results based on all the error combinations that our network can give:</p>
+<ul>
+<li>Training data error: ~2%; Validation data error: ~14%: <strong>high variance</strong></li>
+<li>Training data error: ~14%; Validation data error: ~15%: <strong>high bias</strong></li>
+<li>Training data error: ~14%; Validation data error: ~30%: <strong>high variance, high bias</strong></li>
+<li>Training data error:~2%; Validation data error: ~2.4%: <strong>low variance, low bias</strong></li>
+</ul>
+<p>The desired output is having low variance and low bias. Of course, it takes a lot of time and effort to get this kind of improvement, but in the end, it is worth doing. </p>
+<p>You have now got familiar with how to read your model results and evaluate the model's performance. Now, let's see what can be done to <strong>lower both the variance and the bias of the model</strong>. </p>
+<p><strong><em>How can we lower the variance? (fixing overfitting)</em></strong></p>
+<p>A very useful approach is to collect and transform more data. This will generalize the model and make it perform well on <span>both</span> the training and validation sets. </p>
+<p><strong><em>How can we lower the bias?</em> <em>(fixing underfitting)</em></strong></p>
+<p>This can be done by increasing the network depth—that is, changing the numbers of layers and of hidden units, and tuning the hyperparameters. </p>
+<p>Next, we will cover both of these approaches and see how to use them effectively to improve our neural network's performance. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving performance with data</h1>
+                </header>
+            
+            <article>
+                
+<p>A large amount of quality data is critical for the success of any deep learning model. A good comparison can be made to other algorithms, where an increased volume of data does not necessarily improve performance:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b802c1b6-d305-48c4-a183-2a451e703b50.png" style="width:18.00em;height:12.25em;"/></p>
+<p>But this doesn't mean that gathering more data is always the right approach. For example, if our model suffers from underfitting, more data won't increase the performance. On the other hand, solving the overfitting problem can be done using exactly that approach. </p>
+<p>Improving the model performance with data comes in three steps: <strong>selecting data</strong>, <strong>processing data</strong>, and <strong>transforming data</strong>. It is important to note that all three steps should be done according to your specific problem. For some tasks, such as recognizing digits inside an image, a nicely formatted dataset can be found easily. For more concrete tasks (e.g. analyzing images from plants), you may need to experiment and come up with non-trivial decisions. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Selecting data</h1>
+                </header>
+            
+            <article>
+                
+<p>This is a pretty straightforward technique. You either collect more data<sup> </sup>or invent more training examples. </p>
+<p>Finding more data can be done using an <span>online</span> collection of datasets<span> (</span><a href="https://skymind.ai/wiki/open-datasetshttps://skymind.ai/wiki/open-datasets" target="_blank">https://skymind.ai/wiki/open-datasetshttps://skymind.ai/wiki/open-datasets</a><span>)</span>. Other methods are to scrape web pages, or use the advanced options of Google Search<span> (</span><a href="https://www.google.com/advanced_search" target="_blank">https://www.google.com/advanced_search</a><span>)</span>. </p>
+<p>On the other hand, inventing or augmenting data is a challenging and complex problem, especially if we are trying to generate text or images. For example, a new approach<span> (</span><a href="https://www.quora.com/What-data-augmentation-techniques-are-available-for-deep-learning-on-text" target="_blank">https://www.quora.com/What-data-augmentation-techniques-are-available-for-deep-learning-on-text</a><span>)</span> for augmenting text was created recently. It is done by translating an English sentence to another language and then back to English. This way we are getting two slightly different but meaningful sentences, which increases and diversifies our dataset substantially. Another interesting technique for augmenting data, specifically for RNN language models, can be found in the paper on <em>Data Noising as Smoothing in Neural Network Language Models</em><span> (</span><a href="https://arxiv.org/abs/1703.02573" target="_blank">https://arxiv.org/abs/1703.02573</a><span>)</span>.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Processing data</h1>
+                </header>
+            
+            <article>
+                
+<p>After you have selected the required data, the time comes for processing. This can be done with these three steps:</p>
+<ul>
+<li><strong>Formatting</strong>: This involves converting the data into the most suitable format for your application. Imagine, for example, that your data is the text from thousands of PDF files. You should extract the text and covert the data into CSV format. </li>
+<li><strong>Cleaning</strong>: <span>Often, it is the case that your data may be incomplete. For example, if you have scraped book metadata from the internet, some entries may have missing data (such as ISBN, date of writing, and so on). Your job is to decide whether to fix or discard the </span><span>metadata for the </span><span>whole book.</span></li>
+<li><strong>Sampling</strong>: <span>Using a small part of the dataset can reduce computational time and speed up your training cycles while you are determining the model accuracy.</span></li>
+</ul>
+<p>The order of the preceding steps is not determined, and you may revisit them multiple times.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Transforming data</h1>
+                </header>
+            
+            <article>
+                
+<p>Finally, you need to transform the data using techniques such as scaling, decomposition, and feature selection. First, it is good to plot/visualize your data using M<span>atplotlib (a P</span>ython library) or TensorFlow's TensorBoard (<a href="https://www.tensorflow.org/guide/summaries_and_tensorboard" target="_blank">https://www.tensorflow.org/guide/summaries_and_tensorboard</a>).</p>
+<p><em>Scaling</em> is a technique that converts every entry into a number within a specific range (0-1) without mitigating its effectiveness. Normally, scaling is done within the bounds of your activation functions. If you are using sigmoid activation functions, rescale your data to values between 0 and 1. If you're using the hyperbolic tangent (tanh), rescale to values between -1 and 1. This applies to inputs (x) and outputs (y). </p>
+<p><em>Decomposition</em> is a technique of splitting some features into their components and using them instead. For example, the feature time may have minutes and hours, but we care only about the minutes. </p>
+<p><em>Feature selection</em> is one of the most important decisions you would make when building your model. A great tutorial to follow when deciding how to choose the most appropriate features is Jason Brownlee's <em>An Introduction to Feature Selection</em> (<a href="https://machinelearningmastery.com/an-introduction-to-feature-selection/" target="_blank">https://machinelearningmastery.com/an-introduction-to-feature-selection/</a>).</p>
+<p>Processing and transforming data can be accomplished using the vast selection of Python libraries, such as NumPy, among others. They turn out to be pretty handy when it comes to data manipulation. </p>
+<p>After you have gone through all of the preceding steps<span> </span>(probably multiple times), you can move forward to building your neural network model. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving performance with tuning</h1>
+                </header>
+            
+            <article>
+                
+<p>After selecting, processing, and transforming your data, it's time for a second optimization technique—hyperparameter tuning. This approach is one of the most important components in building your model and you need to spend the time necessary to execute it well. </p>
+<p>Every neural network model has parameters and hyperparameters. These are two distinct sets of values. Parameters are learned by the model during training, such as weights and biases. On the other hand, hyperparameters are predefined values that are selected after careful observation. In a standard recurrent neural network, the set of hyperparameters includes the number of hidden units, number of layers, RNN model type, <span>sequence length,</span> batch size, number of epochs (iterations), and the learning rate.</p>
+<p>Your task is to identify the best of all possible combinations so that the network performs pretty well. This is a pretty challenging task and often takes a lot of time (hours, days, even months) and computational power. </p>
+<p>Following Andrew Ng's tutorial on hyperparameter tuning<span> </span>(<a href="https://www.coursera.org/lecture/deep-neural-network/hyperparameters-tuning-in-practice-pandas-vs-caviar-DHNcc" target="_blank">https://www.coursera.org/lecture/deep-neural-network/hyperparameters-tuning-in-practice-pandas-vs-caviar-DHNcc</a>), we can separate this process into two different techniques: <em>Pandas</em> vs <em>Caviar</em>. </p>
+<p>The <em>Pandas</em> approach follows the way pandas (that is, the animal) raise their children. We initialize our model with a specific set of parameters, and then improve these values after every training operation until we achieve delightful results. This approach is ideal if you lack computational power and multiple GPUs to train neural networks simultaneously. </p>
+<p>The <em>Caviar</em> approach follows the way fish reproduce. We introduce multiple models at once (using different sets of parameters) and train them at the same time, while tracking the results. This technique will likely require access to more computational power. </p>
+<p>Now the question becomes: <em>How can we decide what should be included in our set of hyperparameters?</em></p>
+<p>Summarizing a great article on hyperparameters optimization<span> </span>(<a href="http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe" target="_blank">http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe</a>), we can define five ways for tuning:</p>
+<ul>
+<li><strong>Grid search</strong></li>
+<li><strong>Random search</strong></li>
+<li><strong>Hand-tuning</strong></li>
+<li><strong>Bayesian optimization</strong></li>
+<li><strong>Tree-structured Parzen Estimators</strong> (<strong>TPE</strong>)</li>
+</ul>
+<p>During the beginning phase of your deep learning journey, you will <span>mostly</span><span> </span><span>be </span><span>utilizing grid search, random search, and hand-tuning. The last two techniques are more complex in terms of understanding and implementation. We will cover both of them in the following section, but bear in mind that, for trivial tasks, you can go with normal hand-tuning. </span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Grid search</h1>
+                </header>
+            
+            <article>
+                
+<p>This is the most straightforward way of finding the right hyperparameters. It follows the approach in this graph:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/3e6f5dba-6b9c-42ba-a2bc-6ac19146dfae.png" style="width:23.42em;height:18.67em;"/></p>
+<p>Here, we generate all the possible combinations of values for the hyperparameters and perform separate training cycles. This works for small neural networks, but is impractical for more complex tasks. That is why we should use the better approach listed in the following section. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Random search </h1>
+                </header>
+            
+            <article>
+                
+<p>This technique is similar to grid search. You can follow the graph here:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/99c9f7e1-d9fe-48a9-8a2c-62eebf40cc6d.png" style="width:19.17em;height:15.17em;"/></p>
+<p><span>Instead of taking all the possible combinations, we sample a smaller set of random values and use these values to train the model. If we see that a particular group of closely positioned dots tends to perform better, we can examine this region more closely and focus on it. </span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Hand-tuning</h1>
+                </header>
+            
+            <article>
+                
+<p>Bigger networks normally require more time for training. This is why the aforementioned approaches are not ideal for such situations. In these cases, we often use the hand-tuning technique. The idea is to initially try one set of values, and then evaluate the performance. Then, our intuition, as well as our learning experience, may lead to ideas on a specific sequence of changes. We perform those tweaks and learn new things about the model. After several iterations, we have a good understanding of what needs to change for future improvement. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Bayesian optimization</h1>
+                </header>
+            
+            <article>
+                
+<p>This approach is a way of learning the hyperparameters without the need to manually determine different values. It uses a <span>Gaussian process that utilizes a set of previously evaluated parameters, and the resultant accuracy, to make an assumption about unobserved parameters. An acquisition function uses this information to suggest the next set of parameters. </span>For more information, I suggest watching Professor Hinton's lecture on <em>Bayesian optimization of Hyper Parameters<span> </span></em>(<a href="https://www.youtube.com/watch?v=cWQDeB9WqvU" target="_blank">https://www.youtube.com/watch?v=cWQDeB9WqvU</a>).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Tree-structured Parzen Estimators (TPE)</h1>
+                </header>
+            
+            <article>
+                
+<p>The idea behind this approach is that, at each iteration, TPE collects new observations, and at the end of the iteration, the algorithm decides which set of parameters it should try next. For more information, I suggest taking a look at this amazing article on <em>Hyperparameters optimization for Neural Networks</em> (<a href="http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe" target="_blank">http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe</a>).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Optimizing the TensorFlow library</h1>
+                </header>
+            
+            <article>
+                
+<p>This section focuses mostly on practical advice that can be directly implemented in your code. The TensorFlow team has provided a large set of tools that can be utilized to improve your performance. These techniques are constantly being updated to achieve better results. I strongly recommend watching TensorFlow's video on training performance from the 2018 TensorFlow conference (<a href="https://www.youtube.com/watch?v=SxOsJPaxHME" target="_blank">https://www.youtube.com/watch?v=SxOsJPaxHME</a>). This video is accompanied by nicely aggregated documentation, which is also a must-read (<a href="https://www.tensorflow.org/performance/" target="_blank">https://www.tensorflow.org/performance/</a>)<span>. </span></p>
+<p>Now, let's dive into more details around what you can do to achieve faster and more reliable training. </p>
+<p>Let's first start with an illustration from TensorFlow that presents the general steps of training a neural network. You can divide this process into three phases: <strong>data processing</strong>, <strong>performing training</strong>, and<strong> optimizing gradients</strong>:</p>
+<ol>
+<li><strong>Data processing</strong> <strong>(step 1)</strong>: This phase includes fetching the data (locally or from a network) and transforming it to fit our needs. These transformations might include augmentation, batching, and so on. Normally, these operations are done on the <strong>CPU</strong>.</li>
+<li><strong>Perform training (steps 2a, 2b and 2c)</strong>: This phase includes computing the forward pass during training, which requires a specific neural network model—LSTM, GPU, or a basic RNN in our case. These operations utilize powerful <strong>GPUs</strong> and <strong>TPUs</strong>.</li>
+<li><strong>Optimize gradients (step 3)</strong>: This phase includes the process of minimizing the loss function with the aim of optimizing the weights. The operation is again performed on <strong>GRUs</strong> and <strong>TPUs</strong>.</li>
+</ol>
+<p>This graph illustrates the above steps:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-448 image-border" src="assets/48d71258-83c8-4cae-bb5f-4d6f279f9125.png" style="width:35.00em;height:17.83em;"/></p>
+<p>Next, let's explain how to improve each of these steps. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data processing</h1>
+                </header>
+            
+            <article>
+                
+<p>You need to examine if loading and transforming the data is the bottleneck of your performance. You can do this with several approaches, some of which involve estimating the time it takes to perform these tasks, as well as tracking the CPU usage. </p>
+<p>After you have determined that these operations are slowing down the performance of your model, it's time to apply some useful techniques to speed things up. </p>
+<p>As we said, these operations (loading and transforming data) should be performed on the CPU, rather than the GPU, so that you free up the latter for training. To ensure this, wrap your code as follows:</p>
+<pre>with tf.device('/cpu:0'):<br/>    # call a function that fetches and transforms the data<br/>    final_data = fetch_and_process_data()</pre>
+<p>Then, you need to focus on both the process of loading (fetching) and <span>transforming</span> the data.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving data loading</h1>
+                </header>
+            
+            <article>
+                
+<p>The TensorFlow team has been working hard to make this as easy as possible by providing the <kbd>tf.data</kbd> API<span> </span>(<a href="https://www.tensorflow.org/performance/performance_guide" target="_blank">https://www.tensorflow.org/performance/performance_guide</a>), which works incredibly well. To learn more about it and understand how to use it efficiently, I recommend watching TensorFlow's talk on <kbd>tf.data</kbd> (<a href="https://www.youtube.com/watch?v=uIcqeP7MFH0" target="_blank">https://www.youtube.com/watch?v=uIcqeP7MFH0</a>). This API should always be used, instead of the standard <kbd>feed_dict</kbd> approach you have seen so far.   </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Improving data transformation</h1>
+                </header>
+            
+            <article>
+                
+<p>Transformations can come in different forms, for example, cropping images, splitting text, and rendering and batching files. TensorFlow offers solutions for these techniques. For example, if you are cropping images before training, it is good to use <kbd>tf.image.decode_and_crop_jpeg</kbd>, which decodes only the part of the image required. Another optimization can be made in the batching <span>process</span>. The TensorFlow library offers two methods:</p>
+<pre>batch_normalization = tf.layers.batch_normalization(input_layer, fused=True, data_format='NCHW')</pre>
+<p>The second method is as follows:</p>
+<pre>batch_normalizaton = tf.contrib.layers.batch_norm(input_layer, fused=True, data_format='NCHW')</pre>
+<p>Let's clarify these lines:</p>
+<ul>
+<li>Batch normalization is performed to a neural network model to speed up the process of training. Refer to this amazing article, <em>Batch Normalization in Neural Networks</em>, for more details: <a href="https://towardsdatascience.com/batch-normalization-in-neural-networks-1ac91516821c" target="_blank">https://towardsdatascience.com/batch-normalization-in-neural-networks-1ac91516821c</a>.</li>
+<li>The <kbd>fused</kbd> <span>parameter </span>indicates whether or not the method should <span>combine the multiple operations, required for batch normalization, into a single kernel.</span></li>
+<li>The <kbd>data_format</kbd> <span>parameter </span>refers to <span>the structure of the Tensor passed to a given Operation (such as summation, division, training, and so on). A good explanation can be found under <em>Data formats</em> in the TensorFlow performance guide (<a href="https://www.tensorflow.org/performance/" target="_blank">https://www.tensorflow.org/performance/</a>).</span></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Performing the training</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's move on to the phase of performing the training. Here, we are using one of TensorFlow's built-in functions for initializing recurrent neural network cells and calculating their weights using the preprocessed data. </p>
+<p>Depending on your situation, different techniques for optimizing your training may be more appropriate:</p>
+<ul>
+<li>For small and experimental models, you can use <kbd>tf.nn.rnn_cell.BasicLSTMCell</kbd>. Unfortunately, this is highly inefficient and takes up more memory than the following optimized versions. That is why using it is <strong>not</strong> recommended, unless you are just experimenting.</li>
+<li>An optimized version of the previous code is <kbd>tf.contrib.rnn.LSTMBlockFusedCell</kbd>. It should be used when you don't have access to GPUs or TPUs and want run a more efficient cell.</li>
+<li>The best set of cells to use is under <kbd>tf.contrib.cudnn_rnn.*</kbd> (<kbd>CuddnnCompatibleGPUCell</kbd> for GPU cells and more). They are highly optimized to run on GPUs and perform significantly better than the preceding ones.</li>
+</ul>
+<p>Finally, you should always perform the training using <kbd>tf.nn.dynamic_rnn</kbd> (see the TensorFlow documentation: <a href="https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn">https://www.tensorflow.org/api_docs/python/tf/nn/dynamic_rnn</a>) and pass the specific cell. This method optimizes the training of the recurrent neural networks by occasionally swapping memory between GPUs and CPUs to enable training of large sequences. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Optimizing gradients</h1>
+                </header>
+            
+            <article>
+                
+<p>The last optimization technique will actually improve the performance of our backpropagation algorithm. Recall from the previous chapters that your goal during training is to minimize the loss function by adjusting the weights and biases of the model. Adjusting (optimizing) these weights and biases can be accomplished with different built-in TensorFlow optimizers, such as <kbd>tf.train.AdamOptimizer</kbd> and <kbd>tf.train.GradientDescentOptimizer</kbd>. </p>
+<p>TensorFlow offers the ability to distribute this process across multiple TPUs using this code:</p>
+<pre>optimizer = tf.contrib.tpu.CrossShardOptimizer(existing_optimizer)</pre>
+<p>Here, <kbd>existing_optimizer = <span>tf.train.AdamOptimizer()</span></kbd><span>, and your training step will look like </span><kbd>train_step = optimizer.minimize(loss)</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we covered a lot of new and exciting approaches for optimizing your model's performance, both on a general level, and specifically, using the TensorFlow library. </p>
+<p>The first part covered techniques for improving your RNN performance by selecting, processing, and transforming your data, as well as tuning your hyperparameters. You also learned how to understand your model in <span>more </span>depth, and now know what should be done to make it work better. </p>
+<p>The second part was specifically focused on practical ways of improving your model's performance using the built-in TensorFlow functions. The team at TensorFlow seeks to make it as easy as possible for you to quickly achieve the results you want by providing distributed environments and optimization techniques with just a few lines of code. </p>
+<p>Combining both of the techniques covered in this chapter will enhance your knowledge in deep learning and let you experiment with more complicated models without worrying about performance issues. The knowledge you gained is applicable for any neural network model, so you can confidently apply exactly the same technique for broader sets of problems. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">External links</h1>
+                </header>
+            
+            <article>
+                
+<ul>
+<li>Open source data collection: <a href="https://skymind.ai/wiki/open-datasets">https://skymind.ai/wiki/open-datasets </a>or awesome-public-datasets GitHub repo: <a href="https://github.com/awesomedata/awesome-public-datasets">https://github.com/awesomedata/awesome-public-datasets</a></li>
+<li>Google Search Advanced: <a href="https://www.google.com/advanced_search">https://www.google.com/advanced_search</a></li>
+<li>Augmenting text: <a href="https://www.quora.com/What-data-augmentation-techniques-are-available-for-deep-learning-on-text">https://www.quora.com/What-data-augmentation-techniques-are-available-for-deep-learning-on-text</a></li>
+<li>Data Noising as Smoothing in Neural Network Language Models: <a href="https://arxiv.org/abs/1703.02573">https://arxiv.org/abs/1703.02573</a></li>
+<li>TensorBoard: <a href="https://www.tensorflow.org/guide/summaries_and_tensorboard">https://www.tensorflow.org/guide/summaries_and_tensorboard</a></li>
+<li>An Introduction to Feature Selection: <a href="https://machinelearningmastery.com/an-introduction-to-feature-selection/">https://machinelearningmastery.com/an-introduction-to-feature-selection/</a></li>
+<li>Andrew Ng's course on hyperparameters tuning: <a href="https://www.coursera.org/lecture/deep-neural-network/hyperparameters-tuning-in-practice-pandas-vs-caviar-DHNcc">https://www.coursera.org/lecture/deep-neural-network/hyperparameters-tuning-in-practice-pandas-vs-caviar-DHNcc</a></li>
+<li>Hyperparameters optimization for Neural Networks: <a href="http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe">http://neupy.com/2016/12/17/hyperparameter_optimization_for_neural_networks.html#tree-structured-parzen-estimators-tpe </a></li>
+<li>Bayesian Optimization of Hyper Parameters: <a href="https://www.youtube.com/watch?v=cWQDeB9WqvU">https://www.youtube.com/watch?v=cWQDeB9WqvU</a></li>
+<li>Training performance (TensorFlow Summit 2018): <a href="https://www.youtube.com/watch?v=SxOsJPaxHME">https://www.youtube.com/watch?v=SxOsJPaxHME</a></li>
+<li>TensorFlow Performance Guide: <a href="https://www.tensorflow.org/performance/">https://www.tensorflow.org/performance/</a></li>
+<li>tf.data API: <a href="https://www.tensorflow.org/performance/performance_guide">https://www.tensorflow.org/performance/performance_guide</a></li>
+<li><kbd>tf.data</kbd> (TensorFlow Summit 2018): <a href="https://www.youtube.com/watch?v=uIcqeP7MFH0">https://www.youtube.com/watch?v=uIcqeP7MFH0</a></li>
+<li>Batch Normalization in Neural Networks: <a href="https://towardsdatascience.com/batch-normalization-in-neural-networks-1ac91516821c">https://towardsdatascience.com/batch-normalization-in-neural-networks-1ac91516821c</a></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

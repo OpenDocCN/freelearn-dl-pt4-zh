@@ -1,0 +1,599 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Simulating Control Tasks</h1>
+                </header>
+            
+            <article>
+                
+<p>In the previous chapter, we saw the notable success of <strong>deep Q-learning</strong> (<strong>DQN</strong>) in training an AI agent to play Atari games. One limitation of DQN is that the action space must be discrete, namely, only a finite number of actions are available for the agent to select and the total number of actions cannot be too large. However, many practical tasks require continuous actions, which makes DQN difficult to apply. A naive remedy for DQN in this case is discretizing the continuous action space. But this remedy doesn't work due to the curse of dimensionality, meaning that DQN quickly becomes infeasible and does not generalize well.</p>
+<p>This chapter will discuss deep reinforcement learning algorithms for control tasks with a continuous action space. Several classic control tasks, such as <span>CartPole, Pendulum, and Acrobot</span>, will be introduced first. You will learn how to simulate these tasks using Gym and understand the goal and the reward for each task. Then, a basic actor-critic algorithm<span>,</span> called the <strong>deterministic policy gradient</strong> (<strong>DPG</strong>)<span>,</span> will be represented. You will learn what the actor-critic architecture is, and why these kinds of algorithms can address continuous control tasks. Besides this, you will also learn how to implement DPG via Gym and TensorFlow. Finally, a more advanced algorithm<span>,</span> called the <strong>trust region policy optimization</strong> (<strong>TRPO</strong>)<span>,</span> will be introduced. You will understand why TRPO works much better than DPG and how to learn a policy by applying the conjugate gradient method.</p>
+<p>This chapter requires some background knowledge of mathematical programming and convex/non-convex optimization. Don't be afraid-we will discuss these algorithms step by step to make sure that you fully understand the mechanism behind them. Understanding why they work, when they cannot work, and what their advantages and disadvantages are is much more important than simply knowing how to implement them with Gym and TensorFlow. After finishing this chapter, you will understand that the magic show of deep reinforcement learning is directed by mathematics and deep learning together.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Introduction to classic control tasks</li>
+<li>Deterministic policy gradient methods</li>
+<li>Trust region policy optimization for complex control tasks</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Introduction to control tasks</h1>
+                </header>
+            
+            <article>
+                
+<p>OpenAI Gym offers classic control tasks from the classic reinforcement learning literature. These tasks include CartPole, MountainCar, Acrobot<span>,</span> and Pendulum. To find out more, visit the OpenAI Gym website at: <a href="https://gym.openai.com/envs/#classic_control">https://gym.openai.com/envs/#classic_control</a>. Besides this, Gym also provides more complex continuous control tasks running in the popular physics simulator MuJoCo. Here is the homepage for MuJoCo: <a href="http://www.mujoco.org/">http://www.mujoco.org/</a>. MuJoCo stands for Multi-Joint Dynamics with Contact, which is a physics engine for research and development in robotics, graphics, and animation. The tasks provided by Gym are Ant, HalfCheetah, Hopper, Humanoid, InvertedPendulum, Reacher, Swimmer, and Walker2d. These names are very tricky, aren't they? For more details about these tasks, please visit the following link: <a href="https://gym.openai.com/envs/#mujoco">https://gym.openai.com/envs/#mujoco</a><a href="http://www.mujoco.org/">.</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting started</h1>
+                </header>
+            
+            <article>
+                
+<p>If you don't have a full installation of OpenAI Gym, you can install the <kbd>classic_control</kbd> and <kbd>mujoco</kbd> environment dependencies as follows:</p>
+<pre><span>pip install gym[classic_control]<br/>pip install gym[mujoco]</span></pre>
+<p>MuJoCo is not open source, so you'll have to follow the instructions in <kbd>mujoco-py</kbd> (available at <a href="https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key">https://github.com/openai/mujoco-py#obtaining-the-binaries-and-license-key</a>) to set it up. After the classic control environment is installed, try the following commands:</p>
+<pre>import gym<br/>atari = gym.make('Acrobot-v1')<br/>atari.reset()<br/>atari.render()</pre>
+<p>If it runs successfully, a small window will pop up, showing the screen of the Acrobot <span>task</span>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-653 image-border" src="assets/8f7814e7-22ab-410e-901e-c217a06af6ef.png" style="width:7.67em;height:14.50em;"/></div>
+<p>Besides Acrobot, you can replace the <kbd>Acrobot-v1</kbd> <span>task name with</span> <kbd>CartPole-v0</kbd>, <kbd>MountainCarContinuous-v0</kbd>, and <kbd>Pendulum-v0</kbd> to check out the other control tasks. You can run the following code to simulate these tasks and try to get a high-level understanding of their physical properties:</p>
+<pre>import gym<br/>import time<br/><br/>def start(task_name):<br/>   <br/>    task = gym.make(task_name)<br/>    observation = task.reset()<br/>    <br/>    while True:<br/>        task.render()<br/>        action = task.env.action_space.sample()<br/>        observation, reward, done, _ = task.step(action)<br/>        print("Action {}, reward {}, observation {}".format(action, reward, observation))<br/>        if done:<br/>            print("Game finished")<br/>            break<br/>        time.sleep(0.05)<br/>    task.close()<br/><br/>if __name__ == "__main__":<br/>    <br/>    task_names = ['CartPole-v0', 'MountainCarContinuous-v0', <br/>                  'Pendulum-v0', 'Acrobot-v1']<br/>    for task_name in task_names:<br/>        start(task_name)</pre>
+<p>Gym uses the same interface for all the tasks, including Atari games, classic control tasks, and MuJoCo control tasks. At each step, an action is randomly drawn from the action space by calling <kbd>task.env.action_space.sample()</kbd> and then this action is submitted to the simulator via <kbd>task.step(action)</kbd>, which tells the simulator to execute it. The <kbd>step</kbd> function returns the observation and the reward corresponding to this action.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The classic control tasks</h1>
+                </header>
+            
+            <article>
+                
+<p>We will now go through the details of each control task and answer the following questions:</p>
+<ol>
+<li>What are the control inputs and the corresponding feedbacks?</li>
+<li>How is the reward function defined?</li>
+<li>Is the action space continuous or discrete?</li>
+</ol>
+<p>Understanding the details of these control tasks is quite important for designing proper reinforcement learning algorithms because their specifications, such as the dimension of the action space and the reward function<span>,</span> can affect the performance a lot.</p>
+<p>CartPole is quite a famous control task in both the control and reinforcement learning communities. Gym implements the CartPole system described by <em>Barto, Sutton, and Anderson</em> in their paper <em>Neuronlike Adaptive Elements That Can Solve Difficult Learning Control Problem</em>, 1983. In CartPole, a pole is attached by an un-actuated joint to a cart, which moves along a frictionless track, as illustrated here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-654 image-border" src="assets/7e679e07-1c03-4306-9a0e-e182bd2e43f0.png" style="width:9.75em;height:12.58em;"/></div>
+<p>Here are the specifications of CartPole:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p><strong>Goal</strong></p>
+</td>
+<td>
+<p>The goal is to prevent the pole from falling over.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Action</strong></p>
+</td>
+<td>
+<p>The action space is discrete, namely, the system is controlled by applying a force of +1 (right direction) and -1 (left direction) to the cart.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Observation</strong></p>
+</td>
+<td>
+<p>The observation is a vector with four elements, for example, [ 0.0316304, -0.1893631, -0.0058115, 0.27025422], which describe the positions of the pole and the cart.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Reward</strong></p>
+</td>
+<td>
+<p>A reward of +1 is provided for every timestep that the pole remains upright.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Termination</strong></p>
+</td>
+<td>
+<p>The episode ends when the pole is more than 15 degrees from vertical, or the cart moves more than 2.4 units from the center.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<p>Because this chapter talks about solving continuous control tasks, we will later design a wrapper for CartPole to convert its discrete action space into a continuous one.</p>
+<p>MountainCar was first described by Andrew Moore in his PhD thesis <em>A. Moore, Efficient Memory-Based Learning for Robot Control</em>, 1990, which is widely applied as the benchmark for control, <strong>Markov decision process</strong> (<strong>MDP</strong>), and reinforcement learning algorithms. In MountainCar, a small car is on a one-dimensional track, moving between two mountains and trying to reach the yellow flag, as shown here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-655 image-border" src="assets/b05ae469-0ba1-4cef-811e-584dc93ba924.png" style="width:11.50em;height:7.50em;"/></div>
+<p>The following table provides its specifications:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p><strong>Goal</strong></p>
+</td>
+<td>
+<p>The goal is to reach the top of the right mountain. However, the car's engine is not strong enough to scale the mountain in a single pass. Therefore, the only way to succeed is to drive back and forth to build up momentum.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Action</strong></p>
+</td>
+<td>
+<p>The action space is continuous. The input action is the engine force applied to the car.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Observation</strong></p>
+</td>
+<td>
+<p>The observation is a vector with two elements, for example, [-0.46786288, -0.00619457], which describe the velocity and the position of the car.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Reward</strong></p>
+</td>
+<td>
+<p>The reward is greater if you spend less energy to reach the goal.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Termination</strong></p>
+</td>
+<td>
+<p>The episode ends when the car reaches the goal flag or the maximum number of steps is reached.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>The Pendulum swing-up problem is a classic problem in the control literature and is used as a benchmark for testing control algorithms. In Pendulum, a pole is attached to a pivot point, as shown here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-656 image-border" src="assets/3b3f9b21-e5d5-4f08-bb4c-fc5edac9557b.png" style="width:10.83em;height:11.92em;"/></div>
+<p>Here are the specifications of Pendulum:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p><strong><span>Goal</span></strong></p>
+</td>
+<td>
+<p>The goal is to swing the pole up so it stays upright and to prevent it from falling over.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong><span>Action</span></strong></p>
+</td>
+<td>
+<p>The action space is continuous. The input action is the torque applied to the pole.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong><span>Observation</span></strong></p>
+</td>
+<td>
+<p>The observation is a vector with three elements, for example, [-0.19092327, 0.98160496, 3.36590881], which indicate the angle and angular velocity of the pole.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong><span>Reward</span></strong></p>
+</td>
+<td>
+<p>The reward is computed by a function with the angle, angular velocity, and the torque as the inputs.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong><span>Termination</span></strong></p>
+</td>
+<td>
+<p>The episode ends when the maximum number of steps is reached.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<p>Acrobot was first described by Sutton in the paper <em>Generalization in Reinforcement Learning: Successful Examples Using Sparse Coarse Coding</em>, 1996. The Acrobot system includes two joints and two links, where the joint between the two links is actuated:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-657 image-border" src="assets/0528244b-5626-4c4e-841b-2ece663eb886.png" style="width:10.83em;height:20.08em;"/></div>
+<p>Here are the settings of Acrobot:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p><strong>Goal</strong></p>
+</td>
+<td>
+<p>The goal is to swing the end of the lower link up to a given height.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Action</strong></p>
+</td>
+<td>
+<p>The action space is discrete, namely, the system is controlled by applying a torque of 0, +1 and -1 to the links.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Observation</strong></p>
+</td>
+<td>
+<p>The observation is a vector with six elements, for example, [0.9926474, 0.12104186, 0.99736744, -0.07251337, 0.47965018, -0.31494488], which describe the positions of the two links.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Reward</strong></p>
+</td>
+<td>
+<p>A reward of +1 is provided for every timestep where the lower link is at the given height or, otherwise, -1.</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><strong>Termination</strong></p>
+</td>
+<td>
+<p>The episode ends when the end of the lower link is at the given height, or the maximum number of steps is reached.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p> </p>
+<p><span>Note that, in Gym, both CartPole and Acrobot have discrete</span> action <span>spaces, which means these two tasks can be solved by applying the deep Q-learning algorithm. Well, because this chapter considers continuous control tasks, we need to convert their action spaces into continuous ones. The following class provides a wrapper for Gym classic control tasks:</span></p>
+<pre>class Task:<br/>    <br/>    def __init__(self, name):<br/>        <br/>        assert name in ['CartPole-v0', 'MountainCar-v0', <br/>                        'Pendulum-v0', 'Acrobot-v1']<br/>        self.name = name<br/>        self.task = gym.make(name)<br/>        self.last_state = self.reset()<br/>    <br/>    def reset(self):<br/>        state = self.task.reset()<br/>        self.total_reward = 0<br/>        return state<br/>        <br/>    def play_action(self, action):<br/>        <br/>        if self.name not in ['Pendulum-v0', 'MountainCarContinuous-v0']:<br/>            action = numpy.fmax(action, 0)<br/>            action = action / numpy.sum(action)<br/>            action = numpy.random.choice(range(len(action)), p=action)<br/>        else:<br/>            low = self.task.env.action_space.low<br/>            high = self.task.env.action_space.high<br/>            action = numpy.fmin(numpy.fmax(action, low), high)<br/>            <br/>        state, reward, done, _ = self.task.step(action)<br/>        self.total_reward += reward<br/>        termination = 1 if done else 0<br/>        <br/>        return reward, state, termination<br/>    <br/>    def get_total_reward(self):<br/>        return self.total_reward<br/>    <br/>    def get_action_dim(self):<br/>        if self.name not in ['Pendulum-v0', 'MountainCarContinuous-v0']:<br/>            return self.task.env.action_space.n<br/>        else:<br/>            return self.task.env.action_space.shape[0]<br/>    <br/>    def get_state_dim(self):<br/>        return self.last_state.shape[0]<br/>    <br/>    def get_activation_fn(self):<br/>        if self.name not in ['Pendulum-v0', 'MountainCarContinuous-v0']:<br/>            return tf.nn.softmax<br/>        else:<br/>            return None</pre>
+<p>For CartPole and Acrobot, the input action should be a probability vector indicating the probability of selecting each action. In the <kbd>play_action</kbd> function, an action is randomly sampled based on this probability vector and submitted to the system. The <kbd>get_total_reward</kbd> function returns the total reward in one episode. The <kbd>get_action_dim</kbd> and <kbd>get_state_dim</kbd> functions return the dimension of the action space and the observation, respectively. The <kbd>get_activation_fn</kbd> function is used for the output layer in the actor network, which we will discuss later.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deterministic policy gradient</h1>
+                </header>
+            
+            <article>
+                
+<p>As discussed in the previous chapter, DQN uses the Q-network to estimate the <kbd>state-action value</kbd> function, which has a separate output for each available action. Therefore, the Q-network cannot be applied, due to the continuous action space. A careful reader may remember that there is another architecture of the Q-network that takes both the state and the action as its inputs, and outputs the estimate of the corresponding Q-value. This architecture doesn't require the number of available actions to be finite, and has the capability to deal with continuous input actions:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-658 image-border" src="assets/e4a36225-b99e-4587-941e-2149251fecc7.png" style="width:14.67em;height:11.17em;"/></div>
+<p>If we use this kind of network to estimate the <kbd>state-action value</kbd> function, there must be another network that defines the behavior policy of the agent, namely outputting a proper action given the observed state. In fact, this is the intuition behind actor-critic reinforcement learning algorithms. The actor-critic architecture contains two parts:</p>
+<ol>
+<li style="font-weight: 400"><strong>Actor</strong>: The actor defines the behavior policy of the agent. In control tasks, it outputs the control signal given the current state of the system.</li>
+<li style="font-weight: 400"><strong>Critic</strong>: The critic estimates the Q-value of the current policy. It can judge whether the policy is good or not.</li>
+</ol>
+<p>Therefore, if both the actor and the critic can be trained with the feedbacks (state, reward, next state, termination signal) received from the system, as in training the Q-network in DQN, then the classic control tasks will be solved. But how do we train them?</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The theory behind policy gradient</h1>
+                </header>
+            
+            <article>
+                
+<p>One solution is the <strong>deep deterministic policy gradient</strong> (<strong>DDPG</strong>) algorithm, which combines the actor-critic approach with insights from the success of DQN. This is discussed in the following papers:</p>
+<ul>
+<li>D. Silver, G. Lever, N. Heess, T. Degris, D. Wierstra and M. Riedmiller. <em>Deterministic policy gradient algorithms</em>. In ICML, 2014.</li>
+<li>T. P. Lillicrap, J. J. Hunt, A. Pritzel, N. Heess, T. Erez, Y. Tassa, D. Silver and D. Wierstra. <em>Continuous control with deep reinforcement learning</em>. In ICLR, 2016.</li>
+</ul>
+<p>The reason why DDPG is introduced first is that it is quite similar to DQN, so you can understand the mechanism behind it much more easily after finishing the previous chapter. Recall that DQN is able to train the Q-network in a stable and robust way for the following reasons:</p>
+<ul>
+<li>The Q-network is trained with the samples randomly drawn from the replay memory to minimize the correlations between samples.</li>
+<li> A target network is used to estimate the target Q-value, reducing the probability that oscillation or divergence of the policy occurs. DDPG applies the same strategy, which means that DDPG is also a model-free and off-policy method.</li>
+</ul>
+<p>We use the same notations as in the previous chapter for the reinforcement learning setting. At each timestep <img class="fm-editor-equation" src="assets/0213555b-9970-4ebb-a299-93cecc221371.png" style="width:0.50em;height:1.08em;"/>, the agent observes state <img class="fm-editor-equation" src="assets/37a22f30-aa50-4a09-bb47-2e17e53160d9.png" style="width:1.00em;height:1.00em;"/>, takes action <img class="fm-editor-equation" src="assets/3c05b5fd-7a4c-4908-bf33-124ab777c762.png" style="width:0.67em;height:0.58em;"/> ,and then receives the corresponding reward <img class="fm-editor-equation" src="assets/fc6a21d6-8165-4005-a792-6d83e1f304db.png" style="width:0.92em;height:0.92em;"/> generated from a function <img class="fm-editor-equation" src="assets/87145533-c582-40ee-8cda-be95c2ccc08c.png" style="width:3.17em;height:1.00em;"/>. Instead of using <img class="fm-editor-equation" src="assets/f25863dd-e76e-4b76-9500-1e1d5e13c773.png" style="width:1.83em;height:0.92em;"/> to represent the set of all the available actions at state <img class="fm-editor-equation" src="assets/dd850911-cd3e-4b3a-be3d-0c9f40a99565.png" style="width:1.00em;height:1.00em;"/>, here, we use <img class="fm-editor-equation" src="assets/77bd2c0f-79ee-4a83-b663-17c921f87f38.png" style="width:2.58em;height:0.92em;"/> to denote the policy of the agent, which maps states to a probability distribution over the actions. Many approaches in reinforcement learning, such as DQN, use the Bellman equation as the backbone:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/d33ff51d-b88d-4860-a676-3bed39d88850.png" style="width:33.67em;height:1.67em;"/>.</div>
+<p>The only difference between this formulation and the one in DQN is that the policy <img class="fm-editor-equation" src="assets/2735e862-bbe8-4a3b-a3cf-4e13d9f6316a.png" style="width:0.75em;height:0.75em;"/> here is stochastic, so that the expectation of <img class="fm-editor-equation" src="assets/9b74ca4d-4795-42e5-9963-782190843add.png" style="width:5.08em;height:1.08em;"/> is taken over <img class="fm-editor-equation" src="assets/63b79d7f-ff2c-4b13-b7d9-67134f921b91.png" style="width:2.00em;height:0.92em;"/>. If the target policy <img class="fm-editor-equation" src="assets/df3852c6-b7d4-48f2-906c-85e20d45b6d5.png" style="width:0.67em;height:0.67em;"/> is deterministic, which can be described as a function <img class="fm-editor-equation" src="assets/03d19098-5a51-4ecf-9349-97d235f0572c.png" style="width:1.83em;height:1.00em;"/>, then this inner expectation can be avoided:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/7e5b2b35-ed62-474b-9d78-9ab73c8cd725.png" style="width:29.67em;height:1.75em;"/>.</div>
+<p>The expectation depends only on the environment. This means that it is possible to learn the <kbd>state-action value</kbd> function <img class="fm-editor-equation" src="assets/0e72e393-18cf-49e8-987b-1665d38289b7.png" style="width:0.92em;height:1.17em;"/> off-policy, using transitions that are generated from other policies, as we did in DQN. The function <img class="fm-editor-equation" src="assets/11aa1617-ea61-409b-a303-bf28c1aa4cb0.png" style="width:0.83em;height:1.08em;"/>, the critic, can be approximated by a neural network parameterized by <img class="fm-editor-equation" src="assets/d3a5c035-972e-4dda-8af5-497e2bde1689.png" style="width:1.08em;height:1.00em;"/> and the policy <img class="fm-editor-equation" src="assets/bf619c4b-02a7-4134-a83e-c7c5f7740445.png" style="width:0.50em;height:0.67em;"/>, the actor, can also be represented by another neural network parameterized by <img class="fm-editor-equation" src="assets/0beff831-f282-44be-a4c1-fa3abdc824d9.png" style="width:1.00em;height:0.92em;"/> (in DQN, <img class="fm-editor-equation" src="assets/afb1eec9-f424-4f1b-a510-4e582f3dfa11.png" style="width:2.17em;height:1.17em;"/> is just <img class="fm-editor-equation" src="assets/b7c37d7d-ea25-475a-9b07-4e839a6024fa.png" style="width:5.75em;height:1.33em;"/>). Then, the critic <img class="fm-editor-equation" src="assets/e84ee47b-b0f0-4ab4-9c06-807b68db4548.png" style="width:0.75em;height:0.92em;"/> can be be trained by minimizing the following loss function:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/8885b2f4-a2b1-4a7f-93d1-06c763aa57f4.png" style="width:22.67em;height:1.83em;"/>, </div>
+<p>Here, <img class="fm-editor-equation" src="assets/373f36de-a6b8-4fdd-9f4c-199efec86702.png" style="width:15.75em;height:1.33em;"/>. As in DQN, <img class="fm-editor-equation" src="assets/db4d322c-2054-423a-8834-466d98288b33.png" style="width:1.00em;height:1.00em;"/> can be estimated via the target network and the samples for approximating <img class="fm-editor-equation" src="assets/761e8806-ef76-48da-ac45-a8f533f2277e.png" style="width:2.25em;height:1.17em;"/> can be randomly drawn from the replay memory.</p>
+<p>To train the actor <img class="fm-editor-equation" src="assets/65c68316-35e0-4352-b0bd-4512ce079d3a.png" style="width:0.75em;height:1.00em;"/>, we fix the critic <img class="fm-editor-equation" src="assets/baeaa310-3fb3-4cfd-9786-5b9595570c8b.png" style="width:0.92em;height:1.17em;"/>, learned by minimizing the loss function <img class="fm-editor-equation" src="assets/51ce9801-6891-4d3b-aa28-5fcd61d91376.png" style="width:0.67em;height:0.83em;"/>, and try to maximize <img class="fm-editor-equation" src="assets/8a50c452-1c5f-41b1-8dc7-8f01a0a8686d.png" style="width:6.17em;height:1.17em;"/> over <img class="fm-editor-equation" src="assets/f20dd0ca-a41a-4750-95d3-86434c885672.png" style="width:0.83em;height:0.75em;"/>, since a larger Q-value means a better policy. This can be done by following the applying the chain rule to the expected return with respect to the actor parameters:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b67bb9db-a7c5-40cf-8fcb-1daf7adb257e.png" style="width:34.50em;height:1.67em;"/>.</div>
+<p>The following diagram shows the high-level architecture of DDPG:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-659 image-border" src="assets/ce4a8706-e5a0-400f-bf01-eeac828b66c2.png" style="width:26.75em;height:21.08em;"/></div>
+<p class="mce-root"/>
+<p>Compared to DQN, there is a small difference in updating the target network. Instead of directly copying the weights of <img class="fm-editor-equation" src="assets/83eb027c-4020-42e0-8222-63ccf5903e5b.png" style="width:0.58em;height:0.75em;"/> to the target network after several iterations, a soft update is used:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/74e5cb42-fed1-4443-a51e-0b0a56c6ad40.png" style="width:11.25em;height:1.75em;"/></div>
+<p>Here, <img class="fm-editor-equation" src="assets/4aa85430-4001-4131-b53c-e9d49369d0ee.png" style="width:1.33em;height:1.17em;"/> represents the weights of the target network. This update means that the target values are constrained to change slowly, greatly improving the stability of learning. This simple change moves the relatively unstable problem of learning the value function closer to the case of supervised learning.</p>
+<p>Similar to DQN, DDPG also needs to balance exploration and exploitation during the training. Since the action generated by the policy <img class="fm-editor-equation" src="assets/9df779a4-c193-41f5-8bd6-380ca55498d2.png" style="width:0.75em;height:1.00em;"/> is continuous, the <img class="fm-editor-equation" src="assets/9a1c3ea8-ddcc-4e58-ad65-ec7cae3f99d7.png" style="width:0.58em;height:0.83em;"/>-greedy method cannot be applied. Instead, we can construct an exploration policy <img class="fm-editor-equation" src="assets/d75015e2-a728-46e8-9712-98640b2121d9.png" style="width:0.75em;height:1.00em;"/> by adding noise sampled from a distribution <img class="fm-editor-equation" src="assets/bf171446-b357-49f3-a646-c1cdb3b58a70.png" style="width:0.67em;height:0.75em;"/> to the actor policy <img class="fm-editor-equation" src="assets/f0bfd658-9b98-4c21-a175-efd17e3715b3.png" style="width:0.58em;height:0.83em;"/>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/dde2dd51-dbd4-48c5-98d5-8cfab67139c5.png" style="width:12.08em;height:1.75em;"/> where <img class="fm-editor-equation" src="assets/3d8a98da-c78f-43e5-b978-ca2258dddb19.png" style="font-size: 1em;width:3.08em;height:1.08em;"/></div>
+<p><img class="fm-editor-equation" src="assets/4d4c9de1-140a-446c-a4c9-77d2d42b8185.png" style="width:0.58em;height:0.67em;"/> can be chosen as <img class="fm-editor-equation" src="assets/90caf88c-219a-40e7-8fe4-12dc270d38ce.png" style="width:1.17em;height:0.67em;"/>, where <img class="fm-editor-equation" src="assets/c8166a78-9468-4ac9-b5d1-b82e4e5e753c.png" style="width:0.92em;height:0.83em;"/> is the standard Gaussian distribution and <img class="fm-editor-equation" src="assets/a1072a0b-8629-45ef-a059-7c0de83c8a87.png" style="width:0.75em;height:0.75em;"/> decreases during each training step. Another choice is to apply an Ornstein-Uhlenbeck process to generate the exploration noise <img class="fm-editor-equation" src="assets/d90e6e65-59e3-447f-9a31-42a692177ee9.png" style="width:0.50em;height:0.67em;"/>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">DPG algorithm</h1>
+                </header>
+            
+            <article>
+                
+<p>The following pseudo code shows the DDPG algorithm:</p>
+<pre>Initialize replay memory <img class="fm-editor-equation" src="assets/f9a3c264-95ab-459f-8e91-0e7c080928cb.png" style="width:0.75em;height:0.83em;"/> to capacity <img class="fm-editor-equation" src="assets/7aa63097-9a64-4570-bcb1-f62d38eccc68.png" style="width:0.67em;height:0.58em;"/>;<br/>Initialize the critic network <img class="fm-editor-equation" src="assets/ba649695-e792-48f0-a66e-21dc67532ed6.png" style="width:3.42em;height:1.00em;"/> and actor network <img class="fm-editor-equation" src="assets/7ee8ace4-3755-4d57-95d7-0c612e31753f.png" style="width:2.75em;height:1.00em;"/> with random weights <img class="fm-editor-equation" src="assets/174f1f4a-2bcf-4c76-9471-5282a684b3b5.png" style="width:0.83em;height:0.75em;"/> and <img class="fm-editor-equation" src="assets/9f8f2d87-8501-4686-9127-0f2088718a5d.png" style="width:0.75em;height:0.67em;"/>;<br/>Initialize the target networks <img class="fm-editor-equation" src="assets/361b109a-395f-40e6-a84e-36a0ca821b1c.png" style="width:3.25em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/27081d6b-c795-4ae1-9d4d-bbb75bf61e82.png" style="width:2.75em;height:1.00em;"/> with weights <img class="fm-editor-equation" src="assets/6f146290-0489-4575-8750-5cf9d2000642.png" style="width:2.92em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/0b260aa2-151c-4e51-aa02-49602d95af97.png" style="width:3.17em;height:1.00em;"/>;<br/>Repeat for each episode:<br/>    Set time step <img class="fm-editor-equation" src="assets/2a3c4086-9d0a-423a-af55-8dfc5645d8a0.png" style="width:2.17em;height:0.83em;"/>;<br/>    Initialize a random process <img class="fm-editor-equation" src="assets/9b2494c4-8ae1-4e42-9e01-eff9725df487.png" style="width:1.00em;height:0.92em;"/> for action exploration noise;<br/>    Receive an initial observation state <img class="fm-editor-equation" src="assets/c9e4e0ab-26df-4084-a54f-9606f3864f84.png" style="width:0.92em;height:0.75em;"/>;<br/>    While the terminal state hasn't been reached:<br/>        Select an action <img class="fm-editor-equation" src="assets/0a0495ce-c6bb-491b-b819-37971afdde08.png" style="width:6.83em;height:1.00em;"/> according to the current policy and exploration noise;<br/>        Execute action <img class="fm-editor-equation" src="assets/aeb58b08-91ff-4510-8f2d-325153cb64c2.png" style="width:0.83em;height:0.75em;"/> in the simulator and observe reward <img class="fm-editor-equation" src="assets/9dcc91f5-c225-4860-9d76-e3445ba7a801.png" style="width:0.67em;height:0.67em;"/> and the next state <img class="fm-editor-equation" src="assets/c77d3ab0-9268-4fd1-96b8-3f042c506f1f.png" style="width:1.83em;height:0.92em;"/>;<br/>        Store transition <img class="fm-editor-equation" src="assets/5f7f9284-5186-4aaa-9e32-e34964b9eb2b.png" style="width:6.25em;height:1.17em;"/> into replay memory <img class="fm-editor-equation" src="assets/bd60d138-e0cb-4673-a5af-b8e4272b63be.png" style="width:0.67em;height:0.75em;"/>;<br/>        Randomly sample a batch of <img class="fm-editor-equation" src="assets/1788b3c6-3c41-4f77-adba-1f7c57b2d7d1.png" style="width:0.58em;height:0.67em;"/> transitions <img class="fm-editor-equation" src="assets/fdbe445e-6716-4e2b-b956-8f14d08ab2a3.png" style="width:6.17em;height:1.17em;"/> from <img class="fm-editor-equation" src="assets/00199411-6775-4dd2-8df0-48ef31383aba.png" style="width:0.50em;height:0.58em;"/>;<br/>        Set <img class="fm-editor-equation" src="assets/bbd3b309-ecc9-4411-b548-eddc4e1da482.png" style="width:3.42em;height:1.00em;"/> if <img class="fm-editor-equation" src="assets/d5a53791-05b4-4539-bb59-73b21bb2344c.png" style="width:2.00em;height:1.00em;"/> is a terminal state or <img class="fm-editor-equation" src="assets/6676a522-8a26-4845-babb-76a6cbd3ced9.png" style="width:14.33em;height:1.33em;"/> if <img class="fm-editor-equation" src="assets/7bb90b49-1de5-47be-bbe9-1fef55eddbcf.png" style="width:2.00em;height:1.00em;"/> is a non-terminal state;<br/>        Update critic by minimizing the loss:<br/>                      <img class="fm-editor-equation" src="assets/fc5d0440-1630-43c2-a5eb-08960d67b2ad.png" style="width:7.58em;height:1.83em;"/>;<br/>        Update the actor policy using the sampled policy gradient:<br/>                      <img class="fm-editor-equation" src="assets/b97692e0-cd98-4cae-b308-3ad69fb49208.png" style="width:10.42em;height:2.00em;"/>;<br/>        Update the target networks:<br/>                      <img class="fm-editor-equation" src="assets/b647905d-c2b1-49ed-90cc-6b2000aaf8ef.png" style="width:9.08em;height:1.33em;"/>,<br/>                      <img class="fm-editor-equation" src="assets/15dc4492-2623-4952-9a54-58845b437d8f.png" style="width:8.50em;height:1.25em;"/>;<br/>    End while</pre>
+<p>There is a natural extension of DDPG by replacing the feedforward neural networks used for approximating the actor and the critic with recurrent neural networks. This extension is called the <strong>recurrent deterministic policy gradient</strong> algorithm (<strong>RDPG</strong>) and is discussed in the f paper N. Heess, J. J. Hunt, T. P. Lillicrap and D. Silver. <em>Memory-based control with recurrent neural networks</em>. 2015.</p>
+<p>The recurrent critic and actor are trained using <strong>backpropagation through time</strong> (<strong>BPTT</strong>). For readers who are interested in it, the paper can be downloaded from <a href="https://arxiv.org/abs/1512.04455">https://arxiv.org/abs/1512.04455</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Implementation of DDPG</h1>
+                </header>
+            
+            <article>
+                
+<p>This section will show you how to implement the actor-critic architecture using TensorFlow. The code structure is almost the same as the DQN implementation that was shown in the previous chapter.</p>
+<p>The <kbd>ActorNetwork</kbd> is a simple MLP that takes the observation state as its input:</p>
+<pre>class ActorNetwork:<br/>    <br/>    def __init__(self, input_state, output_dim, hidden_layers, activation=tf.nn.relu):<br/>        <br/>        self.x = input_state<br/>        self.output_dim = output_dim<br/>        self.hidden_layers = hidden_layers<br/>        self.activation = activation<br/>        <br/>        with tf.variable_scope('actor_network'):<br/>            self.output = self._build()<br/>            self.vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, <br/>                                          tf.get_variable_scope().name)<br/>        <br/>    def _build(self):<br/>        <br/>        layer = self.x<br/>        init_b = tf.constant_initializer(0.01)<br/>        <br/>        for i, num_unit in enumerate(self.hidden_layers):<br/>            layer = dense(layer, num_unit, init_b=init_b, name='hidden_layer_{}'.format(i))<br/>            <br/>        output = dense(layer, self.output_dim, activation=self.activation, init_b=init_b, name='output')<br/>        return output</pre>
+<p>The constructor requires four arguments: <kbd>input_state</kbd>, <kbd>output_dim</kbd>, <kbd>hidden_layers</kbd>, and <kbd>activation</kbd>. <kbd>input_state</kbd> is a tensor for the observation state. <kbd>output_dim</kbd> is the dimension of the action space. <kbd>hidden_layers</kbd> specifies the number of the hidden layers and the number of units for each layer. <kbd>activation</kbd> indicates the activation function for the output layer.</p>
+<p>The <kbd>CriticNetwork</kbd> is also a MLP, which is enough for the classic control tasks:</p>
+<pre>class CriticNetwork:<br/>    <br/>    def __init__(self, input_state, input_action, hidden_layers):<br/>        <br/>        assert len(hidden_layers) &gt;= 2<br/>        self.input_state = input_state<br/>        self.input_action = input_action<br/>        self.hidden_layers = hidden_layers<br/>        <br/>        with tf.variable_scope('critic_network'):<br/>            self.output = self._build()<br/>            self.vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, <br/>                                          tf.get_variable_scope().name)<br/>    <br/>    def _build(self):<br/>        <br/>        layer = self.input_state<br/>        init_b = tf.constant_initializer(0.01)<br/>        <br/>        for i, num_unit in enumerate(self.hidden_layers):<br/>            if i != 1:<br/>                layer = dense(layer, num_unit, init_b=init_b, name='hidden_layer_{}'.format(i))<br/>            else:<br/>                layer = tf.concat([layer, self.input_action], axis=1, name='concat_action')<br/>                layer = dense(layer, num_unit, init_b=init_b, name='hidden_layer_{}'.format(i))<br/>        <br/>        output = dense(layer, 1, activation=None, init_b=init_b, name='output')<br/>        return tf.reshape(output, shape=(-1,))</pre>
+<p>The network takes the state and the action as its inputs. It first maps the state into a hidden feature representation and then concatenates this representation with the action, followed by several hidden layers. The output layer generates the Q-value that corresponds to the inputs.</p>
+<p>The actor-critic network combines the actor network and the critic network together:</p>
+<pre>class ActorCriticNet:<br/>    <br/>    def __init__(self, input_dim, action_dim, <br/>                 critic_layers, actor_layers, actor_activation, <br/>                 scope='ac_network'):<br/>        <br/>        self.input_dim = input_dim<br/>        self.action_dim = action_dim<br/>        self.scope = scope<br/>        <br/>        self.x = tf.placeholder(shape=(None, input_dim), dtype=tf.float32, name='x')<br/>        self.y = tf.placeholder(shape=(None,), dtype=tf.float32, name='y')<br/>        <br/>        with tf.variable_scope(scope):<br/>            self.actor_network = ActorNetwork(self.x, action_dim, <br/>                                              hidden_layers=actor_layers, <br/>                                              activation=actor_activation)<br/>            <br/>            self.critic_network = CriticNetwork(self.x, <br/>                                                self.actor_network.get_output_layer(),<br/>                                                hidden_layers=critic_layers)<br/>            <br/>            self.vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, <br/>                                          tf.get_variable_scope().name)<br/>            self._build()<br/>    <br/>    def _build(self):<br/>        <br/>        value = self.critic_network.get_output_layer()<br/>        <br/>        actor_loss = -tf.reduce_mean(value)<br/>        self.actor_vars = self.actor_network.get_params()<br/>        self.actor_grad = tf.gradients(actor_loss, self.actor_vars)<br/>        tf.summary.scalar("actor_loss", actor_loss, collections=['actor'])<br/>        self.actor_summary = tf.summary.merge_all('actor')<br/>        <br/>        critic_loss = 0.5 * tf.reduce_mean(tf.square((value - self.y)))<br/>        self.critic_vars = self.critic_network.get_params()<br/>        self.critic_grad = tf.gradients(critic_loss, self.critic_vars)<br/>        tf.summary.scalar("critic_loss", critic_loss, collections=['critic'])<br/>        self.critic_summary = tf.summary.merge_all('critic')</pre>
+<p>The constructor requires six arguments, as follows: <kbd>input_dim</kbd> and <kbd>action_dim</kbd> are the dimensions of the state space and the action space, respectively. <kbd>critic_layers</kbd> and <kbd>actor_layers</kbd> specify the hidden layers of the critic network and the actor network.  <kbd>actor_activation</kbd> indicates the activation function for the output layer of the actor network. <kbd>scope</kbd> is the scope name used for the <kbd>scope</kbd> TensorFlow variable.</p>
+<p class="mce-root"/>
+<p>The constructor first creates an instance of the <kbd>self.actor_network</kbd> <span>actor network </span>with an input of <kbd>self.x,</kbd> where <kbd>self.x</kbd> represents the current state. It then creates an instance of the critic network using the following as the inputs: <kbd><span>self.actor_network.get_output_layer()</span></kbd> as the output of the actor network and <kbd>self.x</kbd> as the current state. Given these two networks, the constructor calls <kbd>self._build()</kbd> to build the loss functions for the actor and critic that we discussed previously. The actor loss is <kbd>-tf.reduce_mean(value)</kbd>, where <kbd>value</kbd> is the Q-value computed by the critic network. The critic loss is <kbd>0.5 * tf.reduce_mean(tf.square((value - self.y)))</kbd>, where <kbd>self.y</kbd> is a tensor for the predicted target value computed by the target network.</p>
+<p>The class <kbd>ActorCriticNet</kbd> provides the functions for calculating the action and the Q-value given the current state, that is, <kbd>get_action</kbd> and <kbd>get_value</kbd>. It also provides <kbd>get_action_value</kbd>, which computes the <kbd>state-action value</kbd> function given the current state and the action taken by the agent:</p>
+<pre>class ActorCriticNet:<br/>    <br/>    def get_action(self, sess, state):<br/>        return self.actor_network.get_action(sess, state)<br/>    <br/>    def get_value(self, sess, state):<br/>        return self.critic_network.get_value(sess, state)<br/>    <br/>    def get_action_value(self, sess, state, action):<br/>        return self.critic_network.get_action_value(sess, state, action)<br/>    <br/>    def get_actor_feed_dict(self, state):<br/>        return {self.x: state}<br/>    <br/>    def get_critic_feed_dict(self, state, action, target):<br/>        return {self.x: state, self.y: target, <br/>                self.critic_network.input_action: action}<br/>    <br/>    def get_clone_op(self, network, tau=0.9):<br/>        update_ops = []<br/>        new_vars = {v.name.replace(network.scope, ''): v for v in network.vars}<br/>        for v in self.vars:<br/>            u = (1 - tau) * v + tau * new_vars[v.name.replace(self.scope, '')]<br/>            update_ops.append(tf.assign(v, u))<br/>        return update_ops</pre>
+<p>Because DPG has almost the same architecture as DQN, the implementations of the replay memory and the optimizer are not shown in this chapter. For more details, you can refer to the previous chapter or visit our GitHub repository (<a href="https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects">https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects</a>). By combining these modules together, we can implement the <kbd>DPG</kbd> class for the deterministic policy gradient algorithm:</p>
+<pre>class DPG:<br/>    <br/>    def __init__(self, config, task, directory, callback=None, summary_writer=None):<br/>        <br/>        self.task = task<br/>        self.directory = directory<br/>        self.callback = callback<br/>        self.summary_writer = summary_writer<br/>        <br/>        self.config = config<br/>        self.batch_size = config['batch_size']<br/>        self.n_episode = config['num_episode']<br/>        self.capacity = config['capacity']<br/>        self.history_len = config['history_len']<br/>        self.epsilon_decay = config['epsilon_decay']<br/>        self.epsilon_min = config['epsilon_min']<br/>        self.time_between_two_copies = config['time_between_two_copies']<br/>        self.update_interval = config['update_interval']<br/>        self.tau = config['tau']<br/>        <br/>        self.action_dim = task.get_action_dim()<br/>        self.state_dim = task.get_state_dim() * self.history_len<br/>        self.critic_layers = [50, 50]<br/>        self.actor_layers = [50, 50]<br/>        self.actor_activation = task.get_activation_fn()<br/>        <br/>        self._init_modules()</pre>
+<p>Here, <kbd>config</kbd> includes all the parameters of DPG, for example, batch size and learning rate for training. The <kbd>task</kbd> is an instance of a certain classic control task. In the constructor, the replay memory, Q-network, target network, and optimizer are initialized by calling the <kbd>_init_modules</kbd> function:</p>
+<pre>    def _init_modules(self):<br/>        # Replay memory<br/>        self.replay_memory = ReplayMemory(history_len=self.history_len, <br/>                                          capacity=self.capacity)<br/>        # Actor critic network<br/>        self.ac_network = ActorCriticNet(input_dim=self.state_dim, <br/>                                         action_dim=self.action_dim, <br/>                                         critic_layers=self.critic_layers, <br/>                                         actor_layers=self.actor_layers, <br/>                                         actor_activation=self.actor_activation,<br/>                                         scope='ac_network')<br/>        # Target network<br/>        self.target_network = ActorCriticNet(input_dim=self.state_dim, <br/>                                             action_dim=self.action_dim, <br/>                                             critic_layers=self.critic_layers, <br/>                                             actor_layers=self.actor_layers, <br/>                                             actor_activation=self.actor_activation,<br/>                                             scope='target_network')<br/>        # Optimizer<br/>        self.optimizer = Optimizer(config=self.config, <br/>                                   ac_network=self.ac_network, <br/>                                   target_network=self.target_network, <br/>                                   replay_memory=self.replay_memory)<br/>        # Ops for updating target network<br/>        self.clone_op = self.target_network.get_clone_op(self.ac_network, tau=self.tau)<br/>        # For tensorboard<br/>        self.t_score = tf.placeholder(dtype=tf.float32, shape=[], name='new_score')<br/>        tf.summary.scalar("score", self.t_score, collections=['dpg'])<br/>        self.summary_op = tf.summary.merge_all('dpg')<br/>        <br/>    def choose_action(self, sess, state, epsilon=0.1):<br/>        x = numpy.asarray(numpy.expand_dims(state, axis=0), dtype=numpy.float32)<br/>        action = self.ac_network.get_action(sess, x)[0]<br/>        return action + epsilon * numpy.random.randn(len(action))<br/>    <br/>    def play(self, action):<br/>        r, new_state, termination = self.task.play_action(action)<br/>        return r, new_state, termination<br/><br/>    def update_target_network(self, sess):<br/>        sess.run(self.clone_op)</pre>
+<p>The <kbd>choose_action</kbd> function selects an action based on the current estimate of the actor-critic network and the observed state. </p>
+<div class="packt_infobox">Note that a Gaussian noise controlled by <kbd>epsilon</kbd> is added for exploration.</div>
+<p>The <kbd>play</kbd> function submits an action into the simulator and returns the feedback from the simulator. The <kbd>update_target_network</kbd> function updates the target network from the current actor-critic network.</p>
+<p>To begin the training process, the following function can be called:</p>
+<pre>    def train(self, sess, saver=None):<br/>        <br/>        num_of_trials = -1<br/>        for episode in range(self.n_episode):<br/>            frame = self.task.reset()<br/>            for _ in range(self.history_len+1):<br/>                self.replay_memory.add(frame, 0, 0, 0)<br/>            <br/>            for _ in range(self.config['T']):<br/>                num_of_trials += 1<br/>                epsilon = self.epsilon_min + \<br/>                          max(self.epsilon_decay - num_of_trials, 0) / \<br/>                          self.epsilon_decay * (1 - self.epsilon_min)<br/>                if num_of_trials % self.update_interval == 0:<br/>                    self.optimizer.train_one_step(sess, num_of_trials, self.batch_size)<br/>                <br/>                state = self.replay_memory.phi(frame)<br/>                action = self.choose_action(sess, state, epsilon) <br/>                r, new_frame, termination = self.play(action)<br/>                self.replay_memory.add(frame, action, r, termination)<br/>                frame = new_frame<br/>                <br/>                if num_of_trials % self.time_between_two_copies == 0:<br/>                    self.update_target_network(sess)<br/>                    self.save(sess, saver)<br/>                <br/>                if self.callback:<br/>                    self.callback()<br/>                if termination:<br/>                    score = self.task.get_total_reward()<br/>                    summary_str = sess.run(self.summary_op, feed_dict={self.t_score: score})<br/>                    self.summary_writer.add_summary(summary_str, num_of_trials)<br/>                    self.summary_writer.flush()<br/>                    break</pre>
+<p>In each episode, it calls <kbd>replay_memory.phi</kbd> to get the current state and calls the <kbd>choose_action</kbd> function to select an action based on the current state. This action is submitted into the simulator by calling the <kbd>play</kbd> <span>function, </span>which returns the corresponding reward, next state, and termination signal. Then, the <kbd>(current state, action, reward, termination)</kbd> transition is stored into the replay memory. For every <kbd>update_interval</kbd> step (<kbd>update_interval = 1</kbd> ,by default), the actor-critic network is trained with a batch of transitions that are randomly sampled from the replay memory. For every <kbd>time_between_two_copies</kbd> step, the target network is updated and the weights of the Q-network are saved to the hard disk.</p>
+<p>After the training step, the following function can be called for evaluating the performance of our trained agent:</p>
+<pre>    def evaluate(self, sess):<br/>        <br/>        for episode in range(self.n_episode):<br/>            frame = self.task.reset()<br/>            for _ in range(self.history_len+1):<br/>                self.replay_memory.add(frame, 0, 0, 0)<br/>            <br/>            for _ in range(self.config['T']):<br/>                print("episode {}, total reward {}".format(episode, <br/>                                                           self.task.get_total_reward()))<br/>                <br/>                state = self.replay_memory.phi(frame)<br/>                action = self.choose_action(sess, state, self.epsilon_min) <br/>                r, new_frame, termination = self.play(action)<br/>                self.replay_memory.add(frame, action, r, termination)<br/>                frame = new_frame<br/><br/>                if self.callback:<br/>                    self.callback()<br/>                    if termination:<br/>                        break</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Experiments</h1>
+                </header>
+            
+            <article>
+                
+<p>The full implementation of DPG can be downloaded from our GitHub (<a href="https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects">https://github.com/PacktPublishing/Python-Reinforcement-Learning-Projects</a>). To train an agent for CartPole, run the following command under the <kbd>src</kbd> folder:</p>
+<pre><strong><span>python train.py -t CartPole-v0 -d cpu</span></strong></pre>
+<p>There are two arguments in <kbd>train.py</kbd>. One is <kbd>-t</kbd>, or <kbd>--task</kbd>, indicating the name of the classic control task you want to test. The other one is <kbd>-d</kbd>, or <kbd>--device</kbd>, which specifies the device (CPU or GPU) that you want to use to train the actor-critic network. Since the dimensions of the state spaces of these classic control tasks are relatively low compared to the Atari environment, using the CPU to train the agent is fast enough. It should only take several minutes to finish.</p>
+<p>During the training, you can open a new Terminal and type the following command to visualize both the architecture of the actor-critic network and the training procedure:</p>
+<pre><strong><span>tensorboard --logdir=log/CartPole-v0/train</span></strong></pre>
+<p>Here, <kbd>logdir</kbd> points to the folder where the <kbd>CartPole-v0</kbd> log file is stored. Once TensorBoard is running, navigate your web browser to <kbd>localhost:6006</kbd> to view the TensorBoard:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-660 image-border" src="assets/86309e48-df49-4dc5-91d1-53a3b33e5f6b.png" style="width:45.08em;height:41.67em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Tensorboard view</div>
+<p>The top two graphs show the changes of the actor loss and the critic loss against the training step. For classical control tasks, the actor loss usually decreases consistently, while the critic loss has a large fluctuation. After 60,000 training steps, the score becomes stable, achieving 200, the highest score that can be reached in the CartPole simulator.</p>
+<p>Using a similar command, you can also train an agent for the <kbd>Pendulum</kbd> task:</p>
+<pre><strong><span>python train.py -t Pendulum-v0 -d cpu</span></strong></pre>
+<p>Then, check the training procedure via <kbd>Tensorboard</kbd>:</p>
+<pre><strong><span>tensorboard --logdir=log/Pendulum-v0/train</span></strong></pre>
+<p>The following screenshot shows the changes of the score during  training:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-661 image-border" src="assets/6af8e21c-55b9-405d-ac5a-1fc545f87f55.png" style="width:45.58em;height:41.67em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref">Changes in score during training</div>
+<p>A careful reader may notice that the score of Pendulum fluctuates widely compared to the score of CartPole. There are two reasons that are causing this problem:</p>
+<ul>
+<li>In Pendulum, the starting position of the pole is not deterministic, namely, it may be different for two episodes</li>
+<li>The train procedure in DPG may not be always stable, especially for complicated tasks, such as MuJoCo control tasks</li>
+</ul>
+<p>The MuJoCo control tasks, for example, Ant, HalfCheetah, Hopper, Humanoid, InvertedPendulum, Reacher, Swimmer, and Walker2d provided by Gym, have high-dimensional state and action space, which makes DPG fail. If you are curious about what happens when running DPG with the <kbd>Hopper-v0</kbd> task, you can try the following:</p>
+<pre><strong><span>python train.py -t Hopper-v0 -d cpu</span></strong></pre>
+<p>After several minutes, you will see that DPG cannot teach Hopper how to walk. The main reason why DPG fails in this case is that the simple actor and critic updates discussed here become unstable with high-dimensional inputs.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Trust region policy optimization</h1>
+                </header>
+            
+            <article>
+                
+<p>The <strong>trust region policy optimization</strong> (<strong>TRPO</strong>) <span>algorithm </span>was proposed to solve complex continuous control tasks in the following paper: Schulman, S. Levine, P. Moritz, M. Jordan and P. Abbeel. <em>Trust Region Policy Optimization</em>. In ICML, 2015.</p>
+<p>To understand why TRPO works requires some mathematical background. The main idea is that it is better to guarantee that the new policy, <img class="fm-editor-equation" src="assets/31f8d3cd-e898-4f0e-8ba2-b373935baa9e.png" style="width:2.33em;height:0.92em;"/>, optimized by one training step, not only monotonically decreases the optimization loss function (and thus improves the policy), but also does not deviate from the previous policy <img class="fm-editor-equation" src="assets/312b08f4-832f-453a-8d90-e4d0f2d9c0bb.png" style="width:1.75em;height:0.83em;"/> much, which means that there should be a constraint on the difference between <img class="fm-editor-equation" src="assets/8fe518c7-f75b-44df-9f5b-e0299bf3ee1a.png" style="width:2.33em;height:0.92em;"/> and <img class="fm-editor-equation" src="assets/d8d38231-bc91-43c4-a75f-8f3d39b6d8ca.png" style="width:2.00em;height:0.92em;"/>, for example, <img class="fm-editor-equation" src="assets/dba88e62-aaac-48df-8696-ab24ba291e01.png" style="width:7.17em;height:1.17em;"/> for a certain constraint function <img class="fm-editor-equation" src="assets/87c66a83-5938-4481-8b63-92a08ddd9b81.png" style="width:1.83em;height:1.17em;"/> constant <img class="fm-editor-equation" src="assets/5b9d38d9-0b1e-443b-b93f-0b124e2af135.png" style="width:0.50em;height:1.08em;"/>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Theory behind TRPO</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's see the mechanism behind TRPO. If you feel that this part is hard to understand, you can skip it and go directly to how to run TRPO to solve MuJoCo control tasks. Consider an infinite-horizon discounted Markov decision process denoted by <img class="fm-editor-equation" src="assets/4382afa1-271c-4016-bcf0-682471689d03.png" style="width:5.33em;height:0.92em;"/>, where <img class="fm-editor-equation" src="assets/fa7e1576-fa63-4912-9f28-766c74f39662.png" style="width:0.67em;height:0.92em;"/> is a finite set of states, <img class="fm-editor-equation" src="assets/b8bf6678-7e34-4238-bfae-95ca5d706259.png" style="width:0.83em;height:1.00em;"/> is a finite set of actions, <img class="fm-editor-equation" src="assets/ee138461-338b-4461-9c8f-f852cea0201b.png" style="width:0.75em;height:0.83em;"/> is the transition probability distribution, <img class="fm-editor-equation" src="assets/4e72cb1f-a0b0-45c3-96df-eb65d2815c6a.png" style="width:0.67em;height:0.92em;"/> is the cost function, <img class="fm-editor-equation" src="assets/8bcde0ac-2124-40cb-ae6b-fbacc977fa36.png" style="width:1.08em;height:0.92em;"/> is the distribution of the initial state, and <img class="fm-editor-equation" src="assets/61ab4a6b-a890-4de7-a592-f11acc0c5e6c.png" style="width:0.83em;height:1.25em;"/> is the discount factor. Let <img class="fm-editor-equation" src="assets/779c9c94-3227-4173-bc9b-47a496df8645.png" style="width:0.50em;height:0.50em;"/> be a stochastic policy that we want to learn by minimizing the following expected discounted cost:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/4b2b2d3b-82ce-4be8-9268-804c004a1c75.png" style="width:12.75em;height:3.25em;"/></div>
+<p>Here, this is <img class="fm-editor-equation" src="assets/c6326a20-968a-4c4b-8edc-ef2a78164482.png" style="width:3.42em;height:0.92em;"/>, <img class="fm-editor-equation" src="assets/4b3f52e1-26c7-469c-84ed-afc5dde95507.png" style="width:5.83em;height:1.25em;"/> and <img class="fm-editor-equation" src="assets/687aa323-eee8-4230-8c65-e74bae743a2e.png" style="width:6.83em;height:1.08em;"/>. The definitions of the <kbd>state-action value</kbd> function <img class="fm-editor-equation" src="assets/ec709246-272b-4d6e-a633-8650958a88d8.png" style="width:1.33em;height:1.08em;"/>, the value function <img class="fm-editor-equation" src="assets/fd5bb2d1-02ca-4612-b937-a28495e2122b.png" style="width:1.08em;height:1.00em;"/> ,and the advantage function <img class="fm-editor-equation" src="assets/e2731530-62ec-47a3-ad8f-0e4f0fa96b4d.png" style="width:1.25em;height:1.00em;"/> under policy <img class="fm-editor-equation" src="assets/f0c57c4c-00ae-41c7-ae5b-504777148477.png" style="width:0.75em;height:0.75em;"/> are as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/1ecdecae-c636-4f18-8a0f-d9f1852b3f55.png" style="width:19.33em;height:3.67em;"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/dbe7950e-c726-4be1-ae1d-571772cd0ec3.png" style="width:16.42em;height:3.58em;"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/695cfd42-af47-4f7a-a1df-2c19428aabb3.png" style="width:14.25em;height:1.42em;"/></div>
+<p>Here, this is <img class="fm-editor-equation" src="assets/8ad044e8-e6bc-40d4-93c0-37581d8858a6.png" style="width:5.83em;height:1.25em;"/> and<span> </span><img class="fm-editor-equation" src="assets/e487be73-6cde-4217-8024-e4f7cd401537.png" style="width:8.42em;height:1.33em;"/><span>.</span></p>
+<p>Our goal is to improve policy <img class="fm-editor-equation" src="assets/19d0debc-2372-4819-a9b2-ac5e04248f11.png" style="width:0.92em;height:0.92em;"/> (by reducing the expected discounted cost) during each training step. In order to design an algorithm monotonically improving <img class="fm-editor-equation" src="assets/68b1c497-e041-4391-8a5b-36ea39ab6685.png" style="width:0.92em;height:0.92em;"/>, let's consider the following equation:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f20b954f-9a2d-4cbf-94c3-27e99e78982c.png" style="width:19.08em;height:3.42em;"/></div>
+<p>Here, this is <img class="fm-editor-equation" src="assets/4878a2f8-03b8-4c93-8ca6-ebc08fc5382b.png" style="width:3.42em;height:0.92em;"/><span>, <img class="fm-editor-equation" src="assets/311043e8-58ca-4b6b-89e5-f82e712a6f04.png" style="width:5.50em;height:1.17em;"/></span><span> and</span><span> </span><img class="fm-editor-equation" src="assets/324cf7f3-59a2-460b-84a2-efef176891c5.png" style="width:6.25em;height:1.00em;"/><span>. This equation holds for any policy <img class="fm-editor-equation" src="assets/81d9e91f-d378-4c87-a354-414d1ad84942.png" style="width:0.75em;height:1.00em;"/>. </span>For the readers who are interested in the proof of this equation, refer to the appendix in the TRPO paper or the paper <em>Approximately optimal approximate reinforcement learning</em>, written by Kakade and Langford. To simplify this equation, let <img class="fm-editor-equation" src="assets/10619e12-c8bf-4cf2-84a7-1c4e1cb07ec1.png" style="width:1.58em;height:1.25em;"/> be the discounted visitation frequencies:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/3c544a5f-60c8-4d3f-80a6-c3296d59e3fc.png" style="width:22.00em;height:1.25em;"/></div>
+<p>By rearranging the preceding equation to sum over states instead of timesteps, it becomes the following:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/3bceac54-47bb-4518-acb3-7b256a13febc.png" style="width:19.25em;height:2.42em;"/></div>
+<p>From this equation, we can see that any policy update <img class="fm-editor-equation" src="assets/fda3a1ca-854b-44d8-a0c6-197d8cc0cb8c.png" style="width:3.08em;height:0.92em;"/> that has a non-positive expected advantage at every state <img class="fm-editor-equation" src="assets/a6e419f2-c2d2-46fe-afef-48570caec744.png" style="width:0.75em;height:1.00em;"/>, that is, <img class="fm-editor-equation" src="assets/baf76ede-f391-4ed9-b6e9-605cb166bcdf.png" style="width:7.08em;height:1.67em;"/>, is guaranteed to reduce the cost <img class="fm-editor-equation" src="assets/0ffe18a6-a81d-4139-8539-c77c0badf09c.png" style="width:0.75em;height:1.33em;"/>. Therefore, for discrete action space such as the Atari environment, the deterministic policy <img class="fm-editor-equation" src="assets/88b0ef26-401f-4033-8576-82d6fca72fab.png" style="width:10.92em;height:1.25em;"/>, selected in DQN, guarantees to improves the policy if there is at least one state-action pair with a negative advantage value and nonzero state visitation probability. However, in practical problems, especially when the policy is approximated by a neural network, there will be some state for which the expected advantage is positive, due to approximation errors. Besides this, the dependency of <img class="fm-editor-equation" src="assets/5642fe43-339d-46fb-be5d-7b6bd14b1df0.png" style="width:2.58em;height:1.33em;"/> on <img class="fm-editor-equation" src="assets/0fc4904e-49e5-447a-a56a-efecaa1ff4a3.png" style="width:0.92em;height:1.25em;"/> makes this equation hard to optimize, so TRPO considers optimizing the following function by replacing <img class="fm-editor-equation" src="assets/d7fce747-17fc-4da3-97d6-20db3c3c9ed9.png" style="width:1.17em;height:0.92em;"/> with <img class="fm-editor-equation" src="assets/3f64995a-2da0-4ea4-9508-dd5d750197b6.png" style="width:1.33em;height:1.08em;"/>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/78aa2307-eb0c-43b9-bd95-7d12f26f0530.png" style="width:20.75em;height:2.50em;"/></div>
+<p>Kakade and Langford showed that if we have a parameterized policy, <img class="fm-editor-equation" src="assets/8fd694a5-34cc-4604-8330-309b3cae3d44.png" style="width:1.33em;height:1.00em;"/>, which is a differentiable function of the parameter <img class="fm-editor-equation" src="assets/1fe4211a-0762-4c8e-b964-f82205c58113.png" style="width:0.75em;height:1.42em;"/>, then for any parameter <img class="fm-editor-equation" src="assets/aed1c2ad-56e3-4a6c-b9cc-667860302101.png" style="width:1.00em;height:1.08em;"/>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b26d3705-7acd-46e3-95d9-7960a539a17d.png" style="width:6.75em;height:1.58em;"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/2c4d94aa-c595-4312-b77b-4f5b5aa2268d.png" style="width:16.83em;height:1.67em;"/></div>
+<p>This means that improving <img class="fm-editor-equation" src="assets/7e29d171-632b-47f7-8fde-aa755abac2ad.png" style="width:0.50em;height:0.58em;"/> will also improve <img class="fm-editor-equation" src="assets/eb9f53b5-15ee-4804-99a3-d05ae7b70007.png" style="width:0.50em;height:0.92em;"/> with a sufficient small update on <img class="fm-editor-equation" src="assets/a5a215c0-8b48-4d4c-af73-b0cb2855f812.png" style="width:1.17em;height:0.83em;"/>. Based on this idea, Kakade and Langford proposed a policy updating scheme called the conservative policy iteration:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/7b34ce87-7dad-4891-bfc4-d06ac637bf61.png" style="width:18.17em;height:1.33em;"/></div>
+<p>Here, <img class="fm-editor-equation" src="assets/8e97e940-f4a8-4aca-a389-196e3672e47b.png" style="width:1.58em;height:0.75em;"/> is the current policy, <img class="fm-editor-equation" src="assets/0690ebf6-d1d9-4a5d-9975-88e070099654.png" style="width:2.17em;height:1.00em;"/> is the new policy, and <img class="fm-editor-equation" src="assets/656c223d-a53d-466f-9049-cfb3ea1aa43e.png" style="width:1.00em;height:1.17em;"/> is obtained by solving <img class="fm-editor-equation" src="assets/bb69abc4-4efa-431d-bde8-8cb81333e9d9.png" style="width:12.42em;height:1.67em;"/>. They proved the following bound for this update:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/2202bc30-b02d-4b4f-ac00-ccd006344629.png" style="width:18.25em;height:2.92em;"/> where <img class="fm-editor-equation" src="assets/4e8d8a89-687b-4c09-a75b-fd05efbb42bd.png" style="width:14.75em;height:2.08em;"/></div>
+<p>Note that this bound only applies to mixture policies generated by the preceding update. In TRPO, the authors extended this bound to general stochastic policies, rather than just mixture policies. The main idea is to replace mixture weight <img class="fm-editor-equation" src="assets/433ef82d-2ae0-4059-a0db-d0a9b5d60936.png" style="width:1.00em;height:0.92em;"/> with a distance measure between <img class="fm-editor-equation" src="assets/94e130cc-71b0-40ca-b6ad-e962705670f2.png" style="width:1.92em;height:0.75em;"/> and <img class="fm-editor-equation" src="assets/a5b4a9a7-64dd-420f-8422-255798c4721b.png" style="width:1.75em;height:0.83em;"/>. An interesting pick of the distance measure is the total variation divergence. Taking two discrete distributions <img class="fm-editor-equation" src="assets/3234f41f-86a5-4366-9189-5ca28c7c9043.png" style="width:0.75em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/6c78aec7-e723-4044-9371-d99781c5b6ce.png" style="width:0.58em;height:0.92em;"/> as an example, the total variation divergence is defined as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b39bd755-aac8-44f3-b148-40e7e6c75d22.png" style="width:12.58em;height:2.92em;"/></div>
+<p>For policies <img class="fm-editor-equation" src="assets/e1a2e0b2-a80f-4c94-a238-eb5c6a72884b.png" style="width:2.17em;height:0.83em;"/><span> and </span><img class="fm-editor-equation" src="assets/a5952e1b-fdf3-4d52-952d-08efb4aab567.png" style="width:1.67em;height:0.75em;"/>, let <img class="fm-editor-equation" src="assets/962c116d-a5af-45c3-9868-2f3ff9c7c69c.png" style="width:8.50em;height:1.50em;"/> be the maximum total variation divergence over all the states:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b8cdaa06-5dd1-42b5-964c-709d9194dd14.png" style="width:27.75em;height:2.17em;"/></div>
+<p>With <img class="fm-editor-equation" src="assets/f5ad7c02-2977-4428-92c9-e1d932054ab3.png" style="width:9.67em;height:1.33em;"/><span> </span>and <img class="fm-editor-equation" src="assets/4e930847-34f4-4fd3-bbc6-65f4ec91fd6a.png" style="width:12.42em;height:1.75em;"/>, it can be shown that:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/eb185217-9538-492f-bffe-32d1307b6d08.png" style="width:24.33em;height:1.75em;"/>, where <img class="fm-editor-equation" src="assets/00448aeb-93d9-4f75-bb9c-32de71911cab.png" style="width:5.67em;height:2.33em;"/>.</div>
+<p>Actually, the total variation divergence can be upper bounded by the KL divergence, namely, <img class="fm-editor-equation" src="assets/78c2353d-c2a3-4fe1-9e1b-407ac9f8101a.png" style="width:20.58em;height:1.75em;"/>, which means that:</p>
+<div class="CDPAlignCenter CDPAlign"><span><img class="fm-editor-equation" src="assets/2de74f64-0e3f-4130-9b12-48ec49724f87.png" style="width:23.17em;height:1.67em;"/>,</span><span> </span><span>where </span><img class="fm-editor-equation" src="assets/055f7bdb-5fcd-4f75-be54-a5033373ef64.png" style="width:6.00em;height:2.58em;"/><span>.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">TRPO algorithm</h1>
+                </header>
+            
+            <article>
+                
+<p>Based on the preceding policy improvement bound, the following algorithm is developed:</p>
+<pre>Initialize policy <img class="fm-editor-equation" src="assets/efad5018-72f8-4f20-aedb-ef5e7b42d54f.png" style="width:1.33em;height:1.00em;"/>;<br/>Repeat for each step <img class="fm-editor-equation" src="assets/685cebba-948a-4b34-ba3e-9486fae30c02.png" style="width:4.92em;height:1.00em;"/>:<br/>    Compute all advantage values <img class="fm-editor-equation" src="assets/231a244e-95bf-4972-94cf-49e942fec193.png" style="width:3.92em;height:1.25em;"/>;<br/>    Solve the following optimization problem:<br/>    <img class="fm-editor-equation" src="assets/823f4f84-81f0-4d4a-8c77-3b52e36ac282.png" style="width:17.92em;height:1.33em;"/>;<br/>Until convergence</pre>
+<p>In each step, this algorithm minimizes the upper bound of <img class="fm-editor-equation" src="assets/af7c9656-8e07-4215-9d38-0f867bd07473.png" style="width:1.92em;height:1.25em;"/>, so that:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/22c9cc5b-58c6-4996-bb21-280af47bc7db.png" style="width:36.50em;height:1.42em;"/></div>
+<p>The last equation follows from that <img class="fm-editor-equation" src="assets/8acb0164-88a5-4075-a1ad-798769022863.png" style="width:6.83em;height:1.42em;"/> for any policy <img class="fm-editor-equation" src="assets/72c0ceb5-4b1f-4a7b-a34d-74cf20f5ca6e.png" style="width:0.50em;height:0.50em;"/>. This implies that this algorithm is guaranteed to generate a sequence of monotonically improving policies.</p>
+<p>In practice, since the exact value of <img class="fm-editor-equation" src="assets/08cd6ec4-d66e-4134-b835-13a665021708.png" style="width:0.67em;height:0.92em;"/> in <img class="fm-editor-equation" src="assets/6d906ae5-9485-497d-90be-9e3205312eb6.png" style="width:0.83em;height:1.00em;"/> is hard to calculate, and it is difficult to control the step size of each update using the penalty term, TRPO replaces the penalty term with the constraint that KL divergence is bounded by a constant <img class="fm-editor-equation" src="assets/e604b012-bcac-4dca-b9bf-c5d4ac226e43.png" style="width:0.67em;height:1.42em;"/>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/9e0c56b3-1599-4ad7-8933-d3fcf07b1c67.png" style="width:26.00em;height:1.58em;"/></div>
+<p>But this problem is still impractical to solve due to the large number of constraints. Therefore, TRPO uses a heuristic approximation that considers the average KL divergence:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/8d508e2a-acf2-4345-aebb-e232439dcfbc.png" style="width:24.00em;height:1.58em;"/></div>
+<p>This leads to the following optimization problem:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/e098bb38-864f-4fbd-ab5c-2a22a7902534.png" style="width:27.08em;height:1.67em;"/></div>
+<p>In other words, by expanding <img class="fm-editor-equation" src="assets/fff01813-299b-4fa6-910c-c6bdb438fbaf.png" style="width:2.92em;height:1.67em;"/>, we need to solve the following:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/305da5d4-b490-4301-9e4d-9b949f277cda.png" style="width:41.33em;height:3.08em;"/></div>
+<p>Now, the question is: how do we optimize this problem? A straightforward idea is to sample several trajectories by simulating the policy <img class="fm-editor-equation" src="assets/e6fe0c4f-2dd5-4f93-a676-47a4d0599d9d.png" style="width:2.17em;height:1.00em;"/> for some number of steps and then approximate the objective function of this problem using these trajectories. Since the advantage function <img class="fm-editor-equation" src="assets/d0f93482-d0f8-411f-b9e3-e0ae54566ede.png" style="width:14.25em;height:1.42em;"/>, we replace <img class="fm-editor-equation" src="assets/bf05b41e-458f-4cbf-ac10-dff5f4e25f56.png" style="width:2.33em;height:1.33em;"/> with by the Q-value <img class="fm-editor-equation" src="assets/b9edf522-8800-4336-8ac7-1c14d0aa0bd8.png" style="width:2.42em;height:1.33em;"/> in the objective function, which only changes the objective by a constant. Besides, note the following:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/34f59a5f-7d84-44a2-b76d-f483147a3157.png" style="width:29.42em;height:3.50em;"/></div>
+<p>Therefore, given a trajectory <img class="fm-editor-equation" src="assets/c40ea99f-c792-44cb-bef0-1944188cfac8.png" style="width:13.58em;height:1.33em;"/> generated under policy <img class="fm-editor-equation" src="assets/17240a16-8143-425d-a94b-3f3029041e9b.png" style="width:1.75em;height:0.83em;"/>, we will optimize as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/27da421f-eb3d-4630-b1e7-dec03aab4f25.png" style="width:43.58em;height:3.58em;"/></div>
+<p>For the MuJoCo control tasks, both the policy <img class="fm-editor-equation" src="assets/17f26470-538d-4521-be3f-f3e4ea1ed2b6.png" style="width:0.92em;height:0.92em;"/> and the <kbd>state-action value</kbd> function <img src="assets/21d3f97e-547f-4d2e-903b-9120ab4f820d.png" style="width:4.67em;height:1.83em;"/> are approximated by neural networks. In order to optimize this problem, the KL divergence constraint can be approximated by the Fisher information matrix. This problem can then be solved via the conjugate gradient algorithm. For more details, you can download the source code of TRPO from GitHub and check <kbd>optimizer.py</kbd>, which implements the conjugate gradient algorithm using TensorFlow.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Experiments on MuJoCo tasks</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>Swimmer</kbd> task is a good example to test TRPO. This task involves a 3-link swimming robot in a viscous fluid, where the goal is to make it swim forward as fast as possible by actuating the two joints (<a href="http://gym.openai.com/envs/Swimmer-v2/">http://gym.openai.com/envs/Swimmer-v2/</a>). The following screenshot shows how <kbd>Swimmer</kbd> looks in the MuJoCo simulator:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-662 image-border" src="assets/c4e13121-31e1-4e6b-b34a-3f3d6577829c.png" style="width:21.67em;height:16.08em;"/></div>
+<p>To train an agent for <kbd>Swimmer</kbd>, run the following command under the <kbd>src</kbd> folder:</p>
+<pre><strong><span>CUDA_VISIBLE_DEVICES= python train.py -t Swimmer</span></strong></pre>
+<p>There are two arguments in <kbd>train.py</kbd>. One is <kbd>-t</kbd>, or <kbd>--task</kbd>, indicating the name of the MuJoCo or classic control task you want to test. Since the state spaces of these control tasks have relatively low dimensions compared to the Atari environment, it is enough to use CPU alone to train the agent by setting <kbd>CUDA_VISIBLE_DEVICES</kbd> to empty, which will take between 30 minutes and two hours.</p>
+<p>During the training, you can open a new Terminal and type the following command to visualize the training procedure:</p>
+<pre><strong><span>tensorboard --logdir=log/Swimmer</span></strong></pre>
+<p>Here, <kbd>logdir</kbd> points to the folder where the <kbd>Swimmer</kbd> log file is stored. Once TensorBoard is running, navigate your web browser to <kbd>localhost:6006</kbd> to view the TensorBoard:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-663 image-border" src="assets/61d02d5f-0705-499b-80e3-b4334d0e13af.png" style="width:24.92em;height:19.00em;"/></div>
+<p><span>Clearly, after 200 episodes, the total reward achieved in each episode becomes stable, namely, around 366. To check how <kbd>Swimmer</kbd> moves after the training, run the following command:</span></p>
+<pre><strong><span>CUDA_VISIBLE_DEVICES= python test.py -t Swimmer</span></strong></pre>
+<p><span>You will see a funny-looking <kbd>Swimmer</kbd> object walking on the floor.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter introduced the classical control tasks and the MuJoCo control tasks provided by Gym. You have learned the goals and specifications of these tasks and how to implement a simulator for them. The most important parts of this chapter were the deterministic DPG and the TRPO for continuous control tasks. You learned the theory behind them, which explains why they work well in these tasks. You also learned how to implement DPG and TRPO using TensorFlow, and how to visualize the training procedure.</p>
+<p>In the next chapter, we will learn about how to apply reinforcement learning algorithms to more complex tasks, for example, playing Minecraft. We will introduce the <strong>Asynchronous Actor-Critic</strong> (<strong>A3C</strong>)<span> algorithm,</span> which is much faster than DQN at complex tasks, and has been widely applied as a framework in many deep reinforcement learning algorithms.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

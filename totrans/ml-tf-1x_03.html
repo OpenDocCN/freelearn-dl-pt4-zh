@@ -1,0 +1,264 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The TensorFlow Toolbox</h1>
+                </header>
+            
+            <article>
+                
+<p>Most machine learning platforms are focused toward scientists and practitioners in academic or industrial settings. Accordingly, while quite powerful, they are often rough around the edges and have few user-experience features.</p>
+<p>Quite a bit of effort goes into peeking at the model at various stages and viewing and aggregating performance across models and runs. Even viewing the neural network can involve far more effort than expected.</p>
+<p>While this was acceptable when neural networks were simple and only a few layers deep, today's networks are far deeper. In 2015, Microsoft won the annual <strong>ImageNet</strong> competition using a deep network with 152 layers. Visualizing such networks can be difficult, and peeking at weights and biases can be overwhelming.</p>
+<p>Practitioners started using home-built visualizers and bootstrapped tools to analyze their networks and run performance. TensorFlow changed this by releasing TensorBoard directly alongside their overall platform release. TensorBoard runs out of the box with no additional installations or setup.</p>
+<p>Users just need to instrument their code according to what they wish to capture. It features plotting of events, learning rate, and loss over time; histograms, for weights and biases; and images. The Graph Explorer allows interactive reviews of the neural network.</p>
+<p>In this chapter, we will focus on several areas, which are as follows:</p>
+<ul>
+<li>We will start with the instrumentation required to feed TensorBoard using four common models and datasets as examples, highlighting the required changes.</li>
+<li>We will then review the data captured and ways to interpret it.</li>
+<li>Finally, we will review common graphs as visualized by Graph Explorer. This will help you visualize common neural network setups, which will be introduced in later chapters and projects. It will also be a visual introduction to common networks.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">A quick preview</h1>
+                </header>
+            
+            <article>
+                
+<p>Without even having TensorFlow installed, you can play with a reference implementation of TensorBoard. You can get started here:</p>
+<p><a href="https://www.tensorflow.org/tensorboard/index.html#graphs"><span class="URLPACKT">https://www.tensorflow.org/tensorboard/index.html#graphs</span>.</a></p>
+<p>You can follow along with the code here:</p>
+<p><a href="https://github.com/tensorflow/models/blob/master/tutorials/image/cifar10/cifar10_train.py" target="_blank"><span class="URLPACKT">https://github.com/tensorflow/tensorflow/blob/master/tensorflow/model<br/>
+s/image/cifar10/cifar10_train.py</span>.</a></p>
+<p>The example uses the <strong>CIFAR-10</strong> image set. The CIFAR-10 dataset consists of 60,000 images in 10 classes compiled by Alex Krizhevsky, Vinod Nair, and Geoffrey Hinton. The dataset has become one of several standard learning tools and benchmarks for machine learning efforts.</p>
+<p>Let's start with the Graph Explorer. We can immediately see a convolutional network being used. This is not surprising as we're trying to classify images here:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="408" width="610" class=" image-border" src="assets/cfe3a5b8-cf8d-4c87-b8de-bc605accc81b.png"/></div>
+<p>This is just one possible view of the graph. You can try the Graph Explorer as well. It allows deep dives into individual components.</p>
+<p>Our next stop on the quick preview is the <span class="packt_screen">EVENTS</span> tab. This tab shows scalar data over time. The different statistics are grouped into individual tabs on the right-hand side. The following screenshot shows a number of popular scalar statistics, such as loss, learning rate, cross entropy, and sparsity across multiple parts of the network:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="351" width="699" class=" image-border" src="assets/79150dc7-ed50-4625-92d6-ae45e73df412.png"/></div>
+<p>The <span class="packt_screen">HISTOGRAMS</span> tab is a close cousin as it shows tensor data over time. Despite the name, as of TensorFlow v0.7, it does not actually display histograms. Rather, it shows summaries of tensor data using percentiles.</p>
+<p>The summary view is shown in the following figure. Just like with the <span class="packt_screen">EVENTS</span> tab, the data is grouped into tabs on the right-hand side. Different runs can be toggled on and off and runs can be shown overlaid, allowing interesting comparisons.</p>
+<p>It features three runs, which we can see on the left side, and we'll look at just the <kbd>softmax</kbd> function and associated parameters.</p>
+<p>For now, don't worry too much about what these mean, we're just looking at what we can achieve for our own classifiers:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="468" width="662" class=" image-border" src="assets/df6ca2ab-fc79-440f-b643-a7b5e04d0387.png"/></div>
+<p>However, the summary view does not do justice to the utility of the <span class="packt_screen">HISTOGRAMS</span> tab. Instead, we will zoom into a single graph to observe what is going on. This is shown in the following figure:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="189" width="691" class=" image-border" src="assets/6d7a15f4-8379-4e90-8744-27d72f8ba579.png"/></div>
+<p>Notice that each histogram chart shows a time series of nine lines. The top is the maximum, in middle the median, and the bottom the minimum. The three lines directly above and below the median are 1½ standard deviation, 1 standard deviation, and ½ standard deviation marks.</p>
+<p>Obviously, this does represent multimodal distributions as it is not a histogram. However, it does provide a quick gist of what would otherwise be a mountain of data to shift through.</p>
+<p>A couple of things to note are how data can be collected and segregated by runs, how different data streams can be collected, how we can enlarge the views, and how we can zoom into each of the graphs.</p>
+<p>Enough of graphics, let's jump into the code so we can run this for ourselves!</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Installing TensorBoard</h1>
+                </header>
+            
+            <article>
+                
+<p>TensorFlow comes prepackaged with TensorBoard, so it will already be installed. It runs as a locally served web application accessible via the browser at <kbd>http://0.0.0.0:6006</kbd>. Conveniently, there is no server-side code or configurations required.</p>
+<p>Depending on where your paths are, you may be able to run it directly, as follows:</p>
+<pre><strong>tensorboard --logdir=/tmp/tensorlogs</strong></pre>
+<p>If your paths are not correct, you may need to prefix the application accordingly, as shown in the following command line:</p>
+<pre><strong>tf_install_dir/ tensorflow/tensorboard --<br/>logdir=/tmp/tensorlogs</strong></pre>
+<p>On Linux, you can run it in the background and just let it keep running, as follows:</p>
+<pre><strong>nohup tensorboard --logdir=/tmp/tensorlogs &amp;</strong></pre>
+<p>Some thought should be put into the directory structure though. The <span class="packt_screen">Runs</span> list on the left side of the dashboard is driven by subdirectories in the <kbd>logdir</kbd> location. The following image shows two runs--<kbd>MNIST_Run1</kbd> and <kbd>MNIST_Run2</kbd>. Having an organized <kbd>runs</kbd> folder will allow plotting successive runs side by side to see differences:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/35fdd820-9895-4675-9d99-eb11d699cb78.png"/></div>
+<p>When initializing <kbd>writer</kbd>, you will pass in the directory for the log as the first parameter, as follows:</p>
+<pre>   writer = tf.summary.FileWriter("/tmp/tensorlogs",   <br/>   sess.graph) </pre>
+<p>Consider saving a base location and appending run-specific subdirectories for each run. This will help organize outputs without expending more thought on it. We'll discuss more about this later.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Incorporating hooks into our code</h1>
+                </header>
+            
+            <article>
+                
+<p>The best way to get started with TensorBoard is by taking existing working examples and instrument them with the code required for TensorBoard. We will do this for several common training scripts.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Handwritten digits</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start with the typical Hello World of machine learning with images--the MNIST handwritten numeral classification exercise.</p>
+<div style="padding-left: 90px" class="packt_infobox">The MNIST database being used has 60,000 images for training and another 10,000 for testing. It was originally collected by Chris Burges and Corinna Cortes and enhanced by Yann LeCun. You can find out more about the dataset on Yann LeCun's website (<a href="http://yann.lecun.com/exdb/mnist/"><span class="URLPACKT">http://yann.lecun.com/exdb/mnist/</span></a>).</div>
+<p>TensorFlow conveniently comes with a test script demonstrating a convolutional neural network using the MSNIST handwritten, available at <a href="https://github.com/tensorflow/models/blob/master/tutorials/image/mnist/convolutional.py">https://github.com/tensorflow/models/blob/master/tutorials/image/mnist/convolutional.py</a>.<a href="https://github.com/tensorflow/tensorflow/blob/master/tensorflow/models/image/mnist/convolutional.py"/></p>
+<p>Let's modify this script to allow TensorBoard usage. If you wish to peek ahead, download a golden copy or see deltas; our full set of changes is available on the book's GitHub repository (<a href="https://github.com/mlwithtf/mlwithtf"><span class="URLPACKT">https://github.com/mlwithtf/mlwithtf</span></a> ).</p>
+<p>For now, we recommend following along and making changes incrementally to understand the process.</p>
+<p>Early on in the <kbd>main</kbd> class, we will define holders for <kbd>convn_weights</kbd>, <kbd>convn_biases</kbd>, and other parameters. Directly afterward, we will write the following code to add them to the <kbd>histogram</kbd>:</p>
+<pre>    tf.summary.histogram('conv1_weights', conv1_weights) 
+    tf.summary.histogram('conv1_biases', conv1_biases) 
+    tf.summary.histogram('conv2_weights', conv2_weights) 
+    tf.summary.histogram('conv2_biases', conv2_biases) 
+    tf.summary.histogram('fc1_weights', fc1_weights) 
+    tf.summary.histogram('fc1_biases', fc1_biases) 
+    tf.summary.histogram('fc2_weights', fc2_weights) 
+    tf.summary.histogram('fc2_biases', fc2_biases) </pre>
+<p>The preceding lines capture the values for the <span class="packt_screen">HISTOGRAMS</span> tab. Notice that the captured values form subsections on the <span class="packt_screen">HISTOGRAMS</span> tab, which is shown in the following screenshot:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="404" width="647" class=" image-border" src="assets/71d949ac-fed1-4f05-9faf-941dace523fb.png"/></div>
+<p>Next, let's record some <kbd>loss</kbd> figures. We have the following code to start with:</p>
+<pre>    loss += 5e-4 * regularizers </pre>
+<p>We will add a <kbd>scalar</kbd> summary for the <kbd>loss</kbd> figures after the preceding line:</p>
+<pre>    tf.summary.scalar("loss", loss) </pre>
+<p>Similarly, we will start with the standard code calculating the <kbd>learning_rate</kbd>:</p>
+<pre>     learning_rate = tf.train.exponential_decay( 
+        0.01,  # Base learning rate. 
+        batch * BATCH_SIZE,  # Current index into the    <br/>        dataset. 
+        train_size,  # Decay step. 
+        0.95,  # Decay rate. 
+        staircase=True) </pre>
+<p>We will add a <kbd>scalar</kbd> summary for the <kbd>learning_rate</kbd> figures, which is as follows:</p>
+<pre>    tf.summary.scalar("learning_rate", learning_rate) </pre>
+<p>Just these two preceding lines help us capture these to important scalar metrics in our <span class="packt_screen">EVENTS</span> tab:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="431" width="499" class=" image-border" src="assets/53e4b291-5aed-43a5-8b61-de36d742b671.png"/></div>
+<p>Finally, let's instruct our script to save the graph setup. Let's find the section of the script which creates the <kbd>session</kbd>:</p>
+<pre>    # Create a local session to run the training. 
+    start_time = time.time() 
+    with tf.Session() as sess: </pre>
+<p>Just after defining the <kbd>sess</kbd> handle, we will capture the graph as follows:</p>
+<pre>    writer = tf.summary.FileWriter("/tmp/tensorlogs",  <br/>    sess.graph) 
+    merged = tf.summary.merge_all() </pre>
+<p>We will need to add our <kbd>merged</kbd> object when running the session. We originally had the following code:</p>
+<pre>    l, lr, predictions = sess.run([loss, learning_rate,  <br/>    train_prediction], feed_dict=feed_dict) </pre>
+<p>We will add our <kbd>merged</kbd> object when running the session as such:</p>
+<pre>    # Run the graph and fetch some of the nodes.       
+    sum_string, l, lr, predictions = sess.run([merged,  <br/>    loss,  <br/>    learning_rate, train_prediction],  <br/>    feed_dict=feed_dict) </pre>
+<p>Finally, we will need to write summaries at specified steps, much like we typically output validation set accuracy periodically. So, we do add one more line after the <kbd>sum_string</kbd> is computed:</p>
+<pre>    writer.add_summary(sum_string, step) </pre>
+<p>That is all! We have just captured our loss and learning rates, key intermediate parameters on our neural network, and the structure of the graph. We have already examined the <span class="packt_screen">EVENTS</span> and <span class="packt_screen">HISTOGRAMS</span> tab, now let's look at the <span class="packt_screen">GRAPH</span> tab:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="391" width="695" class=" image-border" src="assets/fab51f74-7ad0-49f0-b2fd-c76ae470ce87.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">AlexNet</h1>
+                </header>
+            
+            <article>
+                
+<p>Anyone involved in deep learning with images should become familiar with AlexNet. The network was introduced in the landmark paper, <em>ImageNet Classification with Deep Convolutional Neural Networks</em>, by Alex Krizhevsky, Ilya Sutskever, and Geoffrey E. Hinton. The paper can be viewed at <a href="http://www.cs.toronto.edu/~fritz/absps/imagenet.pdf"><span class="URLPACKT">http://www.cs.toronto.edu/~fritz/absps/imagenet.pdf</span></a>.</p>
+<p>This network architecture achieved then-record accuracy on the annual ImageNet competition. The architecture is described in their paper, as shown in the following image. We will be using this network architecture in later chapters, but for now, let's browse through the network using TensorBoard:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/fc55270a-7218-4c5c-9351-d3573279583a.png"/></div>
+<p>We will not review line-by-line changes to the existing AlexNet code, but the reader can easily see changes by noting differences between the original model code provided by Google and the revised code that we have included with the book's code repository.</p>
+<p>The original AlexNet TensorFlow implementation from Google is available at:</p>
+<p><a href="https://github.com/tensorflow/models/blob/master/tutorials/image/alexnet/alexnet_benchmark.py">https://github.com/tensorflow/models/blob/master/tutorials/image/alexnet/alexnet_benchmark.py.</a></p>
+<p>The revised AlexNet TensorFlow implementation with TensorBoard instrumentation can be found at:</p>
+<p><a href="https://github.com/mlwithtf/mlwithtf/blob/master/chapter_03/alexnet_benchmark.py">https://github.com/mlwithtf/mlwithtf/blob/master/chapter_03/alexnet_benchmark.py.</a></p>
+<p>The changes introduced are very similar to those done for our MNIST example.</p>
+<p>First, find the location of this code:</p>
+<pre>    sess = tf.Session(config=config) 
+    sess.run(init) </pre>
+<p>Then, replace it with the following code:</p>
+<pre>    sess = tf.Session(config=config) 
+    writer = tf.summary.FileWriter("/tmp/alexnet_logs",  <br/>    sess.graph) 
+    sess.run(init) </pre>
+<p>Finally, you can run the Python file <kbd>alexnet_benchmark.py</kbd> and TensorBoard command to visualize the graph:</p>
+<pre><strong>python alexnet_benchmark.py</strong>
+<strong>tensorboard --logdir /tmp/alexnet_logs</strong></pre>
+<p>Our focus for this section is just the graph. The following figure shows a section of the Graph Explorer. We have deep dived into convolutional layer 3 of 5 and we are looking at weights and biases for this layer.</p>
+<p>Clicking on the weights node on the graph is interesting because we see details such as the shape: <kbd>{"shape":{"dim":[{"size":3},{"size":3},{"size":192},{"size":384}]}}</kbd>. We can match many of these details right back to the original paper and the previously referenced diagram! We can also trace details back to the network setup in the code:</p>
+<pre>    with tf.name_scope('conv3') as scope: 
+      kernel = tf.Variable(tf.truncated_normal([3, 3, 192, 384], 
+                               dtype=tf.float32, 
+                               stddev=1e-1), name='weights') 
+      conv = tf.nn.conv2d(pool2, kernel, [1, 1, 1, 1], <br/>       padding='SAME') 
+      biases = tf.Variable(tf.constant(0.0, shape=[384], <br/>       dtype=tf.float32), 
+                         trainable=True, name='biases') 
+      bias = tf.nn.bias_add(conv, biases) 
+      conv3 = tf.nn.relu(bias, name=scope) 
+      parameters += [kernel, biases] </pre>
+<p>The details in the Graph Explorer and code are equivalent, but the flow of data is very easily visualized using TensorBoard. It is also easy to collapse repetitive sections and expand sections of interest:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="501" width="644" class=" image-border" src="assets/73088eb4-aab7-46fb-86e4-58655412e4e9.png"/></div>
+<p>The graph is the most interesting part of this section, but of course, you can also run our revised script and review the training performance, as well as a host of other data we're capturing. You can even capture additional data. Give it a try!</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Automating runs</h1>
+                </header>
+            
+            <article>
+                
+<p>When trying to train a classifier, we will often end up with multiple variables for which we don't know a good setting. Viewing values used by solutions for similar problems is a good starting point. However, we are often left with an array of possible values that we need to test. To make things more complicated, we often have several such parameters, resulting in numerous combinations that we may need to test.</p>
+<p>For such situations, we suggest keeping the parameters of interest as values that can be passed into the trainer. Then, a <kbd>wrapper</kbd> script can pass in various combinations of the parameters, along with a unique output log subdirectory that is possibly tagged with a descriptive name.</p>
+<p>This will allow an easy comparison of results and intermediate values across multiple tests. The following figure shows four runs' losses plotted together. We can easily see the underperforming and overperforming pairs:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="380" width="577" class=" image-border" src="assets/09e61965-8300-46e9-a02a-9833e1f82cdd.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we covered the major areas of TensorBoard--<span class="packt_screen">EVENTS</span>, <span class="packt_screen">HISTOGRAMS</span>, and viewing <span class="packt_screen">GRAPH</span>. We modified popular models to see the exact changes required before TensorBoard could be up and running. This should have demonstrated the fairly minimal effort required to get started with TensorBoard.</p>
+<p>Finally, we focused on various popular models by viewing their network design. We did this by instrumenting the code with TensorBoard hooks and using the TensorBoard Graph Explorer to deep dive into the network setups.</p>
+<p>The reader should now be able to use TensorBoard more effectively, gauge training performance, and plan runs and modify training scripts.</p>
+<p>Next, we're going to jump into convolutional networks. We'll use parts of our prior work so we can hit the ground running. But, we'll focus on more advanced neural network setups to achieve better accuracy. The focus on training accuracy reflects the focus of most practitioner's efforts, so it is the time we face the challenge.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

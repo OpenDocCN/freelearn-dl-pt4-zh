@@ -1,0 +1,902 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The Doctor Will See You Now</h1>
+                </header>
+            
+            <article>
+                
+<p>We have, so far, used deep networks for image, text, and time series processing. While most of our examples were interesting and relevant, they weren't enterprise-grade. Now, we'll tackle an enterprise-grade problem—medical diagnosis. We make the enterprise-grade designation because medical data has attributes one does not typically deal with outside large enterprises, namely proprietary data formats, large native sizes, inconvenient class data, and atypical features.</p>
+<p>In this chapter, we will cover the following topics:</p>
+<ul>
+<li>Medical imaging files and their peculiarities</li>
+<li>Dealing with large image files</li>
+<li>Extracting class data from typical medical files</li>
+<li>Applying networks "pre-trained" with non-medical data</li>
+<li>Scaling training to accommodate the scale typically with medical data</li>
+</ul>
+<p>Obtaining medical data is a challenge on its own, so we'll piggyback on a popular site all readers should become familiarized with—Kaggle. While there are a good number of medical datasets freely available, most require an involved sign-up process to even access them. Many are only publicized in specific sub-communities of the medical image processing field, and most have bespoke submission procedures. Kaggle is probably the most normalized source for a significant medical imaging dataset as well as non-medical ones you can try your hand on. We'll focus specifically on Kaggle's Diabetic Retinopathy Detection challenge.</p>
+<ul>
+<li>You can view the dataset here: <a href="https://www.kaggle.com/c/diabetic-retinopathy-detection/data"><span class="URLPACKT">https://www.kaggle.com/c/diabetic-retinopathy-detection/data</span></a></li>
+</ul>
+<p>The dataset has a training set and a blind test set. The training set is used for, of course, training our network, and the test set is used to submit our results using our network on the Kaggle website.</p>
+<p>As the data is quite large (32 GB for the training set and 49 GB for the test set), both of them are divided into multiple ZIP files of about 8 GB.</p>
+<p>The test set here is blind—we don't know their labels. This is for the purpose of having fair submissions of the test set results from our trained network.</p>
+<p>As far as the training set goes, its labels are present in the <kbd>trainLabels.csv</kbd> file.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The challenge</h1>
+                </header>
+            
+            <article>
+                
+<p>Before we deep-dive into the code, remember how most machine learning efforts involve one of two simple goals—classification or ranking. In many cases, the classification is itself a ranking because we end up choosing the classification with the greatest rank (often a probability). Our foray into medical imaging will be no different—we will be classifying images into either of these binary categories:</p>
+<ul>
+<li>Disease state/positive</li>
+<li>Normal state/negative</li>
+</ul>
+<p>Or, we will classify them into multiple classes or rank them. In the case of the diabetic retinopathy, we'll rank them as follows:</p>
+<ul>
+<li>Class 0: No Diabetic Retinopathy</li>
+<li>Class 1: Mild</li>
+<li>Class 2: Moderate</li>
+<li>Class 3: Severe</li>
+<li>Class 4: Widespread Diabetic Retinopathy</li>
+</ul>
+<p>Often, this is called scoring. Kaggle kindly provides participants over 32 GB of training data, which includes over 35,000 images. The test data is even larger—49 GB. The goal is to train on the 35,000+ images using the known scores and propose scores for the test set. The training labels look like this:</p>
+<table class="table">
+<tbody>
+<tr>
+<td>
+<p><strong>Image</strong></p>
+</td>
+<td>
+<p><strong>Level</strong></p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>10_left</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>10_right</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>13_left</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>13_right</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>15_left</kbd></p>
+</td>
+<td>
+<p>1</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>15_right</kbd></p>
+</td>
+<td>
+<p>2</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>16_left</kbd></p>
+</td>
+<td>
+<p>4</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>16_right</kbd></p>
+</td>
+<td>
+<p>4</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>17_left</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>17_right</kbd></p>
+</td>
+<td>
+<p>1</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Some context here—diabetic retinopathy is a disease of the retina, inside the eye, so we have scores for the left and right eye. We can treat them as independent training data, or we can get creative later and consider them in the larger context of a single patient. Let's start simple and iterate.</p>
+<p>By now, you are probably familiar with taking a set of data and segmenting out chunks for training, validation, and testing. That worked well for some of the standard datasets we've used, but this dataset is part of a competition and one that is publicly audited, so we don't know the answers! This is a pretty good reflection of real life. There is one wrinkle—most Kaggle competitions let you propose an answer and tell you your aggregate score, which helps with learning and direction-setting. It also helps them and the community know which users are doing well.</p>
+<p>Since the test labels are blinded, we'll need to change two things we've done before:</p>
+<ul>
+<li>We will need to have one procedure for internal development and iteration (we'll likely chunk our training set into a training, validation, and test set). We will need another procedure for external testing (we may settle upon a promising setup that works well, and then we may either run it on the blind test set or we may retrain on the entire training set first).</li>
+<li>We will need to make a formal proposal in a very specific format, submit it to the independent auditor (Kaggle, in this case), and gauge the progress accordingly. Here is what a sample submission may look like:</li>
+</ul>
+<table class="table">
+<tbody>
+<tr>
+<td>
+<p><strong>Image</strong></p>
+</td>
+<td>
+<p><strong>Level</strong></p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44342_left</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44342_right</kbd></p>
+</td>
+<td>
+<p>1</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44344_left</kbd></p>
+</td>
+<td>
+<p>2</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44344_right</kbd></p>
+</td>
+<td>
+<p>2</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44345_left</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44345_right</kbd></p>
+</td>
+<td>
+<p>0</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44346_left</kbd></p>
+</td>
+<td>
+<p>4</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44346_right</kbd></p>
+</td>
+<td>
+<p>3</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44350_left</kbd></p>
+</td>
+<td>
+<p>1</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44350_right</kbd></p>
+</td>
+<td>
+<p>1</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44351_left</kbd></p>
+</td>
+<td>
+<p>4</p>
+</td>
+</tr>
+<tr>
+<td>
+<p><kbd>44351_right</kbd></p>
+</td>
+<td>
+<p>4</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p>Not surprisingly, it looks very much like the training label file. You can make your submission here:</p>
+<p><a href="https://www.kaggle.com/c/diabetic-retinopathy-detection/submit%20%20"><span class="URLPACKT">https://www.kaggle.com/c/diabetic-retinopathy-detection/submithttps://www.kaggle.com/c/diabetic-retinopathy-detection/submit</span></a></p>
+<div class="packt_infobox">You need to login in order to open the preceding link.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The data</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start to peek at the data. Open up some of the sample files and be prepared for a shocker—these are neither 28x28 tiles of handwriting nor 64x64 icons with cat faces. This is a real dataset from the real world. In fact, not even the sizes are consistent across images. Welcome to the real world.</p>
+<p>You'll find sizes ranging from 2,000 pixels per side to almost 5,000 pixels! This brings us to our first real-life task—creating a training <strong>pipeline</strong>. The pipeline will be a set of steps that abstract away the ugly realities of life and produce a set of clean and consistent data.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The pipeline</h1>
+                </header>
+            
+            <article>
+                
+<p>We will go about this intelligently. There are a lot of pipeline model structures made by Google using different networks in their <kbd>TensorFlow</kbd> library. What we'll do here is take one of those model structures and networks and modify the code to our needs.</p>
+<p>This is good because we won't waste our time building a pipeline from scratch and won't have to worry about incorporating the TensorBoard visualization stuff as it is already present in the Google pipeline models.</p>
+<p>We will use a pipeline model from here:</p>
+<p><a href="https://github.com/tensorflow/models/"><span class="URLPACKT">https://github.com/tensorflow/models/</span></a></p>
+<p>As you can see, there are a lot of different models made in TensorFlow in this repository. You can dive deeper into some models that are related to natural language processing (NLP), recursive neural networks, and other topics. This is a really good place to start if you want to understand complex models.</p>
+<p>For this chapter, we will use the <strong>Tensorflow-Slim image classification model library</strong>. You can find the library here:</p>
+<p><a href="https://github.com/tensorflow/models/tree/master/research/slim"><span class="URLPACKT">https://github.com/tensorflow/models/tree/master/research/slim</span></a></p>
+<p>There are a lot of details already present on the website that explain how to use this library. They also tell you how to use this library in a distributed environment and also how to utilize multiple GPUs to get a faster training time and even deploy to production.</p>
+<p>The best thing about using this is that they provide you with the pre-trained model snapshot, which you can use to dramatically reduce the training time of your network. So, even if you have slow GPUs, you won't have to train your network this large for weeks to get to a reasonable level of training.</p>
+<p>This is called fine-tuning of the model, in which you just have to provide a different dataset and tell the network to reinitialize the final layers of the network in order to retrain them. Also, you tell it how many output label classes you have in your dataset. In our case, there are five unique classes to identify different levels of <strong>diabetic retinopathy</strong> (<strong>DR</strong>).</p>
+<p>The pre-trained snapshot can be found here:</p>
+<p><a href="https://github.com/tensorflow/models/tree/master/research/slim#Pretrained">https://github.com/tensorflow/models/tree/master/research/slim#Pretrained</a></p>
+<p>As you can see in the preceding link, they provide many types of pre-trained models that we can leverage. They have used the <kbd>ImageNet</kbd> dataset to train these models. <kbd>ImageNet</kbd> is a standard dataset of 1,000 classes with dataset sizing almost 500 GB. You can find more about it here:</p>
+<p><a href="http://image-net.org/"><span class="URLPACKT">http://image-net.org/</span></a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Understanding the pipeline</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start by cloning the <kbd>models</kbd> repository into your computer:</p>
+<pre><strong>git clone https://github.com/tensorflow/models/</strong></pre>
+<p>Now, let's dive into the pipeline that we got from Google's model repository.</p>
+<p>If you look at the folder at this path prefix (<kbd>models/research/slim</kbd>) in the repository, you'll see folders named <kbd>datasets</kbd>, <kbd>deployment</kbd>, <kbd>nets</kbd>, <kbd>preprocessing</kbd>, and <kbd>scripts</kbd>; a bunch of files related to generating the model, plus training and testing pipelines and files related to training the <kbd>ImageNet</kbd> dataset, and a dataset named <kbd>flowers</kbd><strong>.</strong></p>
+<p>We will use the <kbd>download_and_convert_data.py</kbd> to build our DR dataset. This <kbd>image classification model</kbd> library is built based on the <kbd>slim</kbd> library. In this chapter, we will fine-tune the inception network defined in <kbd>nets/inception_v3.py</kbd> (we'll talk more about the network specifications and its concept later in this chapter), which includes the calculation of the loss function, adding different ops, structuring the network, and more. Finally, the <kbd>train_image_classifier.py</kbd> and <kbd>eval_image_classifier.py</kbd> files contain the generalized procedures for making a training and testing pipeline for our network.</p>
+<div class="packt_infobox">For this chapter, due to the complex nature of the network, we are using a GPU-based pipeline to train the network. If you want to find out how to install TensorFlow for GPU in your machine, then refer to <span class="ChapterrefPACKT"><a href="8022db02-d24f-4620-9da7-ae53df279306.xhtml" target="_blank">Appendix A</a>, </span><em>Advanced Installation</em>, in this book. Also, you should have about <strong>120 GB</strong> space inside your machine to be able to run this code. You can find the final code files in the <kbd>Chapter 8</kbd> folder of this book's code files.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Preparing the dataset</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's start preparing the dataset of our network.</p>
+<p>For this inception network, we'll use the <kbd>TFRecord</kbd> class to manage our dataset. The output dataset files after the preprocessing will be protofiles, which <kbd>TFRecord</kbd> can read, and it's just our data stored in a serialized format for faster reading speed. Each protofile has some information stored within it, which is information such as image size and format.</p>
+<p>The reason we are doing this is that the size of the dataset is too large and we cannot load the entire dataset into memory (RAM) as it will take up a huge amount of space. Therefore, to manage efficient RAM usage, we have to load the images in batches and delete the previously loaded images that are not being used right now.</p>
+<p>The input size the network will take is 299x299. So, we will find a way to first reduce the image size to 299x299 to have a dataset of consistent images.</p>
+<p>After reducing the images, we will make protofiles that we can later feed into our network, which will get trained on our dataset.</p>
+<p>You need to first download the five training ZIP files and the labels file from here:</p>
+<p><a href="https://www.kaggle.com/c/diabetic-retinopathy-detection/data"><span class="URLPACKT">https://www.kaggle.com/c/diabetic-retinopathy-detection/data</span></a></p>
+<p>Unfortunately, Kaggle only lets you download the training ZIP files through an account, so this procedure of downloading the dataset files (as in the previous chapters) can't be made automatic.</p>
+<p>Now, let's assume that you have downloaded all five training ZIP files and labels file and stored them in a folder named <kbd>diabetic</kbd>. The structure of the <kbd>diabetic</kbd> folder will look like this:</p>
+<ul>
+<li><kbd>diabetic</kbd>
+<ul>
+<li><kbd>train.zip.001</kbd></li>
+<li><kbd>train.zip.002</kbd></li>
+<li><kbd>train.zip.003</kbd></li>
+<li><kbd>train.zip.004</kbd></li>
+<li><kbd>train.zip.005</kbd></li>
+<li><kbd>trainLabels.csv.zip</kbd></li>
+</ul>
+</li>
+</ul>
+<p>In order to simplify the project, we will do the extraction manually using the compression software. After the extraction is completed, the structure of the <kbd>diabetic</kbd> folder will look like this:</p>
+<ul>
+<li><kbd>diabetic</kbd>
+<ul>
+<li><kbd>train</kbd></li>
+<li><kbd> 10_left.jpeg</kbd></li>
+<li><kbd>10_right.jpeg</kbd></li>
+<li>...</li>
+<li><kbd>trainLabels.csv</kbd></li>
+<li><kbd>train.zip.001</kbd></li>
+<li><kbd>train.zip.002</kbd></li>
+<li><kbd> train.zip.003</kbd></li>
+<li><kbd> train.zip.004</kbd></li>
+<li><kbd>train.zip.005</kbd></li>
+<li><kbd>trainLabels.csv.zip</kbd></li>
+</ul>
+</li>
+</ul>
+<p>In this case, the <kbd>train</kbd> folder contains all the images in the .zip files and <kbd>trainLabels.csv</kbd> contains the ground truth labels for each image.</p>
+<p>The author of the models repository has provided some example code to work with some popular image classification datasets. Our diabetic problem can be solved with the same approach. Therefore, we can follow the code that works with other datasets such as <kbd>flower</kbd> or <kbd>MNIST</kbd> dataset. We have already provided the modification to work with diabetic in the repository of this book at <a href="https://github.com/mlwithtf/mlwithtf/">https://github.com/mlwithtf/mlwithtf/</a>.</p>
+<p>You need to clone the repository and navigate to the <kbd>chapter_08</kbd> folder. You can run the <kbd>download_and_convert_data.py</kbd> <span>file </span>as follows:</p>
+<pre><strong>python download_and_convert_data.py --dataset_name diabetic --dataset_dir D:\\datasets\\diabetic</strong></pre>
+<p>In this case, we will use <kbd>dataset_name</kbd> as <kbd>diabetic</kbd> and <kbd>dataset_dir</kbd> is the folder that contains the <kbd>trainLabels.csv</kbd> and <kbd>train</kbd> folder.</p>
+<p>It should run without any issues, start preprocessing our dataset into a suitable (299x299) format, and create some <kbd>TFRecord</kbd> file in a newly created folder named <kbd>tfrecords</kbd>. The following figure shows the content of the <kbd>tfrecords</kbd> folder:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="459" width="604" class=" image-border" src="assets/e6e0c22a-1342-443c-85f0-aa66e157c294.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Explaining the data preparation</h1>
+                </header>
+            
+            <article>
+                
+<p>Now let's get to the coding part for the data preprocessing. From now on, we will show you what we have changed from the original repository of the <kbd>tensorflow/models</kbd>. Basically, we take the code to the process <kbd>flowers</kbd> dataset as the starting point and modify them to suit our needs.</p>
+<p>In the <kbd>download_and_convert_data.py</kbd> file, we have added a new line at the beginning of the file:</p>
+<pre>from datasets import download_and_convert_diabetic 
+and a new else-if clause to process the dataset_name "diabetic" at line 69: 
+  elif FLAGS.dataset_name == 'diabetic': 
+      download_and_convert_diabetic.run(FLAGS.dataset_dir)</pre>
+<p>With this code, we can call the run method in the <kbd>download_and_convert_diabetic.py</kbd> in the <kbd>datasets</kbd> folder. This is a really simple approach to separating the preprocessing code of multiple datasets, but we can still take advantage of the others parts of the <kbd>image classification</kbd> library.</p>
+<p>The <kbd>download_and_convert_diabetic.py</kbd> file is a copy of the <kbd>download_and_convert_flowers.py</kbd> file with some modifications to prepare our diabetic dataset.</p>
+<p>In the run method of the <kbd>download_and_convert_diabetic.py</kbd> file, we made changes as follows:</p>
+<pre>  def run(dataset_dir): 
+    """Runs the download and conversion operation. 
+ 
+    Args: 
+      dataset_dir: The dataset directory where the dataset is stored. 
+    """ 
+    if not tf.gfile.Exists(dataset_dir): 
+        tf.gfile.MakeDirs(dataset_dir) 
+ 
+    if _dataset_exists(dataset_dir): 
+        print('Dataset files already exist. Exiting without re-creating   <br/>        them.') 
+        return 
+ 
+    # Pre-processing the images. 
+    data_utils.prepare_dr_dataset(dataset_dir) 
+    training_filenames, validation_filenames, class_names =   <br/>    _get_filenames_and_classes(dataset_dir) 
+    class_names_to_ids = dict(zip(class_names,    <br/>    range(len(class_names)))) 
+ 
+    # Convert the training and validation sets. 
+    _convert_dataset('train', training_filenames, class_names_to_ids,   <br/>    dataset_dir) 
+    _convert_dataset('validation', validation_filenames,    <br/>    class_names_to_ids, dataset_dir) 
+ 
+    # Finally, write the labels file: 
+    labels_to_class_names = dict(zip(range(len(class_names)),    <br/>    class_names)) 
+    dataset_utils.write_label_file(labels_to_class_names, dataset_dir) 
+ 
+    print('\nFinished converting the Diabetic dataset!')</pre>
+<p>In this code, we use the <kbd>prepare_dr_dataset</kbd> from the <kbd>data_utils</kbd> package that was prepared in the root of this book repository. We will look at that method later. Then, we changed the <kbd>_get_filenames_and_classes</kbd> method to return the <kbd>training</kbd> and <kbd>validation</kbd> filenames. The last few lines are the same as the <kbd>flowers</kbd> dataset example:</p>
+<pre style="padding-left: 30px">  def _get_filenames_and_classes(dataset_dir): 
+    train_root = os.path.join(dataset_dir, 'processed_images', 'train') 
+    validation_root = os.path.join(dataset_dir, 'processed_images',   <br/>    'validation') 
+    class_names = [] 
+    for filename in os.listdir(train_root): 
+        path = os.path.join(train_root, filename) 
+        if os.path.isdir(path): 
+            class_names.append(filename) 
+ 
+    train_filenames = [] 
+    directories = [os.path.join(train_root, name) for name in    <br/>    class_names] 
+    for directory in directories: 
+        for filename in os.listdir(directory): 
+            path = os.path.join(directory, filename) 
+            train_filenames.append(path) 
+ 
+    validation_filenames = [] 
+    directories = [os.path.join(validation_root, name) for name in    <br/>    class_names] 
+    for directory in directories: 
+        for filename in os.listdir(directory): 
+            path = os.path.join(directory, filename) 
+            validation_filenames.append(path) 
+    return train_filenames, validation_filenames, sorted(class_names) </pre>
+<p>In the preceding method, we find all the filenames in the <kbd>processed_images/train</kbd> and <kbd>processed/validation</kbd> folder, which contains the images that were preprocessed in the <kbd>data_utils.prepare_dr_dataset</kbd> method.</p>
+<p>In the <kbd>data_utils.py</kbd> file, we have written the <kbd>prepare_dr_dataset(dataset_dir)</kbd> function, which is responsible for the entire preprocessing of the data.</p>
+<p>Let's start by defining the necessary variables to link to our data:</p>
+<pre style="padding-left: 60px">num_of_processing_threads = 16 
+dr_dataset_base_path = os.path.realpath(dataset_dir) 
+unique_labels_file_path = os.path.join(dr_dataset_base_path, "unique_labels_file.txt") 
+processed_images_folder = os.path.join(dr_dataset_base_path, "processed_images") 
+num_of_processed_images = 35126 
+train_processed_images_folder = os.path.join(processed_images_folder, "train") 
+validation_processed_images_folder = os.path.join(processed_images_folder, "validation") 
+num_of_training_images = 30000 
+raw_images_folder = os.path.join(dr_dataset_base_path, "train") 
+train_labels_csv_path = os.path.join(dr_dataset_base_path, "trainLabels.csv")</pre>
+<p>The <kbd>num_of_processing_threads</kbd> variable is used to specify the number of threads we want to use while preprocessing our dataset, as you may have already guessed. We will use a multi-threaded environment to preprocess our data faster. Later on, we have specified some directory paths to contain our data inside different folders while preprocessing.</p>
+<p>We will extract the images in their raw form and then preprocess them to get them into a suitable consistent format and size, and then we will generate the <kbd>tfrecords</kbd> files from the processed images with the <kbd>_convert_dataset</kbd> method in the <kbd>download_and_convert_diabetic.py</kbd> file. After that, we will feed these <kbd>tfrecords</kbd> files into the training and testing networks.</p>
+<p>As we said in the previous section, we have already extracted the <kbd>dataset</kbd> files and the labels files. Now, as we have all of the data extracted and present inside our machine, we will process the images. A typical image from the DR dataset looks like this:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="239" width="426" class=" image-border" src="assets/d8fd4a61-193c-420c-a0eb-fa2cf12a79a3.png"/></div>
+<p>What we want is to remove this extra black space because it is not necessary for our network. This will reduce the unnecessary information inside the image. After this, we will scale this image into a 299x299 JPG image file.</p>
+<p>We will repeat this process for all of the training datasets.</p>
+<p>The function to crop the black image borders is as follows:</p>
+<pre>  def crop_black_borders(image, threshold=0):<br/>     """Crops any edges below or equal to threshold<br/><br/>     Crops blank image to 1x1.<br/><br/>     Returns cropped image.<br/><br/>     """<br/>     if len(image.shape) == 3:<br/>         flatImage = np.max(image, 2)<br/>     else:<br/>         flatImage = image<br/>     assert len(flatImage.shape) == 2<br/><br/>     rows = np.where(np.max(flatImage, 0) &gt; threshold)[0]<br/>     if rows.size:<br/>         cols = np.where(np.max(flatImage, 1) &gt; threshold)[0]<br/>         image = image[cols[0]: cols[-1] + 1, rows[0]: rows[-1] + 1]<br/>     else:<br/>         image = image[:1, :1]<br/><br/>     return image </pre>
+<p>This function takes the image and a threshold for a grayscale, below which it will remove the black borders around the image.</p>
+<p>As we are doing all of this processing in a multithreaded environment, we will process the images in batches. To process an image batch, we will use the following function:</p>
+<pre>  def process_images_batch(thread_index, files, labels, subset):<br/><br/>     num_of_files = len(files)<br/><br/>     for index, file_and_label in enumerate(zip(files, labels)):<br/>         file = file_and_label[0] + '.jpeg'<br/>         label = file_and_label[1]<br/><br/>         input_file = os.path.join(raw_images_folder, file)<br/>         output_file = os.path.join(processed_images_folder, subset,   <br/>         str(label), file)<br/><br/>         image = ndimage.imread(input_file)<br/>         cropped_image = crop_black_borders(image, 10)<br/>         resized_cropped_image = imresize(cropped_image, (299, 299, 3),   <br/>         interp="bicubic")<br/>         imsave(output_file, resized_cropped_image)<br/><br/>         if index % 10 == 0:<br/>             print("(Thread {}): Files processed {} out of  <br/>             {}".format(thread_index, index, num_of_files)) </pre>
+<p>The <kbd>thread_index</kbd><strong> </strong>tells us the ID of the thread in which the function has been called. The threaded environment around processing the image batch is defined in the following function:</p>
+<pre>   def process_images(files, labels, subset):<br/><br/>     # Break all images into batches with a [ranges[i][0], ranges[i] <br/>     [1]].<br/>     spacing = np.linspace(0, len(files), num_of_processing_threads +  <br/>     1).astype(np.int)<br/>     ranges = []<br/>     for i in xrange(len(spacing) - 1):<br/>         ranges.append([spacing[i], spacing[i + 1]])<br/><br/>     # Create a mechanism for monitoring when all threads are finished.<br/>     coord = tf.train.Coordinator()<br/><br/>     threads = []<br/>     for thread_index in xrange(len(ranges)):<br/>         args = (thread_index, files[ranges[thread_index] <br/>         [0]:ranges[thread_index][1]],<br/>                 labels[ranges[thread_index][0]:ranges[thread_index] <br/>                 [1]],<br/>                 subset)<br/>         t = threading.Thread(target=process_images_batch, args=args)<br/>         t.start()<br/>         threads.append(t)<br/><br/>     # Wait for all the threads to terminate.<br/>     coord.join(threads) </pre>
+<p>To get the final result from all of the threads, we use a <kbd>TensorFlow</kbd> class, <kbd>tf.train.Coordinator()</kbd>, whose <kbd>join</kbd> function is responsible for handling all of the threads' final approach point.</p>
+<p>For the threading, we use <kbd>threading.Thread</kbd>, in which the <kbd>target</kbd> argument specifies the function to be called and the <kbd>args</kbd> argument specifies the target function arguments.</p>
+<p>Now, we will process the training images. The training dataset is divided into a train set (30,000 images) and a validation set (5,126 images).</p>
+<p>The total preprocessing is handled as follows:</p>
+<pre style="padding-left: 60px">def process_training_and_validation_images():<br/>     train_files = []<br/>     train_labels = []<br/><br/>     validation_files = []<br/>     validation_labels = []<br/><br/>     with open(train_labels_csv_path) as csvfile:<br/>         reader = csv.DictReader(csvfile)<br/>         for index, row in enumerate(reader):<br/>             if index &lt; num_of_training_images:<br/>                 train_files.extend([row['image'].strip()])<br/>                 train_labels.extend([int(row['level'].strip())])<br/>             else:<br/>                 validation_files.extend([row['image'].strip()])<br/>                   <br/>   validation_labels.extend([int(row['level'].strip())])<br/><br/>     if not os.path.isdir(processed_images_folder):<br/>         os.mkdir(processed_images_folder)<br/><br/>     if not os.path.isdir(train_processed_images_folder):<br/>         os.mkdir(train_processed_images_folder)<br/><br/>     if not os.path.isdir(validation_processed_images_folder):<br/>         os.mkdir(validation_processed_images_folder)<br/><br/>     for directory_index in range(5):<br/>         train_directory_path =   <br/>    os.path.join(train_processed_images_folder,   <br/>    str(directory_index))<br/>         valid_directory_path =   <br/>   os.path.join(validation_processed_images_folder,  <br/>   str(directory_index))<br/><br/>         if not os.path.isdir(train_directory_path):<br/>             os.mkdir(train_directory_path)<br/><br/>         if not os.path.isdir(valid_directory_path):<br/>             os.mkdir(valid_directory_path)<br/><br/>     print("Processing training files...")<br/>     process_images(train_files, train_labels, "train")<br/>     print("Done!")<br/><br/>     print("Processing validation files...")<br/>     process_images(validation_files, validation_labels,  <br/>     "validation")<br/>     print("Done!")<br/><br/>     print("Making unique labels file...")<br/>     with open(unique_labels_file_path, 'w') as unique_labels_file:<br/>         unique_labels = ""<br/>         for index in range(5):<br/>             unique_labels += "{}\n".format(index)<br/>         unique_labels_file.write(unique_labels)<br/><br/>     status = check_folder_status(processed_images_folder, <br/>     num_of_processed_images,<br/>     "All processed images are present in place",<br/>     "Couldn't complete the image processing of training and  <br/>     validation files.")<br/><br/>     return status </pre>
+<p>Now, we will look at the last method for preparing the dataset, the <kbd>_convert_dataset</kbd> method that is called in the <kbd>download_and_convert_diabetic.py</kbd> file:</p>
+<pre style="padding-left: 60px">def _get_dataset_filename(dataset_dir, split_name, shard_id): 
+    output_filename = 'diabetic_%s_%05d-of-%05d.tfrecord' % ( 
+        split_name, shard_id, _NUM_SHARDS) 
+    return os.path.join(dataset_dir, output_filename) 
+def _convert_dataset(split_name, filenames, class_names_to_ids, dataset_dir): 
+    """Converts the given filenames to a TFRecord dataset. 
+ 
+    Args: 
+      split_name: The name of the dataset, either 'train' or  <br/>     'validation'. 
+      filenames: A list of absolute paths to png or jpg images. 
+      class_names_to_ids: A dictionary from class names (strings) to  <br/>      ids 
+        (integers). 
+      dataset_dir: The directory where the converted datasets are  <br/>     stored. 
+    """ 
+    assert split_name in ['train', 'validation'] 
+ 
+    num_per_shard = int(math.ceil(len(filenames) /  <br/>    float(_NUM_SHARDS))) 
+ 
+    with tf.Graph().as_default(): 
+        image_reader = ImageReader() 
+ 
+        with tf.Session('') as sess: 
+ 
+            for shard_id in range(_NUM_SHARDS): 
+                output_filename = _get_dataset_filename( 
+                    dataset_dir, split_name, shard_id) 
+ 
+                with tf.python_io.TFRecordWriter(output_filename)<br/>                as   <br/>                tfrecord_writer: 
+                    start_ndx = shard_id * num_per_shard 
+                    end_ndx = min((shard_id + 1) * num_per_shard,  <br/>                    len(filenames)) 
+                    for i in range(start_ndx, end_ndx): 
+                        sys.stdout.write('\r&gt;&gt; Converting image  <br/>                         %d/%d shard %d' % ( 
+                            i + 1, len(filenames), shard_id)) 
+                        sys.stdout.flush() 
+ 
+                        # Read the filename: 
+                        image_data =  <br/>                    tf.gfile.FastGFile(filenames[i], 'rb').read() 
+                        height, width =          <br/>                    image_reader.read_image_dims(sess, image_data) 
+ 
+                        class_name =  <br/>                     os.path.basename(os.path.dirname(filenames[i])) 
+                        class_id = class_names_to_ids[class_name] 
+ 
+                        example = dataset_utils.image_to_tfexample( 
+                            image_data, b'jpg', height, width,   <br/>                             class_id) 
+                         <br/>                 tfrecord_writer.write(example.SerializeToString()) 
+ 
+                  sys.stdout.write('\n') 
+                  sys.stdout.flush() </pre>
+<p>In the preceding function, we will get the image filenames and then store them in the <kbd>tfrecord</kbd> files. We will also split the <kbd>train</kbd> and <kbd>validation</kbd> files into multiple <kbd>tfrecord</kbd> files instead of using only one file for each split set.</p>
+<p>Now, as the data processing is out of the way, we will formalize the dataset into an instance of <kbd>slim.dataset</kbd>. Dataset from <kbd>Tensorflow Slim</kbd>. In the <kbd>datasets/diabetic.py</kbd> file, you will see a method named <kbd>get_split</kbd>, as follows:</p>
+<pre style="padding-left: 60px">_FILE_PATTERN = 'diabetic_%s_*.tfrecord' 
+SPLITS_TO_SIZES = {'train': 30000, 'validation': 5126} 
+_NUM_CLASSES = 5 
+_ITEMS_TO_DESCRIPTIONS = { 
+    'image': 'A color image of varying size.', 
+    'label': 'A single integer between 0 and 4', 
+} 
+def get_split(split_name, dataset_dir, file_pattern=None, reader=None): 
+  """Gets a dataset tuple with instructions for reading flowers. 
+  Args: 
+    split_name: A train/validation split name. 
+    dataset_dir: The base directory of the dataset sources. 
+    file_pattern: The file pattern to use when matching the dataset sources. 
+      It is assumed that the pattern contains a '%s' string so that the split 
+      name can be inserted. 
+    reader: The TensorFlow reader type. 
+  Returns: 
+    A `Dataset` namedtuple. 
+  Raises: 
+    ValueError: if `split_name` is not a valid train/validation split. 
+  """ 
+  if split_name not in SPLITS_TO_SIZES: 
+    raise ValueError('split name %s was not recognized.' % split_name) 
+ 
+  if not file_pattern: 
+    file_pattern = _FILE_PATTERN 
+  file_pattern = os.path.join(dataset_dir, file_pattern % split_name) 
+ 
+  # Allowing None in the signature so that dataset_factory can use the default. 
+  if reader is None: 
+    reader = tf.TFRecordReader 
+ 
+  keys_to_features = { 
+      'image/encoded': tf.FixedLenFeature((), tf.string, default_value=''), 
+      'image/format': tf.FixedLenFeature((), tf.string, default_value='png'), 
+      'image/class/label': tf.FixedLenFeature( 
+          [], tf.int64, default_value=tf.zeros([], dtype=tf.int64)), 
+  } 
+  items_to_handlers = { 
+      'image': slim.tfexample_decoder.Image(), 
+      'label': slim.tfexample_decoder.Tensor('image/class/label'), 
+  } 
+  decoder = slim.tfexample_decoder.TFExampleDecoder( 
+      keys_to_features, items_to_handlers) 
+ 
+  labels_to_names = None 
+  if dataset_utils.has_labels(dataset_dir): 
+    labels_to_names = dataset_utils.read_label_file(dataset_dir) 
+ 
+  return slim.dataset.Dataset( 
+      data_sources=file_pattern, 
+      reader=reader, 
+      decoder=decoder, 
+      num_samples=SPLITS_TO_SIZES[split_name], 
+      items_to_descriptions=_ITEMS_TO_DESCRIPTIONS, 
+      num_classes=_NUM_CLASSES, 
+      labels_to_names=labels_to_names) </pre>
+<p>The preceding method will be called during the training and evaluating routines. We will create an instance of <kbd>slim.dataset</kbd> with the information about our <kbd>tfrecord</kbd> files so that it can automatically perform the work to parse the binary files. Moreover, we can also use <kbd>slim.dataset.Dataset</kbd> with the support of <kbd>DatasetDataProvider</kbd> from Tensorflow Slim to read the dataset in parallel, so we can increase the training and evaluating routines.</p>
+<p>Before we start training, we need to download the pre-trained model of Inception V3 from the <kbd>Tensorflow Slim image classification</kbd> library so we can leverage the performance of Inception V3 without training from scratch.</p>
+<p>The pre-trained snapshot can be found here:</p>
+<p><a href="https://github.com/tensorflow/models/tree/master/research/slim#Pretrained">https://github.com/tensorflow/models/tree/master/research/slim#Pretrained</a></p>
+<p>In this chapter, we will use Inception V3, so we need to download the <kbd>inception_v3_2016_08_28.tar.gz</kbd> file and extract it to have the checkpoint file named <kbd>inception_v3.ckpt</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training routine</h1>
+                </header>
+            
+            <article>
+                
+<p>Now let's move towards training and evaluating our model.</p>
+<p>The training script is present inside <kbd>train_image_classifer.py</kbd>. Since we have followed the workflow of the library, we can leave this file untouched and run our training routine with the following command:</p>
+<pre><strong>python train_image_classifier.py --train_dir=D:\datasets\diabetic\checkpoints --dataset_name=diabetic --dataset_split_name=train --dataset_dir=D:\datasets\diabetic\tfrecords --model_name=inception_v3 --checkpoint_path=D:\datasets\diabetic\checkpoints\inception_v3\inception_v3.ckpt --checkpoint_exclude_scopes=InceptionV3/Logits,InceptionV3/AuxLogits --trainable_scopes=InceptionV3/Logits,InceptionV3/AuxLogits --learning_rate=0.000001 --learning_rate_decay_type=exponential </strong></pre>
+<p>In our setup, we have run the training process overnight. Now, we will run the trained model through the validation process to see how it works.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Validation routine</h1>
+                </header>
+            
+            <article>
+                
+<p>You can run the validation routine with the following command:</p>
+<pre><strong>python eval_image_classifier.py --alsologtostderr --checkpoint_path=D:\datasets\diabetic\checkpoints\model.ckpt-92462 --dataset_name=diabetic --dataset_split_name=validation --dataset_dir=D:\datasets\diabetic\tfrecords --model_name=inception_v3</strong></pre>
+<pre><strong> </strong></pre>
+<div class="CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/e5a39134-d138-4657-b5b0-b0cdbf535885.png"/></div>
+<p>As you can see, the current accuracy is about 75 percent. In the <em>Going further</em> section, we will give you some ideas to improve this accuracy.</p>
+<p>Now, we will look at the TensorBoard to visualize the training process.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Visualize outputs with TensorBoard</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, we will visualize the training result with TensorBoard.</p>
+<p>First, you need to change the <kbd>command-line</kbd> directory to the folder that contains the checkpoints. In our case, it is the <kbd>train_dir</kbd> parameter in the previous command, <kbd>D:\datasets\diabetic\checkpoints</kbd>. Then, you should run the following command:</p>
+<pre><strong>tensorboard -logdir .</strong></pre>
+<p>Here is some output when we run TensorBoard for our network:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="553" width="539" src="assets/ef7909a6-8cb9-4a9e-8ce6-f3c1aedfa0ea.png"/></div>
+<p>The preceding image shows the nodes containing the RMS prop optimizer for the training network and some logits that it contains for the output of DR classification. The next screenshot shows the images coming as input, along with their preprocessing and modifications:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/0f3edeef-914b-49a9-ba3b-4c993b857449.png"/></div>
+<p><span>In this screenshot, you can see the graph showing the network output during training:</span></p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/ac215a51-fc57-4826-81a0-3aa05b16bc2e.png"/></div>
+<p><span>This screenshot depicts the total raw loss of the network during training:</span></p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/10d1ce85-4786-4914-bb10-4f363202e7fa.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Inception network</h1>
+                </header>
+            
+            <article>
+                
+<p><span>The main concept behind the </span>inception<span> network is to combine different convolutions in a single layer. The combination is done by combining 7x7, 5x5, 3x3, and 1x1 convolutions to give to the next layer. Through this, the network can extract more features of the network and thus give better accuracy. This is shown in the following image of the Google inception V3 network. You can try to access the code at </span><kbd>chapter_08/nets/inception_v3.py</kbd><span>.</span></p>
+<div class="CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/e3cb0bf3-f977-4546-9046-fc474ee35279.png"/></div>
+<p>The image is taken from <a href="https://github.com/tensorflow/models/blob/master/research/inception/g3doc/inception_v3_architecture.png">https://github.com/tensorflow/models/blob/master/research/inception/g3doc/inception_v3_architecture.png</a></p>
+<p><a href="https://github.com/tensorflow/models/blob/master/research/inception/g3doc/inception_v3_architecture.png"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Going further</h1>
+                </header>
+            
+            <article>
+                
+<p>The result we got from running this network is 75 percent accurate on the validation set. This is not very good because of the criticality of the network usage. In medicine, there is not much room for error because a person's medical condition is on the line.</p>
+<p>To make this accuracy better, we need to define a different criterion for evaluation. You can read more about it here:</p>
+<p><a href="https://en.wikipedia.org/wiki/Confusion_matrix"><span class="URLPACKT">https://en.wikipedia.org/wiki/Confusion_matrix</span></a></p>
+<p>Also, you can balance the dataset. What we have now is an unbalanced dataset in which the number of diseased patients is much lower than the number of normal patients. Thus, the network becomes more sensitive to normal patients' features and less sensitive to diseased patients' features.</p>
+<p>To fix this problem, we can SMOTE our dataset. SMOTing is basically replicating the data of less frequent classes (flipping the image horizontally or vertically, changing saturation, and so on) to create a balanced dataset. SMOTE stands for <strong>Synthetic Minority Over-sampling Technique</strong>.</p>
+<p>Here is a good read on this topic:</p>
+<p><a href="https://www.jair.org/media/953/live-953-2037-jair.pdf"><span class="URLPACKT">https://www.jair.org/media/953/live-953-2037-jair.pdf</span></a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Other medical data challenges</h1>
+                </header>
+            
+            <article>
+                
+<p>Understandably, medical data is not as easy to release as other datasets, so there are far fewer datasets in the public domain. This is changing slowly, but in the meantime, here are some datasets and associated challenges you can try your hand at. Note that many of these challenges have been overcome, but they have luckily continued to publish the datasets.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The ISBI grand challenge</h1>
+                </header>
+            
+            <article>
+                
+<p>ISBI is the International Symposium on Biomedical Imaging, a popular venue for furthering the type of work you're seeing in this chapter. Their annual conferences often feature multiple challenges posed to the academic community. They posed several challenges in 2016.</p>
+<p>One popular challenge was the AIDA-E: Analysis of Images to Detect Abnormalities in Endoscopy. The challenge website is <a href="http://isbi-aida.grand-challenge.org/"><span class="URLPACKT">http://isbi-aida.grand-challenge.org/</span></a>.</p>
+<p>Another popular challenge was the Cancer Metastasis Detection in Lymph Nodes, which features pathology data. The challenge website is <a href="http://camelyon16.grand-challenge.org/"><span class="URLPACKT">http://camelyon16.grand-challenge.org/</span></a>.</p>
+<p>On the radiology side, a popular challenge in 2016 was the Data Science Bowl challenge on heart disease diagnosis. Titled <em>Transforming How We Diagnose Heart Disease</em>, the challenge sought to segment parts of the cardiac Magnetic Resonance Imaging data to gauge pump volume, which was then used as a proxy for heart health. The challenge website and dataset is <a href="http://www.datasciencebowl.com/competitions/transforming-how-we-diagnose-heart-disease/"><span class="URLPACKT">http://www.datasciencebowl.com/competitions/transforming-how-we-diagnose-heart-disease/</span></a><span class="URLPACKT">.</span></p>
+<p>Another popular radiology dataset is the Lung Image Database Consortium's <strong>computed tomography</strong> (<strong>CT</strong>) data in the LIDC-IDRI image collection. This is a dataset of diagnostic and lung cancer screening thoracic CT scans. Interestingly, instead of image-level classes, this dataset annotates the actual locations of the lesions.</p>
+<p>The two radiology competitions are interesting for two more reasons:</p>
+<ul>
+<li>They feature three-dimensional <strong>volume</strong> data, which is essentially an ordered stack of two-dimensional images that form an actual space.</li>
+<li>They feature <strong>segmentation</strong> tasks where you want to classify parts of an image or volume into certain classes. This is a familiar classification challenge, except we're trying to also localize the feature on the image. In one case, we seek to localize the feature and point to it (rather than classify the entire image), and in another case, we seek to classify a section as a way to measure the size of a region.</li>
+</ul>
+<p>We'll speak more about dealing with volume data later, but for now, you've got some really interesting and varied datasets to work with.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Reading medical data</h1>
+                </header>
+            
+            <article>
+                
+<p>The diabetic retinopathy challenge, despite the challenges, is not as complicated as it gets. The actual images were provided in JPEG format, but most medical data is not in JPEG format. They are usually within container formats such as DICOM. DICOM stands for <span class="st"><strong>Digital Imaging and Communications in Medicine</strong> and has a number of versions and variations. It contains the medical image, but also header data. The header data often includes general demographic and study data, but it can contain dozens of other custom fields. If you are lucky, it will also contain a diagnosis, which you can use as a label.</span></p>
+<p><span class="st">DICOM data adds another step to the pipeline we discussed earlier because we now need to read the DICOM file, extract the header (and hopefully class/label data), and extract the underlying image. DICOM is not as easy to work with as JPEG or PNG, but it is not too difficult. It will require some extra packages.</span></p>
+<p><span class="st">Since we're writing almost everything in Python, let's use a <kbd>Python</kbd> library for DICOM processing. The most popular is</span> <strong>pydicom</strong><span class="st">, which is available at</span> <a href="https://github.com/darcymason/pydicom"><span class="URLPACKT">https://github.com/darcymason/pydicom</span></a>.</p>
+<p><span class="st">The documentation is available at</span> <a href="https://pydicom.readthedocs.io/en/stable/getting_started.html"><span class="URLPACKT">https://pydicom.readthedocs.io/en/stable/getting_started.html</span></a>.</p>
+<p>It should be noted that the <kbd>pip</kbd> installation is currently broken, so it must be cloned from the source repository and installed via the setup script before it can be used.</p>
+<p>A quick excerpt from the documentation will help set the stage for understanding how to work with <kbd>DICOM</kbd> files:</p>
+<pre style="padding-left: 60px">&gt;&gt;&gt; import dicom 
+&gt;&gt;&gt; plan = dicom.read_file("rtplan.dcm") 
+&gt;&gt;&gt; plan.PatientName 
+'Last^First^mid^pre' 
+&gt;&gt;&gt; plan.dir("setup")    # get a list of tags with "setup" somewhere in the name 
+['PatientSetupSequence'] 
+&gt;&gt;&gt; plan.PatientSetupSequence[0] 
+(0018, 5100) Patient Position                    CS: 'HFS' 
+(300a, 0182) Patient Setup Number                IS: '1' 
+(300a, 01b2) Setup Technique Description         ST: '' </pre>
+<p>This may seem a bit messy, but this is the type of interaction you should expect when working with medical data. Worse, each vendor often places the same data, even basic data, into slightly different tags. The typical industry practice is to simply look around! We do that by dumping the entire tag set as follows:</p>
+<pre style="padding-left: 60px">&gt;&gt;&gt; ds 
+(0008, 0012) Instance Creation Date              DA: '20030903' 
+(0008, 0013) Instance Creation Time              TM: '150031' 
+(0008, 0016) SOP Class UID                       UI: RT Plan Storage 
+(0008, 0018) Diagnosis                        UI: Positive  
+(0008, 0020) Study Date                          DA: '20030716' 
+(0008, 0030) Study Time                          TM: '153557' 
+(0008, 0050) Accession Number                    SH: '' 
+(0008, 0060) Modality                            CS: 'RTPLAN'</pre>
+<p>Suppose we were seeking the diagnosis. We would look through several files of tags and try to see whether the diagnosis consistently shows up under tag <kbd>(0008, 0018) Diagnosis</kbd>, and if so, we'd test our hypothesis by pulling out just this field from a large portion of our training set to see whether it is indeed consistently populated. If it is, we're ready for the next step. If not, we need to start again and look at other fields. Theoretically, the data provider, broker, or vendor can provide this information, but, practically speaking, it is rarely that simple.</p>
+<p>The next step is to see the domain of values. This is very important because we want to see what our classes look like. Ideally, we will have a nice clean set of values such as {<kbd>Negative</kbd>, <kbd>Positive</kbd>}, but, in reality, we often get a long tail of dirty values. So, the typical approach is to loop through every single image and keep a count of each unique domain value encountered, as follows:</p>
+<pre style="padding-left: 60px">&gt;&gt;&gt; import dicom, glob, os 
+&gt;&gt;&gt; os.chdir("/some/medical/data/dir") 
+&gt;&gt;&gt; domains={} 
+&gt;&gt;&gt; for file in glob.glob("*.dcm"): 
+&gt;&gt;&gt;    aMedFile = dicom.read_file(file) 
+&gt;&gt;&gt;    theVal=aMedFile.ds[0x10,0x10].value 
+&gt;&gt;&gt;    if domains[theVal]&gt;0: 
+&gt;&gt;&gt;       domains[theVal]= domains[theVal]+1 
+&gt;&gt;&gt;    else: 
+&gt;&gt;&gt;       domains[theVal]=1 </pre>
+<p class="mce-root"/>
+<p>A very common finding at this point would be that 99 percent of domain values exist across a handful of domain values (such as <em>positive</em> and <em>negative</em>), and there is a long tail of 1% domain values that are dirty (such as <em>positive, but under review</em>, <em>@#Q#$%@#$%</em>, or <em>sent for re-read</em>). The easiest thing to do is throw out the long tail—just keep the good data. This is especially easy if there is plenty of training data.</p>
+<p>OK, so we've extracted the class information, but we've still got to extract the actual image. We can do that as follows:</p>
+<pre style="padding-left: 60px">&gt;&gt;&gt; import dicom 
+&gt;&gt;&gt; ds=dicom.read_file("MR_small.dcm") 
+&gt;&gt;&gt; ds.pixel_array 
+array([[ 905, 1019, 1227, ...,  302,  304,  328], 
+       [ 628,  770,  907, ...,  298,  331,  355], 
+       [ 498,  566,  706, ...,  280,  285,  320], 
+       ..., 
+       [ 334,  400,  431, ..., 1094, 1068, 1083], 
+       [ 339,  377,  413, ..., 1318, 1346, 1336], 
+       [ 378,  374,  422, ..., 1369, 1129,  862]], dtype=int16) 
+&gt;&gt;&gt; ds.pixel_array.shape 
+(64, 64)</pre>
+<p>Unfortunately, this only gives us a raw matrix of pixel values. We still need to convert this into a <span>readable </span>format (ideally, JPEG or PNG.) We'll achieve the next step as follows:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="407" width="258" class=" image-border" src="assets/ec447807-fda1-4c53-a986-6834101d3663.png"/></div>
+<p>Next, we'll scale the image to the bit length we desire and write the matrix to a file using another library geared to writing data in our destination format. In our case, we'll use a PNG output format and write it using the <kbd>png</kbd> library. This means some extra imports:</p>
+<pre style="padding-left: 60px">import os 
+from pydicom import dicomio 
+import png 
+import errno 
+import fnmatch</pre>
+<p>We'll export like this:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="528" width="334" class=" image-border" src="assets/57b56d7d-07a9-4dfd-a369-80e391a0793e.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Skills Learned</h1>
+                </header>
+            
+            <article>
+                
+<p>You should have learned these skills in the chapter:</p>
+<ul>
+<li>Dealing with arcane and proprietary medical imaging formats</li>
+<li>Dealing with large image files, a common medical image hallmark</li>
+<li>Extracting class data from medical files</li>
+<li>Extending our existing pipeline to deal with heterogeneous data inputs</li>
+<li>Applying networks pre-trained with non-medical data</li>
+<li>Scaling training to accommodate new datasets.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we created a deep neural network for image classification problem in an enterprise-grade problem, medical diagnosis. Moreover, we also guided you through the process of reading DICOM digital medical image data for further researches. In the next chapter, we will build a production system that can self-improve by learning from users feedback.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

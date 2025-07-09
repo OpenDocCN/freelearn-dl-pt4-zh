@@ -1,0 +1,778 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Develop an Autonomous Agent with Deep R Learning</h1>
+                </header>
+            
+            <article>
+                
+<p>Welcome to the chapter on reinforcement learning. <span>In the previous chapters, we have worked on solving supervised learning problems.</span> In this chapter, we will learn to build and train a deep reinforcement learning model capable of playing games. </p>
+<div class="packt_infobox">Reinforcement learning is often a new paradigm for deep learning engineers and this is why we're using the framework of a game for this training. The business use cases that we should be looking out for are typified by process optimization. Reinforcement learning is great for gaming, but also applicable in use cases ranging from drone control (<a href="https://arxiv.org/pdf/1707.05110.pdf" target="_blank">https://arxiv.org/pdf/1707.05110.pdf</a>) and navigation to optimizing file downloads over mobile networks <span>(</span><a href="http://anrg.usc.edu/www/papers/comsnets_2017.pdf" target="_blank"><span>http://anrg.usc.edu/www/papers/comsnets_2017.pdf</span></a><span>)</span>.</div>
+<p>We will do this with something called deep Q-learning and deep <strong>State-Action-Reward-State-Action</strong> (<strong>SARSA</strong>) learning. The idea is that we will build a deep learning model, also called an agent in reinforcement learning terms, that interacts with the game environment and learns how to play the game while maximizing rewards after several attempts at playing. Here is a  diagram illustrating reinforcement learning:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/599cfdb5-da3b-4f20-aaa2-75dfec68c33c.png" style="width:27.67em;height:12.92em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.1: Reinforcement learning </div>
+<p><span>For the purpose of this chapter, we will be using the CartPole game from OpenAI Gym. </span></p>
+<p>What we'll learn in this chapter is the following:</p>
+<ul>
+<li>How to interact with the Gym toolkit</li>
+<li>What is Q-learning and SARSA learning</li>
+<li>Coding the RL model and defining hyperparameters</li>
+<li>Building and understanding the training loop</li>
+<li>Testing the model</li>
+</ul>
+<p><span>It would be better if you implement the code snippets as you go along in this chapter, either in a </span>Jupyter<span> Notebook</span> <span>or any source code editor</span><span>. This will make it easier for you to follow along, as well as understand what each part of the code does.</span></p>
+<p>All of the Python <span>and the Jupyter Notebook </span>files for this chapter can be found <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter14">at https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter14</a>.<a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter14"/></p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Let's get to the code!</h1>
+                </header>
+            
+            <article>
+                
+<p>In this exercise, we will be using the Gym toolkit from OpenAI for developing reinforcement learning models. It supports teaching agents such as CartPole and pinball games.</p>
+<div class="packt_infobox">To know more about the Gym toolkit from OpenAI <span>and the games it supports,</span> visit <a href="http://gym.openai.com/">http://gym.openai.com/</a>.<a href="http://gym.openai.com/"/></div>
+<p><span>We will also be using the Keras deep learning library,</span> <span>which is a high-level neural network API capable of running on top of TensorFlow, Theano, or Cognitive Toolkit (CNTK).</span></p>
+<div class="packt_infobox">To learn more about Keras and its functionalities visit <a href="https://keras.io/" target="_blank">https://keras.io/</a>.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deep Q-learning</h1>
+                </header>
+            
+            <article>
+                
+<p>In this segment, we will implement deep Q-learning with a deep learning model built using the Keras deep learning library as the function approximator.</p>
+<p>We will start off this segment with a gentle introduction as to how to use the Gym module and then move on to understanding what Q-learning is, and finally, implement the deep Q-learning. <span>We will be using the CartPole environment from OpenAI Gym.</span></p>
+<p>To follow along, refer to the Jupyter Notebook code file for the deep Q-learning section at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/DQN.ipynb">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/DQN.ipynb</a>.<a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/DQN.ipynb"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Importing all of the dependencies</h1>
+                </header>
+            
+            <article>
+                
+<p><span>We will be using </span><kbd>numpy</kbd><span>, <kbd>gym</kbd>, </span><kbd>matplotlib</kbd><span>,</span> <kbd>keras</kbd><span>, and</span> <kbd>tensorflow</kbd><span> </span><span>packages in this segment of the exercise. Here, TensorFlow will be used as the backend for Keras. You can install these packages using <kbd>pip</kbd>:</span></p>
+<pre>import random<br/>import numpy as np<br/>import matplotlib.pyplot as plt<br/>from keras.layers import Dense, Dropout, Activation<br/>from keras.models import Sequential<br/>from keras.optimizers import Adam<br/>from keras import backend as k<br/>from collections import deque<br/>import gym</pre>
+<div class="packt_infobox"><kbd>deque</kbd> is a list-like container with fast appends and pops on either end.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Exploring the CartPole game</h1>
+                </header>
+            
+            <article>
+                
+<p><span>In the</span> <span>CartPole</span> <span>game, you will find a pole attached by an unattached joint to the cart, which moves on a frictionless track. At the beginning of each game, the pole starts in the upright position and the goal is to hold it in the upright position as long as possible or for a given number of time steps. You can control the</span> <span>CartPole</span><span> system by applying a force of +1 and -1 (to move the cart either to the right or to the left) and prevent the pole from falling over. The game/episode ends when the cart moves more than 2.4 units from the center or when the pole is more than 45 degrees from the vertical.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Interacting with the CartPole game</h1>
+                </header>
+            
+            <article>
+                
+<p>OpenAI Gym makes it super easy to interact with the game. In this section, we will cover how to load, reset, and play the CartPole game.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Loading the game</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's load the <kbd>CartPole-v1</kbd> game from the <kbd>gym</kbd> module. It's very simple. All you have to do is feed the <kbd>gym.make()</kbd> function the name of the game. In<span> our case, the game is</span> <kbd>CartPole<span>-v1</span></kbd>. Gym then loads the game into your workspace:</p>
+<pre>env = gym.make('CartPole-v1')</pre>
+<p>It is important that you set <kbd>seed</kbd> for reproducibility:</p>
+<pre><strong># Set seed for reproducibility</strong><br/>seed_val = 456<br/>np.random.seed(seed_val)<br/>env.seed(seed_val)<br/>random.seed(seed_val)</pre>
+<p>Let's explore how many variables we have in the CartPole game:</p>
+<pre>states = env.observation_space.shape[0]<br/>print('Number of states/variables in the cartpole environment', states) </pre>
+<p>The following is the output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/6ad4918d-90a9-4b51-bd73-f8e682edde99.png" style="width:39.50em;height:2.67em;"/></div>
+<p>We can see that the CartPole has <kbd>4</kbd> variables and these are namely the position (<kbd>x</kbd>), velocity (<kbd>x_dot</kbd>), angular position (<kbd>theta</kbd>), and the angular velocity (<kbd>theta_dot</kbd>). </p>
+<p><span>Let's explore how many possible responses we have in this game using the following code:</span></p>
+<pre>actions = env.action_space.n<br/>print('Number of responses/classes in the cartpole environment', actions) </pre>
+<p>The following is the output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/32179474-c616-4311-bf21-8b2bcb7aad96.png" style="width:40.33em;height:2.50em;"/></div>
+<p>We see that the CartPole environment has <kbd>2</kbd> possible responses/buttons, namely move left and move right.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Resetting the game</h1>
+                </header>
+            
+            <article>
+                
+<p>You can reset the game with the following code:</p>
+<pre>state = env.reset() <strong># reset the game</strong><br/>print('State of the Cart-Pole after reset', state)<br/>print('Shape of state of the Cart-Pole after reset', state.shape)</pre>
+<p>The preceding snippet will reset the game and also return you the state (<kbd>x</kbd>, <kbd>x_dot</kbd>, <kbd>theta</kbd>, <kbd>theta_dot</kbd>) of the CartPole after the reset, which will be an array of the shape of  (<kbd>4</kbd>,).</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Playing the game</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, once you have reset the game, all there is to do is play. You can feed your actions/responses to the game with the use of the following code:</p>
+<pre>action = 0<br/>new_state, reward, done, info = env.step(action) <br/>print((new_state, reward, done, info))</pre>
+<p>The <kbd>env.step</kbd> function accepts your response/action (move left or right) and generates the <kbd>new_state</kbd>/orientation (<span>x, x_dot, theta, theta_dot</span>) of the CartPole system. Along with the new state, the <kbd>env.step</kbd> function also returns the <kbd>reward</kbd>, which indicates the score you receive for the <kbd>action</kbd> you just took; <kbd>done</kbd>, which indicates if the game has finished; and <kbd>info</kbd>, which has system-related information.</p>
+<p>When the game begins, <kbd>done</kbd> is set to <kbd>False</kbd>. Only when the CartPole orientation exceeds the game rules will <kbd>done</kbd> be set to <kbd>True</kbd>, indicating that either the cart moved 2.4 units from the center or the pole was more than 45 degrees from the vertical.</p>
+<p>As long as every step you take is within the game over limits, the reward for that step will be 1 unit, otherwise zero.</p>
+<p>Let's play the game by making random actions:</p>
+<pre>def random_actions_game(episodes):<br/>    for episode in range(episodes):<br/>        state = env.reset() <strong># reset environment</strong><br/>        done = False <strong># set done to False</strong><br/>        score = 0<br/>        while not done:<br/>            #env.render() <strong># Display cart pole game on the screen</strong><br/>            action = random.choice([0,1]) <strong># Choose between 0 or 1</strong><br/>            new_state, reward, done, info = env.step(action) <strong># perform the action</strong><br/>            score+=1<br/>        print('Episode: {} Score: {}'.format(episode+1, score))<br/><br/><strong># play game</strong><br/>random_actions_game(10) </pre>
+<p>The following is the Terminal output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/fa4390d9-7bf3-4023-9a24-07358b86bbe7.png" style="width:15.50em;height:14.33em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref">Figure 14.2: Scores from random actions game </div>
+<p>The following is the CartPole game output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/a3a94675-ba98-4953-8e54-f72402e48d24.png" style="width:35.25em;height:24.00em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.3: Snapshot of the CartPole game that gets displayed on the screen when rendered</div>
+<div class="packt_infobox"><span><kbd>random.choice</kbd> returns a randomly selected item from a non-empty sequence such as a list/array. </span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Q-learning</h1>
+                </header>
+            
+            <article>
+                
+<p>Q-learning is a policy-based reinforcement learning technique where the goal of Q-learning is to learn an optimal policy that helps an agent decide <span>what action to take </span>under which circumstances of the environment. </p>
+<p>To implement Q-learning, you need to understand what a <em>Q</em> function is.</p>
+<p>A <em>Q</em> function accepts a state and a corresponding action as input and yields the total expected reward. It can be expressed as <em>Q(s, a)</em>. When at the <em>s</em> state, an optimal <em>Q</em> function indicates to the agent how good of a choice is picking an action, <em>a</em>.</p>
+<p>For a single state, <em>s,</em> and an action, <em>a</em>, <em>Q(s, a)</em> can be expressed in terms of the <em>Q</em> value of the next state, <em>s'</em>, given by using the following equation:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f8058bff-e7d2-4eb6-b543-551e2a944f5d.png" style="width:18.00em;height:1.58em;"/></p>
+<p>This is known as the Bellman equation. It tells us that the maximum reward is the sum of the reward the agent received for entering the current state, <em>s,</em> and the discounted maximum future reward for the next state, <em>s'</em>.</p>
+<p>The following is the pseudocode for the Q-learning algorithm from the book <em>Reinforcement Learning: An Introduction,</em> by <span>Richard S. Sutton and Andrew G. Barto:</span></p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1445 image-border" src="assets/a0808dbd-1be2-487f-83de-3e055b19ffb1.png" style="width:37.08em;height:14.00em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.4: Pseudocode for Q-learning</div>
+<div class="packt_figref packt_infobox"><em>Reinforcement Learning: An Introduction</em> by <span>Richard S. Sutton and Andrew G. Barto <em>(</em></span><a href="http://incompleteideas.net/book/ebook/the-book.html">http://incompleteideas.net/book/ebook/the-book.html</a>).<a href="http://incompleteideas.net/book/ebook/the-book.html"/></div>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining hyperparameters for Deep Q Learning (DQN)</h1>
+                </header>
+            
+            <article>
+                
+<p><span>The following are some of the hyperparameters defined that we will be using throughout the code and are totally configurable:</span></p>
+<pre><strong># Discount in Bellman Equation</strong><br/>gamma = 0.95 <br/><br/><strong># Epsilon</strong><br/>epsilon = 1.0<br/><br/><strong># Minimum Epsilon</strong><br/>epsilon_min = 0.01<br/><br/><strong># Decay multiplier for epsilon</strong><br/>epsilon_decay = 0.99<br/><br/><strong># Size of deque container</strong><br/>deque_len = 20000<br/><br/><strong># Average score needed over 100 epochs</strong><br/>target_score = 200<br/><br/><strong># Number of games</strong><br/>episodes = 2000<br/><br/><strong># Data points per episode used to train the agent</strong><br/>batch_size = 64<br/><br/><strong># Optimizer for training the agent</strong><br/>optimizer = 'adam'<br/><br/><strong># Loss for training the agent</strong><br/>loss = 'mse'</pre>
+<p>The following are the parameters used:</p>
+<ul>
+<li><kbd>gamma</kbd> : Discount parameter in the Bellman equation</li>
+<li><kbd>epsilon_decay</kbd>: Multiplier by which you want to discount the value of <kbd>epsilon</kbd> after each episode/game</li>
+<li><kbd>epsilon_min</kbd>: Minimum value of <kbd>epsilon</kbd> beyond which you do not want to decay it</li>
+<li><kbd>deque_len</kbd>: Size of the <kbd>deque</kbd> container used to store the training examples (state, reward, done, and action)</li>
+<li><kbd>target_score</kbd>: The average score over 100 epochs that you want the agent to score after which you stop the learning process</li>
+<li><kbd>episodes</kbd>: Maximum number of games you want the agent to play</li>
+<li><kbd>batch_size</kbd>: Size of the batch of training data (stored in the <kbd>deque</kbd> container) used to train the agent after each episode</li>
+<li><kbd>optimizer</kbd>: Optimizer of choice for training the agent</li>
+<li><kbd>loss</kbd>: Loss of choice for training the agent</li>
+</ul>
+<div class="packt_tip"><span>Experiment with different learning rates,</span> optimizers<span>, batch sizes as well as <kbd>epsilon_decay</kbd> values to see how these factors affect the quality of your model and, if you get better results, show it to the deep learning community.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building the model components</h1>
+                </header>
+            
+            <article>
+                
+<p>In this section, we will define all of the functions that go into training the reinforcement learning agent. These functions are as follows:</p>
+<ul>
+<li>Agent</li>
+<li>Agent action</li>
+<li>Memory</li>
+<li>Performance plot </li>
+<li>Replay </li>
+<li>Training and testing to train and test the agent</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the agent</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's define an agent/function approximator.</p>
+<p>The agent is nothing but a simple deep neural network that takes in the state (four variables) of the CartPole system and returns the maximum possible reward for each of the two actions.</p>
+<p>The first, second, and third layers are simple <kbd>Dense</kbd> layers with 16 neurons and with activation as <kbd>relu</kbd>.</p>
+<p>The final layer is a <kbd>Dense</kbd> layer with two neurons equal to the number of possible <kbd>actions</kbd>:</p>
+<pre>def <strong>agent(states, actions)</strong>:<br/>    """Simple Deep Neural Network."""<br/>    model = Sequential()<br/>    model.add(Dense(16, input_dim=states))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(actions))<br/>    model.add(Activation('linear'))<br/>    return model<br/><br/><strong># print summary of the agent</strong><br/>print(agent(states, actions).summary())</pre>
+<p>The following is the output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/11f5fa24-2da6-4ebf-9cdf-0252287c1c2d.png" style="width:37.33em;height:27.25em;"/></div>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref">Figure 14.5: Summary of the agent</div>
+<div class="packt_tip"><span>Play around with the parameters of the agent to suit the needs of the problem you are trying to solve. Try using leaky <kbd>relu</kbd> in the model if needed.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the agent action</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's define a function that, when called, will return the action that needs to be taken for that specific state:</p>
+<pre>def <strong>agent_action(model, epsilon, state, actions)</strong>:<br/>    """Define action to be taken."""<br/>    if np.random.rand() &lt;= epsilon:<br/>        act = random.randrange(actions)<br/>    else:<br/>        act = np.argmax(model.predict(state)[0])<br/>    return act</pre>
+<p>For any value from the uniform distribution (between 0 and 1), less than or equal to <kbd>epsilon</kbd>, the action returned will be <kbd>random</kbd>. For any value greater than <kbd>epsilon</kbd>, the action chosen will be that predicted by the agent we have defined in the preceding code. </p>
+<div class="packt_infobox">The <kbd>numpy.random.rand</kbd> function generates a random number from a uniform distribution over 0 and 1. <kbd>numpy.argmax</kbd> returns the index of the maximum value in the sequence. <kbd>random.randrange</kbd> returns a randomly selected item from <kbd>range()</kbd>.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the memory</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's define a <kbd>deque</kbd> object to store the information (<kbd>state</kbd>, <kbd>action</kbd>, <kbd>reward</kbd>, and <kbd>done</kbd>) related to every relevant step we take when playing the game. We will then be using the data stored in this <kbd>deque</kbd> object for training:</p>
+<pre>training_data = deque(maxlen=deque_len)</pre>
+<p>We have defined the <kbd>deque</kbd> object to be of a size of <kbd>20000</kbd>. Once this container is filled with 20,000 data points, every new append being made at one end will result in popping a data point at the other end. Then, we will end up retaining only the latest information over time.</p>
+<p>We will define a function called <kbd>memory</kbd>, which, when called during the game, will accept the information related to <kbd>action</kbd>, <kbd>state</kbd>, <kbd>reward</kbd>, and <kbd>done</kbd> as input at that time step, and then will store it in the training data <kbd>deque</kbd> container we have defined in the preceding code. You will see that we are storing these five variables as a tuple entry at each timestep:</p>
+<pre>def <strong>memory(state, new_state, reward, done, action)</strong>:<br/>    """Function to store data points in the deque container."""<br/>    training_data.append((state, new_state, reward, done, action))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the performance plot</h1>
+                </header>
+            
+            <article>
+                
+<p>The following <kbd>performance_plot</kbd> function plots the performance of the model over time. This function has been placed such that it is only plotted once our target of 200 points has been reached. You can also place this function to plot the progress after every 100 episodes during training:</p>
+<pre>def <strong>performance_plot(scores, target_score)</strong>:<br/>    """Plot the game progress."""<br/>    scores_arr = np.array(scores) <strong># convert list to array</strong><br/>    scores_arr[np.where(scores_arr &gt; target_score)] = target_score <strong># scores</strong><br/>    plt.figure(figsize=(20, 5)) <strong># set figure size to 20 by 5</strong><br/>    plt.title('Plot of Score v/s Episode') <strong># title</strong><br/>    plt.xlabel('Episodes') <strong># xlabel</strong><br/>    plt.ylabel('Scores') <strong># ylabel</strong><br/>    plt.plot(scores_arr)<br/>    plt.show()</pre>
+<p>A sample plot output of the function (after the goal has been achieved) is shown in the following screenshot:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/16cad3a0-7a27-4dd1-b6e6-3cab837c971d.png"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.6: Sample plot output of performance_plot function</div>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining replay</h1>
+                </header>
+            
+            <article>
+                
+<p>The following <span><kbd>replay</kbd> </span>function is called inside the <kbd>train</kbd> function (defined in the next section) at the end of the game for training the agent. It is in this function that we define the targets for each state using the <em>Q</em> function Bellman equation:</p>
+<pre>def <strong>replay(epsilon, gamma, epsilon_min, epsilon_decay, model,</strong> <strong>training_data, batch_size=64)</strong>:<br/>    """Train the agent on a batch of data."""<br/>    idx = random.sample(range(len(training_data)), min(len(training_data), batch_size))<br/>    train_batch = [training_data[j] for j in idx]<br/>    for state, new_state, reward, done, action in train_batch:<br/>        target = reward<br/>        if not done:<br/>            target = reward + gamma * np.amax(model.predict(new_state)[0])<br/>        #print('target', target)<br/>        target_f = model.predict(state)<br/>        #print('target_f', target_f)<br/>        target_f[0][action] = target<br/>        #print('target_f_r', target_f)<br/>                <br/>        model.fit(state, target_f, epochs=1, verbose=0)<br/>    if epsilon &gt; epsilon_min:<br/>        epsilon *= epsilon_decay<br/>    return epsilon</pre>
+<p class="mce-root">It is inside this function that we train the agent compiled with mean squared error loss to learn to maximize the reward. We have done so because we are predicting the numerical value of the reward possible for the two actions. Remember that the agent accepts the state as input that is of a shape of 1*4. The output of this agent is of shape 1*2, and it basically contains the expected reward for the two possible actions.</p>
+<p>So, when an episode ends, we use a batch of data stored in the <kbd>deque</kbd> container to train the agent.</p>
+<p>In this batch of data, consider the 1<sup>st</sup> tuple: </p>
+<pre class="mce-root">state = [[-0.07294358 -0.94589796 0.03188364 1.40490844]]<br/>new_state = [[-0.09186154 -1.14140094 0.05998181 1.70738606]]<br/>reward = 1<br/>done = False<br/>action = 0</pre>
+<p>For the <kbd>state</kbd>, we know the <kbd>action</kbd> that needs to be taken to enter the <kbd>new_state</kbd> and <kbd>reward</kbd> for doing so. We also have <kbd>done</kbd>, which indicates whether the <kbd>new_state</kbd> entered is within the game rules.</p>
+<p class="mce-root"/>
+<p>As long as the new state, <em>s'</em> ,being entered is within the game rules, that is, <kbd>done</kbd> is <kbd>False</kbd>, the total <kbd>reward</kbd> according to the Bellman equation for entering the new state <em>s'</em> <span>form state <em>s</em> </span>by taking an <kbd>action</kbd> can be written in Python as follows:</p>
+<pre class="mce-root">target = reward + gamma * np.amax(model.predict(new_state)[0])</pre>
+<p>Output of <kbd>model.predict(new_state)[0]</kbd> be <kbd>[-0.55639267, 0.37972435]</kbd>. The <kbd>np.amax([-0.55639267, 0.37972435])</kbd> will be <kbd>0.37972435</kbd><em>.</em></p>
+<p>With the discount/<kbd>gamma</kbd> as 0.95 and the <kbd>reward</kbd> as <kbd>1</kbd>, this gives us the following value. The <kbd>reward + gamma * np.amax(model.predict(new_state)[0])</kbd> end us up as <kbd>1.36073813587427</kbd>.</p>
+<p><span>This is the value of the target defined previously.</span></p>
+<p>Using the model, let's predict the reward <span>for the two possible actions</span> <span>for the current state. </span><kbd>target_f = model.predict(state)</kbd> will be <kbd>[[-0.4597198 0.31523475]]</kbd>.</p>
+<p>Since we already know the <kbd>action</kbd> that needs to be taken for the <kbd>state</kbd>, which is <kbd>0</kbd>, to maximize the reward for the next state, we will set the <kbd>reward</kbd> at index zero of <kbd>target_f</kbd> equal to the <kbd>reward</kbd> computed using the Bellman equation, which is, <kbd>target_f[0][action] = 1.3607381358742714</kbd>.</p>
+<p>Finally, <kbd>target_f</kbd> will be equal to <span><kbd>[[1.3607382 0.31523475]]</kbd>.</span></p>
+<p>We will use the state as <kbd>input</kbd> and the <span><kbd>target_f</kbd> as the target reward and fit the agent/model on it.</span></p>
+<p>This process will be repeated for all of the data points in the batch of training data. Also, for each call of the replay function, the value of epsilon is reduced by the multiplier epsilon decay.</p>
+<div class="packt_infobox"><kbd>random.sample</kbd> samples <em>n</em> elements from a population set. <kbd>np.amax</kbd> returns the maximum value in an array.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training loop</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's put all of the pieces we have formed until now together to implement training of the agent using the <kbd>train()</kbd> function that we have defined here:</p>
+<ol>
+<li>Load the agent by calling the <kbd>agent()</kbd> <span>function </span>and compile it with the loss as <kbd>loss</kbd> and with the optimizer as <kbd>optimizer</kbd>, which we have defined in the <em>Defining hyperparameters for Deep Q Learning (DQN)</em> section.</li>
+<li>Reset the environment and reshape the initial state.</li>
+<li>Call the <kbd>agent_action</kbd> function by passing the <kbd>model</kbd>, <kbd>epsilon</kbd>, and <kbd>state</kbd> information and obtain the next action that needs to be taken.</li>
+<li>Take the action obtained in <em>Step 3</em> using the <kbd>env.step</kbd> function. Store the resulting information in the <kbd>training_data</kbd> deque container by calling the <kbd>memory</kbd> function and passing the required arguments.</li>
+<li>Assign the new state obtained in <em>Step 4</em> to the <kbd>state</kbd> variable and increment the time step by 1 unit.</li>
+<li>Until done resulting in <em>Step 4</em> turns <kbd>True</kbd>, repeat <em>Step 3</em> through <em>Step 5</em>.</li>
+<li>Call the <kbd>replay</kbd> function to train the agent on a batch of the training data at the end of the episode/game.</li>
+<li>Repeat <em>Step 2</em> through <em>Step 7</em> until the target score has been achieved:</li>
+</ol>
+<p>Following code shows the implementation of the <kbd>train()</kbd> function:</p>
+<pre style="padding-left: 90px">def <strong>train(target_score, batch_size, episodes,</strong><br/><strong> optimizer, loss, epsilon,</strong><br/><strong> gamma, epsilon_min, epsilon_decay, actions, render=False)</strong>:<br/> """Training the agent on games."""<br/> print('----Training----')<br/> k.clear_session()<br/><br/> <strong># define empty list to store the score at the end of each episode</strong><br/> scores = []<br/><br/> <strong># load the agent</strong><br/> model = agent(states, actions)<br/><br/> <strong># compile the agent with mean squared error loss</strong><br/> model.compile(loss=loss, optimizer=optimizer)<br/><br/> for episode in range(1, (episodes+1)):<br/> <strong># reset environment at the end of each episode</strong><br/> state = env.reset()<br/><br/> <strong># reshape state to shape 1*4</strong><br/> state = state.reshape(1, states)<br/><br/> <strong># set done value to False</strong><br/> done = False</pre>
+<div class="packt_tip">For the remaining part of this code snippet, please refer to the <kbd>DQN.ipynb</kbd> file here: <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/DQN.ipynb" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/DQN.ipynb</a></div>
+<div class="packt_infobox"><span>To view the CartPole game on your screen when training, set the </span><kbd>render</kbd> <span>argument to <kbd>True</kbd> inside the <kbd>train</kbd> function. Also, visualizing the game will slow down the training.<br/></span></div>
+<p>The following two images are the outputs generated during training of DQN:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/531bf89c-4cb8-4708-8727-89a4ec9b6f6f.png" style="width:29.25em;height:10.58em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.7: Scores output when training the agent</div>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/79840a92-e93b-4271-a9fe-953773276f67.png"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.8: Plot of <span>scores v/s episodes when training the agent</span></div>
+<p>We can see that, when training the agent, our target score of <kbd>200</kbd> points averaging over <kbd>100</kbd> latest episodes was reached at the end of <kbd>300</kbd> games. </p>
+<div class="packt_tip">We have been using the epsilon-greedy policy to train the agent. Feel free to use other policies listed at <a href="https://github.com/keras-rl/keras-rl/blob/master/rl/policy.py">https://github.com/keras-rl/keras-rl/blob/master/rl/policy.py</a>, once you have finished mastering the training of DQN.</div>
+<div class="packt_infobox">It is not always necessary that, when you give a try at training the agent, it takes you just 300 games. In some cases, it might even take more than 300. Refer to the notebook at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/DQN.ipynb">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/DQN.ipynb</a> to see the five tries made at training the agent and the number of episodes it took to train it.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Testing the DQN model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's test how our trained DQN model performs on new games. The following <kbd>test</kbd> function uses the trained DQN model to play ten games and see whether our average target of 200 points will be achieved:</p>
+<pre>def <strong>test(env, model, states, episodes=100, render=False)</strong>:<br/>    """Test the performance of the DQN agent."""<br/>    scores_test = []<br/>    for episode in range(1, (episodes+1)):<br/>        state = env.reset()<br/>        state = state.reshape(1, states)<br/><br/>        done = False<br/>        time_step = 0<br/><br/>        while not done:<br/>            if render:<br/>                env.render()<br/>            action = np.argmax(model.predict(state)[0])<br/>            new_state, reward, done, info = env.step(action)<br/>            new_state = new_state.reshape(1, states)<br/>            state = new_state<br/>            time_step += 1<br/>        scores_test.append(time_step)<br/>        if episode % 10 == 0:<br/>            print('episode {}, score {} '.format(episode, time_step))<br/>    print('Average score over 100 test games: {}'.format(np.mean(scores_test)))<br/><br/>test(env, model, states, render=False)</pre>
+<div class="packt_infobox"><span>To view the CartPole game on your screen when testing, set the </span><kbd>render</kbd> <span>argument to <kbd>true</kbd> inside the <kbd>test</kbd> function.</span></div>
+<p>The following is the output:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/a9fa9444-0a9e-45dc-ac84-5f4184434e14.png" style="width:27.58em;height:14.83em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.9: Test scores with the trained Q agent</div>
+<p>When the agent is tested on the new 100 CartPole games, it is averaging a score of <kbd>277.88</kbd>.</p>
+<div class="packt_tip"><span>Remove the threshold of 200 points and aim at training the agent to consistently score an average of 450 points or more.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deep Q-learning scripts in modular form</h1>
+                </header>
+            
+            <article>
+                
+<p>The entire script can be split into four modules named <kbd>train_dqn.py</kbd>, <kbd>agent_reply_dqn.py</kbd>, <kbd>test_dqn.py</kbd>, and <kbd>hyperparameters_dqn.py</kbd>. Store these in a folder of your choice, for example <kbd>chapter_15</kbd>. Set <kbd>chapter_15</kbd> as the project folder in your favorite source code editor and just run the <kbd>train_dqn.py</kbd> file. </p>
+<p>The <span><kbd>train_dqn.py</kbd> </span>Python file will import functions from all of the other modules in places where they are needed for execution.</p>
+<p>Now let's walk through the contents of each file.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Module 1 – hyperparameters_dqn.py</h1>
+                </header>
+            
+            <article>
+                
+<p>This Python file contains the hyperparameters of the DQN model:</p>
+<pre>"""This module contains hyperparameters for the DQN model."""<br/><br/># Discount in Bellman Equation<br/>gamma = 0.95<br/># Epsilon<br/>epsilon = 1.0<br/># Minimum Epsilon<br/>epsilon_min = 0.01<br/># Decay multiplier for epsilon<br/>epsilon_decay = 0.99<br/># Size of deque container<br/>deque_len = 20000<br/># Average score needed over 100 epochs<br/>target_score = 200<br/># Number of games<br/>episodes = 2000<br/># Data points per episode used to train the agent<br/>batch_size = 64<br/># Optimizer for training the agent<br/>optimizer = 'adam'<br/># Loss for training the agent<br/>loss = 'mse'</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Module 2 – agent_replay_dqn.py</h1>
+                </header>
+            
+            <article>
+                
+<p>This Python file contains the four functions, namely  <kbd>agent()</kbd>, <kbd>agent_action()</kbd>, <kbd>performance_plot()</kbd>, and <kbd>replay()</kbd>:</p>
+<pre>"""This module contains."""<br/>import random<br/>import numpy as np<br/>import matplotlib.pyplot as plt<br/>from keras.layers import Dense, Dropout, Activation<br/>from keras.models import Sequential<br/>from keras.optimizers import Adam<br/><br/><br/>def agent(states, actions):<br/>    """Simple Deep Neural Network."""<br/>    model = Sequential()<br/>    model.add(Dense(16, input_dim=states))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(actions))<br/>    model.add(Activation('linear'))<br/>    return model</pre>
+<div class="packt_infobox">For the remaining part of this file, please visit here: <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/agent_replay_dqn.py" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/agent_replay_dqn.py</a></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Module 3 – test_dqn.py</h1>
+                </header>
+            
+            <article>
+                
+<p>This module contains the <kbd>test()</kbd> function, which will be called in the <kbd>train_dqn.py</kbd> script to test the performance of the DQN agent:</p>
+<pre>"""This module contains function to test the performance of the DQN model."""<br/>import numpy as np<br/><br/><br/>def test(env, model, states, episodes=100, render=False):<br/>    """Test the performance of the DQN agent."""<br/>    scores_test = []<br/>    for episode in range(1, (episodes+1)):<br/>        state = env.reset()<br/>        state = state.reshape(1, states)<br/><br/>        done = False<br/>        time_step = 0<br/><br/>        while not done:<br/>            if render:<br/>                env.render()<br/>            action = np.argmax(model.predict(state)[0])<br/>            new_state, reward, done, info = env.step(action)<br/>            new_state = new_state.reshape(1, states)<br/>            state = new_state<br/>            time_step += 1<br/>        scores_test.append(time_step)<br/>        if episode % 10 == 0:<br/>            print('episode {}, score {} '.format(episode, time_step))<br/>    print('Average score over 100 test games: {}'.format(np.mean(scores_test)))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Module 4 – train_dqn.py</h1>
+                </header>
+            
+            <article>
+                
+<p>In this module, we include the <kbd>memory()</kbd> and  <kbd>train()</kbd> functions and also the calls to train and test the reinforcement learning model:</p>
+<pre>"""This module is used to train and test the DQN agent."""<br/>import random<br/>import numpy as np<br/>from agent_replay_dqn import agent, agent_action, replay, performance_plot<br/>from hyperparameters_dqn import *<br/>from test_dqn import test<br/>from keras import backend as k<br/>from collections import deque<br/>import gym<br/><br/>env = gym.make('CartPole-v1')<br/><br/># Set seed for reproducibility<br/>seed_val = 456<br/>np.random.seed(seed_val)<br/>env.seed(seed_val)<br/>random.seed(seed_val)<br/><br/>states = env.observation_space.shape[0]<br/>actions = env.action_space.n<br/>training_data = deque(maxlen=deque_len)<br/><br/><br/>def memory(state, new_state, reward, done, action):<br/>    """Function to store data points in the deque container."""<br/>    training_data.append((state, new_state, reward, done, action))<br/><br/><br/>def train(target_score, batch_size, episodes,<br/>          optimizer, loss, epsilon,<br/>          gamma, epsilon_min, epsilon_decay, actions, render=False):<br/>    """Training the agent on games."""<br/>    print('----Training----')<br/>    k.clear_session()</pre>
+<div class="mce-root packt_infobox">For the remaining part of this code, please visit here: <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/train_dqn.py" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/train_dqn.py</a></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deep SARSA learning</h1>
+                </header>
+            
+            <article>
+                
+<p>In this segment, we will implement deep SARSA learning with the <kbd>keras-rl</kbd> library. The <kbd>keras-rl</kbd> library is a simple neural network API that allows simple and easy implementation of reinforcement learning models (Q, SARSA, and others). To learn more about the <kbd>keras-rl</kbd> library, visit the documentation at <a href="https://keras-rl.readthedocs.io/en/latest/">https://keras-rl.readthedocs.io/en/latest/</a>.<a href="https://keras-rl.readthedocs.io/en/latest/"/></p>
+<p>We will be using the same CartPole environment we have been using so far from OpenAI Gym.</p>
+<p><span>A Jupyter Notebook code example for deep SARSA learning</span><span> can be found at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/Deep%20SARSA.ipynb" target="_blank"/><a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/Deep%20SARSA.ipynb" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter14/Deep%20SARSA.ipynb</a>.<a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter%2015/Deep%20SARSA.ipynb"/></span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">SARSA learning</h1>
+                </header>
+            
+            <article>
+                
+<p>SARSA learning, like Q-learning, is also a policy-based reinforcement learning technique. Its goal is to learn an optimal policy, which helps an agent decide on the action that needs to be taken under various possible circumstances.</p>
+<p>SARSA and Q-learning are very similar to each other, except Q-learning is an off-policy algorithm and SARSA is an on-policy algorithm. The Q value learned by SARSA is not based on a greedy policy like in Q-learning but is based on the action performed under the current  policy.</p>
+<p>For a single state, <em>s,</em> and an action, <em>a</em>, <em>Q(s, a)</em> can be expressed in terms of the Q value of the next state, <em>s'</em> ,and action, <em>a'</em>, given by the following formula:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b69b5557-639d-477c-b48a-2bb34d6d41ce.png" style="width:13.75em;height:1.50em;"/></p>
+<p><span>The following is the pseudocode for the SARSA learning algorithm from the book, </span><em>Reinforcement Learning: An Introduction,</em> by <span>Richard S. Sutton and Andrew G. Barto:</span></p>
+<div class="mce-root CDPAlignCenter CDPAlign"><img src="assets/872c9fb4-5fd1-41ae-a9cb-d92c1112e656.png" style="width:39.08em;height:16.08em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.10: Pseudocode for SARSA learning</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Importing all of the dependencies</h1>
+                </header>
+            
+            <article>
+                
+<p><span>We will be using </span><kbd>numpy</kbd><span>, <kbd>gym</kbd>, </span><kbd>matplotlib</kbd><span>,</span> <kbd>keras</kbd><span>,</span> <kbd>tensorflow</kbd>,<span> and the </span><kbd>keras-rl</kbd> <span>package in this segment of the exercise. Here, TensorFlow will be used as the backend for Keras. You can install these packages with <kbd>pip</kbd>:</span></p>
+<pre>import numpy as np<br/>import gym<br/>from keras.models import Sequential<br/>from keras.layers import Dense, Activation, Flatten<br/>from keras.optimizers import Adam<br/>from rl.agents import SARSAAgent<br/>from rl.policy import EpsGreedyQPolicy</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Loading the game environment</h1>
+                </header>
+            
+            <article>
+                
+<p>Just like we loaded the game in the DQN segment, we will load the game into the workspace and set <kbd>seed</kbd> for reproducibility: </p>
+<pre>env = gym.make('CartPole-v1')<br/><br/><strong># set seed</strong> <br/>seed_val = 456<br/>env.seed(seed_val)<br/>np.random.seed(seed_val)<br/><br/>states = env.observation_space.shape[0]<br/>actions = env.action_space.n</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the agent</h1>
+                </header>
+            
+            <article>
+                
+<p>For deep SARSA learning, we will be using the same agent we used in the Deep Q-learning segment:</p>
+<pre>def <strong>agent(states, actions)</strong>:<br/> """Simple Deep Neural Network."""<br/> model = Sequential()<br/> model.add(Flatten(input_shape=(1,states)))<br/> model.add(Dense(16))<br/> model.add(Activation('relu'))<br/> model.add(Dense(16))<br/> model.add(Activation('relu'))<br/> model.add(Dense(16))<br/> model.add(Activation('relu'))<br/> model.add(Dense(actions))<br/> model.add(Activation('linear'))<br/> return model<br/><br/>model = agent(states, actions)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the agent</h1>
+                </header>
+            
+            <article>
+                
+<p>Training an agent using the <kbd>keras-rl</kbd> library is very easy:</p>
+<ol>
+<li>Define the policy you want the training to follow. We will be using the epsilon-greedy policy. The equivalent of this in the DQN section would be the agent <kbd>action</kbd> function. To know more about other policies, visit <a href="https://github.com/keras-rl/keras-rl/blob/master/rl/policy.py">https://github.com/keras-rl/keras-rl/blob/master/rl/policy.py</a>.<a href="https://github.com/keras-rl/keras-rl/blob/master/rl/policy.py"/></li>
+<li>Load the agent you would like to use. In this case, the SARSA agent has a lot of parameters of which the important ones that need to be defined are <kbd>model</kbd>, <kbd>nb_actions</kbd>, and <kbd>policy</kbd>. <kbd>model</kbd> is the deep learning agent you have defined in the preceding code, <kbd>nb_actions</kbd> is the number of possible actions in the system, <span>and <kbd>policy</kbd> is your preferred choice of policy to train the SARSA agent.</span></li>
+<li>We compile the SARSA agent with loss and optimizer of choice.</li>
+</ol>
+<ol start="4">
+<li>We fit the SARSA agent by feeding the <kbd>.fit</kbd> function the arguments environment and number of steps to train:</li>
+</ol>
+<div class="packt_infobox">To get complete details on the usage of agents from the <kbd>keras-rl</kbd> library and their parameter definitions, visit this documentation by Keras at <a href="http://keras-rl.readthedocs.io/en/latest/agents/sarsa/#sarsaagent">http://keras-rl.readthedocs.io/en/latest/agents/sarsa/#sarsaagent</a>.<a href="http://keras-rl.readthedocs.io/en/latest/agents/sarsa/#sarsaagent"/></div>
+<pre><strong># Define the policy</strong><br/>policy = EpsGreedyQPolicy()<br/><br/><strong># Loading SARSA agent by feeding it the policy and the model</strong><br/>sarsa = SARSAAgent(model=model, nb_actions=actions, policy=policy)<br/><br/><strong># compile sarsa with mean squared error loss</strong><br/>sarsa.compile('adam', metrics=['mse'])<br/><br/><strong># train the agent for 50000 steps</strong><br/>sarsa.fit(env, nb_steps=50000, visualize=False, verbose=1)</pre>
+<div class="packt_infobox"><span>To view the CartPole game on your screen when training, set visualize argument to true inside the <kbd>.fit</kbd> function. But visualizing the game will slow down the training.</span></div>
+<p>Here is the scores output<span> when training the SARSA agent</span>:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/e8f1da64-1c3b-407b-bb32-2394bed5a92a.png" style="width:69.00em;height:25.08em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.11: Scores output when training SARSA agent</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Testing the agent</h1>
+                </header>
+            
+            <article>
+                
+<p>Once the agent has been trained, we evaluate its performance over 100 new episodes. This can be done by calling the <kbd>.test</kbd> function and feeding the <span>arguments environment and number of episodes on which to test:</span></p>
+<pre><strong># Evaluate the agent on 100 new episodes</strong><br/>scores = sarsa.test(env, nb_episodes=100, visualize=False)<br/><br/>print('Average score over 100 test games: {}'.format(np.mean(scores.history['episode_reward'])))</pre>
+<div class="packt_infobox">To view the CartPole game on your screen when testing, set the <kbd>visualize</kbd> argument to <kbd>True</kbd> inside the <kbd>.test</kbd> function.</div>
+<p>The following is the output after testing 100 episodes:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/8476eba6-c485-4ca5-96c4-a16d9c20fbce.png" style="width:30.42em;height:15.00em;"/></div>
+<p>Following the the output at the end of the code execution:</p>
+<div class="mce-root CDPAlignCenter CDPAlign"><img src="assets/ab9fad31-1de5-4204-b1fe-23c09ea57abd.png" style="width:29.00em;height:15.83em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 14.12: Test scores with trained SARSA agent</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deep SARSA learning script in modular form</h1>
+                </header>
+            
+            <article>
+                
+<p>For SARSA learning, we have only one script, which implements both the training and testing of the SARSA agent:</p>
+<pre>"""This module implements training and testing of SARSA agent."""<br/>import gym<br/>import numpy as np<br/>from keras.layers import Dense, Activation, Flatten<br/>from keras.models import Sequential<br/>from rl.agents import SARSAAgent<br/>from rl.policy import EpsGreedyQPolicy<br/><br/># load the environment<br/>env = gym.make('CartPole-v1')<br/><br/># set seed<br/>seed_val = 456<br/>env.seed(seed_val)<br/>np.random.seed(seed_val)<br/><br/>states = env.observation_space.shape[0]<br/>actions = env.action_space.n<br/><br/><br/>def agent(states, actions):<br/>    """Agent/Deep Neural Network."""<br/>    model = Sequential()<br/>    model.add(Flatten(input_shape=(1, states)))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(16))<br/>    model.add(Activation('relu'))<br/>    model.add(Dense(actions))<br/>    model.add(Activation('linear'))<br/>    return model<br/><br/><br/>model = agent(states, actions)<br/><br/># Define the policy<br/>policy = EpsGreedyQPolicy()<br/># Define SARSA agent by feeding it the policy and the model<br/>sarsa = SARSAAgent(model=model, nb_actions=actions, nb_steps_warmup=10,<br/>                   policy=policy)<br/># compile sarsa with mean squared error loss<br/>sarsa.compile('adam', metrics=['mse'])<br/># train the agent for 50000 steps<br/>sarsa.fit(env, nb_steps=50000, visualize=False, verbose=1)<br/><br/># Evaluate the agent on 100 new episodes.<br/>scores = sarsa.test(env, nb_episodes=100, visualize=False)<br/>print('Average score over 100 test games: {}'<br/>      .format(np.mean(scores.history['episode_reward'])))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The conclusion to the project</h1>
+                </header>
+            
+            <article>
+                
+<p>This project was to build a deep reinforcement learning model to successfully play the game of CartPole-v1 from OpenAI Gym. The use case of this chapter is to build a reinforcement learning model on a simple game environment and then extend it to other complex games such as Atari.</p>
+<p>In the first half of this chapter, we built a deep Q-learning model to play the CartPole game. The DQN model during testing scored an average of 277.88 points over 100 games. </p>
+<p><span>In the second half of this chapter, we built a deep SARSA learning model (using the same epsilon-greedy policy as Q-learning) to play the CartPole game. The SARSA model during testing scored an average of 365.67 points over 100 games.</span></p>
+<p>Now, let's follow the same technique we have been following in the previous chapters for evaluating the performance of the models from the restaurant chain point of view.</p>
+<p>What are the implications of this score? </p>
+<p>An average score of 277.88 with Q-learning means that we have successfully solved the game of CartPole as defined on the OpenAI site. It also means that our model survives slightly more than half the length of the game with the total game length being 500 points.</p>
+<p><span>As regards SARSA learning, on the other hand, an average score of 365.67 with Q-learning means that we have successfully solved the game of CartPole as defined on the OpenAI site and that our model survives more than 70% the length of the game, with the total game length being 500 points.</span></p>
+<p><span>It is still not a level of performance you should be happy with because the goal should not just be to solve the problem but to train a model that is really good at scoring a consistent 500 points at each game, so you can see why we'd need to continue fine-tuning the models to get the maximum performance possible.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we have successfully built a deep reinforcement learning model, each with Q-learning and SARSA learning in Keras using the CartPole game from Open<span>AI</span> Gym. We understood Q-learning, SARSA learning, how to interact with game environments from Gym, and the function of the agent (deep learning model). <span>We defined some key hyperparameters, as well as, in some places, reasoned with why we used what we did. Finally, we tested the performance of our reinforcement learning on new games and determined that we succeeded in achieving our goals.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

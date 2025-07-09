@@ -1,0 +1,526 @@
+<html><head></head><body><div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Deep Belief Networking</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">A <strong class="calibre7">deep belief network</strong> (<strong class="calibre7">DBN</strong>) is a class of deep neural network, composed of multiple layers of hidden units, with connections between the layers; where a DBN differs is these hidden units don't interact with other units within each layer. A DBN can learn to probabilistically reconstruct its input without supervision, when trained, using a set of training datasets. It is a <span class="calibre14">joint (multivariate) distributions over large numbers of random variables that interact with each other. These representations sit at the intersection of statistics and computer science, relying on concepts from probability theory, graph algorithms, machine learning, and more.</span></p>
+<p class="calibre4">The layers act as feature detectors. After the training step, a DBN can be trained with supervision to perform classification.</p>
+<p class="calibre4">We will be covering the following chapters in the chapter:</p>
+<ul class="calibre20">
+<li class="calibre21">Understanding deep belief networks</li>
+<li class="calibre21">Model training</li>
+<li class="calibre21">Predicting the label</li>
+<li class="calibre21">Finding the accuracy of the model</li>
+<li class="calibre21">DBN implementation for the MNIST dataset</li>
+<li class="calibre21">Effect of the number of neurons in an RBM Layer in a DBN</li>
+<li class="calibre21">DBNs with two RBM layers</li>
+<li class="calibre21">Classifying the NotMNIST dataset with a DBN</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Understanding deep belief networks</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">DBNs can be considered a composition of simple, unsupervised networks such as <strong class="calibre7">Restricted Boltzmann machines</strong> (<strong class="calibre7">RBMs</strong>) or autoencoders; in these, each subnetwork's hidden layer serves as the visible layer for the next. An RBM is an undirected, generative model with an input layer (which is visible) and a hidden layer, with connections between the layers but not within layers. This topology leads to a fast, layer-by-layer, unsupervised training procedure. Contrastive divergence is applied to each subnetwork, starting from the lowest pair of layers (the lowest visible layer is a training set).</p>
+<p class="calibre4">DBNs are trained (greedily), one layer at a time, which makes it one of the first effective deep learning algorithms. There are many implementations and uses of DBNs in real-life applications and scenarios; we will be looking at using a DBN to classify MNIST and NotMNIST datasets.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">DBN implementation</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">This class instantiates the Restricted Boltzmann machines (RBN) layers and the cost functions. The <strong class="calibre7">DeepBeliefNetwork</strong> class is itself a subclass of the <strong class="calibre7">Model</strong>:</p>
+<div class="mce-root"><img src="Images/70002aa2-1334-419c-818a-23a3a0021660.png" width="227" height="336" class="calibre158"/></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Class initialization</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In DBN initialization, the <kbd class="calibre18">Model</kbd> class's initialization method <kbd class="calibre18">__init__(self, name)</kbd> is called. The <kbd class="calibre18">Model</kbd> class references the following:</p>
+<ul class="calibre20">
+<li class="calibre21"><strong class="calibre3">Input data</strong>: <kbd class="calibre18">self.input_data</kbd></li>
+<li class="calibre21"><strong class="calibre3">Input labels</strong>: <kbd class="calibre18">self.input_labels</kbd></li>
+<li class="calibre21"><strong class="calibre3">Cost</strong>: <kbd class="calibre18"><kbd class="calibre159">self.cost</kbd></kbd></li>
+<li class="calibre21"><strong class="calibre3">Number of nodes in final layer</strong>: <kbd class="calibre18">self.layer_nodes</kbd></li>
+<li class="calibre21"><strong class="calibre3">TensorFlow session</strong>: <kbd class="calibre18">self.tf_session</kbd></li>
+<li class="calibre21"><strong class="calibre3">TensorFlow graph</strong>: <kbd class="calibre18">self.tf_graph= tf.graph</kbd></li>
+</ul>
+<pre class="calibre26"><span class="calibre5">class </span>Model(<span class="calibre5">object</span>):<br class="calibre2"/>    <span class="calibre5">"""Class representing an abstract Model."""<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>, name):<br class="calibre2"/>        <span class="calibre5">"""Constructor.<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> name: name of the model, used as filename.<br class="calibre2"/></span><span class="calibre5">            string, default 'dae'<br class="calibre2"/></span><span class="calibre5">        """<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.name = name<br class="calibre2"/>        <span class="calibre5">self</span>.model_path = os.path.join(Config().models_dir, <span class="calibre5">self</span>.name)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.input_data = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.input_labels = <span class="calibre5">None<br class="calibre2"/>&gt;</span><span class="calibre5">        </span><span class="calibre5">self</span>.keep_prob = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.layer_nodes = []  <span class="calibre5"># list of layers of the final network<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.train_step = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.cost = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5"># tensorflow objects<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.tf_graph = tf.Graph()<br class="calibre2"/>        <span class="calibre5">self</span>.tf_session = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.tf_saver = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.tf_merged_summaries = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.tf_summary_writer = <span class="calibre5">None</span></pre>
+<p class="calibre4">Other variables that are defined are the loss functions, which should be one of the following:</p>
+<pre class="calibre26">["cross_entropy", "softmax_cross_entropy", "mse"]</pre>
+<p class="calibre4">Code Listing for <strong class="calibre7">DeepBeliefNetwork</strong> class is given below. The <kbd class="calibre18">__init__()</kbd> function is shown in the following code. Here all the variables, such as array of parameters for each RBM layer are specified. We are also making a call to the <kbd class="calibre18">__init__()</kbd> function of <kbd class="calibre18">SupervisedModel</kbd>, which is the super class for the <kbd class="calibre18">DeepBeliefNetwork</kbd> class.</p>
+<p class="calibre4">Two important parameters to initialize are:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18"><span class="calibre5">self</span>.rbms = []</kbd>: Array of <kbd class="calibre18">RBM</kbd> class instances</li>
+<li class="calibre21"><kbd class="calibre18"><span class="calibre5">self</span>.rbm_graphs = []</kbd>: An array <kbd class="calibre18">tf.Graph</kbd> for each of those RBMs</li>
+</ul>
+<pre class="calibre26"><span class="calibre5">class </span>DeepBeliefNetwork(SupervisedModel):<br class="calibre2"/>    <span class="calibre5">"""Implementation of Deep Belief Network for Supervised Learning.<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    The interface of the class is sklearn-like.<br class="calibre2"/></span><span class="calibre5">    """<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">def </span><span class="calibre5">__init__</span>(<br class="calibre2"/>        <span class="calibre5">self</span>, rbm_layers, name=<span class="calibre5">'dbn'</span>, do_pretrain=<span class="calibre5">False</span>,<br class="calibre2"/>        rbm_num_epochs=[<span class="calibre5">10</span>], rbm_gibbs_k=[<span class="calibre5">1</span>],<br class="calibre2"/>        rbm_gauss_visible=<span class="calibre5">False</span>, rbm_stddev=<span class="calibre5">0.1</span>, rbm_batch_size=[<span class="calibre5">10</span>],<br class="calibre2"/>        rbm_learning_rate=[<span class="calibre5">0.01</span>], finetune_dropout=<span class="calibre5">1</span>,<br class="calibre2"/>        finetune_loss_func=<span class="calibre5">'softmax_cross_entropy'</span>,<br class="calibre2"/>        finetune_act_func=tf.nn.sigmoid, finetune_opt=<span class="calibre5">'sgd'</span>,<br class="calibre2"/>        finetune_learning_rate=<span class="calibre5">0.001</span>, finetune_num_epochs=<span class="calibre5">10</span>,<br class="calibre2"/>            finetune_batch_size=<span class="calibre5">20</span>, momentum=<span class="calibre5">0.5</span>):<br class="calibre2"/>        <span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span>SupervisedModel.<span class="calibre5">__init__</span>(<span class="calibre5">self</span>, name)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.loss_func = finetune_loss_func<br class="calibre2"/>        <span class="calibre5">self</span>.learning_rate = finetune_learning_rate<br class="calibre2"/>        <span class="calibre5">self</span>.opt = finetune_opt<br class="calibre2"/>        <span class="calibre5">self</span>.num_epochs = finetune_num_epochs<br class="calibre2"/>        <span class="calibre5">self</span>.batch_size = finetune_batch_size<br class="calibre2"/>        <span class="calibre5">self</span>.momentum = momentum<br class="calibre2"/>        <span class="calibre5">self</span>.dropout = finetune_dropout<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.loss = Loss(<span class="calibre5">self</span>.loss_func)<br class="calibre2"/>        <span class="calibre5">self</span>.trainer = Trainer(<br class="calibre2"/>            finetune_opt, <span class="calibre5">learning_rate</span>=finetune_learning_rate,<br class="calibre2"/>            <span class="calibre5">momentum</span>=momentum)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.do_pretrain = do_pretrain<br class="calibre2"/>        <span class="calibre5">self</span>.layers = rbm_layers<br class="calibre2"/>        <span class="calibre5">self</span>.finetune_act_func = finetune_act_func<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># Model parameters<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.encoding_w_ = []  <span class="calibre5"># list of matrices of encoding weights per layer<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.encoding_b_ = []  <span class="calibre5"># list of arrays of encoding biases per layer<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.softmax_W = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.softmax_b = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span>rbm_params = {<br class="calibre2"/>            <span class="calibre5">'num_epochs'</span>: rbm_num_epochs, <span class="calibre5">'gibbs_k'</span>: rbm_gibbs_k,<br class="calibre2"/>            <span class="calibre5">'batch_size'</span>: rbm_batch_size, <span class="calibre5">'learning_rate'</span>: rbm_learning_rate}<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>p <span class="calibre5">in </span>rbm_params:<br class="calibre2"/>            <span class="calibre5">if </span><span class="calibre5">len</span>(rbm_params[p]) != <span class="calibre5">len</span>(rbm_layers):<br class="calibre2"/>                <span class="calibre5"># The current parameter is not specified by the user,<br class="calibre2"/></span><span class="calibre5">                # should default it for all the layers<br class="calibre2"/></span><span class="calibre5">                </span>rbm_params[p] = [rbm_params[p][<span class="calibre5">0</span>] <span class="calibre5">for </span>_ <span class="calibre5">in </span>rbm_layers]<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.rbms = []<br class="calibre2"/>        <span class="calibre5">self</span>.rbm_graphs = []<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>l, layer <span class="calibre5">in </span><span class="calibre5">enumerate</span>(rbm_layers):<br class="calibre2"/>            rbm_str = <span class="calibre5">'rbm-' </span>+ <span class="calibre5">str</span>(l+<span class="calibre5">1</span>)<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5">if </span>l == <span class="calibre5">0 </span><span class="calibre5">and </span>rbm_gauss_visible:<br class="calibre2"/>                <span class="calibre5">self</span>.rbms.append(<br class="calibre2"/>                    rbm.RBM(<br class="calibre2"/>                        <span class="calibre5">name</span>=<span class="calibre5">self</span>.name + <span class="calibre5">'-' </span>+ rbm_str,<br class="calibre2"/>                        <span class="calibre5">num_hidden</span>=layer,<br class="calibre2"/>                        <span class="calibre5">learning_rate</span>=rbm_params[<span class="calibre5">'learning_rate'</span>][l],<br class="calibre2"/>                        <span class="calibre5">num_epochs</span>=rbm_params[<span class="calibre5">'num_epochs'</span>][l],<br class="calibre2"/>                        <span class="calibre5">batch_size</span>=rbm_params[<span class="calibre5">'batch_size'</span>][l],<br class="calibre2"/>                        <span class="calibre5">gibbs_sampling_steps</span>=rbm_params[<span class="calibre5">'gibbs_k'</span>][l],<br class="calibre2"/>                        <span class="calibre5">visible_unit_type</span>=<span class="calibre5">'gauss'</span>, <span class="calibre5">stddev</span>=rbm_stddev))<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5">else</span>:<br class="calibre2"/>                <span class="calibre5">self</span>.rbms.append(<br class="calibre2"/>                    rbm.RBM(<br class="calibre2"/>                        <span class="calibre5">name</span>=<span class="calibre5">self</span>.name + <span class="calibre5">'-' </span>+ rbm_str,<br class="calibre2"/>                        <span class="calibre5">num_hidden</span>=layer,<br class="calibre2"/>                        <span class="calibre5">learning_rate</span>=rbm_params[<span class="calibre5">'learning_rate'</span>][l],<br class="calibre2"/>                        <span class="calibre5">num_epochs</span>=rbm_params[<span class="calibre5">'num_epochs'</span>][l],<br class="calibre2"/>                        <span class="calibre5">batch_size</span>=rbm_params[<span class="calibre5">'batch_size'</span>][l],<br class="calibre2"/>                        <span class="calibre5">gibbs_sampling_steps</span>=rbm_params[<span class="calibre5">'gibbs_k'</span>][l]))<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5">self</span>.rbm_graphs.append(tf.Graph())<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/></pre>
+<p class="calibre4">Notice how RBM layers are constructed from the <kbd class="calibre18">rbm_layers</kbd> array:</p>
+<pre class="calibre26"><span class="calibre5">for </span>l, layer <span class="calibre5">in </span><span class="calibre5">enumerate</span>(rbm_layers):<br class="calibre2"/>            rbm_str = <span class="calibre5">'rbm-' </span>+ <span class="calibre5">str</span>(l+<span class="calibre5">1</span>)<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5">if </span>l == <span class="calibre5">0 </span><span class="calibre5">and </span>rbm_gauss_visible:<br class="calibre2"/>                <span class="calibre5">self</span>.rbms.append(<br class="calibre2"/>                    rbm.RBM(<br class="calibre2"/>                        <span class="calibre5">name</span>=<span class="calibre5">self</span>.name + <span class="calibre5">'-' </span>+ rbm_str,<br class="calibre2"/>                        <span class="calibre5">num_hidden</span>=layer,<br class="calibre2"/>                        <span class="calibre5">learning_rate</span>=rbm_params[<span class="calibre5">'learning_rate'</span>][l],<br class="calibre2"/>                        <span class="calibre5">num_epochs</span>=rbm_params[<span class="calibre5">'num_epochs'</span>][l],<br class="calibre2"/>                        <span class="calibre5">batch_size</span>=rbm_params[<span class="calibre5">'batch_size'</span>][l],<br class="calibre2"/>                        <span class="calibre5">gibbs_sampling_steps</span>=rbm_params[<span class="calibre5">'gibbs_k'</span>][l],<br class="calibre2"/>                        <span class="calibre5">visible_unit_type</span>=<span class="calibre5">'gauss'</span>, <span class="calibre5">stddev</span>=rbm_stddev))<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5">else</span>:<br class="calibre2"/>                <span class="calibre5">self</span>.rbms.append(<br class="calibre2"/>                    rbm.RBM(<br class="calibre2"/>                        <span class="calibre5">name</span>=<span class="calibre5">self</span>.name + <span class="calibre5">'-' </span>+ rbm_str,<br class="calibre2"/>                        <span class="calibre5">num_hidden</span>=layer,<br class="calibre2"/>                        <span class="calibre5">learning_rate</span>=rbm_params[<span class="calibre5">'learning_rate'</span>][l],<br class="calibre2"/>                        <span class="calibre5">num_epochs</span>=rbm_params[<span class="calibre5">'num_epochs'</span>][l],<br class="calibre2"/>                        <span class="calibre5">batch_size</span>=rbm_params[<span class="calibre5">'batch_size'</span>][l],<br class="calibre2"/>                        <span class="calibre5">gibbs_sampling_steps</span>=rbm_params[<span class="calibre5">'gibbs_k'</span>][l]))</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">RBM class</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">For each RBM layer, an <strong class="calibre7">RBM</strong> class is initialized. This class extends the <strong class="calibre7">UnsupervisedModel</strong> and <strong class="calibre7">Model</strong> classes:</p>
+<div class="mce-root"><img src="Images/c37de519-b528-4c0c-a841-a2b242ad02ec.png" width="227" height="336" class="calibre158"/></div>
+<p class="calibre4">Details of the <strong class="calibre7">RBM</strong> class <kbd class="calibre18">__init__(..)</kbd> function are specified in the following code:</p>
+<pre class="calibre26"><span class="calibre5">class </span>RBM(UnsupervisedModel):<br class="calibre2"/>    <span class="calibre5">"""Restricted Boltzmann Machine implementation using TensorFlow.<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    The interface of the class is sklearn-like.<br class="calibre2"/></span><span class="calibre5">    """<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">def </span><span class="calibre5">__init__</span>(<br class="calibre2"/>        <span class="calibre5">self</span>, num_hidden, visible_unit_type=<span class="calibre5">'bin'</span>,<br class="calibre2"/>        name=<span class="calibre5">'rbm'</span>, loss_func=<span class="calibre5">'mse'</span>, learning_rate=<span class="calibre5">0.01</span>,<br class="calibre2"/>        regcoef=<span class="calibre5">5e-4</span>, regtype=<span class="calibre5">'none'</span>, gibbs_sampling_steps=<span class="calibre5">1</span>,<br class="calibre2"/>            batch_size=<span class="calibre5">10</span>, num_epochs=<span class="calibre5">10</span>, stddev=<span class="calibre5">0.1</span>):<br class="calibre2"/>        <span class="calibre5">"""Constructor.<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> num_hidden: number of hidden units<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> loss_function: type of loss function<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> visible_unit_type: type of the visible units (bin or gauss)<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> gibbs_sampling_steps: optional, default 1<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">:param</span><span class="calibre5"> stddev: default 0.1. Ignored if visible_unit_type is not 'gauss'<br class="calibre2"/></span><span class="calibre5">        """<br class="calibre2"/></span><span class="calibre5">        </span>UnsupervisedModel.<span class="calibre5">__init__</span>(<span class="calibre5">self</span>, name)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.loss_func = loss_func<br class="calibre2"/>        <span class="calibre5">self</span>.learning_rate = learning_rate<br class="calibre2"/>        <span class="calibre5">self</span>.num_epochs = num_epochs<br class="calibre2"/>        <span class="calibre5">self</span>.batch_size = batch_size<br class="calibre2"/>        <span class="calibre5">self</span>.regtype = regtype<br class="calibre2"/>        <span class="calibre5">self</span>.regcoef = regcoef<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.loss = Loss(<span class="calibre5">self</span>.loss_func)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.num_hidden = num_hidden<br class="calibre2"/>        <span class="calibre5">self</span>.visible_unit_type = visible_unit_type<br class="calibre2"/>        <span class="calibre5">self</span>.gibbs_sampling_steps = gibbs_sampling_steps<br class="calibre2"/>        <span class="calibre5">self</span>.stddev = stddev<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.W = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.bh_ = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.bv_ = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.w_upd8 = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.bh_upd8 = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.bv_upd8 = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.cost = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.input_data = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.hrand = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.vrand = <span class="calibre5">None</span></pre>
+<p class="calibre4">Once the <kbd class="calibre18">rbm</kbd> graphs are initialized they are appended to the the TensorFlow graph:</p>
+<pre class="calibre26"><span class="calibre5">self</span>.rbm_graphs.append(tf.Graph())</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Pretraining the DBN</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this section, we look at how a DBN is pretrained:</p>
+<pre class="calibre160"><span class="calibre5">class </span>RBM(UnsupervisedModel):<br class="calibre2"/>...<br class="calibre2"/><span class="calibre5">  def </span>pretrain(<span class="calibre5">self</span>, train_set, validation_set=<span class="calibre5">None</span>):<br class="calibre2"/>    <span class="calibre5">"""Perform Unsupervised pretraining of the DBN."""<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">self</span>.do_pretrain = <span class="calibre5">True<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">def </span>set_params_func(rbmmachine, rbmgraph):<br class="calibre2"/>    params = rbmmachine.get_parameters(<span class="calibre5">graph</span>=rbmgraph)<br class="calibre2"/>     self.encoding_w_.append(params[<span class="calibre5">'W'</span>])<br class="calibre2"/>     self.encoding_b_.append(params[<span class="calibre5">'bh_'</span>])<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">return </span>SupervisedModel.pretrain_procedure(<br class="calibre2"/>     <span class="calibre5">self</span>, <span class="calibre5">self</span>.rbms, <span class="calibre5">self</span>.rbm_graphs, <span class="calibre5">set_params_func</span>=set_params_func,<br class="calibre2"/>     <span class="calibre5">train_set</span>=train_set, <span class="calibre5">validation_set</span>=validation_set)</pre>
+<p class="calibre4">This in turn calls <kbd class="calibre18">SupervisedModel.pretrain_procedure(..)</kbd>, which takes the following parameters:</p>
+<ul class="calibre20">
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">layer_objs</kbd>: A list of model objects (autoencoders or RBMs)</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">layer_graphs</kbd>: A list of model <kbd class="calibre18">tf.Graph</kbd> objects</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">set_params_func</kbd>: The function used to set the parameters after</span> <span class="calibre5">pretraining</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">train_set</kbd>: The training set</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">validation_set</kbd>: The validation set</span></li>
+</ul>
+<p class="calibre4"><span class="calibre14">This function returns</span> <span class="calibre14">data encoded by the last layer:</span></p>
+<pre class="calibre26"><span class="calibre5">def </span>pretrain_procedure(<span class="calibre5">self</span>, layer_objs, layer_graphs, set_params_func,<br class="calibre2"/> train_set, validation_set=<span class="calibre5">None</span>):<span class="calibre5"><br class="calibre2"/></span><span class="calibre5">   </span>next_train = train_set<br class="calibre2"/>   <span class="calibre5">next_valid</span> = validation_set<br class="calibre2"/><br class="calibre2"/>   <span class="calibre5">for </span>l, layer_obj <span class="calibre5">in </span><span class="calibre5">enumerate</span>(layer_objs):<br class="calibre2"/>     <span class="calibre5">print</span>(<span class="calibre5">'Training layer {}...'</span>.format(l + <span class="calibre5">1</span>))<br class="calibre2"/>     next_train, <span class="calibre5">next_valid</span> = <span class="calibre5">self</span>._pretrain_layer_and_gen_feed(<br class="calibre2"/>       layer_obj, set_params_func, next_train, <span class="calibre5">next_valid</span>,<br class="calibre2"/>       layer_graphs[l])<br class="calibre2"/><br class="calibre2"/>   <span class="calibre5">return </span>next_train, <span class="calibre5">next_valid</span></pre>
+<p class="calibre4">This in turn calls <kbd class="calibre18">self._pretrain_layer_and_gen_feed(...)</kbd>:</p>
+<pre class="calibre26"><span class="calibre5">def </span>_pretrain_layer_and_gen_feed(<span class="calibre5">self</span>, layer_obj, set_params_func,<br class="calibre2"/>                                 train_set, validation_set, graph):<span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span>layer_obj.fit(train_set, train_set,<br class="calibre2"/>                  validation_set, validation_set, <span class="calibre5">graph</span>=graph)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">with </span>graph.as_default():<br class="calibre2"/>        set_params_func(layer_obj, graph)<br class="calibre2"/><br class="calibre2"/>        next_train = layer_obj.transform(train_set, <span class="calibre5">graph</span>=graph)<br class="calibre2"/>        <span class="calibre5">if </span>validation_set <span class="calibre5">is not </span><span class="calibre5">None</span>:<br class="calibre2"/>            next_valid = layer_obj.transform(validation_set, <span class="calibre5">graph</span>=graph)<br class="calibre2"/>        <span class="calibre5">else</span>:<br class="calibre2"/>            next_valid = <span class="calibre5">None<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">return </span>next_train, next_valid</pre>
+<p class="calibre4">Inside the preceding function, each <kbd class="calibre18">layer_obj</kbd> is called <strong class="calibre7">iteratively</strong>.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Model training</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Model training is implemented in the <kbd class="calibre18">fit(..)</kbd> method. It takes the following parameters:</p>
+<ul class="calibre20">
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">train_X</kbd>: <kbd class="calibre18">array_like, shape (n_samples, n_features)</kbd>,</span> <span class="calibre5">Training data</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">train_Y</kbd>: <kbd class="calibre18">array_like, shape (n_samples, n_classes)</kbd>,</span> <span class="calibre5">Training labels</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">val_X</kbd>: <kbd class="calibre18">array_like, shape (N, n_features) optional, (default = None)</kbd>,</span> <span class="calibre5">Validation data</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">val_Y</kbd>: <kbd class="calibre18">array_like, shape (N, n_classes) optional, (default = None)</kbd></span>, <span class="calibre5">Validation labels</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">graph</kbd>: <kbd class="calibre18">tf.Graph, optional (default = None)</kbd>,</span> <span class="calibre5">TensorFlow Graph object</span></li>
+</ul>
+<p class="calibre4">Next, we look at the implementation of <kbd class="calibre18">fit(...)</kbd> function where the model is trained and saved in the model path specified by <kbd class="calibre18">model_path</kbd>.</p>
+<pre class="calibre26"><span class="calibre5">def </span>fit(<span class="calibre5">self</span>, train_X, train_Y, val_X=<span class="calibre5">None</span>, val_Y=<span class="calibre5">None</span>, graph=<span class="calibre5">None</span>):<span class="calibre5"><br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">if </span><span class="calibre5">len</span>(train_Y.shape) != <span class="calibre5">1</span>:<br class="calibre2"/>        num_classes = train_Y.shape[<span class="calibre5">1</span>]<br class="calibre2"/>    <span class="calibre5">else</span>:<br class="calibre2"/>        <span class="calibre5">raise </span><span class="calibre5">Exception</span>(<span class="calibre5">"Please convert the labels with one-hot encoding."</span>)<br class="calibre2"/><br class="calibre2"/>    g = graph <span class="calibre5">if </span>graph <span class="calibre5">is not </span><span class="calibre5">None </span><span class="calibre5">else </span><span class="calibre5">self</span>.tf_graph<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">with </span>g.as_default():<br class="calibre2"/>        <span class="calibre5"># Build model<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.build_model(train_X.shape[<span class="calibre5">1</span>], num_classes)<br class="calibre2"/>        <span class="calibre5">with </span>tf.Session() <span class="calibre5">as </span><span class="calibre5">self</span>.tf_session:<br class="calibre2"/>            <span class="calibre5"># Initialize tf stuff<br class="calibre2"/></span><span class="calibre5">            </span>summary_objs = tf_utils.init_tf_ops(<span class="calibre5">self</span>.tf_session)<br class="calibre2"/>            <span class="calibre5">self</span>.tf_merged_summaries = summary_objs[<span class="calibre5">0</span>]<br class="calibre2"/>            <span class="calibre5">self</span>.tf_summary_writer = summary_objs[<span class="calibre5">1</span>]<br class="calibre2"/>            <span class="calibre5">self</span>.tf_saver = summary_objs[<span class="calibre5">2</span>]<br class="calibre2"/>            <span class="calibre5"># Train model<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">self</span>._train_model(train_X, train_Y, val_X, val_Y)<br class="calibre2"/>            <span class="calibre5"># Save model<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">self</span>.tf_saver.save(<span class="calibre5">self</span>.tf_session, <span class="calibre5">self</span>.model_path)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Predicting the label</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Prediction of the label can be made by calling the following method:</p>
+<pre class="calibre26"><span class="calibre5">def </span>predict(<span class="calibre5">self</span>, test_X):<span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">with </span><span class="calibre5">self</span>.tf_graph.as_default():<br class="calibre2"/>        <span class="calibre5">with </span>tf.Session() <span class="calibre5">as </span><span class="calibre5">self</span>.tf_session:<br class="calibre2"/>            <span class="calibre5">self</span>.tf_saver.restore(<span class="calibre5">self</span>.tf_session, <span class="calibre5">self</span>.model_path)<br class="calibre2"/>            feed = {<br class="calibre2"/>                <span class="calibre5">self</span>.input_data: test_X,<br class="calibre2"/>                <span class="calibre5">self</span>.keep_prob: <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5">            </span>}<br class="calibre2"/>            <span class="calibre5">return </span><span class="calibre5">self</span>.mod_y.eval(feed)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Finding the accuracy of the model</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Accuracy of the model is found by computing mean accuracy over the test set. It is implemented in the following method:</p>
+<pre class="calibre26"><span class="calibre5">def </span>score(<span class="calibre5">self</span>, test_X, test_Y):<br class="calibre2"/>  ...</pre>
+<p class="calibre4"><span class="calibre14">Here, the p</span><span class="calibre14">arameters are as follows:</span></p>
+<ul class="calibre20">
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">test_X</kbd>: <kbd class="calibre18">array_like, shape (n_samples, n_features)</kbd></span>, <span class="calibre5">Test data</span></li>
+<li class="calibre21"><span class="calibre5"><kbd class="calibre18">test_Y</kbd>: <kbd class="calibre18">array_like, shape (n_samples, n_features)</kbd>,</span> <span class="calibre5">Test labels<br class="calibre2"/></span></li>
+<li class="calibre21"><kbd class="calibre18">return float</kbd>: mean accuracy over the test set</li>
+</ul>
+<pre class="calibre26"><span class="calibre5">def </span>score(<span class="calibre5">self</span>, test_X, test_Y):<span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">with </span><span class="calibre5">self</span>.tf_graph.as_default():<br class="calibre2"/>        <span class="calibre5">with </span>tf.Session() <span class="calibre5">as </span><span class="calibre5">self</span>.tf_session:<br class="calibre2"/>            <span class="calibre5">self</span>.tf_saver.restore(<span class="calibre5">self</span>.tf_session, <span class="calibre5">self</span>.model_path)<br class="calibre2"/>            feed = {<br class="calibre2"/>                <span class="calibre5">self</span>.input_data: test_X,<br class="calibre2"/>                <span class="calibre5">self</span>.input_labels: test_Y,<br class="calibre2"/>                <span class="calibre5">self</span>.keep_prob: <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5">            </span>}<br class="calibre2"/>            <span class="calibre5">return </span><span class="calibre5">self</span>.accuracy.eval(feed)</pre>
+<p class="calibre4">In the next section, we will look at how DBN implementation can be used on the MNIST dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">DBN implementation for the MNIST dataset</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's look at how the DBN class implemented earlier is used for the MNIST dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Loading the dataset</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">First, we load the dataset from <kbd class="calibre18">idx3</kbd> and <kbd class="calibre18">idx1</kbd> formats into test, train, and validation sets. We need to import TensorFlow common utilities that are defined in the common module explained here:</p>
+<pre class="calibre26">import tensorflow as tf<br class="calibre2"/>from common.models.boltzmann import dbn<br class="calibre2"/>from common.utils import datasets, utilities</pre>
+<pre class="calibre26">trainX, trainY, validX, validY, testX, testY = <br class="calibre2"/>     datasets.load_mnist_dataset(mode='supervised')</pre>
+<p class="calibre4">You can find details about <kbd class="calibre18">load_mnist_dataset()</kbd> in the following code listing. As <kbd class="calibre18">mode='supervised'</kbd> is set, the train, test, and validation labels are returned:</p>
+<pre class="calibre26">def load_mnist_dataset(mode='supervised', one_hot=True):<br class="calibre2"/>   mnist = input_data.read_data_sets("MNIST_data/", one_hot=one_hot)<br class="calibre2"/>   # Training set<br class="calibre2"/>   trX = mnist.train.images<br class="calibre2"/>   trY = mnist.train.labels<br class="calibre2"/>   # Validation set<br class="calibre2"/>   vlX = mnist.validation.images<br class="calibre2"/>   vlY = mnist.validation.labels<br class="calibre2"/>   # Test set<br class="calibre2"/>   teX = mnist.test.images<br class="calibre2"/>   teY = mnist.test.labels<br class="calibre2"/>   if mode == 'supervised':<br class="calibre2"/>     return trX, trY, vlX, vlY, teX, teY<br class="calibre2"/>   elif mode == 'unsupervised':<br class="calibre2"/>     return trX, vlX, teX</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Input parameters for a DBN with 256-Neuron RBM layers</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">We will initialize various parameters that are needed by the DBN class defined earlier:</p>
+<pre class="calibre26"><br class="calibre2"/> finetune_act_func = tf.nn.relu<br class="calibre2"/> rbm_layers = [256]<br class="calibre2"/> do_pretrain = True<br class="calibre2"/> name = 'dbn'<br class="calibre2"/> rbm_layers = [256]<br class="calibre2"/> finetune_act_func ='relu'<br class="calibre2"/> do_pretrain = True<br class="calibre2"/> rbm_learning_rate = [0.001]<br class="calibre2"/> rbm_num_epochs = [1]<br class="calibre2"/> rbm_gibbs_k= [1]<br class="calibre2"/> rbm_stddev= 0.1<br class="calibre2"/> rbm_gauss_visible= False<br class="calibre2"/> momentum= 0.5<br class="calibre2"/> rbm_batch_size= [32]<br class="calibre2"/> finetune_learning_rate = 0.01<br class="calibre2"/> finetune_num_epochs = 1<br class="calibre2"/> finetune_batch_size = 32<br class="calibre2"/> finetune_opt = 'momentum'<br class="calibre2"/> finetune_loss_func = 'softmax_cross_entropy'<br class="calibre2"/> finetune_dropout = 1<br class="calibre2"/> finetune_act_func = tf.nn.sigmoid</pre>
+<p class="calibre4">Once the parameters are defined, let's run the DBN network on the MNIST dataset:</p>
+<pre class="calibre26">srbm = dbn.DeepBeliefNetwork(<br class="calibre2"/>    <span class="calibre5">name</span>=name, <span class="calibre5">do_pretrain</span>=do_pretrain,<br class="calibre2"/>    <span class="calibre5">rbm_layers</span>=rbm_layers,<br class="calibre2"/>    <span class="calibre5">finetune_act_func</span>=finetune_act_func,<br class="calibre2"/><span class="calibre5">    rbm_learning_rate</span>=rbm_learning_rate,<br class="calibre2"/>    <span class="calibre5">rbm_num_epochs</span>=rbm_num_epochs, <span class="calibre5">rbm_gibbs_k </span>= rbm_gibbs_k,<br class="calibre2"/>    <span class="calibre5">rbm_gauss_visible</span>=rbm_gauss_visible, <span class="calibre5">rbm_stddev</span>=rbm_stddev,<br class="calibre2"/>    <span class="calibre5">momentum</span>=momentum, <span class="calibre5">rbm_batch_size</span>=rbm_batch_size, <br class="calibre2"/><span class="calibre5">    finetune_learning_rate</span>=finetune_learning_rate,<br class="calibre2"/>    <span class="calibre5">finetune_num_epochs</span>=finetune_num_epochs, <br class="calibre2"/><span class="calibre5">    finetune_batch_size</span>=finetune_batch_size,<br class="calibre2"/>    <span class="calibre5">finetune_opt</span>=finetune_opt, <span class="calibre5">finetune_loss_func</span>=finetune_loss_func,<br class="calibre2"/>    <span class="calibre5">finetune_dropout</span>=finetune_dropout<br class="calibre2"/>    )<br class="calibre2"/><br class="calibre2"/><span class="calibre5">print</span>(do_pretrain)<br class="calibre2"/><span class="calibre5">if </span>do_pretrain:<br class="calibre2"/>    srbm.pretrain(trainX, validX)<br class="calibre2"/><br class="calibre2"/><span class="calibre5"># finetuning<br class="calibre2"/></span><span class="calibre5">print</span>(<span class="calibre5">'Start deep belief net finetuning...'</span>)<br class="calibre2"/>srbm.fit(trainX, trainY, validX, validY)<br class="calibre2"/><br class="calibre2"/><span class="calibre5"># Test the model<br class="calibre2"/></span><span class="calibre5">print</span>(<span class="calibre5">'Test set accuracy: {}'</span>.format(srbm.score(testX, testY)))</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Output for a DBN with 256-neuron RBN layers</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The output of the preceding listing shows the test set's accuracy:</p>
+<pre class="calibre26">Reconstruction loss: 0.156712: 100%|██████████| 5/5 [00:49&amp;lt;00:00, 9.99s/it]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run53<br class="calibre2"/>Accuracy: 0.0868: 100%|██████████| 1/1 [00:04&amp;lt;00:00, 4.09s/it]<br class="calibre2"/>Test set accuracy: 0.0868000015616</pre>
+<p class="calibre4">Overall accuracy and Test set accuracy is quite low. With the increase in number of iterations it improves. Let us run same sample with 20 epochs</p>
+<pre class="calibre26">Reconstruction loss: 0.120337: 100%|██████████| 20/20 [03:07&lt;00:00, 8.79s/it]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run80<br class="calibre2"/>Accuracy: 0.105: 100%|██████████| 1/1 [00:04&lt;00:00, 4.16s/it]<br class="calibre2"/>Test set accuracy: 0.10339999944</pre>
+<p class="calibre4">As can be seen the reconstruction loss has come down and the Test set accuracy has improved by 20% to  0.10339999944</p>
+<p class="calibre4">Let us increase the number of Epochs to 40. Output is shown below</p>
+<pre class="calibre26">Reconstruction loss: 0.104798: 100%|██████████| 40/40 [06:20&lt;00:00, 9.18s/it]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run82<br class="calibre2"/>Accuracy: 0.075: 100%|██████████| 1/1 [00:04&lt;00:00, 4.08s/it]<br class="calibre2"/>Test set accuracy: 0.0773999989033<br class="calibre2"/>As can be seen the accuracy again came down so the optimal number of iterations peaks somewhere between 20 and 40</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Effect of the number of neurons in an RBM layer in a DBN</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's look at how changing the number of neurons in an RBM layer affects the test set's accuracy:</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">An RBM layer with 512 neurons</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following is the output of a DBN with 512 neurons in an RBM layer. The reconstruction loss has come down and the test set's accuracy has come down as well:</p>
+<pre class="calibre26">Reconstruction loss: 0.128517: 100%|██████████| 5/5 [01:32&amp;lt;00:00, 19.25s/it]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run55<br class="calibre2"/>Accuracy: 0.0758: 100%|██████████| 1/1 [00:06&amp;lt;00:00, 6.40s/it]<br class="calibre2"/>Test set accuracy: 0.0689999982715</pre>
+<p class="calibre4">Notice how the accuracy and test set accuracy both have come down. This means increasing the number of neurons doesn't necessarily improve the accuracy.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">An RBM layer with 128 neurons</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">A 128-neuron RBM layer leads to higher test set accuracy but a lower overall accuracy:</p>
+<pre class="calibre26">Reconstruction loss: 0.180337: 100%|██████████| 5/5 [00:32&amp;lt;00:00, 6.44s/it]<br class="calibre2"/> Start deep belief net finetuning...<br class="calibre2"/> Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run57<br class="calibre2"/> Accuracy: 0.0698: 100%|██████████| 1/1 [00:03&amp;lt;00:00, 3.16s/it]<br class="calibre2"/> Test set accuracy: 0.0763999968767</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Comparing the accuracy metrics</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">As we have trained the neural network with multiple neuron numbers in RBM layers, let's compare metrics:</p>
+<div class="mce-root"><img src="Images/23687400-5515-410c-9181-711d9e3fd7da.png" width="812" height="522" class="calibre161"/></div>
+<p class="calibre4">Reconstruction loss reduces as a function of the number of neurons, as shown in the preceding figure.</p>
+<div class="mce-root"><img src="Images/d7959b46-15cd-4b5f-8821-6404fa591c3a.png" width="816" height="510" class="calibre162"/></div>
+<p class="calibre4">The test set accuracy peaks for 256 neurons and then comes down.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">DBNs with two RBM layers</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this section, we will create a DBN with two RBM layers and run it on the MNIST dataset. We will modify the input parameters for the <kbd class="calibre18">DeepBeliefNetwork(..)</kbd> class:</p>
+<pre class="calibre26">name = 'dbn'<br class="calibre2"/>rbm_layers = [256, 256]<br class="calibre2"/>finetune_act_func ='relu'<br class="calibre2"/>do_pretrain = True<br class="calibre2"/>rbm_learning_rate = [0.001, 0.001]<br class="calibre2"/>rbm_num_epochs = [5, 5]<br class="calibre2"/>rbm_gibbs_k= [1, 1]<br class="calibre2"/>rbm_stddev= 0.1<br class="calibre2"/>rbm_gauss_visible= False<br class="calibre2"/>momentum= 0.5<br class="calibre2"/>rbm_batch_size= [32, 32]<br class="calibre2"/>finetune_learning_rate = 0.01<br class="calibre2"/>finetune_num_epochs = 1<br class="calibre2"/>finetune_batch_size = 32<br class="calibre2"/>finetune_opt = 'momentum'<br class="calibre2"/>finetune_loss_func = 'softmax_cross_entropy'<br class="calibre2"/>finetune_dropout = 1<br class="calibre2"/>finetune_act_func = tf.nn.sigmoid</pre>
+<p class="calibre4">Notice that some of the parameters have two elements for array so we need to specify these parameters for two layers:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">rbm_layers = [256, 256]</kbd>: Number of neurons in each RBM layer</li>
+<li class="calibre21">
+<p class="calibre163"><kbd class="calibre18">rbm_learning_rate = [0.001, 0001]</kbd>: Learning rate for each RBM layer</p>
+</li>
+<li class="calibre21"><kbd class="calibre18">rbm_num_epochs = [5, 5]</kbd>: Number of epochs in each layer</li>
+<li class="calibre21">
+<p class="calibre163"><kbd class="calibre18">rbm_batch_size= [32, 32]</kbd>: Batch size for each RBM layer</p>
+</li>
+</ul>
+<p class="calibre4">Let's look at the DBN initialization and the training of the model:</p>
+<pre class="calibre26">srbm = dbn.DeepBeliefNetwork(<br class="calibre2"/> name=name, do_pretrain=do_pretrain,<br class="calibre2"/> rbm_layers=rbm_layers,<br class="calibre2"/> finetune_act_func=finetune_act_func, rbm_learning_rate=rbm_learning_rate,<br class="calibre2"/> rbm_num_epochs=rbm_num_epochs, rbm_gibbs_k = rbm_gibbs_k,<br class="calibre2"/> rbm_gauss_visible=rbm_gauss_visible, rbm_stddev=rbm_stddev,<br class="calibre2"/> momentum=momentum, rbm_batch_size=rbm_batch_size, finetune_learning_rate=finetune_learning_rate,<br class="calibre2"/> finetune_num_epochs=finetune_num_epochs, finetune_batch_size=finetune_batch_size,<br class="calibre2"/> finetune_opt=finetune_opt, finetune_loss_func=finetune_loss_func,<br class="calibre2"/> finetune_dropout=finetune_dropout<br class="calibre2"/> )</pre>
+<pre class="calibre26"><br class="calibre2"/> if do_pretrain:<br class="calibre2"/>   srbm.pretrain(trainX, validX)</pre>
+<pre class="calibre26"># <br class="calibre2"/>finetuning<br class="calibre2"/> print('Start deep belief net finetuning...')<br class="calibre2"/> srbm.fit(trainX, trainY, validX, validY)</pre>
+<p class="calibre4">Test the model:</p>
+<pre class="calibre26">print('Test set accuracy: {}'.format(srbm.score(testX, testY)))</pre>
+<div class="packt_infobox">The complete code listing can be found at:<br class="calibre2"/>
+<a href="https://github.com/ml-resources/neuralnetwork-programming/blob/ed1/ch08/implementation/boltzmann/run_dbn_mnist_two_layers.py" target="_blank" class="pcalibre pcalibre3 pcalibre2 pcalibre1 calibre31">https://github.com/ml-resources/neuralnetwork-programming/blob/ed1/ch08/implementation/boltzmann/run_dbn_mnist_two_layers.py</a>.</div>
+<p class="calibre4">The following is the output of the preceding listing:</p>
+<pre class="calibre26">Reconstruction loss: 0.156286: 100%|██████████| 5/5 [01:03&amp;lt;00:00, 13.04s/it]<br class="calibre2"/>Training layer 2...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run73<br class="calibre2"/>Reconstruction loss: 0.127524: 100%|██████████| 5/5 [00:23&amp;lt;00:00, 4.87s/it]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run74<br class="calibre2"/>Accuracy: 0.1496: 100%|██████████| 1/1 [00:05&amp;lt;00:00, 5.53s/it]<br class="calibre2"/>Test set accuracy: 0.140300005674</pre>
+<p class="calibre4">As can be seen from the preceding listing, the test set accuracy is better than the single RBM layer DBN.</p>
+<p class="calibre4"> </p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Classifying the NotMNIST dataset with a DBN</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's look at the NotMNIST dataset, which we explored in <a href="c373e64c-90d3-4676-96fa-cf67e652c25b.xhtml" target="_blank" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">Chapter 2</a>, <em class="calibre17">Deep Feedforward Networks</em>, in the <em class="calibre17">Implementing feedforward networks</em> section with images, and see how our DBN works for that dataset.</p>
+<p class="calibre4">We will leverage the same pickle file, <span class="calibre14"><kbd class="calibre18">notMNIST.pickle</kbd></span>, created in <a href="c373e64c-90d3-4676-96fa-cf67e652c25b.xhtml" target="_blank" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">Chapter 2</a>, <em class="calibre17">Deep Feedforward Networks</em>. The initialization parameters and imports are listed here:</p>
+<pre class="calibre26"><span class="calibre5">import </span>tensorflow <span class="calibre5">as </span>tf<br class="calibre2"/><span class="calibre5">import </span>numpy <span class="calibre5">as </span>np<br class="calibre2"/><span class="calibre5">import </span>cPickle <span class="calibre5">as </span>pickle<br class="calibre2"/><br class="calibre2"/><span class="calibre5">from </span>common.models.boltzmann <span class="calibre5">import </span>dbn<br class="calibre2"/><span class="calibre5">from </span>common.utils <span class="calibre5">import </span>datasets, utilities<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/>flags = tf.app.flags<br class="calibre2"/>FLAGS = flags.FLAGS<br class="calibre2"/>pickle_file = <span class="calibre5">'../notMNIST.pickle'<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span>image_size = <span class="calibre5">28<br class="calibre2"/></span>num_of_labels = <span class="calibre5">10<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span>RELU = <span class="calibre5">'RELU'<br class="calibre2"/></span>RELU6 = <span class="calibre5">'RELU6'<br class="calibre2"/></span>CRELU = <span class="calibre5">'CRELU'<br class="calibre2"/></span>SIGMOID = <span class="calibre5">'SIGMOID'<br class="calibre2"/></span>ELU = <span class="calibre5">'ELU'<br class="calibre2"/></span>SOFTPLUS = <span class="calibre5">'SOFTPLUS'<br class="calibre2"/><br class="calibre2"/></span></pre>
+<p class="calibre4">Implementation remains more or less similar to the MNIST dataset. The main implementation listing is given here:</p>
+<pre class="calibre26"><span class="calibre5">if </span>__name__ == <span class="calibre5">'__main__'</span>:<br class="calibre2"/>    utilities.random_seed_np_tf(-<span class="calibre5">1</span>)<br class="calibre2"/>    <span class="calibre5">with </span><span class="calibre5">open</span>(pickle_file, <span class="calibre5">'rb'</span>) <span class="calibre5">as </span>f:<br class="calibre2"/>        save = pickle.load(f)<br class="calibre2"/>        training_dataset = save[<span class="calibre5">'train_dataset'</span>]<br class="calibre2"/>        training_labels = save[<span class="calibre5">'train_labels'</span>]<br class="calibre2"/>        validation_dataset = save[<span class="calibre5">'valid_dataset'</span>]<br class="calibre2"/>        validation_labels = save[<span class="calibre5">'valid_labels'</span>]<br class="calibre2"/>        test_dataset = save[<span class="calibre5">'test_dataset'</span>]<br class="calibre2"/>        test_labels = save[<span class="calibre5">'test_labels'</span>]<br class="calibre2"/>        <span class="calibre5">del </span>save  <span class="calibre5"># hint to help gc free up memory<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">print </span><span class="calibre5">'Training set'</span>, training_dataset.shape, training_labels.shape<br class="calibre2"/>        <span class="calibre5">print </span><span class="calibre5">'Validation set'</span>, validation_dataset.shape, validation_labels.shape<br class="calibre2"/>        <span class="calibre5">print </span><span class="calibre5">'Test set'</span>, test_dataset.shape, test_labels.shape<br class="calibre2"/><br class="calibre2"/>    train_dataset, train_labels = reformat(training_dataset, training_labels)<br class="calibre2"/>    valid_dataset, valid_labels = reformat(validation_dataset, validation_labels)<br class="calibre2"/>    test_dataset, test_labels = reformat(test_dataset, test_labels)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">#trainX, trainY, validX, validY, testX, testY = datasets.load_mnist_dataset(mode='supervised')<br class="calibre2"/></span><span class="calibre5">    </span>trainX = train_dataset<br class="calibre2"/>    trainY = train_labels<br class="calibre2"/><br class="calibre2"/>    validX = valid_dataset<br class="calibre2"/>    validY = valid_labels<br class="calibre2"/>    testX = test_dataset<br class="calibre2"/>    testY = test_labels<br class="calibre2"/><br class="calibre2"/>    finetune_act_func = tf.nn.relu<br class="calibre2"/>    rbm_layers = [<span class="calibre5">256</span>]<br class="calibre2"/>    do_pretrain = <span class="calibre5">True<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span>name = <span class="calibre5">'dbn'<br class="calibre2"/></span><span class="calibre5">    </span>rbm_layers = [<span class="calibre5">256</span>]<br class="calibre2"/>    finetune_act_func =<span class="calibre5">'relu'<br class="calibre2"/></span><span class="calibre5">    </span>do_pretrain = <span class="calibre5">True<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span>rbm_learning_rate = [<span class="calibre5">0.001</span>]<br class="calibre2"/><br class="calibre2"/>    rbm_num_epochs = [<span class="calibre5">1</span>]<br class="calibre2"/>    rbm_gibbs_k= [<span class="calibre5">1</span>]<br class="calibre2"/>    rbm_stddev= <span class="calibre5">0.1<br class="calibre2"/></span><span class="calibre5">    </span>rbm_gauss_visible= <span class="calibre5">False<br class="calibre2"/></span><span class="calibre5">    </span>momentum= <span class="calibre5">0.5<br class="calibre2"/></span><span class="calibre5">    </span>rbm_batch_size= [<span class="calibre5">32</span>]<br class="calibre2"/>    finetune_learning_rate = <span class="calibre5">0.01<br class="calibre2"/></span><span class="calibre5">    </span>finetune_num_epochs = <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5">    </span>finetune_batch_size = <span class="calibre5">32<br class="calibre2"/></span><span class="calibre5">    </span>finetune_opt = <span class="calibre5">'momentum'<br class="calibre2"/></span><span class="calibre5">    </span>finetune_loss_func = <span class="calibre5">'softmax_cross_entropy'<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span>finetune_dropout = <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5">    </span>finetune_act_func = tf.nn.sigmoid<br class="calibre2"/><br class="calibre2"/>    srbm = dbn.DeepBeliefNetwork(<br class="calibre2"/>        <span class="calibre5">name</span>=name, <span class="calibre5">do_pretrain</span>=do_pretrain,<br class="calibre2"/>        <span class="calibre5">rbm_layers</span>=rbm_layers,<br class="calibre2"/>        <span class="calibre5">finetune_act_func</span>=finetune_act_func, <span class="calibre5">rbm_learning_rate</span>=rbm_learning_rate,<br class="calibre2"/>        <span class="calibre5">rbm_num_epochs</span>=rbm_num_epochs, <span class="calibre5">rbm_gibbs_k </span>= rbm_gibbs_k,<br class="calibre2"/>        <span class="calibre5">rbm_gauss_visible</span>=rbm_gauss_visible, <span class="calibre5">rbm_stddev</span>=rbm_stddev,<br class="calibre2"/>        <span class="calibre5">momentum</span>=momentum, <span class="calibre5">rbm_batch_size</span>=rbm_batch_size, <span class="calibre5">finetune_learning_rate</span>=finetune_learning_rate,<br class="calibre2"/>        <span class="calibre5">finetune_num_epochs</span>=finetune_num_epochs, <span class="calibre5">finetune_batch_size</span>=finetune_batch_size,<br class="calibre2"/>        <span class="calibre5">finetune_opt</span>=finetune_opt, <span class="calibre5">finetune_loss_func</span>=finetune_loss_func,<br class="calibre2"/>        <span class="calibre5">finetune_dropout</span>=finetune_dropout<br class="calibre2"/>    )<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">if </span>do_pretrain:<br class="calibre2"/>        srbm.pretrain(trainX, validX)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5"># finetuning<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">print</span>(<span class="calibre5">'Start deep belief net finetuning...'</span>)<br class="calibre2"/>    srbm.fit(trainX, trainY, validX, validY)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5"># Test the model<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">print</span>(<span class="calibre5">'Test set accuracy: {}'</span>.format(srbm.score(testX, testY)))</pre>
+<div class="packt_infobox">The complete code listing can be found at:<br class="calibre2"/>
+<a href="https://github.com/ml-resources/neuralnetwork-programming/blob/ed1/ch08/implementation/boltzmann/run_dbn_nomnist.py" target="_blank" class="pcalibre pcalibre3 pcalibre2 pcalibre1 calibre31">https://github.com/ml-resources/neuralnetwork-programming/blob/ed1/ch08/implementation/boltzmann/run_dbn_nomnist.py</a>.</div>
+<p class="calibre4">The output of the preceding listing will point the performance of our model for the NotMNIST dataset:</p>
+<pre class="calibre26">Reconstruction loss: 0.546223: 100%|██████████| 1/1 [00:00&amp;lt;00:00, 5.51it/s]<br class="calibre2"/>Start deep belief net finetuning...<br class="calibre2"/>Tensorboard logs dir for this run is /home/ubuntu/.yadlt/logs/run76<br class="calibre2"/>Accuracy: 0.126: 100%|██████████| 1/1 [00:00&amp;lt;00:00, 8.83it/s]<br class="calibre2"/>Test set accuracy: 0.180000007153</pre>
+<p class="calibre4">As can be seen, this network performed much better than the MNIST dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this chapter, we explored DBNs and looked at how these could be used to build classification pipelines using one or more RBM layers. We looked at various parameters within the RBM layer and their effects on accuracy, reconstruction loss, and test set accuracy. We also looked at single layer and multilayer DBNs using one or more RBMs.</p>
+<p class="calibre4">In the next chapter we look at Generative models and how they differ from discriminative models.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  </body></html>

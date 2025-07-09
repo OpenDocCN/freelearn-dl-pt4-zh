@@ -1,0 +1,450 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Making Money with Machine Learning</h1>
+                </header>
+            
+            <article>
+                
+<p>So far, we've used TensorFlow mostly for image processing, and, to a lesser extent, for text sequence processing. In this chapter, we will tackle a specific type of tabular data: time-series, data.</p>
+<p>The time series data comes from many domains with usually one commonality—the only field changing constantly is a time or sequence field. It is common in a variety of fields, but especially common in economics, finance, health, medicine, environmental engineering, and control engineering. We'll dive into examples throughout the chapter, but the key thing to remember is that order matters. Unlike in previous chapters, where we shuffled our data freely, time series data cannot be shuffled that way without losing meaning. An added complexity can be the availability of data itself; if we have data available up until the current time with no further historical data to capture, no amount of data collection will possibly produce more—you are bound by time-based availability.</p>
+<p>Luckily, we're going to dive into an area with copious amounts of data: the financial world. We'll explore some types of things hedge funds and other sophisticated investors may do with a time series data.</p>
+<p>In this chapter, we will cover the following topics:</p>
+<ul>
+<li>What a time series data is and its special properties</li>
+<li>Types of input and approaches investments firms may use in their quantitative and ML-driven investment efforts</li>
+<li>Financial time series data and how it is obtained; we'll obtain some live financial data as well</li>
+<li>The application of modified convolutional neural networks to finance</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Inputs and approaches</h1>
+                </header>
+            
+            <article>
+                
+<p>Investment firms' internal proprietary trading groups use a large variety of means to invest, trade, and make money. Hedge funds, which are relatively unregulated, use an even broader, more interesting, and more sophisticated means for investment. Some investments are gut-driven or driven by a great deal of thinking. Others are largely filter-driven, algorithmic, or signal-driven. Both approaches are fine, but we'll of course focus on the latter category.</p>
+<p>Amongst the quantitative approaches, there are numerous techniques; some of them are as follows:</p>
+<ul>
+<li>Valuation based</li>
+<li>Anomaly and signal based</li>
+<li>External signal based</li>
+<li>Filtering and segmentation-based cohort analysis</li>
+</ul>
+<p>Some of these approaches will use traditional machine learning techniques, such as K-Nearest Neighbors, Naive Bayes, and Support Vector Machines. Cohort analysis, in particular, is almost a perfect fit for KNN-type approaches.</p>
+<p>Another popular technique is sentiment analysis and crowd-sentiment-based signals. We covered this in the previous chapter as we gauged text sentiment and classified paragraphs of text into basic categories: positive, negative, happy, angry, and so on. Imagine if we sourced more data and filtered out everything except those involving particular stocks, we'd be able to get a valence on stocks. Now, imagine we had a source of such text that was broad (possibly global), high volume, and high velocity—actually, there is no need to imagine, as all of this entered the scene in the past decade. Twitter makes their <em>firehose</em> available via an API, as does Facebook, and a host of other social media platforms. Some hedge funds, in fact, consume the entire firehose of Twitter and Facebook data and attempt to extract public sentiment on stocks, market sectors, commodities, and the like. However, this is an external NLP-driven signal-based investment strategy that practitioners use to predict the directionality and/or intensity of a time series.</p>
+<p>In this chapter, we'll use internal measures using the time series itself to predict future entries on the time series. Predicting the actual future entry is actually a very difficult task, and it turns out, not entirely necessary. Often, just a viewpoint in one direction is sufficient. A view on the direction combined with the intensity of movement is better.</p>
+<p>For many types of investing, even the viewpoint might not give you complete assurance, rather something more right than wrong on average can be sufficient. Imagine betting a penny per flip of a coin—if you could be right 51% of the time, and if you had the ability to play the game thousands of times, it may be enough to be profitable, as you would gain more than you lose.</p>
+<p>This all bodes well for machine learning based efforts where we may not have 100% confidence in our answers but may have good predictive ability statistically. Net-net we want to be ahead because even a slight leg-up can be multiplied by thousands of cycles to produce substantial profits.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting the data</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start by grabbing some data. For the purposes of this chapter, we'll use data from Quandl, a longtime favorite of technically adept independent investors. Quandl makes data available on many stocks using a number of mechanisms. One easy mechanism is via a URL API. To get stock data on, say, Google Stock, we can click on <a href="https://www.quandl.com/api/v3/datasets/WIKI/GOOG/data.json"><span class="URLPACKT">https://www.quandl.com/api/v3/datasets/WIKI/GOOG/data.json</span></a>. Similarly, we can replace <kbd>GOOG</kbd> with other index codes to grab data on other stocks.</p>
+<p>This is fairly easy to automate via Python; we will use the following code to do so:</p>
+<pre style="padding-left: 60px">import requests 
+ 
+API_KEY = '&lt;your_api_key&gt;' 
+ 
+start_date = '2010-01-01' 
+end_date = '2015-01-01' 
+order = 'asc' 
+column_index = 4 
+ 
+stock_exchange = 'WIKI' 
+index = 'GOOG' 
+ 
+data_specs = 'start_date={}&amp;end_date={}&amp;order={}&amp;column_index={}&amp;api_key={}' 
+   .format(start_date, end_date, order, column_index, API_KEY) 
+base_url = "https://www.quandl.com/api/v3/datasets/{}/{}/data.json?" + data_specs 
+stock_data = requests.get(base_url.format(stock_exchange, index)).json()</pre>
+<p>So, here, in the <kbd>stock_data</kbd> variable, you'll have the stock data variable from WIKI/GOOG into the <kbd>stock_data</kbd> <span>variable,</span> downloaded from the formatted URL between the dates <kbd>2010-01-01</kbd> and <kbd>2015-01-01</kbd>. The <kbd>column_index = 4</kbd> variables is telling the server to get only the closing values from the history.</p>
+<div class="packt_infobox">Note that you can find this chapter's code in your GitHub repository—(<a href="https://github.com/saifrahmed/MLwithTF/tree/master/book_code/chapter_07"><span class="URLPACKT">https://github.com/saifrahmed/MLwithTF/tree/master/book_code/chapter_07</span></a>).</div>
+<p class="mce-root">So, what are these closing values? Well, stock prices fluctuate every day. They open with a certain value and they reach a certain high value and a certain low value within a day, and, at the end of the day, they close with a certain value. The following image shows how the stock prices change within each day:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="391" width="274" class=" image-border" src="assets/50078c32-8ab0-4418-b652-2f5e7ae968cd.png"/></div>
+<p>So, after the stock opens, you can invest in them and buy shares. At the end of the day, you'll have either a profit or a loss, depending on the closing values of those shares bought. Investors use different techniques to predict which stocks have the potential to rise on a particular day, and, depending on their analysis, they invest in shares.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Approaching the problem</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we will find out whether the stock prices will rise or fall depending on the rises and falls of markets in other time zones (such that their closing time is earlier than the stock in which we want to invest in). We will analyze the data from European markets that close about 3 or 4 hours before the American stock markets. From Quandl, we will get the data from the following European markets:</p>
+<ul>
+<li><kbd>WSE/OPONEO_PL</kbd></li>
+<li><kbd>WSE/VINDEXUS</kbd></li>
+<li><kbd>WSE/WAWEL</kbd></li>
+<li><kbd>WSE/WIELTON</kbd></li>
+</ul>
+<p>And we will predict the closing rise and fall for the following American market: WIKI/SNPS.</p>
+<p>We will download all the market data, view the downloaded graphs for the markets' closing values, and modify the data so that it can be trained on our networks. Then, we'll see how our networks perform on our assumptions.</p>
+<p>The code and analysis techniques used in this chapter are inspired by Google's Cloud Datalab notebook found at <a href="https://github.com/googledatalab/notebooks/blob/master/samples/TensorFlow/Machine%20Learning%20with%20Financial%20Data.ipynb">https://github.com/googledatalab/notebooks/blob/master/samples/TensorFlow/Machine%20Learning%20with%20Financial%20Data.ipynbhere</a>.</p>
+<p>The steps are as follows:</p>
+<ol>
+<li>Download the required data and modify it.</li>
+<li>View the original and modified data.</li>
+<li>Extract features from the modified data.</li>
+<li>Prepare for training and test out the network.</li>
+<li>Build the network.</li>
+<li>Training.</li>
+<li>Testing.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Downloading and modifying data</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Here, we will download the data from the sources mentioned in the </span><kbd>codes</kbd><span> variable, and we will put them into our </span><kbd>closings</kbd><span> data frame. We will store the original data, <kbd>scaled</kbd> data, and the <kbd>log_return</kbd>:</span></p>
+<pre style="padding-left: 60px">codes = ["WSE/OPONEO_PL", "WSE/VINDEXUS", "WSE/WAWEL", "WSE/WIELTON", "WIKI/SNPS"] 
+closings = pd.DataFrame() 
+for code in codes: 
+    code_splits = code.split("/") 
+    stock_exchange = code_splits[0] 
+    index = code_splits[1] 
+    stock_data = requests.get(base_url.format(stock_exchange,  <br/>    index)).json() 
+    dataset_data = stock_data['dataset_data'] 
+    data = np.array(dataset_data['data']) 
+    closings[index] = pd.Series(data[:, 1].astype(float)) 
+    closings[index + "_scaled"] = closings[index] / <br/>     max(closings[index]) 
+    closings[index + "_log_return"] = np.log(closings[index] / closings[index].shift()) 
+closings = closings.fillna(method='ffill')  # Fill the gaps in data </pre>
+<p>We scaled the data so that the stock values stay between <kbd>0</kbd> and <kbd>1</kbd>; this is helpful for minimizing compared to other stock values. It will help us see trends in the stock compared to other markets and will make it visually easier to analyze.</p>
+<p>The log returns help us get a graph of the market rising and falling compared to the previous day.</p>
+<p>Now let's see how our data looks.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Viewing the data</h1>
+                </header>
+            
+            <article>
+                
+<p><span>The following code snippet will plot the data we downloaded and processed:</span></p>
+<pre style="padding-left: 60px">def show_plot(key="", show=True): 
+    fig = plt.figure() 
+    fig.set_figwidth(20) 
+    fig.set_figheight(15) 
+    for code in codes: 
+        index = code.split("/")[1] 
+        if key and len(key) &gt; 0: 
+            label = "{}_{}".format(index, key) 
+        else: 
+            label = index 
+        _ = plt.plot(closings[label], label=label) 
+ 
+    _ = plt.legend(loc='upper right') 
+    if show: 
+        plt.show() 
+ 
+show = True 
+show_plot("", show=show) 
+show_plot("scaled", show=show) 
+show_plot("log_return", show=show) </pre>
+<p><span>The </span>original market<span> data to </span>close values<span>. As you can see here, the value for </span><strong>WAWEL</strong><span> is a couple of magnitudes larger than the other markets</span>:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/9a3c3d86-9492-4649-90f1-00f1c0d60d99.png"/></div>
+<p>The closing values for WAWEL visually reduced the trends in data for the other market values. We will scale this data so we can see it better. Take a look at the following screenshot:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="367" width="489" class=" image-border" src="assets/e57ad309-ca26-4e67-b7d4-a3e6575dfcca.png"/></div>
+<p>The scaled market values help us visualize the trends better. Now, let's see how the <kbd>log_return</kbd> looks:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="356" width="475" class=" image-border" src="assets/9fd72903-21e5-4640-a63e-f49a3662fb31.png"/></div>
+<p>The log returns the markets' closing values</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Extracting features</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, we will extract the required features to train and test our data:</p>
+<pre style="padding-left: 60px">feature_columns = ['SNPS_log_return_positive', 'SNPS_log_return_negative'] 
+for i in range(len(codes)): 
+    index = codes[i].split("/")[1] 
+    feature_columns.extend([ 
+        '{}_log_return_1'.format(index), 
+        '{}_log_return_2'.format(index), 
+        '{}_log_return_3'.format(index) 
+    ]) 
+features_and_labels = pd.DataFrame(columns=feature_columns) 
+closings['SNPS_log_return_positive'] = 0 
+closings.ix[closings['SNPS_log_return'] &gt;= 0, 'SNPS_log_return_positive'] = 1 
+closings['SNPS_log_return_negative'] = 0 
+closings.ix[closings['SNPS_log_return'] &lt; 0, 'SNPS_log_return_negative'] = 1 
+for i in range(7, len(closings)): 
+    feed_dict = {'SNPS_log_return_positive': closings['SNPS_log_return_positive'].ix[i], 
+        'SNPS_log_return_negative': closings['SNPS_log_return_negative'].ix[i]} 
+    for j in range(len(codes)): 
+        index = codes[j].split("/")[1] 
+        k = 1 if j == len(codes) - 1 else 0 
+        feed_dict.update({'{}_log_return_1'.format(index): closings['{}_log_return'.format(index)].ix[i - k], 
+                '{}_log_return_2'.format(index): closings['{}_log_return'.format(index)].ix[i - 1 - k], 
+                '{}_log_return_3'.format(index): closings['{}_log_return'.format(index)].ix[i - 2 - k]}) 
+    features_and_labels = features_and_labels.append(feed_dict, ignore_index=True) </pre>
+<p>We are storing all our features and labels in the <kbd>features_and_label</kbd> variable. The <kbd>SNPS_log_return_positive</kbd> and <kbd>SNPS_log_return_negative</kbd> <span>keys </span>store the point where the log returns for SNPS are positive and negative, respectively. They are <kbd>1</kbd> if true and <kbd>0</kbd> if false. These two keys will act as the labels for the network.</p>
+<p>The other keys are to store the values of other markets for the last 3 days (and for the preceding 3 days for SNPS because today's value won't be available to us for this market).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Preparing for training and testing</h1>
+                </header>
+            
+            <article>
+                
+<p>Now we'll split our features into <kbd>train</kbd> and <kbd>test</kbd> subsets. We won't be randomizing our data because, in time series for financial markets, the data comes every day in a regular manner and we have to follow it like it is. You can't predict the past behavior if you train for the future data because that would be useless. We are always interested in the future behavior of the stock market:</p>
+<pre style="padding-left: 60px">features = features_and_labels[features_and_labels.columns[2:]] 
+labels = features_and_labels[features_and_labels.columns[:2]] 
+train_size = int(len(features_and_labels) * train_test_split) 
+test_size = len(features_and_labels) - train_size 
+train_features = features[:train_size] 
+train_labels = labels[:train_size] 
+test_features = features[train_size:] 
+test_labels = labels[train_size:]</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building the network</h1>
+                </header>
+            
+            <article>
+                
+<p>The network model to train our time series looks as follows:</p>
+<pre style="padding-left: 60px">sess = tf.Session() 
+num_predictors = len(train_features.columns) 
+num_classes = len(train_labels.columns) 
+feature_data = tf.placeholder("float", [None, num_predictors]) 
+actual_classes = tf.placeholder("float", [None, 2]) 
+weights1 = tf.Variable(tf.truncated_normal([len(codes) * 3, 50], stddev=0.0001)) 
+biases1 = tf.Variable(tf.ones([50])) 
+weights2 = tf.Variable(tf.truncated_normal([50, 25], stddev=0.0001)) 
+biases2 = tf.Variable(tf.ones([25])) 
+weights3 = tf.Variable(tf.truncated_normal([25, 2], stddev=0.0001)) 
+biases3 = tf.Variable(tf.ones([2])) 
+hidden_layer_1 = tf.nn.relu(tf.matmul(feature_data, weights1) + biases1) 
+hidden_layer_2 = tf.nn.relu(tf.matmul(hidden_layer_1, weights2) + biases2) 
+model = tf.nn.softmax(tf.matmul(hidden_layer_2, weights3) + biases3) 
+cost = -tf.reduce_sum(actual_classes * tf.log(model)) 
+train_op1 = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(cost) 
+init = tf.initialize_all_variables() 
+sess.run(init) 
+correct_prediction = tf.equal(tf.argmax(model, 1), tf.argmax(actual_classes, 1)) 
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float")) </pre>
+<p>This is just a simple network with two hidden layers.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's train our network:</p>
+<pre style="padding-left: 60px">for i in range(1, 30001): 
+    sess.run(train_op1, feed_dict={feature_data: train_features.values, 
+            actual_classes: train_labels.values.reshape(len(train_labels.values), 2)}) 
+    if i % 5000 == 0: 
+        print(i, sess.run(accuracy, feed_dict={feature_data: train_features.values, 
+                actual_classes: train_labels.values.reshape(len(train_labels.values), 2)})) </pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Testing</h1>
+                </header>
+            
+            <article>
+                
+<p>The testing of our network looks as follows:</p>
+<pre style="padding-left: 60px">feed_dict = { 
+    feature_data: test_features.values, 
+    actual_classes: test_labels.values.reshape(len(test_labels.values), 2) 
+} 
+tf_confusion_metrics(model, actual_classes, sess, feed_dict) </pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Taking it further</h1>
+                </header>
+            
+            <article>
+                
+<p>Suppose you just trained a nifty classifier showing some predictive power over the markets, should you start trading? Much like with the other machine learning projects we've done to date, you will need to test on an independent test set. In the past, we've often cordoned off our data into the following three sets:</p>
+<ul>
+<li>The training set</li>
+<li>The development set, aka the validation set</li>
+<li>The test set</li>
+</ul>
+<p>We can do something similar to our current work, but the financial markets give us an added resource—ongoing data streams!</p>
+<p>We can use the same data source we used for our earlier pulls and continue to pull more data; essentially, we have an ever-expanding, unseen dataset! Of course, some of this depends on the frequency of the data that we use—if we operate on daily data, it will take a while to accomplish this. Operating on hourly or per-minute data makes this easier as we'll have more data quickly. Operating on tick-level data, based on the volume of quotes, is usually even better.</p>
+<p>As real money can potentially be at stake here, most people will typically paper trade—essentially, run the system almost live, but not actually spend any money and instead just keep track of how the system will operate when live. If this works, then the next step will be to trade it live, that is, with real money (usually, a small amount to test the system).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Practical considerations for the individual</h1>
+                </header>
+            
+            <article>
+                
+<p>Suppose you trained a nifty classifier and also showed good results over a blind or live set, now should you start trading? While it is possible, it isn't so easy. The following are some reasons why:</p>
+<ul>
+<li><strong>Historical analyses versus streaming data</strong>: This historical data is often cleansed and near perfect, but streaming data does not offer such benefits. You will need code to evaluate the stream of data and throw out potentially unreliable data.</li>
+<li><strong>Bid-ask spread</strong>: This is the biggest surprise novice's face. There are actually two prices in the marketplace: the price at which you can buy and the one at which you can sell. You don't both buy and sell at the typical market price you see (that is just the last meeting point on the two, called the last price). Buying a holding and immediately selling it loses money because of this gap, so net-net, you are already at a loss.</li>
+<li><strong>Transaction costs</strong>: This can be as small as a $1/trade, but it is still a hurdle and one that needs to be surpassed before a strategy can become profitable.</li>
+<li><strong>Taxes</strong>: This is often forgotten, but probably because taxes indicate net gains, which is usually a good thing.</li>
+<li><strong>Exit ability</strong>: Just because you can sell theoretically does not mean there is actually a market available to sell your holding, and, even if there is, possibly not for your entire holding. Guess what? Yet more coding is required. This time, look at bid prices, volumes on those prices, and the depth of the book.</li>
+<li><strong>Volume and liquidity</strong>: Just because the signal tells you to buy doesn't mean there is sufficient volume in the market to purchase; you may be seeing just the top of the book with very little actual volume underneath. More coding is required!</li>
+<li><strong>Integrations with trading APIs</strong>: Calling libraries is easy, but not so much when money is involved. You'll need trading agreements, API agreements, and the like. However, tens of thousands of individuals have done this and Interactive Brokers is the most popular brokerage for those seeking APIs to buy and sell holdings. Conveniently, they also have an API to provide market data.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Skills learned</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, you should have learned the following skills:</p>
+<ul>
+<li>Understanding the time-series data</li>
+<li>Setting up a pipeline for the time-series data</li>
+<li>Integrating primary data</li>
+<li>Creating training and test sets</li>
+<li>Practical considerations</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>Machine learning on financial data is no different from the many other data we use and, in fact, we used a network just as we did for other datasets. There are other options we can use, but the general approach stays the same. Especially when transacting money, we will find that the surrounding code becomes larger than ever relative to the actual machine learning portion of the code.</p>
+<p>In the next chapter, we will see how we can use machine learning for medical purposes.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

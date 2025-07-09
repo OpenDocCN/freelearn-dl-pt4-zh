@@ -1,0 +1,499 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Cats and Dogs</h1>
+                </header>
+            
+            <article>
+                
+<p>Back in <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml" target="_blank"><span class="ChapterrefPACKT">Chapter 2</span></a><a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml"/>, <em>Your First Classifier</em>, we constructed a simple neural network for our character recognition effort. We ended the chapter with commendable mid-80% accuracy. Good start, but we can do much better!</p>
+<p>In this chapter, we will retrofit our earlier classifier with far more powerful network architecture. Then, we'll delve into a much more difficult problem—handling color images from the CIFAR-10 dataset. The images will be much more difficult (cats, dogs, airplanes, and so on), so we'll bring more powerful tools to the table—specifically, a convolutional neural network. Let's begin.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Revisiting notMNIST</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start our effort incrementally by trying the technical changes on the <kbd>notMNIST</kbd> dataset we used in <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml"><span class="ChapterrefPACKT">Chapter 2</span></a>, <em>Your First Classifier</em>. You can write the code as you go through the chapter, or work on the book's repository at:</p>
+<p><a href="https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/training.py"><span class="URLPACKT">https://github.com/mlwithtf/mlwithtf/blob/master/chapter_02/training.py</span></a>.</p>
+<p>We will begin with the following imports:</p>
+<pre>    import sys, os 
+    import tensorflow as tf 
+    sys.path.append(os.path.realpath('../..')) 
+    from data_utils import * 
+    from logmanager import * 
+    import math</pre>
+<p>There are not many substantial changes here. The real horsepower is already imported with the <kbd>tensorflow</kbd> package. You'll notice that we reuse our <kbd>data_utils</kbd> work from before. However, we'll need some changes there.</p>
+<p>The only difference from before is the <kbd>math</kbd> package, which we will use for ancillary <kbd>math</kbd> functions, such as <kbd>ceiling</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Program configurations</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's look at our old program configurations, which are as follows:</p>
+<pre>    batch_size = 128 
+    num_steps = 10000 
+    learning_rate = 0.3 
+    data_showing_step = 500 </pre>
+<p>We will need more configurations this time. Here is what we will use now:</p>
+<pre style="padding-left: 60px"> batch_size = 32 
+ num_steps = 30000 
+ learning_rate = 0.1 
+ data_showing_step = 500 
+ model_saving_step = 2000 
+ log_location = '/tmp/alex_nn_log' 
+ 
+ SEED = 11215 
+ 
+ patch_size = 5 
+ depth_inc = 4 
+ num_hidden_inc = 32 
+ dropout_prob = 0.8 
+ conv_layers = 3 
+ stddev = 0.1 </pre>
+<p>The first four configurations are familiar:</p>
+<ul>
+<li>We will still train for a certain number of steps (<kbd>num_steps</kbd>), just as we did earlier. But, you'll notice the number of steps has gone up. They will get even higher because our datasets will be more complex and require more training.</li>
+<li>We will revisit subtleties around the learning rate (<kbd>learning_rate</kbd>) later, but to start with, you are already familiar with it.</li>
+<li>We will review results intermediately every five hundred steps, which is trivially controlled by the <kbd>data_showing_step</kbd> variable.</li>
+<li>Finally, <kbd>log_location</kbd> controls where our TensorBoard logs are dumped. We are quite familiar with this from <span class="ChapterrefPACKT"><a href="a6bb2a79-d492-4620-a28b-72ec62523593.xhtml" target="_blank">Chapter 3</a></span>, <em>The TensorFlow Toolbox</em>. We will use it again in this chapter but without explanations this time.</li>
+</ul>
+<p>The next configuration—the <strong>random seed</strong> (<kbd>SEED</kbd>) variable - can be helpful. This can be left unset and TensorFlow will randomize numbers on each run. However, having a <kbd>seed</kbd> variable set, and constant across runs, will allow consistency from run to run as we debug our system. If you do use it, which you should do to start off, you can set it to any number you wish: your birthday, anniversary date, first phone number, or lucky number. I use the ZIP code for my beloved neighborhood. Enjoy the small things.</p>
+<p>Finally, we will encounter seven new variables—<kbd>batch_size</kbd>, <kbd>patch_size</kbd>, <kbd>depth_inc</kbd>, <kbd>num_hidden_inc</kbd>, <kbd>conv_layers</kbd>, <kbd>stddev</kbd>, and <kbd>dropout_prob</kbd>. These are at the heart of how our newer, more advanced <strong>Convolutional neural networks</strong> (<strong>CNNs</strong>) works and will be introduced in context as we explore the network we're using.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Understanding convolutional networks</h1>
+                </header>
+            
+            <article>
+                
+<p>CNNs are more advanced neural networks specialized for machine learning with images. Unlike the hidden layers we used before, CNNs have some layers that are not fully connected. These convolutional layers have depth in addition to just width and height. The general principle is that an image is analyzed patch by patch. We can visualize the 7x7 patch in the image as follows:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="222" width="221" class=" image-border" src="assets/83aa17bb-6c42-4643-b9b5-81c484187653.png"/></div>
+<p>This reflects a 32x32 greyscale image, with a 7x7 patch. Example of sliding the patch from left to right is given as follows:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="259" width="305" class=" image-border" src="assets/bdaa4b88-36da-4346-8a89-59584f189dcd.png"/></div>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="250" width="300" class=" image-border" src="assets/461f4a5e-855a-41cc-8dc8-fae26ab4656c.png"/></div>
+<p>If this were a color image, we'd be sliding our patch simultaneously over three identical layers.</p>
+<p>You probably noticed that we slid the patch over by one pixel. That is a configuration as well; we could have slid more, perhaps by two or even three pixels each time. This is the stride configuration. As you can guess, the larger the stride, the fewer the patches we will end up covering and thus, the smaller the output layer.</p>
+<p>Matrix math, which we will not get into here, is performed to reduce the patch (with the full depth driven by the number of channels) into an output depth column. The output is just a single in height and width but many pixels deep. As we will slide the patch across, over, and across iteratively, the sequence of depth columns form a block with a new length, width, and height.</p>
+<p>There is another configuration at play here—the padding along the sides of the image. As you can imagine, the more padding you have the more room the patch has to slide and veer off the edge of the image. This allows more strides and thus, a larger length and width for the output volume. You'll see this in the code later as <kbd>padding='SAME'</kbd> or <kbd>padding='VALID'</kbd>.</p>
+<p>Let's see how these add up. We will first select a patch:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="145" width="383" src="assets/8cfad793-1383-4f9d-9b06-f7f4b4c88927.png"/></div>
+<p>However, the patch is not just the square, but the full depth (for color images):</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="147" width="385" src="assets/73820b82-074d-41dc-ae5c-53cd8b6981b5.png"/></div>
+<p>We will then convolve that into a 1x1 volume, but with depth, as shown in the following diagram. The depth of the resulting volume is configurable and we will use <kbd>inct_depth</kbd> for this configuration in our program:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="209" width="365" src="assets/05389cd9-d779-4c51-b334-0d7609676e19.png"/></div>
+<p>Finally, as we slide the patch across, over, and across again, through the original image, we will produce many such 1x1xN volumes, which itself creates a volume:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="218" width="380" src="assets/8c88a030-d437-434d-907f-c037089ade35.png"/></div>
+<p>We will then convolve that into a 1x1 volume.</p>
+<p>Finally, we will squeeze each layer of the resulting volume using a <kbd>POOL</kbd> operation. There are many types, but simple <strong>max pooling</strong> is typical:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="279" width="446" class=" image-border" src="assets/01223d35-9aa6-4dbb-ba9c-3df61cadfa9f.png"/></div>
+<p>Much like with the sliding patches we used earlier, there will be a patch (except this time, we will take the maximum number of the patch) and a stride (this time, we'll want a larger stride to squeeze the image). We are essentially reducing the size. Here, we will use a 3x3 patch with a stride of 2.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Revisiting configurations</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have been introduced to convolutional neural networks, let's revisit the configurations that we encountered earlier: <kbd>batch_size</kbd>, <kbd>patch_size</kbd>, <kbd>depth_inc</kbd>, <kbd>num_hidden_inc</kbd>, <kbd>conv_layers</kbd>, <kbd>stddev</kbd>, and <kbd>dropout_prob</kbd>:</p>
+<ul>
+<li>Batch size (<kbd>batch_size</kbd>)</li>
+<li>Patch size (<kbd>patch_size</kbd>)</li>
+<li>Depth increment (<kbd>depth_inc</kbd>)</li>
+<li>Number hidden increment (<kbd>num_hidden_inc</kbd>)</li>
+<li>Convolutional layers (<kbd>conv_layers</kbd>)</li>
+<li>Standard deviation (<kbd>stddev</kbd>)</li>
+<li>Dropout probability (<kbd>dropout_prob</kbd>)</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Constructing the convolutional network</h1>
+                </header>
+            
+            <article>
+                
+<p>We will skip explanations for the two utility functions, reformat and accuracy, as we've already encountered these in <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml" target="_blank"><span class="ChapterrefPACKT">Chapter 2</span></a>, <em>Your First Classifier</em>. Instead, we will jump directly to the neural network configuration. For comparison, the following figure shows our model from <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml" target="_blank"><span class="ChapterrefPACKT">Chapter 2</span></a>, <em>Your First Classifier</em>, and the next figure shows our new model. We'll run the new model on the same <kbd>notMNIST</kbd> dataset to see the accuracy boost that we will get (hint: good news!):</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="112" width="436" class=" image-border" src="assets/1ab3311b-ae1f-46ce-96c4-b3f095eae98b.png"/></div>
+<p>The following figure is our new model:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/365f9caf-dc2c-4ac9-bfd2-1df7927d6cbf.png"/></div>
+<p>First, we will encounter a <kbd>helper</kbd> function, as follows:</p>
+<pre>    def fc_first_layer_dimen(image_size, layers): 
+       output = image_size 
+       for x in range(layers): 
+        output = math.ceil(output/2.0) 
+       return int(output) </pre>
+<p>Then, we will call it later, as follows:</p>
+<pre>    fc_first_layer_dimen(image_size, conv_layers) </pre>
+<p>The <kbd>fc_first_layer_dimen</kbd> function calculates the dimensions of the first fully connected layer. Recall how CNN's typically use a series of layers with a smaller window layer after layer. Here, we've decided to reduce the dimensions by half for each convolutional layer we used. This also shows why having input images highly divisible by powers of two makes things nice and clean.</p>
+<p>Let's now parse the actual network. This is generated using the <kbd>nn_model</kbd> method and called later when training the model, and again when testing against the validation and test sets.</p>
+<p>Recall how CNN's are usually composed of the following layers:</p>
+<ul>
+<li>Convolutional layers</li>
+<li>Rectified linear unit layers</li>
+<li>Pooling layers</li>
+<li>Fully connected layers</li>
+</ul>
+<p>The convolutional layers are usually paired with <strong>RELU</strong> layers and repeated. That is what we've done—we've got three nearly identical <strong>CONV-RELU</strong> layers stacked on top of each other.</p>
+<p>Each of the paired layers appears as follows:</p>
+<pre>    with tf.name_scope('Layer_1') as scope: 
+        conv = tf.nn.conv2d(data, weights['conv1'], strides=[1, 1, <br/>         1, 1], padding='SAME', name='conv1')        <br/>        bias_add = tf.nn.bias_add(conv, biases['conv1'], <br/>         name='bias_add_1') 
+        relu = tf.nn.relu(bias_add, name='relu_1') 
+        max_pool = tf.nn.max_pool(relu, ksize=[1, 2, 2, 1], <br/>         strides=[1, 2, 2, 1], padding='SAME', name=scope)</pre>
+<p>The major difference across the three nearly identical layers (<kbd>Layer_1</kbd>, <kbd>Layer_2</kbd>, and <kbd>Layer_3</kbd>) is how the output of one is fed to the next in a series. So, the first layer begins by taking in data (the image data) but the second layer begins by taking in the pooling layer output from the first layer, as follows:</p>
+<pre>    conv = tf.nn.conv2d(max_pool, weights['conv2'], strides=[1, 1, 1, <br/>     1], padding='SAME', name='conv2')</pre>
+<p>Similarly, the third layer begins by taking in the pooling layer output from the second layer, as follows:</p>
+<pre>    conv = tf.nn.conv2d(max_pool, weights['conv3'], strides=[1, 1, 1, <br/>     1], padding='SAME', name='conv3')</pre>
+<p>There is another major difference across the three <kbd>CONV</kbd>-<kbd>RELU</kbd> layers, that is, the layers get squeezed. It might help to peek at the <kbd>conv</kbd> variable after each layer is declared using a couple of <kbd>print</kbd> statements like this:</p>
+<pre>    print "Layer 1 CONV", conv.get_shape() 
+    print "Layer 2 CONV", conv.get_shape() 
+    print "Layer 3 CONV", conv.get_shape() </pre>
+<p>This will reveal the following structures:</p>
+<pre style="padding-left: 30px"><strong>Layer 1 CONV (32, 28, 28, 4) 
+Layer 2 CONV (32, 14, 14, 4) 
+Layer 3 CONV (32, 7, 7, 4) 
+Layer 1 CONV (10000, 28, 28, 4) 
+Layer 2 CONV (10000, 14, 14, 4) 
+Layer 3 CONV (10000, 7, 7, 4) 
+Layer 1 CONV (10000, 28, 28, 4) 
+Layer 2 CONV (10000, 14, 14, 4) 
+Layer 3 CONV (10000, 7, 7, 4)</strong> </pre>
+<p>We ran this with the <kbd>notMNIST</kbd> dataset, so we will see an original input size of 28x28 to no surprise. More interesting are the sizes of successive layers—14x14 and 7x7. Notice how the filters for successive convolutional layers are squeezed.</p>
+<p>Let's make things more interesting and examine the entire stack. Add the following <kbd>print</kbd> statements to peek at the <kbd>CONV</kbd>, <kbd>RELU</kbd>, and <kbd>POOL</kbd> layers:</p>
+<pre style="padding-left: 60px"> print "Layer 1 CONV", conv.get_shape() 
+ print "Layer 1 RELU", relu.get_shape() 
+ print "Layer 1 POOL", max_pool.get_shape() </pre>
+<p>Add similar statements after the other two <kbd>CONV</kbd>-<kbd>RELU</kbd>-<kbd>POOL</kbd> stacks and you'll find the following output:</p>
+<pre style="padding-left: 30px"><strong>Layer 1 CONV (32, 28, 28, 4) 
+Layer 1 RELU (32, 28, 28, 4) 
+Layer 1 POOL (32, 14, 14, 4) 
+Layer 2 CONV (32, 14, 14, 4) 
+Layer 2 RELU (32, 14, 14, 4) 
+Layer 2 POOL (32, 7, 7, 4) 
+Layer 3 CONV (32, 7, 7, 4) 
+Layer 3 RELU (32, 7, 7, 4) 
+Layer 3 POOL (32, 4, 4, 4) 
+...</strong> </pre>
+<p>We will ignore the outputs from the validation and test instances (those are the same, except with a height of 10000 instead of <kbd>32</kbd> as we're processing the validation and test sets rather than a minibatch).</p>
+<p>We will see from the outputs how the dimension is squeezed at the <kbd>POOL</kbd> layer (<kbd>28</kbd> to <kbd>14</kbd>) and how that squeeze then carries to the next <kbd>CONV</kbd> layer. At the third and final <kbd>POOL</kbd> layer, we will end up with a 4x4 size.</p>
+<p>There is another feature on the final <kbd>CONV</kbd> stack—a <kbd>dropout</kbd> layer that we will use when training, which is as follows:</p>
+<pre style="padding-left: 60px"> max_pool = tf.nn.dropout(max_pool, dropout_prob, seed=SEED, <br/>  name='dropout')</pre>
+<p>This layer utilizes the <kbd>dropout_prob = 0.8</kbd> configuration we set earlier. It randomly drops neurons on the layer to prevent overfitting by disallowing nodes from coadapting to neighboring nodes with dropouts; they can never rely on a particular node being present.</p>
+<p>Let's proceed through our network. We'll find a fully connected layer followed by a <kbd>RELU</kbd>:</p>
+<pre>    with tf.name_scope('FC_Layer_1') as scope: 
+        matmul = tf.matmul(reshape, weights['fc1'], <br/>         name='fc1_matmul')       <br/>         bias_add = tf.nn.bias_add(matmul, biases['fc1'], <br/>         name='fc1_bias_add') 
+        relu = tf.nn.relu(bias_add, name=scope) </pre>
+<p>Finally, we will end with a fully connected layer, as follows:</p>
+<pre>    with tf.name_scope('FC_Layer_2') as scope: 
+        matmul = tf.matmul(relu, weights['fc2'], <br/>         name='fc2_matmul')       <br/>        layer_fc2 = tf.nn.bias_add(matmul, biases['fc2'], <br/>         name=scope)</pre>
+<p>This is typical for the convolutional network. Typically, we will end up with a fully connected, <kbd>RELU</kbd> layer and finally a fully connected layer that holds scores for each class.</p>
+<p>We skipped some details along the way. Most of our layers were initialized with three other values—<kbd>weights</kbd>, <kbd>biases</kbd>, and <kbd>strides</kbd>:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="247" width="698" class=" image-border" src="assets/1a019ee4-889d-4cec-a30c-b3ca3bce9577.png"/></div>
+<p>The <kbd>weights</kbd> and <kbd>biases</kbd> are themselves initialized with other variables. I didn't say this will be easy.</p>
+<p>The most important variable here is <kbd>patch_size</kbd>, which denotes the size of the filter we slide across the image. Recall that we set this to 5 early on, so we will use 5x5 patches. We will also get reintroduced to the <kbd>stddev</kbd> and <kbd>depth_inc</kbd> configurations that we set up earlier.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fulfilment</h1>
+                </header>
+            
+            <article>
+                
+<p>Likely, by now, you must have many questions running through your mind—why three convolutional layers rather than two or four? Why a stride of one? Why a patch size of five? Why end up with fully connected layers rather than start with them?</p>
+<p>There is some method to the madness here. At the core, CNN's are built around image processing and patches are built around the features being sought. Why some configurations work well while others do not is not fully understood, though general rules do follow intuition. The exact network architectures are discovered, honed, and increasingly inch toward perfection through thousands of trials and many errors. It continues to be a research-grade task.</p>
+<p>The practitioner's general approach is often to find a well working, existing architecture (for example, AlexNet, GoogLeNet, ResNet) and tweak them for use with a specific dataset. That is what we did; we started with AlexNet and tweaked it. Perhaps, that is not fulfilling, but it works and remains the state of practice in 2016.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training day</h1>
+                </header>
+            
+            <article>
+                
+<p>It will be more fulfilling, however, to see our training in action and how we will improve upon what we did earlier.</p>
+<p>We will prepare the training dataset and labels as follows:</p>
+<pre>    tf_train_dataset = tf.placeholder(tf.float32, 
+    shape=(batch_size, image_size, image_size,   <br/>    num_channels), <br/>    name='TRAIN_DATASET')    <br/>    tf_train_labels = tf.placeholder(tf.float32, <br/>    shape=(batch_size, num_of_classes), <br/>    name='TRAIN_LABEL') 
+    tf_valid_dataset = tf.constant(dataset.valid_dataset,   <br/>    name='VALID_DATASET') 
+    tf_test_dataset = tf.constant(dataset.test_dataset,  <br/>    name='TEST_DATASET') </pre>
+<p>Then, we will run the trainer, as follows:</p>
+<pre>    # Training computation. 
+    logits = nn_model(tf_train_dataset, weights, biases,  <br/>    True) 
+    loss = tf.reduce_mean( 
+        tf.nn.softmax_cross_entropy_with_logits(logits, <br/>         tf_train_labels)) 
+    # L2 regularization for the fully connected  <br/>    parameters. 
+    regularizers = (tf.nn.l2_loss(weights['fc1']) + <br/>     tf.nn.l2_loss(biases['fc1']) + 
+     tf.nn.l2_loss(weights['fc2']) + <br/><br/>    tf.nn.l2_loss(biases['fc2'])) 
+    # Add the regularization term to the loss. 
+    loss += 5e-4 * regularizers 
+    tf.summary.scalar("loss", loss) </pre>
+<p>This is very similar to what we did in <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml" target="_blank"><span class="ChapterrefPACKT">Chapter 2</span></a>, <em>Your First Classifier</em>. We instantiated the network, passed in an initial set of weights and biases, and defined a <kbd>loss</kbd> function using the training labels. Our optimizer is then defined to minimize that <kbd>loss</kbd>, as follows:</p>
+<pre>    optimizer = tf.train.GradientDescentOptimizer<br/>     (learning_rate).minimize(loss)</pre>
+<p>We will then use the <kbd>weights</kbd> and <kbd>biases</kbd> to predict labels for the validation and, eventually, the training set:</p>
+<pre class="mce-root">    train_prediction = tf.nn.softmax(nn_model(tf_train_dataset,  <br/>    weights, biases, TRAIN=False)) 
+    valid_prediction = tf.nn.softmax(nn_model(tf_valid_dataset, <br/>     weights, biases))    test_prediction =  <br/>     tf.nn.softmax(nn_model(tf_test_dataset, <br/>     weights, biases))</pre>
+<p class="mce-root">The complete code for training session is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img height="352" width="689" class=" image-border" src="assets/511d8afb-d417-4be7-b0da-a6d71bf75963.png"/></div>
+<p>Finally, we will run the session. We will use the <kbd>num_steps</kbd> variable that we set earlier and run through the training data in chunks (<kbd>batch_size</kbd>.) We will load small chunks of the training data and associated labels, and run the session as follows:</p>
+<pre>    batch_data = dataset.train_dataset[offset:(offset + <br/>     batch_size), :]   <br/>    batch_labels = dataset.train_labels[offset: <br/>     (offset + <br/>     batch_size), :]</pre>
+<p>We will get back predictions on the minibatch, which we will compare against the actual labels to get accuracy on the minibatch.</p>
+<p>We will use the following <kbd>valid_prediction</kbd> that we declared earlier:</p>
+<pre>    valid_prediction =   <br/>    tf.nn.softmax(nn_model(tf_valid_dataset, <br/>     weights, biases))</pre>
+<p>Then, we will evaluate the validation set predictions against the actual labels we know, as follows:</p>
+<pre>    accuracy(valid_prediction.eval(), <br/>    dataset.valid_labels) </pre>
+<p>After we've run through all the steps, we will do the same in our test set:</p>
+<pre>    accuracy(test_prediction.eval(), dataset.test_labels)</pre>
+<p>As you can see the actual execution of the training, validation, and test was not that different from before. What is different from before is the accuracy. Notice that we've broken out of the 80s into the 90s on test set accuracy:</p>
+<div class="CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/1c25f2c5-ac0d-46c3-a118-6171a8660e77.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Actual cats and dogs</h1>
+                </header>
+            
+            <article>
+                
+<p>We've demonstrated our new tools on the <kbd>notMNIST</kbd> dataset, which was helpful as it served to provide a comparison to our earlier simpler network setup. Now, let's progress to a more difficult problem—actual cats and dogs.</p>
+<p>We'll utilize the CIFAR-10 dataset. There will be more than just cats and dogs, there are 10 classes—airplanes, automobiles, birds, cats, deer, dogs, frogs, horses, ships, and trucks. Unlike the <kbd>notMNIST</kbd> set, there are two major complexities, which are as follows:</p>
+<ul>
+<li>There is far more heterogeneity in the photos, including background scenes</li>
+<li>The photos are color</li>
+</ul>
+<p>We have not worked with color datasets before. Luckily, it is not that different from the usual black and white dataset—we will just add another dimension. Recall that our previous 28x28 images were flat matrices. Now, we'll have 32x32x3 matrices - the extra dimension represents a layer for each red, green, and blue channels. This does make visualizing the dataset more difficult, as stacking up images will go into a fourth dimension. So, our training/validation/test sets will now be 32x32x3xSET_SIZE in dimension. We'll just need to get used to having matrices that we cannot visualize in our familiar 3D space.</p>
+<p>The mechanics of the color dimension are the same though. Just as we had floating point numbers representing shades of grey earlier, we will now have floating point numbers representing shades of red, green, and blue.</p>
+<p>Recall how we loaded the <kbd>notMNIST</kbd> dataset:</p>
+<pre>    dataset, image_size, num_of_classes, num_channels = <br/>     prepare_not_mnist_dataset() </pre>
+<p>The <kbd>num_channels</kbd> variable dictated the color channels. It was just one until now.</p>
+<p>We'll load the CIFAR-10 set similarly, except this time, we'll have three channels returned, as follows:</p>
+<pre>    dataset, image_size, num_of_classes, num_channels = <br/>     prepare_cifar_10_dataset()</pre>
+<p>Not reinventing the wheel.</p>
+<p>Recall how we automated the dataset grab, extraction, and preparation for our <kbd>notMNIST</kbd> dataset in <a href="0197f632-3ce2-4032-9abd-83b3720c7127.xhtml" target="_blank"><span class="ChapterrefPACKT">Chapter 2</span></a>, <em>Your First Classifier</em>? We put those pipeline functions into the <kbd>data_utils.py</kbd> file to separate our pipeline code from our actual machine learning code. Having that clean separation and maintaining clean, generic functions allows us to reuse those for our current project.</p>
+<p>In particular, we will reuse nine of those functions, which are as follows:</p>
+<ul>
+<li><kbd>download_hook_function</kbd></li>
+<li><kbd>download_file</kbd></li>
+<li><kbd>extract_file</kbd></li>
+<li><kbd>load_class</kbd></li>
+<li><kbd>make_pickles</kbd></li>
+<li><kbd>randomize</kbd></li>
+<li><kbd>make_arrays</kbd></li>
+<li><kbd>merge_datasets</kbd></li>
+<li><kbd>pickle_whole</kbd></li>
+</ul>
+<p>Recall how we used those functions inside an overarching function, <kbd>prepare_not_mnist_dataset</kbd>, which ran the entire pipeline for us. We just reused that function earlier, saving ourselves quite a bit of time.</p>
+<p>Let's create an analogous function for the CIFAR-10 set. In general, you should save your own pipeline functions, try to generalize them, isolate them into a single module, and reuse them across projects. As you do your own projects, this will help you focus on the key machine learning efforts rather than spending time on rebuilding pipelines.</p>
+<p>Notice the revised version of <kbd>data_utils.py</kbd>; we have an overarching function called <kbd>prepare_cifar_10_dataset</kbd> that isolates the dataset details and pipelines for this new dataset, which is as follows:</p>
+<pre style="padding-left: 60px">  def prepare_cifar_10_dataset(): 
+    print('Started preparing CIFAR-10 dataset') 
+    image_size = 32 
+    image_depth = 255 
+    cifar_dataset_url = 'https://www.cs.toronto.edu/~kriz/cifar-<br/>     10-python.tar.gz' 
+    dataset_size = 170498071 
+    train_size = 45000 
+    valid_size = 5000 
+    test_size = 10000 
+    num_of_classes = 10 
+    num_of_channels = 3 
+    pickle_batch_size = 10000 </pre>
+<p>Here is a quick overview of the preceding code:</p>
+<ul>
+<li>We will grab the dataset from Alex Krizhevsky's site at the University of Toronto using <kbd>cifar_dataset_url = 'https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'</kbd></li>
+<li>We will use <kbd>dataset_size = 170498071</kbd> to validate whether we've received the file successfully, rather than some truncated half download</li>
+<li class="packt_nosymbol">We will also declare some details based on our knowledge of the dataset</li>
+<li>We will segment our set of 60,000 images into training, validation, and test sets of <kbd>45000</kbd>, <kbd>5000</kbd>, and <kbd>10000</kbd> images respectively</li>
+<li>There are ten classes of images, so we have <kbd>num_of_classes = 10</kbd></li>
+<li>These are color images with red, green, and blue channels, so we have <kbd>num_of_channels = 3</kbd></li>
+<li>We will know the images are 32x32 pixels, so we have <kbd>image_size = 32</kbd> that we'll use for both width and height</li>
+<li>Finally, we will know the images are 8-bit on each channel, so we have <kbd>image_depth = 255</kbd></li>
+<li>The data will end up at <kbd>/datasets/CIFAR-10/</kbd></li>
+</ul>
+<p>Much like we did with the <kbd>notMNIST</kbd> dataset, we will download the dataset only if we don't already have it. We will unarchive the dataset, do the requisite transformations, and save preprocessed matrices as pickles using <kbd>pickle_cifar_10</kbd>. If we find the <kbd>pickle</kbd> files, we can reload intermediate data using the <kbd>load_cifar_10_from_pickles</kbd> method.</p>
+<p>The following are the three helper methods that we will use to keep the complexity of the main method manageable:</p>
+<ul>
+<li><kbd>pickle_cifar_10</kbd></li>
+<li><kbd>load_cifar_10_from_pickles</kbd></li>
+<li><kbd>load_cifar_10_pickle</kbd></li>
+</ul>
+<p>The functions are defined as follows:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/4169bb8d-f6cc-4ac9-968a-1895971a4c1c.png"/></div>
+<p>The <kbd>load_cifar_10_pickle</kbd> method allocates numpy arrays to train and test data and labels as well as load existing pickle files into these arrays. As we will need to do everything twice, we will isolate the <kbd>load_cifar_10_pickle</kbd> method, which actually loads the data and zero-centers it:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img class=" image-border" src="assets/9f4b7d1d-507d-481a-b64d-87b48fbcea69.png"/></div>
+<p>Much like earlier, we will check to see if the <kbd>pickle</kbd> files exist already and if so, load them. Only if they don't exist (the <kbd>else</kbd> clause), we actually save <kbd>pickle</kbd> files with the data we've prepared.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Saving the model for ongoing use</h1>
+                </header>
+            
+            <article>
+                
+<p>To save variables from the tensor flow session for future use, you can use the <kbd>Saver()</kbd> function. Let's start by creating a <kbd>saver</kbd> variable right after the <kbd>writer</kbd> variable:</p>
+<pre>    writer = tf.summary.FileWriter(log_location, session.graph)<br/>    saver = tf.train.Saver(max_to_keep=5)</pre>
+<p>Then, in the training loop, we will add the following code to save the model after every <kbd>model_saving_step</kbd>:</p>
+<pre style="padding-left: 60px"> if step % model_saving_step == 0 or step == num_steps + 1: 
+   path = saver.save(session, os.path.join(log_location,  <br/> "model.ckpt"), global_step=step) 
+   logmanager.logger.info('Model saved in file: %s' % path) </pre>
+<p>After that, whenever we want to restore the model using the <kbd>saved</kbd> model, we can easily create a new <kbd>Saver()</kbd> instance and use the <kbd>restore</kbd> function as follows:</p>
+<pre style="padding-left: 60px"> checkpoint_path = tf.train.latest_checkpoint(log_location) 
+ restorer = tf.train.Saver() 
+ with tf.Session() as sess: 
+    sess.run(tf.global_variables_initializer()) 
+    restorer.restore(sess, checkpoint_path) </pre>
+<p>In the preceding code, we use the <kbd>tf.train.latest_checkpoint</kbd> so that TensorFlow will automatically choose the latest model checkpoint. Then, we create a new <kbd>Saver</kbd> instance named restore. Finally, we can use the <kbd>restore</kbd> function to load the <kbd>saved</kbd> model to the session graph:</p>
+<pre>    restorer.restore(sess, checkpoint_path) </pre>
+<p>You should note that we must restore after we run the <kbd>tf.global_variables_initializer</kbd>. Otherwise, the loaded variables will be overridden by the initializer.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Using the classifier</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we've enhanced the classifier to load random images, we'll start with choosing these random images with the exact size and shape of our training/testing images. We'll need to add placeholders for these user-provided images, so we'll add the following lines in the appropriate locations:</p>
+<pre style="padding-left: 60px"> tf_random_dataset = tf.placeholder(tf.float32, shape=(1, <br/>  image_size, image_size, num_channels),  <br/> name='RANDOM_DATA')random_prediction =  <br/> tf.nn.softmax(nn_model(tf_random_dataset, <br/>  weights, biases))</pre>
+<p>Next, we will grab the image provided by the user via the following command-line parameter and run our session on the image:</p>
+<div class="packt_figure CDPAlignCenter CDPAlign"><img height="189" width="623" class=" image-border" src="assets/c5f0d571-ec3a-4f81-846e-5d210979b15d.png"/></div>
+<p>We will follow almost the exact sequence as we did earlier. Running a <kbd>test</kbd> file through the script using the <kbd>-e</kbd> switch will yield an extra output, as follows:</p>
+<pre>    The prediction is: 2 </pre>
+<p>Voila! We just classified an arbitrary image.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Skills learned</h1>
+                </header>
+            
+            <article>
+                
+<p>You should have learned these skills in the chapter:</p>
+<ul>
+<li>Preparing more advanced color training and test data</li>
+<li>Setting up a convolutional neural network graph</li>
+<li>Parameters and configurations associated with CNN's</li>
+<li>Creating a full system including hooks for TensorBoard</li>
+<li>Piping in real-world data</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>Excellent! We just built a much more advanced classifier, swapped in and out models, and even started applying our classifier to arbitrary models. True to our chapter's name, we've also trained our system to differentiate cats and dogs.</p>
+<p>In the next chapter, we will start working with sequence-to-sequence models and write an English to French translator with TensorFlow.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

@@ -1,0 +1,737 @@
+<html><head></head><body><div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Autoencoders</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">An autoencoder is a type of neural network that is trained to attempt to copy its input to its output. It has a hidden layer (let's call it <em class="calibre17">h</em>) that describes a code used to represent the input. The network may be viewed as consisting of two parts:</p>
+<ul class="calibre20">
+<li class="calibre21"><strong class="calibre3">Encoder function</strong>: <em class="calibre29">h = f (x)</em></li>
+<li class="calibre21"><strong class="calibre3">Decoder that produces a reconstruction</strong>: <em class="calibre29">r = g(h)</em></li>
+</ul>
+<p class="calibre4">The following figure shows a basic autoencoder with input <em class="calibre17">n</em> and a hidden layer with neurons <em class="calibre17">m</em>:</p>
+<div class="mce-root"><img src="Images/af478e87-a284-4b89-95bd-027cbdca7a02.png" width="585" height="405" class="calibre164"/></div>
+<div class="mce-root3">Basic representation of an autoencoder</div>
+<p class="calibre4">Autoencoders are designed to be unable to learn to copy perfectly. They are restricted in ways that allow them to copy only approximately, and to copy only input that resembles the training data. As the model is forced to prioritize which aspects of the input should be copied, it often learns useful properties of the data.</p>
+<p class="calibre4">The following topics will be covered in this chapter:</p>
+<ul class="calibre20">
+<li class="calibre21">Autoencoder algorithms</li>
+<li class="calibre21">Under-complete autoencoders</li>
+<li class="calibre21">Basic autoencoders</li>
+<li class="calibre21">Additive Gaussian Noise autoencoders</li>
+<li class="calibre21">Sparse autoencoders</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Autoencoder algorithms</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In the following notation, <kbd class="calibre18">x</kbd> is the input, <kbd class="calibre18">y</kbd> is the encoded data, <kbd class="calibre18">z</kbd> is the decoded data, <kbd class="calibre18">σ</kbd> is a nonlinear activation function (sigmoid or hyperbolic tangent, usually), and <kbd class="calibre18">f(x;θ)</kbd> means a function of <kbd class="calibre18">x</kbd> parameterized by <kbd class="calibre18">θ</kbd>.</p>
+<p class="calibre4">The model can be summarized in the following way:</p>
+<p class="calibre4">The input data is mapped to the hidden layer (encoding). The mapping is usually an affine (<span class="calibre14">allowing for or preserving parallel relationships.) </span>transformation followed by a non-linearity:</p>
+<pre class="calibre26">y = f(x;θ) = σ(Wx+b)y = f(x;θ) =σ(Wx+b)</pre>
+<p class="calibre4">The hidden layer is mapped to the output layer, which is also called <strong class="calibre7">decoding</strong>. The mapping is an affine transformation (affine transformation is a linear mapping method that preserves points, straight lines, and planes) optionally followed by a non linearity. The following equation explains this:</p>
+<pre class="calibre26">z = g(y;θ′) = g(f(x;θ);θ′) = σ(W′y+b′)</pre>
+<p class="calibre4">In order to reduce the size of the model, tied weights can be used, which means that the decoder weights matrix is constrained and can be the transpose of the encoder weights matrix, <em class="calibre17">θ'=θ<sup class="calibre120">T</sup></em>.</p>
+<p class="calibre4">The hidden layer can have a lower or higher dimensionality than that of the input/output layers.</p>
+<p class="calibre4">In the case of lower dimensionality, the decoder reconstructs the original input from a lower-dimensional representation of it (also called <strong class="calibre7">under-complete representation</strong>). For the overall algorithm to work, the encoder should learn to provide a low-dimensional representation that captures the essence of the data (that is, the main factors of variations in the distribution). It is forced to find a good way to summarize the data.</p>
+<div class="packt_infobox">Reference: <a href="http://blackecho.github.io/blog/machine-learning/2016/02/29/denoising-autoencoder-tensorflow.html" target="_blank" class="pcalibre pcalibre3 pcalibre2 pcalibre1 calibre31">http://blackecho.github.io/blog/machine-learning/2016/02/29/denoising-autoencoder-tensorflow.html</a>.</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Under-complete autoencoders</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">One of the ways to obtain useful features from the autoencoder is done by constraining <em class="calibre17">h</em> to have a smaller dimension than input <kbd class="calibre18">x</kbd>. An autoencoder with a code dimension less than the input dimension is called under-complete.</p>
+<p class="calibre4">Learning a representation that is under-complete forces the autoencoder to capture the most salient features of the training data.</p>
+<p class="calibre4">The learning process is described as minimizing a loss function, <kbd class="calibre18">L(x, g(f(x)))</kbd>,<br class="calibre25"/>
+where <kbd class="calibre18">L</kbd> is a loss function penalizing <kbd class="calibre18">g(f (x))</kbd> for being dissimilar from <kbd class="calibre18">x</kbd>, such as the mean squared error.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Dataset</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">We are planning to use the MNIST dataset in the <kbd class="calibre18">idx3</kbd> format as input to train our autoencoders. We will be testing the autoencoder on the first 100 images. Let's first plot the original images:</p>
+<pre class="calibre26"><br class="calibre2"/><span class="calibre5">from </span>tensorflow.examples.tutorials.mnist <span class="calibre5">import </span>input_data<br class="calibre2"/><span class="calibre5">import </span>matplotlib.pyplot <span class="calibre5">as </span>plt<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/>mnist = input_data.read_data_sets(<span class="calibre5">'MNIST_data'</span>, <span class="calibre5">one_hot </span>= <span class="calibre5">True</span>)<br class="calibre2"/><br class="calibre2"/><span class="calibre5">class </span>OriginalImages:<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>):<br class="calibre2"/>        <span class="calibre5">pass<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    def </span>main(<span class="calibre5">self</span>):<br class="calibre2"/>        X_train, X_test = <span class="calibre5">self</span>.standard_scale(mnist.train.images, mnist.test.images)<br class="calibre2"/><br class="calibre2"/>        original_imgs = X_test[:<span class="calibre5">100</span>]<br class="calibre2"/>        plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(<span class="calibre5">10</span>, <span class="calibre5">10</span>))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, <span class="calibre5">100</span>):<br class="calibre2"/>            im = original_imgs[i].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>            ax = plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i + <span class="calibre5">1</span>)<br class="calibre2"/>            <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/><br class="calibre2"/>            plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(<span class="calibre5">0.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>        plt.suptitle(<span class="calibre5">' Original Images'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>        plt.savefig(<span class="calibre5">'figures/original_images.png'</span>)<br class="calibre2"/>        plt.show()<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/><span class="calibre5">def </span>main():<br class="calibre2"/>    auto = OriginalImages()<br class="calibre2"/>    auto.main()<br class="calibre2"/><br class="calibre2"/><span class="calibre5">if </span>__name__ == <span class="calibre5">'__main__'</span>:<br class="calibre2"/>    main()</pre>
+<p class="calibre4">The output of the preceding is the following figure:</p>
+<div class="mce-root"><img src="Images/3ea4bce8-c710-41bb-9eed-3ba8deac2dde.png" class="calibre165"/></div>
+<div class="mce-root3">Plot of original MNIST images</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoders</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's look at a basic example of an autoencoder that also happens to be a basic autoencoder. First, we will create an <kbd class="calibre18">AutoEncoder</kbd> <span class="calibre14">class</span> and initialize it with the following parameters passed to <kbd class="calibre18">__init__()</kbd>:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">num_input</kbd>: Number of input samples</li>
+<li class="calibre21"><kbd class="calibre18">num_hidden</kbd>: Number of neurons in the hidden layer</li>
+<li class="calibre21"><kbd class="calibre18">transfer_function=tf.nn.softplus</kbd>: Transfer function</li>
+<li class="calibre21"><kbd class="calibre18">optimizer = tf.train.AdamOptimizer()</kbd>: Optimizer</li>
+</ul>
+<div class="packt_infobox">You can either pass a custom <kbd class="calibre166">transfer_function</kbd> and <kbd class="calibre166">optimizer</kbd> or use the default one specified. In our example, we are using softplus as the default <kbd class="calibre166">transfer_function</kbd> (also called <strong class="calibre3">activation function</strong>): <kbd class="calibre166"><span class="calibre5"><span class="calibre5"><span class="calibre5">f(x)=ln(1+e<sup class="calibre167">x</sup>)</span></span></span></kbd>.</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Autoencoder initialization</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">First, we initialize the class variables and weights:</p>
+<pre class="calibre26"> self.num_input = num_input<br class="calibre2"/> self.num_hidden = num_hidden<br class="calibre2"/> self.transfer = transfer_function<br class="calibre2"/> network_weights = self._initialize_weights()<br class="calibre2"/> self.weights = network_weights</pre>
+<p class="calibre4">Here, the <kbd class="calibre18">_initialize_weigths()</kbd> function is a local function that initializes values for the <kbd class="calibre18">weights</kbd> dictionary:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">w1</kbd> is a 2D tensor with shape <kbd class="calibre18">num_input X num_hidden</kbd></li>
+<li class="calibre21"><kbd class="calibre18">b1</kbd> is a 1D tensor with shape <kbd class="calibre18">num_hidden</kbd></li>
+<li class="calibre21"><kbd class="calibre18">w2</kbd> is a 2D tensor with shape <kbd class="calibre18">num_hidden X num_input</kbd></li>
+<li class="calibre21"><kbd class="calibre18">b2</kbd> is a 2D tensor with shape <kbd class="calibre18">num_input</kbd></li>
+</ul>
+<p class="calibre4">The following code shows how weights are initialized as a dictionary of TensorFlow variables for two hidden layers:</p>
+<pre class="calibre26"><span class="calibre5">def </span>_initialize_weights(<span class="calibre5">self</span>):<br class="calibre2"/>    <span class="calibre5">weights</span> = <span class="calibre5">dict</span>()<br class="calibre2"/>    <span class="calibre5">weights</span>[<span class="calibre5">'w1'</span>] = tf.get_variable(<span class="calibre5">"w1"</span>, <span class="calibre5">shape</span>=[<span class="calibre5">self</span>.num_input, <span class="calibre5">self</span>.num_hidden],<br class="calibre2"/>                      <span class="calibre5">initializer</span>=tf.contrib.layers.xavier_initializer())<br class="calibre2"/>    <span class="calibre5">weights</span>[<span class="calibre5">'b1'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden], <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>    <span class="calibre5">weights</span>[<span class="calibre5">'w2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden, <span class="calibre5">self</span>.num_input],<br class="calibre2"/>      <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>    <span class="calibre5">weights</span>[<span class="calibre5">'b2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_input], <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>    <span class="calibre5">return </span><span class="calibre5">weights</span></pre>
+<p class="calibre4">Next, we define <kbd class="calibre18">x_var</kbd>, <kbd class="calibre18">hidden_layer</kbd>, and <kbd class="calibre18">reconstruction layer</kbd>:</p>
+<pre class="calibre26"> self.x_var = tf.placeholder(tf.float32, [None, self.num_input])<br class="calibre2"/> self.hidden_layer = self.transfer(tf.add(tf.matmul(self.x_var, <br class="calibre2"/>   self.weights[<span class="calibre5">'w1'</span>]), self.weights[<span class="calibre5">'b1'</span>]))<br class="calibre2"/> self.reconstruction = tf.add(tf.matmul(self.hidden_layer, <br class="calibre2"/>   self.weights[<span class="calibre5">'w2'</span>]), self.weights[<span class="calibre5">'b2'</span>])</pre>
+<pre class="calibre26">This is followed by the cost function and the Optimizer<br class="calibre2"/><span class="calibre5"># cost function<br class="calibre2"/></span>self.cost = <span class="calibre5">0.5 </span>* tf.reduce_sum(<br class="calibre2"/>   tf.pow(tf.subtract(self.reconstruction, self.x_var), <span class="calibre5">2.0</span>))<br class="calibre2"/>self.optimizer = optimizer.minimize(self.cost)</pre>
+<div class="mce-root8"><img src="Images/65f7a30e-20da-4026-b85e-8536e42987f3.jpg" width="500" height="158" class="calibre168"/></div>
+<div class="mce-root3"><span class="calibre5">Cost function</span></div>
+<p class="calibre4">Instantiate the global variables initializer and pass it to TensorFlow session.</p>
+<pre class="calibre26">initializer = tf.global_variables_initializer()<br class="calibre2"/>self.session = tf.Session()<br class="calibre2"/>self.session.run(initializer)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">AutoEncoder class</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Th following code shows <kbd class="calibre18">AutoEncoder</kbd> class. This class with be instantiated for samples in next few sections to create autoencoders:</p>
+<pre class="calibre26"><span class="calibre5">import </span>tensorflow <span class="calibre5">as </span>tf<br class="calibre2"/><br class="calibre2"/><span class="calibre5">class </span>AutoEncoder:<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>__init__(self, num_input, num_hidden, <br class="calibre2"/>      transfer_function=tf.nn.softplus, <br class="calibre2"/>      optimizer = tf.train.AdamOptimizer()):<br class="calibre2"/>        self.num_input = num_input<br class="calibre2"/>        self.num_hidden = num_hidden<br class="calibre2"/>        self.transfer = transfer_function<br class="calibre2"/><br class="calibre2"/>        network_weights = self._initialize_weights()<br class="calibre2"/>        self.weights = network_weights<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># model for reconstruction of the image<br class="calibre2"/></span><span class="calibre5">        </span>self.x_var = tf.placeholder(tf.float32, [None, self.num_input])<br class="calibre2"/>        self.hidden_layer = self.transfer(tf.add(tf.matmul(self.x_var, <br class="calibre2"/>          self.weights[<span class="calibre5">'w1'</span>]), self.weights[<span class="calibre5">'b1'</span>]))<br class="calibre2"/>        self.reconstruction = tf.add(tf.matmul(self.hidden_layer, <br class="calibre2"/>          self.weights[<span class="calibre5">'w2'</span>]), self.weights[<span class="calibre5">'b2'</span>])<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># cost function<br class="calibre2"/></span><span class="calibre5">        </span>self.cost = <br class="calibre2"/><span class="calibre5">          0.5 </span>* tf.reduce_sum(tf.pow(tf.subtract(self.reconstruction,<br class="calibre2"/>          self.x_var), <span class="calibre5">2.0</span>))<br class="calibre2"/>        self.optimizer = optimizer.minimize(self.cost)<br class="calibre2"/><br class="calibre2"/>        initializer = tf.global_variables_initializer()<br class="calibre2"/>        self.session = tf.Session()<br class="calibre2"/>        self.session.run(initializer)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>_initialize_weights(self):<br class="calibre2"/>        weights = dict()<br class="calibre2"/>        weights[<span class="calibre5">'w1'</span>] = tf.get_variable(<span class="calibre5">"w1"</span>, <br class="calibre2"/>                          shape=[self.num_input, <br class="calibre2"/>                          self.num_hidden],<br class="calibre2"/>                          initializer=<br class="calibre2"/>                            tf.contrib.layers.xavier_initializer())<br class="calibre2"/>        weights[<span class="calibre5">'b1'</span>] = tf.Variable(tf.zeros([self.num_hidden], <br class="calibre2"/>                                    dtype=tf.float32))<br class="calibre2"/>        weights[<span class="calibre5">'w2'</span>] = tf.Variable(<br class="calibre2"/>          tf.zeros([self.num_hidden, self.num_input],<br class="calibre2"/>          dtype=tf.float32))<br class="calibre2"/>        weights[<span class="calibre5">'b2'</span>] = tf.Variable(tf.zeros(<br class="calibre2"/>                          [self.num_input], dtype=tf.float32))<br class="calibre2"/>        <span class="calibre5">return </span>weights<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>partial_fit(self, X):<br class="calibre2"/>        cost, opt = self.session.run((self.cost, self.optimizer), <br class="calibre2"/>          feed_dict={self.x_var: X})<br class="calibre2"/>        <span class="calibre5">return </span>cost<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>calculate_total_cost(self, X):<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.cost, feed_dict = {self.x_var: X})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>transform(self, X):<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.hidden_layer, <br class="calibre2"/>          feed_dict={self.x_var: X})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>generate(self, hidden = None):<br class="calibre2"/>        <span class="calibre5">if </span>hidden <span class="calibre5">is </span>None:<br class="calibre2"/>            hidden = self.session.run(<br class="calibre2"/>              tf.random_normal([<span class="calibre5">1</span>, self.num_hidden]))<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.reconstruction, <br class="calibre2"/>               feed_dict={self.hidden_layer: hidden})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>reconstruct(self, X):<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.reconstruction, <br class="calibre2"/>                                feed_dict={self.x_var: X})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>get_weights(self):<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.weights[<span class="calibre5">'w1'</span>])<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>get_biases(self):<br class="calibre2"/>        <span class="calibre5">return </span>self.session.run(self.weights[<span class="calibre5">'b1'</span>])</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoders with MNIST data</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's use the autoencoder with MNIST data: <kbd class="calibre18">mnist = input_data.read_data_sets(<span class="calibre5">'MNIST_data'</span>, <span class="calibre5">one_hot</span> = <span class="calibre5">True</span>)</kbd>.</p>
+<p class="calibre4">Use StandardScalar from Scikit Learn's <kbd class="calibre18"><span class="calibre5">sklearn.</span></kbd><span class="calibre14"><kbd class="calibre18">preprocessing</kbd> module</span> to extract <kbd class="calibre18">testmnist.test.images</kbd> and training images <kbd class="calibre18">mnist.train.images</kbd>:</p>
+<pre class="calibre26">X_train, X_test = self.standard_scale(mnist.train.images, mnist.test.images).</pre>
+<div class="packt_infobox">The preprocessing module provides a utility class, <kbd class="calibre166">StandardScaler</kbd>, which implements the Transformer API. This computes and transforms the mean and standard deviation of a training set. It reapplies the same transformation to the testing set. By default, Scalar centers the mean and makes the variance one.<br class="calibre2"/>
+It is possible to disable either centering or scaling by passing <kbd class="calibre166">with_mean=False</kbd> or <kbd class="calibre166">with_std=False</kbd> to the constructor of StandardScaler.</div>
+<p class="calibre4">Next, we define an instance of the AutoEncoder class listed earlier:</p>
+<pre class="calibre26"> n_samples = <span class="calibre5">int</span>(mnist.train.num_examples)<br class="calibre2"/> training_epochs = <span class="calibre5">5<br class="calibre2"/></span><span class="calibre5"> </span>batch_size = <span class="calibre5">128<br class="calibre2"/></span><span class="calibre5"> </span>display_step = <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5"> </span>autoencoder = AutoEncoder(<span class="calibre5">n_input </span>= <span class="calibre5">784</span>,<br class="calibre2"/>   <span class="calibre5">n_hidden </span>= <span class="calibre5">200</span>,<br class="calibre2"/>   <span class="calibre5">transfer_function </span>= tf.nn.softplus,<br class="calibre2"/>   <span class="calibre5">optimizer </span>= tf.train.AdamOptimizer(<span class="calibre5">learning_rate </span>= <span class="calibre5">0.001</span>))</pre>
+<p class="calibre4">Notice that the autoencoder includes the following:</p>
+<ul class="calibre20">
+<li class="calibre21">Number of input neurons is <kbd class="calibre18">784</kbd></li>
+<li class="calibre21">Number of neurons in the hidden layer is <kbd class="calibre18">200</kbd></li>
+<li class="calibre21">Activation function is <kbd class="calibre18">tf.nn.softplus</kbd></li>
+<li class="calibre21">Optimizer is <kbd class="calibre18">tf.train.AdamOptimizer</kbd></li>
+</ul>
+<p class="calibre4">Next, we iterate over the training data and display the cost function:</p>
+<pre class="calibre26"><span class="calibre5">for </span>epoch <span class="calibre5">in </span><span class="calibre5">range</span>(training_epochs):<br class="calibre2"/>    avg_cost = <span class="calibre5">0.<br class="calibre2"/></span><span class="calibre5">    </span>total_batch = <span class="calibre5">int</span>(n_samples / batch_size)<br class="calibre2"/>    <span class="calibre5"># Loop over all batches<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(total_batch):<br class="calibre2"/>        batch_xs = <span class="calibre5">self</span>.get_random_block_from_data(X_train, batch_size)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># Fit training using batch data<br class="calibre2"/></span><span class="calibre5">        </span>cost = autoencoder.partial_fit(batch_xs)<br class="calibre2"/>        <span class="calibre5"># Compute average loss<br class="calibre2"/></span><span class="calibre5">        </span>avg_cost += cost / n_samples * batch_size<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5"># Display logs per epoch step<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">if </span>epoch % display_step == <span class="calibre5">0</span>:<br class="calibre2"/>        <span class="calibre5">print</span>(<span class="calibre5">"Epoch:"</span>, <span class="calibre5">'%04d' </span>% (epoch + <span class="calibre5">1</span>), <span class="calibre5">"cost="</span>, <span class="calibre5">"{:.9f}"</span>.format(avg_cost))</pre>
+<p class="calibre4">Print the total cost:</p>
+<pre class="calibre26"><span class="calibre5">print</span>(<span class="calibre5">"Total cost: " </span>+ <span class="calibre5">str</span>(autoencoder.calc_total_cost(X_test)))</pre>
+<p class="calibre4">The output of the epochs is listed as follows; as expected, the cost converges with each iteration:</p>
+<pre class="calibre26">('Epoch:', '0001', 'cost=', '20432.278386364')<br class="calibre2"/>('Epoch:', '0002', 'cost=', '13542.435997727')<br class="calibre2"/>('Epoch:', '0003', 'cost=', '10630.662196023')<br class="calibre2"/>('Epoch:', '0004', 'cost=', '10717.897946591')<br class="calibre2"/>('Epoch:', '0005', 'cost=', '9354.191921023')<br class="calibre2"/>Total cost: 824850.0</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoder plot of weights</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Once the training is done show the plot of weights using the Matplotlib library using code listing:</p>
+<pre class="calibre26"><span class="calibre5">print</span>(<span class="calibre5">"Total cost: " </span>+ <span class="calibre5">str</span>(autoencoder.calc_total_cost(X_test)))<br class="calibre2"/>wts = autoencoder.getWeights()<br class="calibre2"/>dim = math.ceil(math.sqrt(autoencoder.n_hidden))<br class="calibre2"/>plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(dim, dim))<br class="calibre2"/><br class="calibre2"/><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, autoencoder.n_hidden):<br class="calibre2"/>    im = wts.flatten()[i::autoencoder.n_hidden].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>    ax = plt.subplot(dim, dim, i + <span class="calibre5">1</span>)<br class="calibre2"/>    <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>        label.set_fontname(<span class="calibre5">'Arial'</span>)<br class="calibre2"/>        label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/>    <span class="calibre5"># plt.title('Feature Weights ' + str(i))<br class="calibre2"/></span><span class="calibre5">    </span>plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(-<span class="calibre5">1.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>plt.suptitle(<span class="calibre5">'Basic AutoEncoder Weights'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/><span class="calibre5">#plt.title("Test Title", y=1.05)<br class="calibre2"/></span>plt.savefig(<span class="calibre5">'figures/basic_autoencoder_weights.png'</span>)<br class="calibre2"/>plt.show()</pre>
+<div class="mce-root"><br class="calibre2"/>
+<img src="Images/8f561398-b0db-4d6f-b0eb-622b94e61396.png" width="1500" height="1500" class="calibre169"/></div>
+<div class="mce-root3"><span class="calibre5">Basic autoencoder weights plot</span></div>
+<p class="calibre4">In the next section, we will look at how images are recreated using the weights shown in the preceding image.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoder recreated images plot</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Having recreated the images, let's plot them to get a feel of how they look. First, we will reconstruct the images using the <kbd class="calibre18">autoencoder</kbd> instance created earlier:</p>
+<pre class="calibre26">predicted_imgs = autoencoder.reconstruct(X_test[:<span class="calibre5">100</span>])<br class="calibre2"/><br class="calibre2"/>plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(<span class="calibre5">10</span>, <span class="calibre5">10</span>))<br class="calibre2"/><br class="calibre2"/><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, <span class="calibre5">100</span>):<br class="calibre2"/>    im = predicted_imgs[i].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>    ax = plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i + <span class="calibre5">1</span>)<br class="calibre2"/>    <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                label.set_fontname(<span class="calibre5">'Arial'</span>)<br class="calibre2"/>                label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/><br class="calibre2"/>    plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(<span class="calibre5">0.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>plt.suptitle(<span class="calibre5">'Basic AutoEncoder Images'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>plt.savefig(<span class="calibre5">'figures/basic_autoencoder_images.png'</span>)<br class="calibre2"/>plt.show()</pre>
+<p class="calibre4">Let's look at the created images from the neural network:</p>
+<div class="mce-root"><img src="Images/fcaccfd9-080c-4775-a79e-3f0756e2c92b.png" width="1000" height="1000" class="calibre170"/></div>
+<div class="mce-root3"><span class="calibre5">Basic autoencoder plot of output images</span></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoder full code listing</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The full code listing can be found here or can also be downloaded from GitHub--<a href="https://github.com/rajdeepd/neuralnetwork-programming/blob/ed1/ch07/basic_autoencoder_example.py" class="pcalibre pcalibre3 pcalibre1 calibre8 pcalibre2">https://github.com/rajdeepd/neuralnetwork-programming/blob/ed1/ch07/basic_autoencoder_example.py</a>:</p>
+<pre class="calibre26"><span class="calibre5">import </span>numpy <span class="calibre5">as </span>np<br class="calibre2"/><br class="calibre2"/><span class="calibre5">import </span>sklearn.preprocessing <span class="calibre5">as </span>prep<br class="calibre2"/><span class="calibre5">import </span>tensorflow <span class="calibre5">as </span>tf<br class="calibre2"/><span class="calibre5">from </span>tensorflow.examples.tutorials.mnist <span class="calibre5">import </span>input_data<br class="calibre2"/><span class="calibre5">from </span>autencoder_models.auto_encoder <span class="calibre5">import </span>AutoEncoder<br class="calibre2"/><span class="calibre5">import </span>math<br class="calibre2"/><span class="calibre5">import </span>matplotlib.pyplot <span class="calibre5">as </span>plt<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/>mnist = input_data.read_data_sets(<span class="calibre5">'MNIST_data'</span>, <span class="calibre5">one_hot </span>= <span class="calibre5">True</span>)<br class="calibre2"/><br class="calibre2"/><span class="calibre5">class </span>BasicAutoEncoder:<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>):<br class="calibre2"/>        <span class="calibre5">pass<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    def </span>standard_scale(<span class="calibre5">self</span>,X_train, X_test):<br class="calibre2"/>        preprocessor = prep.StandardScaler().fit(X_train)<br class="calibre2"/>        X_train = preprocessor.transform(X_train)<br class="calibre2"/>        X_test = preprocessor.transform(X_test)<br class="calibre2"/>        <span class="calibre5">return </span>X_train, X_test<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>get_random_block_from_data(<span class="calibre5">self</span>,data, batch_size):<br class="calibre2"/>        start_index = np.random.randint(<span class="calibre5">0</span>, <span class="calibre5">len</span>(data) - batch_size)<br class="calibre2"/>        <span class="calibre5">return </span>data[start_index:(start_index + batch_size)]<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>main(<span class="calibre5">self</span>):<br class="calibre2"/>        X_train, X_test = <span class="calibre5">self</span>.standard_scale(mnist.train.images, mnist.test.images)<br class="calibre2"/><br class="calibre2"/>        n_samples = <span class="calibre5">int</span>(mnist.train.num_examples)<br class="calibre2"/>        training_epochs = <span class="calibre5">5<br class="calibre2"/></span><span class="calibre5">        </span>batch_size = <span class="calibre5">128<br class="calibre2"/></span><span class="calibre5">        </span>display_step = <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span>autoencoder = AutoEncoder(<span class="calibre5">n_input </span>= <span class="calibre5">784</span>,<br class="calibre2"/>                                  <span class="calibre5">n_hidden </span>= <span class="calibre5">200</span>,<br class="calibre2"/>                                  <span class="calibre5">transfer_function </span>= tf.nn.softplus,<br class="calibre2"/>                                  <span class="calibre5">optimizer </span>= tf.train.AdamOptimizer(<br class="calibre2"/><span class="calibre5">                                    learning_rate </span>= <span class="calibre5">0.001</span>))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>epoch <span class="calibre5">in </span><span class="calibre5">range</span>(training_epochs):<br class="calibre2"/>            avg_cost = <span class="calibre5">0.<br class="calibre2"/></span><span class="calibre5">            </span>total_batch = <span class="calibre5">int</span>(n_samples / batch_size)<br class="calibre2"/>            <span class="calibre5"># Loop over all batches<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(total_batch):<br class="calibre2"/>                batch_xs = <span class="calibre5">self</span>.get_random_block_from_data(X_train, batch_size)<br class="calibre2"/><br class="calibre2"/>                <span class="calibre5"># Fit training using batch data<br class="calibre2"/></span><span class="calibre5">                </span>cost = autoencoder.partial_fit(batch_xs)<br class="calibre2"/>                <span class="calibre5"># Compute average loss<br class="calibre2"/></span><span class="calibre5">                </span>avg_cost += cost / n_samples * batch_size<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5"># Display logs per epoch step<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">if </span>epoch % display_step == <span class="calibre5">0</span>:<br class="calibre2"/>                <span class="calibre5">print</span>(<span class="calibre5">"Epoch:"</span>, <span class="calibre5">'%04d' </span>% (epoch + <span class="calibre5">1</span>), <span class="calibre5">"cost="</span>, <span class="calibre5">"{:.9f}"</span>.format(avg_cost))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">print</span>(<span class="calibre5">"Total cost: " </span>+ <span class="calibre5">str</span>(autoencoder.calc_total_cost(X_test)))<br class="calibre2"/><br class="calibre2"/>        wts = autoencoder.getWeights()<br class="calibre2"/>        dim = math.ceil(math.sqrt(autoencoder.n_hidden))<br class="calibre2"/>        plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(dim, dim))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, autoencoder.n_hidden):<br class="calibre2"/>            im = wts.flatten()[i::autoencoder.n_hidden].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>            ax = plt.subplot(dim, dim, i + <span class="calibre5">1</span>)<br class="calibre2"/>            <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                label.set_fontname(<span class="calibre5">'Arial'</span>)<br class="calibre2"/>                label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/>            <span class="calibre5"># plt.title('Feature Weights ' + str(i))<br class="calibre2"/></span><span class="calibre5">            </span>plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(-<span class="calibre5">1.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>        plt.suptitle(<span class="calibre5">'Basic AutoEncoder Weights'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>        <span class="calibre5">#plt.title("Test Title", y=1.05)<br class="calibre2"/></span><span class="calibre5">        </span>plt.savefig(<span class="calibre5">'figures/basic_autoencoder_weights.png'</span>)<br class="calibre2"/>        plt.show()<br class="calibre2"/><br class="calibre2"/>        predicted_imgs = autoencoder.reconstruct(X_test[:<span class="calibre5">100</span>])<br class="calibre2"/><br class="calibre2"/>        plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(<span class="calibre5">10</span>, <span class="calibre5">10</span>))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, <span class="calibre5">100</span>):<br class="calibre2"/>            im = predicted_imgs[i].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>            ax = plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i + <span class="calibre5">1</span>)<br class="calibre2"/>            <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                        label.set_fontname(<span class="calibre5">'Arial'</span>)<br class="calibre2"/>                        label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/><br class="calibre2"/>            plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(<span class="calibre5">0.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>        plt.suptitle(<span class="calibre5">'Basic AutoEncoder Images'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>        plt.savefig(<span class="calibre5">'figures/basic_autoencoder_images.png'</span>)<br class="calibre2"/>        plt.show()<br class="calibre2"/><br class="calibre2"/><span class="calibre5">def </span>main():<br class="calibre2"/>    auto = BasicAutoEncoder()<br class="calibre2"/>    auto.main()<br class="calibre2"/><br class="calibre2"/><span class="calibre5">if </span>__name__ == <span class="calibre5">'__main__'</span>:<br class="calibre2"/>    main()</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Basic autoencoder summary</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The autoencoder created a basic approximation of MNSIT images using 200 neuron hidden layers. The following diagram shows nine images and how they were transformed into approximations using a basic autoencoder:</p>
+<div class="mce-root"><img src="Images/f98d20e7-7c2e-4a37-8e18-5fc0bc23ab87.png" width="1257" height="476" class="calibre171"/></div>
+<div class="mce-root3">Basic autoencoder input and output representation</div>
+<p class="calibre4">In the next section, we will look at a more advanced autoencoder, an <strong class="calibre7">Additive Gaussian Noise AutoEncoder</strong>.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Additive Gaussian Noise autoencoder</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">What are Denoising autoencoders? They are very similar to the basic model we saw in previous sections, the difference is that, the input is corrupted before being passed to the network. By matching the original version (not the corrupted one) with the reconstruction at training time, this autoencoder gets trained to reconstruct the original input image from the corrupted image.  The ability to reconstruct original image from corrupted image makes autoencoder very smart.</p>
+<p class="calibre4">An additive noise autoencoder uses the following equation to add corruption to incoming data:</p>
+<p class="calibre53"><em class="calibre17">x<sub class="calibre36">corr</sub> = x + scale*random_normal(n)</em></p>
+<p class="calibre4">The following is the detail describe about the preceding equation:</p>
+<ul class="calibre20">
+<li class="calibre21"><em class="calibre29">x</em> is the original image</li>
+<li class="calibre21"><em class="calibre29">scale</em> is the multiplier for a random normal number generated from <em class="calibre29">n</em></li>
+<li class="calibre21"><em class="calibre29">n</em> is the number of training samples</li>
+<li class="calibre21"><em class="calibre29">x<sub class="calibre36">corr</sub></em> is the corrupted output</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Autoencoder class</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">We initialize the autoencoder defined in <kbd class="calibre18">class AdditiveGaussianNoiseAutoEncoder</kbd> by passing following parameters:</p>
+<ul class="calibre20">
+<li class="calibre21"><kbd class="calibre18">num_input</kbd>: Number of input samples</li>
+<li class="calibre21"><kbd class="calibre18">num_hidden</kbd>: Number of neurons in the hidden layer</li>
+<li class="calibre21"><kbd class="calibre18">transfer_function=tf.nn.sigmoid</kbd>: Transfer function</li>
+<li class="calibre21"><kbd class="calibre18">optimizer = tf.train.AdamOptimizer()</kbd>: Optimizer</li>
+<li class="calibre21"><kbd class="calibre18">scale=0.1</kbd>: Scale for corruption of the image</li>
+</ul>
+<pre class="calibre26"><span class="calibre5">def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>, num_input, num_hidden, <br class="calibre2"/>                 transfer_function=tf.nn.sigmoid, <br class="calibre2"/>                 optimizer=tf.train.AdamOptimizer(),<br class="calibre2"/>                 scale=<span class="calibre5">0.1</span>):</pre>
+<p class="calibre4">Assign the passed parameters to the instance variables:</p>
+<pre class="calibre26">        <span class="calibre5">self</span>.num_input = num_input<br class="calibre2"/>        <span class="calibre5">self</span>.num_hidden = num_hidden<br class="calibre2"/>        <span class="calibre5">self</span>.transfer = transfer_function<br class="calibre2"/>        <span class="calibre5">self</span>.scale = tf.placeholder(tf.float32)<br class="calibre2"/>        <span class="calibre5">self</span>.training_scale = scale<br class="calibre2"/>        n_weights = <span class="calibre5">self</span>._initialize_weights()<br class="calibre2"/>        <span class="calibre5">self</span>.weights = n_weights</pre>
+<p class="calibre4">Initialize the hidden layer <kbd class="calibre18">hidden_layer</kbd> and the reconstruction layer <kbd class="calibre18">reconstruction</kbd>:</p>
+<pre class="calibre26"><span class="calibre5">self</span>.x = tf.placeholder(tf.float32, [<span class="calibre5">None</span>, <span class="calibre5">self</span>.num_input])<br class="calibre2"/><span class="calibre5">self</span>.hidden_layer = <span class="calibre5">self</span>.transfer(<br class="calibre2"/>            tf.add(tf.matmul(<br class="calibre2"/><span class="calibre5">                      self</span>.x + scale * tf.random_normal((n_input,)),<br class="calibre2"/>                      <span class="calibre5">self</span>.weights[<span class="calibre5">'w1'</span>]),<br class="calibre2"/>                      <span class="calibre5">self</span>.weights[<span class="calibre5">'b1'</span>]))<br class="calibre2"/><span class="calibre5">self</span>.reconstruction = tf.add(<br class="calibre2"/>                        tf.matmul(<span class="calibre5">self</span>.hidden_layer, <span class="calibre5">self</span>.weights[<span class="calibre5">'w2'</span>]),    <br class="calibre2"/><span class="calibre5">                        self</span>.weights[<span class="calibre5">'b2'</span>])</pre>
+<p class="calibre4">Define the cost function and the optimizer:</p>
+<pre class="calibre26"><span class="calibre5">self</span>.<span class="calibre5">cost</span> = <span class="calibre5">0.5 </span>* tf.reduce_sum(tf.pow(tf.subtract(<br class="calibre2"/><span class="calibre5">                           self</span>.reconstruction, <span class="calibre5">self</span>.x), <span class="calibre5">2.0</span>))<br class="calibre2"/><span class="calibre5">self</span>.optimizer = optimizer.minimize(<span class="calibre5">self</span>.<span class="calibre5">cost</span>)</pre>
+<p class="calibre4">The<span class="calibre14"> cost function remains the same as the basic autoencoder</span></p>
+<div class="mce-root1"><img src="Images/594dd7ad-8b38-4948-9df7-edea73778020.jpg" width="500" height="158" class="calibre172"/></div>
+<div class="mce-root3">Cost function of additive Gaussian autoencoder</div>
+<p class="calibre4">Finally, we initialize global variables, create a TensorFlow session, and run it to execute the <kbd class="calibre18">init</kbd> graph:</p>
+<div class="title-page-name">
+<pre class="calibre26">init = tf.global_variables_initializer()<br class="calibre2"/><span class="calibre5">self</span>.session = tf.Session()<br class="calibre2"/><span class="calibre5">self</span>.session.run(init)<br class="calibre2"/><br class="calibre2"/></pre></div>
+<p class="calibre4">In the next section, we will look at how this autoencoder will be used to encode MNIST data.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Additive Gaussian Autoencoder with the MNIST dataset</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">First, we load the train and test datasets, <kbd class="calibre18">X_train</kbd> and <kbd class="calibre18">X_test</kbd>:</p>
+<pre class="calibre26">mnist = input_data.read_data_sets(<span class="calibre5">'MNIST_data'</span>, <span class="calibre5">one_hot</span>=<span class="calibre5">True</span>)<br class="calibre2"/><br class="calibre2"/><span class="calibre5">def </span>get_random_block_from_data(data, batch_size):<br class="calibre2"/>    start_index = np.random.randint(<span class="calibre5">0</span>, <span class="calibre5">len</span>(data) - batch_size)<br class="calibre2"/>    <span class="calibre5">return </span>data[start_index:(start_index + batch_size)]<br class="calibre2"/><br class="calibre2"/>X_train = mnist.train.images<br class="calibre2"/>X_test = mnist.test.images<br class="calibre2"/><br class="calibre2"/><span class="calibre5"><br class="calibre2"/></span></pre>
+<p class="calibre4">Define the variables for the number of samples, <kbd class="calibre18">n_samples</kbd>, <kbd class="calibre18">training_epoch</kbd>, and <kbd class="calibre18">batch_size</kbd> for each iteration of the training and <kbd class="calibre18">display_step</kbd>:</p>
+<pre class="calibre26">n_samples = <span class="calibre5">int</span>(mnist.train.num_examples)<br class="calibre2"/>training_epochs = <span class="calibre5">2<br class="calibre2"/></span>batch_size = <span class="calibre5">128<br class="calibre2"/></span>display_step = <span class="calibre5">1</span></pre>
+<p class="calibre4">Instantiate the autoencoder and the optimizer. The autoencoder has 200 hidden units and uses sigmoid as the <kbd class="calibre18">transfer_function</kbd>:</p>
+<pre class="calibre26">autoencoder = AdditiveGaussianNoiseAutoEncoder(<span class="calibre5">n_input</span>=<span class="calibre5">784</span>,<br class="calibre2"/>                                               <span class="calibre5">n_hidden</span>=<span class="calibre5">200</span>,<br class="calibre2"/>                                               <span class="calibre5">transfer_function</span>=tf.nn.sigmoid,<br class="calibre2"/>                                               <span class="calibre5">optimizer</span>=tf.train.AdamOptimizer(<span class="calibre5">learning_rate</span>=<span class="calibre5">0.001</span>),<br class="calibre2"/>                                               <span class="calibre5">scale</span>=<span class="calibre5">0.01</span>)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Training the model</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Once the neural network layers have been defined we train the model by calling method</p>
+<p class="calibre4"><kbd class="calibre18">autoencoder.partial_fit(batch_xs)</kbd> for each batch of data:</p>
+<pre class="calibre26"><span class="calibre5">for </span>epoch <span class="calibre5">in </span><span class="calibre5">range</span>(training_epochs):<br class="calibre2"/>    avg_cost = <span class="calibre5">0.<br class="calibre2"/></span><span class="calibre5">    </span>total_batch = <span class="calibre5">int</span>(n_samples / batch_size)<br class="calibre2"/>    <span class="calibre5"># Loop over all batches<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(total_batch):<br class="calibre2"/>        batch_xs = get_random_block_from_data(X_train, batch_size)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># Fit training using batch data<br class="calibre2"/></span><span class="calibre5">        </span>cost = autoencoder.partial_fit(batch_xs)<br class="calibre2"/>        <span class="calibre5"># Compute average loss<br class="calibre2"/></span><span class="calibre5">        </span>avg_cost += cost / n_samples * batch_size<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5"># Display logs per epoch step<br class="calibre2"/></span><span class="calibre5">    </span><span class="calibre5">if </span>epoch % display_step == <span class="calibre5">0</span>:<br class="calibre2"/>        <span class="calibre5">print</span>(<span class="calibre5">"Epoch:"</span>, <span class="calibre5">'%04d' </span>% (epoch + <span class="calibre5">1</span>), <span class="calibre5">"cost="</span>, avg_cost)<br class="calibre2"/><br class="calibre2"/><span class="calibre5">print</span>(<span class="calibre5">"Total cost: " </span>+ <span class="calibre5">str</span>(autoencoder.calc_total_cost(X_test)))</pre>
+<p class="calibre4">The cost of each epoch is printed:</p>
+<pre class="calibre26">('Epoch:', '0001', 'cost=', 1759.873304261363)<br class="calibre2"/>('Epoch:', '0002', 'cost=', 686.85984829545475)<br class="calibre2"/>('Epoch:', '0003', 'cost=', 460.52834446022746)<br class="calibre2"/>('Epoch:', '0004', 'cost=', 355.10590241477308)<br class="calibre2"/>('Epoch:', '0005', 'cost=', 297.99104825994351)</pre>
+<p class="calibre4">The total cost of training is as follows:</p>
+<pre class="calibre26">Total cost: 21755.4</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Plotting the weights</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's plot the weights visually and plot them using Matplotlib:</p>
+<pre class="calibre26">wts = autoencoder.get_weights()<br class="calibre2"/>dim = math.ceil(math.sqrt(autoencoder.num_hidden))<br class="calibre2"/>plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(dim, dim))<br class="calibre2"/><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, autoencoder.num_hidden):<br class="calibre2"/>    im = wts.flatten()[i::autoencoder.num_hidden].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>    ax = plt.subplot(dim, dim, i + <span class="calibre5">1</span>)<br class="calibre2"/>    <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>        label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/>    <span class="calibre5">#plt.title('Feature Weights ' + str(i))<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">    </span>plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(-<span class="calibre5">1.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>plt.suptitle(<span class="calibre5">'Additive Gaussian Noise AutoEncoder Weights'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>plt.savefig(<span class="calibre5">'figures/additive_gaussian_weights.png'</span>)<br class="calibre2"/>plt.show()</pre>
+<div class="mce-root"><img src="Images/02034b23-6d96-47a1-bd02-38459aaecc86.png" width="1500" height="1500" class="calibre173"/></div>
+<div class="mce-root3">Weights of the neurons in hidden layers for the Additive Gaussian Auto Encoder</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Plotting the reconstructed images</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The last step is to print the reconstructed images to give us visual proof of how the encoder is able to reconstruct the images based on the weights:</p>
+<div class="title-page-name">
+<pre class="calibre26">predicted_imgs = autoencoder.reconstruct(X_test[:<span class="calibre5">100</span>])<br class="calibre2"/><br class="calibre2"/><span class="calibre5"># plot the reconstructed images<br class="calibre2"/></span>plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(<span class="calibre5">10</span>, <span class="calibre5">10</span>))<br class="calibre2"/>plt.title(<span class="calibre5">'Autoencoded Images'</span>)<br class="calibre2"/><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, <span class="calibre5">100</span>):<br class="calibre2"/>    im = predicted_imgs[i].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>    ax = plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i + <span class="calibre5">1</span>)<br class="calibre2"/>    <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>        label.set_fontname(<span class="calibre5">'Arial'</span>)<br class="calibre2"/>        label.set_fontsize(<span class="calibre5">8</span>)<br class="calibre2"/><br class="calibre2"/>    plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(<span class="calibre5">0.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>plt.suptitle(<span class="calibre5">'Additive Gaussian Noise AutoEncoder Images'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>plt.savefig(<span class="calibre5">'figures/additive_gaussian_images.png'</span>)<br class="calibre2"/>plt.show()</pre></div>
+<div class="mce-root"><img src="Images/29d01b60-b0b1-4d30-b2f5-cdd4801808d6.png" width="1000" height="1000" class="calibre174"/></div>
+<div class="mce-root3">Reconstructed images using the Additive Gaussian Auto Encoder</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Additive Gaussian autoencoder full code listing</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following is the code of the Additive Gaussian autoencoder:</p>
+<pre class="calibre26"><span class="calibre5">import </span>numpy <span class="calibre5">as </span>np<br class="calibre2"/><span class="calibre5">import </span>tensorflow <span class="calibre5">as </span>tf<br class="calibre2"/><span class="calibre5">def </span>xavier_init(fan_in, fan_out, constant = <span class="calibre5">1</span>):<br class="calibre2"/>    low = -constant * np.sqrt(<span class="calibre5">6.0 </span>/ (fan_in + fan_out))<br class="calibre2"/>    high = constant * np.sqrt(<span class="calibre5">6.0 </span>/ (fan_in + fan_out))<br class="calibre2"/>    <span class="calibre5">return </span>tf.random_uniform((fan_in, fan_out), <span class="calibre5">minval </span>= low, <span class="calibre5">maxval </span>= high, <span class="calibre5">dtype </span>= tf.float32)<br class="calibre2"/><br class="calibre2"/><span class="calibre5">class </span>AdditiveGaussianNoiseAutoEncoder(<span class="calibre5">object</span>):<br class="calibre2"/><span class="calibre5">    def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>, num_input, num_hidden, <br class="calibre2"/>                 transfer_function=tf.nn.sigmoid, <br class="calibre2"/>                 optimizer=tf.train.AdamOptimizer(),<br class="calibre2"/>                 scale=<span class="calibre5">0.1</span>):<br class="calibre2"/>        <span class="calibre5">self</span>.num_input = num_input<br class="calibre2"/>        <span class="calibre5">self</span>.num_hidden = num_hidden<br class="calibre2"/>        <span class="calibre5">self</span>.transfer = transfer_function<br class="calibre2"/>        <span class="calibre5">self</span>.scale = tf.placeholder(tf.float32)<br class="calibre2"/>        <span class="calibre5">self</span>.training_scale = scale<br class="calibre2"/>        n_weights = <span class="calibre5">self</span>._initialize_weights()<br class="calibre2"/>        <span class="calibre5">self</span>.weights = n_weights<br class="calibre2"/><span class="calibre5">      # model<br class="calibre2"/>&lt;/span&gt;<span class="calibre5">        </span><span class="calibre5">self</span>.x = tf.placeholder(tf.float32, [<span class="calibre5">None</span>, <span class="calibre5">self</span>.num_input])<br class="calibre2"/>        <span class="calibre5">self</span>.hidden_layer = <span class="calibre5">self</span>.transfer(<br class="calibre2"/>            tf.add(tf.matmul(<br class="calibre2"/><span class="calibre5">                      self</span>.x + scale * tf.random_normal((n_input,)),<br class="calibre2"/>                      <span class="calibre5">self</span>.weights[<span class="calibre5">'w1'</span>]),<br class="calibre2"/>                      <span class="calibre5">self</span>.weights[<span class="calibre5">'b1'</span>]))<br class="calibre2"/>        <span class="calibre5">self</span>.reconstruction = tf.add(<br class="calibre2"/>                                tf.matmul(<span class="calibre5">self</span>.hidden_layer, <span class="calibre5">self</span>.weights[<span class="calibre5">'w2'</span>]),    <br class="calibre2"/><span class="calibre5">                                self</span>.weights[<span class="calibre5">'b2'</span>])<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># cost<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.<span class="calibre5">cost</span> = <span class="calibre5">0.5 </span>* tf.reduce_sum(tf.pow(tf.subtract(<br class="calibre2"/><span class="calibre5">                           self</span>.reconstruction, <span class="calibre5">self</span>.x), <span class="calibre5">2.0</span>))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.optimizer = optimizer.minimize(<span class="calibre5">self</span>.<span class="calibre5">cost</span>)<br class="calibre2"/><br class="calibre2"/>        init = tf.global_variables_initializer()<br class="calibre2"/>        <span class="calibre5">self</span>.session = tf.Session()<br class="calibre2"/>        <span class="calibre5">self</span>.session.run(init)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>_initialize_weights(<span class="calibre5">self</span>):<br class="calibre2"/>        weights = <span class="calibre5">dict</span>()<br class="calibre2"/>        weights[<span class="calibre5">'w1'</span>] = tf.Variable(xavier_init(<span class="calibre5">self</span>.num_input, <span class="calibre5">self</span>.num_hidden))<br class="calibre2"/>        weights[<span class="calibre5">'b1'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden], <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>        weights[<span class="calibre5">'w2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden, <span class="calibre5">self</span>.num_input],<br class="calibre2"/>          <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>        weights[<span class="calibre5">'b2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_input], <span class="calibre5">dtype</span>=tf.float32))<br class="calibre2"/>        <span class="calibre5">return </span>weights<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>partial_fit(<span class="calibre5">self</span>, X):<br class="calibre2"/>        cost, opt = <span class="calibre5">self</span>.session.run((<span class="calibre5">self</span>.<span class="calibre5">cost</span>, <span class="calibre5">self</span>.optimizer), <br class="calibre2"/><span class="calibre5">            feed_dict</span>={<span class="calibre5">self</span>.x: X,<span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale})<br class="calibre2"/>        <span class="calibre5">return </span>cost<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>kl_divergence(<span class="calibre5">self</span>, p, p_hat):<br class="calibre2"/>        <span class="calibre5">return </span>tf.reduce_mean(<br class="calibre2"/>          p * tf.log(p) - p * tf.log(p_hat) + (<span class="calibre5">1 </span>- p) * tf.log(<span class="calibre5">1 </span>- p) - (<span class="calibre5">1 </span>- p) *        tf.log(<span class="calibre5">1 </span>- p_hat))<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>calculate_total_cost(<span class="calibre5">self</span>, X):<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.<span class="calibre5">cost</span>, <span class="calibre5">feed_dict</span>={<span class="calibre5">self</span>.x: X,<br class="calibre2"/>                                                      <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale<br class="calibre2"/>                                                      })<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>transform(<span class="calibre5">self</span>, X):<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<br class="calibre2"/><span class="calibre5">          self</span>.hidden_layer, <br class="calibre2"/><span class="calibre5">          feed_dict </span>= {<span class="calibre5">self</span>.x: X, <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>generate_value(<span class="calibre5">self</span>, _hidden=<span class="calibre5">None</span>):<br class="calibre2"/>        <span class="calibre5">if </span>_hidden <span class="calibre5">is </span><span class="calibre5">None</span>:<br class="calibre2"/>            _hidden = np.random.normal(<span class="calibre5">size</span>=<span class="calibre5">self</span>.weights[<span class="calibre5">"b1"</span>])<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.reconstruction, <br class="calibre2"/><span class="calibre5">            feed_dict</span>={<span class="calibre5">self</span>.hidden_layer: _hidden})<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>reconstruct(<span class="calibre5">self</span>, X):<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.reconstruction, <br class="calibre2"/><span class="calibre5">          feed_dict</span>={<span class="calibre5">self</span>.x: X,<span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale })<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>get_weights(<span class="calibre5">self</span>):<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.weights[<span class="calibre5">'w1'</span>])<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>get_biases(<span class="calibre5">self</span>):<br class="calibre2"/>        <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.weights[<span class="calibre5">'b1'</span>])</span></pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Comparing basic encoder costs with the Additive Gaussian Noise autoencoder</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following graph shows the cost of two algorithms for each epoch. It can be inferred that the basic autoencoder is much more expensive compared to the Additive Gaussian Noise autoencoder:</p>
+<div class="mce-root"><img src="Images/5ce1b147-0a74-4a1d-a216-df06b6355f71.png" width="950" height="582" class="calibre175"/></div>
+<div class="mce-root3">C<span class="calibre5">ost comparison: basic versus Additive</span> Gaussian Noise autoencoder</div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Additive Gaussian Noise autoencoder summary</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">You learned how to create an autoencoder with Gaussian noise, which helps in improving the accuracy of the model drastically when compared to the basic autoencoder.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Sparse autoencoder</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this section, we will look at how adding sparsity to the cost function helps in reducing the cost of training. Most of the code remains the same, but the primary changes are in the way the cost function is calculated.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">KL divergence</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's first try to understand KL divergence, which is used to add sparsity to the cost function.</p>
+<p class="calibre4">We can think of a neuron as active (or <em class="calibre17">firing</em>) if a neuron's output value is close to one, and <em class="calibre17">inactive</em> if its output value is close to zero. We would like to constrain the neurons to be inactive most of the time. This discussion assumes a sigmoid activation function.<br class="calibre25"/>
+Recall that <em class="calibre17">a<sup class="calibre120">(2)</sup><sub class="calibre36">j</sub></em> denotes the activation of the hidden unit <em class="calibre17">j</em> in the autoencoder. This notation does not state explicitly what the input <em class="calibre17">x </em>was that led to this activation. We will write <em class="calibre17">a<sup class="calibre120">(2)</sup><sub class="calibre36">j</sub>(x)</em> to denote the activation of the hidden unit when the network is given a specific input <em class="calibre17">x</em>. Further, let <img src="Images/10147870-75b0-464d-b1cf-2edc0807e4d2.jpg" width="463" height="142" class="calibre176"/> be the average activation of the hidden unit <em class="calibre17">j</em> (averaged over the training set). We would like to (approximately) enforce the constraint <img src="Images/9971f609-c670-4c63-a7d8-381212c5620c.png" width="232" height="136" class="calibre177"/>, where <sub class="calibre36"><img src="Images/82da78e8-7a12-4a56-8037-b83b98326850.png" width="80" height="94" class="calibre178"/></sub> is a sparsity parameter, typically a small value close to zero (say, = <em class="calibre17">0.05</em>). Our aim is that the average activation of each hidden neuron <em class="calibre17">j</em> be close to <em class="calibre17">0.05</em> (as an example). To satisfy the preceding constraint, the hidden unit's activation must mostly be close to zero.</p>
+<p class="calibre4">To achieve this, an extra penalty term is added to the optimization objective that penalizes it, deviating significantly from<sub class="calibre36"><img src="Images/82da78e8-7a12-4a56-8037-b83b98326850.png" width="80" height="94" class="calibre178"/></sub>:</p>
+<p class="calibre53"><img src="Images/6088760a-c222-4657-b2d1-7fcf511893dd.jpg" width="617" height="154" class="calibre179"/></p>
+<p class="calibre4">Let's take a look at how KL divergence varies as a function of the average activation:</p>
+<div class="mce-root"><img src="Images/16a1258c-7aef-41ae-95dd-00965d51e402.png" width="1410" height="1126" class="calibre180"/></div>
+<div class="mce-root3"><span class="calibre5">Average activation versus KL divergence plot</span></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">KL divergence in TensorFlow</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In our implementation of a sparse encoder, we defined KL divergence in a <kbd class="calibre18">kl_divergence</kbd> <span class="calibre14">function</span> in the <kbd class="calibre18">SparseEncoder</kbd> class, which is nothing but an implementation of the preceding formula:</p>
+<pre class="calibre26"><span class="calibre5">def </span>kl_divergence(<span class="calibre5">self</span>, p, p_hat):<br class="calibre2"/>    <span class="calibre5">return </span>tf.reduce_mean(<br class="calibre2"/>           p*(tf.log(p)/tf.log(p_hat)) + <br class="calibre2"/>           (<span class="calibre5">1</span>-p)*(tf.log(<span class="calibre5">1</span>-p)/tf.log(<span class="calibre5">1</span>-p_hat)))</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Cost of a sparse autoencoder based on KL Divergence</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The cost function is redefined with two new parameters, <kbd class="calibre18">sparse_reg</kbd> and <kbd class="calibre18">kl_divergence</kbd>, when compared to the previous encoders discussed in this chapter:</p>
+<pre class="calibre26">self.cost = 0.5 * tf.reduce_sum(<br class="calibre2"/>  tf.pow(tf.subtract(self.reconstruction, self.x), 2.0)) + <br class="calibre2"/>    self.sparse_reg * self.kl_divergence(self.sparsity_level, self.hidden_layer)</pre>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Complete code listing of the sparse autoencoder</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">For reference, we have given the code listing for <kbd class="calibre18">SparseAutoEncoder</kbd> here, with the <kbd class="calibre18">kl_divergence</kbd> and <kbd class="calibre18">cost</kbd> discussed earlier:</p>
+<pre class="calibre26"><span class="calibre5">class </span>SparseAutoencoder(<span class="calibre5">object</span>):<br class="calibre2"/>    <span class="calibre5">def </span><span class="calibre5">__init__</span>(<span class="calibre5">self</span>, num_input, num_hidden, <br class="calibre2"/>                 transfer_function=tf.nn.softplus, <br class="calibre2"/>                 optimizer=tf.train.AdamOptimizer(),<br class="calibre2"/>                 scale=<span class="calibre5">0.1</span>):<br class="calibre2"/>        <span class="calibre5">self</span>.num_input = num_input<br class="calibre2"/>        <span class="calibre5">self</span>.num_hidden = num_hidden<br class="calibre2"/>        <span class="calibre5">self</span>.transfer = transfer_function<br class="calibre2"/>        <span class="calibre5">self</span>.scale = tf.placeholder(tf.float32)<br class="calibre2"/>        <span class="calibre5">self</span>.training_scale = scale<br class="calibre2"/>        network_weights = <span class="calibre5">self</span>._initialize_weights()<br class="calibre2"/>        <span class="calibre5">self</span>.weights = network_weights<br class="calibre2"/>        <span class="calibre5">self</span>.sparsity_level = np.repeat([<span class="calibre5">0.05</span>], <br class="calibre2"/><span class="calibre5">           self</span>.num_hidden).astype(np.float32)<br class="calibre2"/>        <span class="calibre5">self</span>.sparse_reg = <span class="calibre5">0.0<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5"># model<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.x = tf.placeholder(tf.float32, [<span class="calibre5">None</span>, <span class="calibre5">self</span>.num_input])<br class="calibre2"/>        <span class="calibre5">self</span>.hidden_layer = <span class="calibre5">self</span>.transfer(tf.add(tf.matmul(<br class="calibre2"/><span class="calibre5">            self</span>.x + scale * tf.random_normal((num_input,)), <br class="calibre2"/><span class="calibre5">                                               self</span>.weights[<span class="calibre5">'w1'</span>]),<br class="calibre2"/>                                               <span class="calibre5">self</span>.weights[<span class="calibre5">'b1'</span>]))<br class="calibre2"/>        <span class="calibre5">self</span>.reconstruction = tf.add(tf.matmul(<span class="calibre5">self</span>.hidden_layer, <br class="calibre2"/><span class="calibre5">            self</span>.weights[<span class="calibre5">'w2'</span>]), <span class="calibre5">self</span>.weights[<span class="calibre5">'b2'</span>])<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># cost<br class="calibre2"/></span><span class="calibre5">        </span><span class="calibre5">self</span>.cost = <span class="calibre5">0.5 </span>* tf.reduce_sum(<br class="calibre2"/>            tf.pow(tf.subtract(<span class="calibre5">self</span>.reconstruction, <span class="calibre5">self</span>.x), <span class="calibre5">2.0</span>)) + <br class="calibre2"/><span class="calibre5">            self</span>.sparse_reg * <span class="calibre5">self</span>.kl_divergence(<br class="calibre2"/><span class="calibre5">                self</span>.sparsity_level, <span class="calibre5">self</span>.hidden_layer)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">self</span>.optimizer = optimizer.minimize(<span class="calibre5">self</span>.cost)<br class="calibre2"/><br class="calibre2"/>        init = tf.global_variables_initializer()<br class="calibre2"/>        <span class="calibre5">self</span>.session = tf.Session()<br class="calibre2"/>        <span class="calibre5">self</span>.session.run(init)<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>_initialize_weights(<span class="calibre5">self</span>):<br class="calibre2"/>        all_weights = <span class="calibre5">dict</span>()<br class="calibre2"/>        all_weights[<span class="calibre5">'w1'</span>] = tf.Variable(xavier_init(<span class="calibre5">self</span>.num_input, <br class="calibre2"/><span class="calibre5">           self</span>.num_hidden))<br class="calibre2"/>        all_weights[<span class="calibre5">'b1'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden], <br class="calibre2"/><span class="calibre5">           dtype </span>= tf.float32))<br class="calibre2"/>        all_weights[<span class="calibre5">'w2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_hidden, <br class="calibre2"/><span class="calibre5">                            self</span>.num_input], <br class="calibre2"/><span class="calibre5">                            dtype </span>= tf.float32))<br class="calibre2"/>        all_weights[<span class="calibre5">'b2'</span>] = tf.Variable(tf.zeros([<span class="calibre5">self</span>.num_input], <br class="calibre2"/><span class="calibre5">            dtype </span>= tf.float32))<br class="calibre2"/>        <span class="calibre5">return </span>all_weights<br class="calibre2"/><br class="calibre2"/>    <span class="calibre5">def </span>partial_fit(<span class="calibre5">self</span>, X):<br class="calibre2"/>        cost, opt = <span class="calibre5">self</span>.session.run((<span class="calibre5">self</span>.cost, <span class="calibre5">self</span>.optimizer), <br class="calibre2"/><span class="calibre5">                    feed_dict </span>= {<span class="calibre5">self</span>.x: X,<br class="calibre2"/>                                 <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale})<br class="calibre2"/>        <span class="calibre5">return </span>cost<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>kl_divergence(<span class="calibre5">self</span>, p, p_hat):<br class="calibre2"/>         <span class="calibre5">return </span>tf.reduce_mean(p*(tf.log(p)/tf.log(p_hat)) + <br class="calibre2"/>             (<span class="calibre5">1</span>-p)*(tf.log(<span class="calibre5">1</span>-p)/tf.log(<span class="calibre5">1</span>-p_hat)))<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>calculate_total_cost(<span class="calibre5">self</span>, X):<br class="calibre2"/>         <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.cost, <span class="calibre5">feed_dict </span>= {<br class="calibre2"/><span class="calibre5">             self</span>.x: X,<br class="calibre2"/>             <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale<br class="calibre2"/>         })<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>transform(<span class="calibre5">self</span>, X):<br class="calibre2"/>         <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.hidden_layer, <br class="calibre2"/><span class="calibre5">             feed_dict </span>= {<span class="calibre5">self</span>.x: X, <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale})<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>generate(<span class="calibre5">self</span>, hidden = <span class="calibre5">None</span>):<br class="calibre2"/>         <span class="calibre5">if </span>hidden <span class="calibre5">is </span><span class="calibre5">None</span>:<br class="calibre2"/>             hidden = np.random.normal(<span class="calibre5">size </span>= <span class="calibre5">self</span>.weights[<span class="calibre5">"b1"</span>])<br class="calibre2"/>             <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.reconstruction, <br class="calibre2"/><span class="calibre5">                 feed_dict </span>= {<span class="calibre5">self</span>.hidden_layer: hidden})<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>reconstruct(<span class="calibre5">self</span>, X):<br class="calibre2"/>         <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.reconstruction, <br class="calibre2"/><span class="calibre5">             feed_dict </span>= {<span class="calibre5">self</span>.x: X, <span class="calibre5">self</span>.scale: <span class="calibre5">self</span>.training_scale})<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>get_weights(<span class="calibre5">self</span>):<br class="calibre2"/>         <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.weights[<span class="calibre5">'w1'</span>])<br class="calibre2"/><br class="calibre2"/>     <span class="calibre5">def </span>get_biases(<span class="calibre5">self</span>):<br class="calibre2"/>         <span class="calibre5">return </span><span class="calibre5">self</span>.session.run(<span class="calibre5">self</span>.weights[<span class="calibre5">'b1'</span>])<br class="calibre2"/><br class="calibre2"/><br class="calibre2"/></pre>
+<p class="calibre4">In the next section we will look at Sparse autoencoder applied to a specific dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Sparse autoencoder on MNIST data</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">Let's run this encoder on the same dataset that we used in the other examples and compare the results:</p>
+<pre class="calibre26"><span class="calibre5">class </span>SparseAutoEncoderExample:<br class="calibre2"/>    <span class="calibre5">def </span>main(<span class="calibre5">self</span>):<br class="calibre2"/>        mnist = input_data.read_data_sets(<span class="calibre5">'MNIST_data'</span>, <span class="calibre5">one_hot </span>= <span class="calibre5">True</span>)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">def </span>get_random_block_from_data(data, batch_size):<br class="calibre2"/>            start_index = np.random.randint(<span class="calibre5">0</span>, <span class="calibre5">len</span>(data) - batch_size)<br class="calibre2"/>            <span class="calibre5">return </span>data[start_index:(start_index + batch_size)]<br class="calibre2"/><br class="calibre2"/>        X_train = mnist.train.images<br class="calibre2"/>        X_test = mnist.test.images<br class="calibre2"/><br class="calibre2"/>        n_samples = <span class="calibre5">int</span>(mnist.train.num_examples)<br class="calibre2"/>        training_epochs = <span class="calibre5">5<br class="calibre2"/></span><span class="calibre5">        </span>batch_size = <span class="calibre5">128<br class="calibre2"/></span><span class="calibre5">        </span>display_step = <span class="calibre5">1<br class="calibre2"/></span><span class="calibre5"><br class="calibre2"/></span><span class="calibre5">        </span>autoencoder =SparseAutoencoder(<span class="calibre5">num_input</span>=<span class="calibre5">784</span>,<br class="calibre2"/>                                       <span class="calibre5">num_hidden </span>= <span class="calibre5">200</span>,<br class="calibre2"/>                                       <span class="calibre5">transfer_function </span>= tf.nn.sigmoid,<br class="calibre2"/>                                       <span class="calibre5">optimizer </span>= tf.train.AdamOptimizer(<br class="calibre2"/><span class="calibre5">                                           learning_rate </span>= <span class="calibre5">0.001</span>),<br class="calibre2"/>                                       <span class="calibre5">scale </span>= <span class="calibre5">0.01</span>)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">for </span>epoch <span class="calibre5">in </span><span class="calibre5">range</span>(training_epochs):<br class="calibre2"/>            avg_cost = <span class="calibre5">0.<br class="calibre2"/></span><span class="calibre5">            </span>total_batch = <span class="calibre5">int</span>(n_samples / batch_size)<br class="calibre2"/>            <span class="calibre5"># Loop over all batches<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(total_batch):<br class="calibre2"/>                batch_xs = get_random_block_from_data(X_train, batch_size)<br class="calibre2"/><br class="calibre2"/>                <span class="calibre5"># Fit training using batch data<br class="calibre2"/></span><span class="calibre5">                </span>cost = autoencoder.partial_fit(batch_xs)<br class="calibre2"/>                <span class="calibre5"># Compute average loss<br class="calibre2"/></span><span class="calibre5">                </span>avg_cost += cost / n_samples * batch_size<br class="calibre2"/><br class="calibre2"/>            <span class="calibre5"># Display logs per epoch step<br class="calibre2"/></span><span class="calibre5">            </span><span class="calibre5">if </span>epoch % display_step == <span class="calibre5">0</span>:<br class="calibre2"/>                <span class="calibre5">print</span>(<span class="calibre5">"Epoch:"</span>, <span class="calibre5">'%04d' </span>% (epoch + <span class="calibre5">1</span>), <span class="calibre5">"cost="</span>, avg_cost)<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5">print</span>(<span class="calibre5">"Total cost: " </span>+ <br class="calibre2"/><span class="calibre5">            str</span>(autoencoder.calculate_total_cost(X_test)))<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># input weights<br class="calibre2"/></span><span class="calibre5">        </span>wts = autoencoder.get_weights()<br class="calibre2"/>        dim = math.ceil(math.sqrt(autoencoder.num_hidden))<br class="calibre2"/>        plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(dim, dim))<br class="calibre2"/>        <span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>, autoencoder.num_hidden):<br class="calibre2"/>            im = wts.flatten()[i::autoencoder.num_hidden].reshape((<span class="calibre5">28</span>, <span class="calibre5">28</span>))<br class="calibre2"/>            ax = plt.subplot(dim, dim, i + <span class="calibre5">1</span>)<br class="calibre2"/>            <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                label.set_fontsize(<span class="calibre5">6</span>)<br class="calibre2"/>            plt.subplot(dim, dim, i+<span class="calibre5">1</span>)<br class="calibre2"/>            plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(-<span class="calibre5">1.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>        plt.suptitle(<span class="calibre5">'Sparse AutoEncoder Weights'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>        plt.savefig(<span class="calibre5">'figures/sparse_autoencoder_weights.png'</span>)<br class="calibre2"/>        plt.show()<br class="calibre2"/><br class="calibre2"/>        predicted_imgs = autoencoder.reconstruct(X_test[:<span class="calibre5">100</span>])<br class="calibre2"/><br class="calibre2"/>        <span class="calibre5"># plot the reconstructed images<br class="calibre2"/></span><span class="calibre5">        </span>plt.figure(<span class="calibre5">1</span>, <span class="calibre5">figsize</span>=(<span class="calibre5">10</span>, <span class="calibre5">10</span>))<br class="calibre2"/>        plt.title(<span class="calibre5">'Sparse Autoencoded Images'</span>)<br class="calibre2"/>        <span class="calibre5">for </span>i <span class="calibre5">in </span><span class="calibre5">range</span>(<span class="calibre5">0</span>,<span class="calibre5">100</span>):<br class="calibre2"/>            im = predicted_imgs[i].reshape((<span class="calibre5">28</span>,<span class="calibre5">28</span>))<br class="calibre2"/>            ax = plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i + <span class="calibre5">1</span>)<br class="calibre2"/>            <span class="calibre5">for </span>label <span class="calibre5">in </span>(ax.get_xticklabels() + ax.get_yticklabels()):<br class="calibre2"/>                label.set_fontsize(<span class="calibre5">6</span>)<br class="calibre2"/><br class="calibre2"/>            plt.subplot(<span class="calibre5">10</span>, <span class="calibre5">10</span>, i+<span class="calibre5">1</span>)<br class="calibre2"/>            plt.imshow(im, <span class="calibre5">cmap</span>=<span class="calibre5">"gray"</span>, <span class="calibre5">clim</span>=(<span class="calibre5">0.0</span>, <span class="calibre5">1.0</span>))<br class="calibre2"/>        plt.suptitle(<span class="calibre5">'Sparse AutoEncoder Images'</span>, <span class="calibre5">fontsize</span>=<span class="calibre5">15</span>, <span class="calibre5">y</span>=<span class="calibre5">0.95</span>)<br class="calibre2"/>        plt.savefig(<span class="calibre5">'figures/sparse_autoencoder_images.png'</span>)<br class="calibre2"/>        plt.show()<br class="calibre2"/><br class="calibre2"/><span class="calibre5">def </span>main():<br class="calibre2"/>    auto = SparseAutoEncoderExample()<br class="calibre2"/>    auto.main()<br class="calibre2"/><br class="calibre2"/><span class="calibre5">if </span>__name__ == <span class="calibre5">'__main__'</span>:<br class="calibre2"/>    main()</pre>
+<p class="calibre4">The output of the preceding code is as follows:</p>
+<pre class="calibre26">('Epoch:', '0001', 'cost=', 1697.039439488638)<br class="calibre2"/>('Epoch:', '0002', 'cost=', 667.23002088068188)<br class="calibre2"/>('Epoch:', '0003', 'cost=', 450.02947024147767)<br class="calibre2"/>('Epoch:', '0004', 'cost=', 351.54360497159115)<br class="calibre2"/>('Epoch:', '0005', 'cost=', 293.73473448153396)<br class="calibre2"/>Total cost: 21025.2</pre>
+<p class="calibre4">As can be seen, the cost is lower than other encoders, hence KL divergence and sparsity definitely help.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Comparing the Sparse encoder with the Additive Gaussian Noise encoder</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">The following graph shows how the costs compare for the Additive Gaussian Noise autoencoder and the Sparse autoencoder:</p>
+<div class="mce-root"><img src="Images/7bafe3e7-94b6-4a06-96e7-8422a114d7ab.png" width="1190" height="730" class="calibre181"/></div>
+<div class="mce-root3"><span class="calibre5">Cost comparison of two autoencoders for five epochs on the MNIST dataset</span></div>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  
+<div id="sbo-rt-content" class="calibre1"><section class="calibre2">
+
+                            <header class="calibre2">
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article class="calibre2">
+                
+<p class="calibre4">In this chapter, you learned three different types of autoencoders: basic, Additive Gaussian Noise, and Sparse. We understood the use cases where they can be useful. We ran them against the MNIST dataset and also compared the cost of the three autoencoders. We also plotted the weights as well as the approximate output.</p>
+
+
+            </article>
+
+            
+        </section>
+    </div>
+
+
+
+  </body></html>

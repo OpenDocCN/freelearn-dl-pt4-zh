@@ -1,0 +1,464 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generative Language Model for Content Creation</h1>
+                </header>
+            
+            <article>
+                
+<p>This work is certainly getting exciting, and the word is out that we're demonstrating a professional set of deep learning capabilities by producing solutions for a wide range of business use cases! As data scientists, we understand the transferability of our skills. We know that we can provide value by employing core skills when working on problems that we know are similar in structure but that may seem different at first glance. This couldn't be more true than in the next deep learning project. Next, we're (hypothetically) going to be working on a project in which a creative group has asked us to help produce some original content for movie scripts, song lyrics, and even music!  </p>
+<p>How can we leverage our experience in solving problems for restaurant chains to such a different industry? Let's explore what we know and what we're going to be asked to do. In past projects, we demonstrated that we could take an image as input and output a class label (<a href="027b6171-1cf7-4589-b9a2-e417dbe53d8b.xhtml" target="_blank">Chapter 2</a>, <em>Training NN for Prediction Using Regression</em>); we trained a model to take text input and output sentiment classifications (<a href="4dcd4b65-934b-4a8a-a252-9af7513a4787.xhtml" target="_blank">Chapter 3</a>, <em>Word Representation Using word2vec</em>); we built a NLP pipeline for an open domain question and answering chatbot where we took text as input and identified text in a corpus to present as the appropriate output (<a href="c6f638a5-96bf-4488-9e14-4fbc9b969a42.xhtml" target="_blank">Chapter 4</a>, <em>Building an NLP Pipeline for Building Chatbots</em>); and we expanded that chatbot's functionality so that it was able to serve a restaurant with an automated ordering system (<a href="856ccfef-cfe1-462f-9998-73f2b5168ae7.xhtml" target="_blank">Chapter 5</a>, <em>Sequence-to-Sequence Models for Building Chatbots</em>). </p>
+<div class="packt_tip"><strong>Define the goal</strong>: In this next project, we're going to take the next step in our computational linguistics journey in <em>Python Deep Learning Projects</em> and generate new content for our client. We need to help them by providing a deep learning solution that generates new content that can be used in movie scrips, song lyrics, and music.</div>
+<p class="mce-root">In this chapter, we will implement a generative model that can generate content using <strong>long short-term memory</strong> (<strong>LSTM</strong>), variational autoencoders, and <strong>Generative Adversarial Networks</strong> (<strong>GANs</strong>). We will be implementing models for both text and images, which can then generate images and text for artists and various businesses.</p>
+<p class="mce-root">In this chapter, we'll cover the following topics:</p>
+<ul>
+<li>Text generation with LSTM</li>
+<li>Additional power of a bi-directional LSTM for text generation</li>
+<li>Deep (multi-layer) LSTM to generate lyrics for a song</li>
+<li>Deep (multi-layer) LSTM music generation for a song</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">LSTM for text generation</h1>
+                </header>
+            
+            <article>
+                
+<p class="column"><span>In this section, we'll explore a popular deep learning model: the <strong>recurrent neural network</strong></span> (<span><strong>RNN</strong></span>)<span>, and how it can be used in the generation of sequence data. </span><span>The universal way to create sequence data in deep learning is to train a model (usually a</span> RNN <span>or a ConvNet) to predict the next token or next few tokens in a series, based on the previous tokens as input. For instance, let's imagine that we're given the sentence with these words as input: <kbd>I love to work in deep learning</kbd>. We will train the</span><span> network to predict the next character as our target.</span></p>
+<div class="column packt_infobox"><span>When working with textual data,</span> <span>tokens</span> <span>are typically words or characters, and any network that can model the probability of the next token given the previous ones is called a</span> <span>language model that can</span><span> capture the</span> <span>latent space</span> <span>of language.</span></div>
+<p>Upon training the language model, we can then proceed to feed some initial text and ask it to generate the next token, then add the generated token back into the language model to predict more tokens. For our hypothetical use case, our creative client will use this model and later provide examples of text that we would then be asked to create novel content for in that style.</p>
+<p class="column">The first step in building the generative model for text is to import all the modules required. Keras APIs will be used in this project to create the models and Keras utils will be used to download the dataset. In order to build text generation modules, we need a significant amount of simple text data.</p>
+<div>
+<p>You can find the code file for this at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Basics/generative_text.py" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Basics/generative_text.py</a>:</p>
+</div>
+<pre>import keras<br/>import numpy as np<br/>from keras import layers<br/><strong># Gather data</strong><br/>path = keras.utils.get_file(<br/>    'sample.txt',<br/>    origin='https://s3.amazonaws.com/text-datasets/nietzsche.txt')<br/>text = open(path).read().lower()<br/>print('Number of words in corpus:', len(text))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data pre-processing</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's perform the data pre-processing to convert the raw data into its encoded form. We will extract fixed length sentences, encode them using a one-hot encoding process, and finally build a tensor of the (<kbd>sequence</kbd>, <kbd>maxlen</kbd>, <kbd>unique_characters</kbd>) shape, as shown in the following diagram. At the same time, we will prepare the target vector, <kbd>y</kbd>, to contain the associated next character that follows each extracted sequence.</p>
+<p>The following is the code we'll use to pre-process the data:</p>
+<pre><strong># Length of extracted character sequences</strong><br/>maxlen = 100<br/><br/><strong># We sample a new sequence every 5 characters</strong><br/>step = 5<br/><br/><strong># List to hold extracted sequences</strong><br/>sentences = []<br/><br/><strong># List to hold the target characters </strong><br/>next_chars = []<br/><br/><strong># Extracting sentences and the next characters.</strong><br/>for i in range(0, len(text) - maxlen, step):<br/>    sentences.append(text[i: i + maxlen])<br/>    next_chars.append(text[i + maxlen])<br/>print('Number of sequences:', len(sentences))<br/><br/><strong># List of unique characters in the corpus</strong><br/>chars = sorted(list(set(text)))<br/><br/><strong># Dictionary mapping unique characters to their index in `chars`</strong><br/>char_indices = dict((char, chars.index(char)) for char in chars)<br/><br/><strong># Converting characters into one-hot encoding.</strong><br/>x = np.zeros((len(sentences), maxlen, len(chars)), dtype=np.bool)<br/>y = np.zeros((len(sentences), len(chars)), dtype=np.bool)<br/>for i, sentence in enumerate(sentences):<br/>    for t, char in enumerate(sentence):<br/>        x[i, t, char_indices[char]] = 1<br/>    y[i, char_indices[next_chars[i]]] = 1</pre>
+<p>Following is how data preprocessing looks like. We have transformed the raw data into the tensors which we will further use for the training purpose:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1392 image-border" src="assets/b412734c-ce09-4512-8bf6-29e1340dbd95.png" style="width:157.42em;height:76.33em;"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the LSTM model for text generation</h1>
+                </header>
+            
+            <article>
+                
+<p><span>This deep model is a network that's made up of one hidden LSTM layer with <kbd>128</kbd> memory units,</span><span> </span><span>followed by a</span> <kbd><span>Dense</span></kbd> <span>classifier layer with a <kbd>softmax</kbd> activation function over all possible characters. T</span><span>argets are one-hot encoded, and this means that we'll train the model using <kbd>categorical_crossentropy</kbd> as</span> <span>the <kbd>loss</kbd> function.</span></p>
+<p>The following code block defines the model's architecture:</p>
+<pre>model = keras.models.Sequential()<br/>model.add(layers.LSTM(128, input_shape=(maxlen, len(chars))))<br/>model.add(layers.Dense(len(chars), activation='softmax')) <br/><br/><br/>optimizer = keras.optimizers.RMSprop(lr=0.01)<br/>model.compile(loss='categorical_crossentropy', optimizer=optimizer)</pre>
+<p>The following diagram helps us visualize the model's architecture:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/1172e519-40f4-46f6-a18b-662dfa35653e.png" style="width:19.50em;height:15.50em;"/></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the model</h1>
+                </header>
+            
+            <article>
+                
+<div class="page">
+<div class="layoutArea">
+<div class="column">
+<div class="page">
+<div class="layoutArea">
+<div class="column">
+<p><span>In text generation, the way we choose the succeeding character is crucial. The most common way (greedy sampling) leads to repetitive characters that does not produce </span><span>a coherent language. This is why we use a different approach called </span><span><strong>stochastic sampling</strong>. This adds a degree of randomness to the prediction probability distribution.</span></p>
+<p><span>Use the following code to re-weight the prediction probability distribution and sample a character index</span><span>:</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<pre>def sample(preds, temperature=1.0):<br/>    preds = np.asarray(preds).astype('float64')<br/>    preds = np.log(preds) / temperature<br/>    exp_preds = np.exp(preds)<br/>    preds = exp_preds / np.sum(exp_preds)<br/>    probas = np.random.multinomial(1, preds, 1)<br/>    return np.argmax(probas)</pre>
+<div class="page">
+<div class="page">
+<div class="layoutArea">
+<p class="column"><span>Now, we iterate the training and text generation, beginning with 30 training epochs and then fitting the model for 1 iteration. Then, perform a random selection of the seed text, convert it into one-hot encoding format, and perform predictions of 100 characters. Finally, append the newly generated character to the seed text in each iteration.</span></p>
+<p class="column"><span>After each epoch, generation is performed by utilizing a different temperature from a range of values. This makes it possible to see and understand the evolution of the generated text at model convergence, and the consequences of temperature in the sampling strategy.</span></p>
+<div class="column packt_infobox"><strong>Temperature</strong><span> is an LSTM hyperparameter that is used to influence prediction randomness by logit scaling before applying softmax. </span></div>
+</div>
+<p>We need to execute the following code so that we can train the model:</p>
+</div>
+</div>
+<pre>for epoch in range(1, 30):<br/>    print('epoch', epoch)<br/>    # Fit the model for 1 epoch <br/>    model.fit(x, y, batch_size=128, epochs=1, callbacks=callbacks_list)<br/><br/><strong>    # Select a text seed randomly</strong><br/>    start_index = random.randint(0, len(text) - maxlen - 1)<br/>    generated_text = text[start_index: start_index + maxlen]<br/>    print('---Seeded text: "' + generated_text + '"')<br/><br/>    for temperature in [0.2, 0.5, 1.0, 1.2]:<br/>        print('------ Selected temperature:', temperature)<br/>        sys.stdout.write(generated_text)<br/><br/>        # We generate 100 characters<br/>        for i in range(100):<br/>            sampled = np.zeros((1, maxlen, len(chars)))<br/>            for t, char in enumerate(generated_text):<br/>                sampled[0, t, char_indices[char]] = 1.<br/><br/>            preds = model.predict(sampled, verbose=0)[0]<br/>            next_index = sample(preds, temperature)<br/>            next_char = chars[next_index]<br/><br/>            generated_text += next_char<br/>            generated_text = generated_text[1:]<br/><br/>            sys.stdout.write(next_char)<br/>            sys.stdout.flush()<br/>        print()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Inference and results</h1>
+                </header>
+            
+            <article>
+                
+<p>This gets us to the exciting part of our generative language model—creating custom content! The inference step in deep learning is where we take a trained model and expose it to new data to make predictions or classifications. In the current context of this project, we're looking for model outputs, that is, new sentences, which will be our novel custom content. Let's see what our deep learning model can do!</p>
+<p>We will use the following code to store and load the checkpoints into a binary file that stores all of the weights:</p>
+<pre>from keras.callbacks import ModelCheckpoint<br/><br/>filepath="weights-{epoch:02d}-{loss:.4f}.hdf5"<br/>checkpoint = ModelCheckpoint(filepath, monitor='loss', verbose=1, save_best_only=True, mode='min')<br/>callbacks_list = [checkpoint]</pre>
+<p> </p>
+<p class="mce-root">Now, we will use the trained model and generate new text:</p>
+<pre>seed_text = 'i want to generate new text after this '<br/>print (seed_text)<br/><br/><strong># load the network weights</strong> <br/>filename = "weights-30-1.545.hdf5" <br/>model.load_weights(filename) <br/>model.compile(loss='categorical_crossentropy', optimizer='adam') <br/><br/>for temperature in [0.5]:<br/>        print('------ temperature:', temperature)<br/>        sys.stdout.write(seed_text)<br/><br/>        # We generate 400 characters<br/>        for i in range(40):<br/>            sampled = np.zeros((1, maxlen, len(chars)))<br/>            for t, char in enumerate(seed_text):<br/>                sampled[0, t, char_indices[char]] = 1.<br/><br/>            preds = model.predict(sampled, verbose=0)[0]<br/>            next_index = sample(preds, temperature)<br/>            next_char = chars[next_index]<br/><br/>            seed_text += next_char<br/>            seed_text = seed_text[1:]<br/><br/>            sys.stdout.write(next_char)<br/>            sys.stdout.flush()<br/>        print()</pre>
+<p>After successfully training the model, we will see the following results<span> at the 30<sup>th</sup> epoch:</span></p>
+<div class="stream output-id-8280">
+<div class="output_subarea output_text">
+<pre><strong>--- Generating with seed:</strong><br/>the "good old time" to which it belongs, and as an expressio"
+<strong>------ temperature: 0.2</strong>
+the "good old time" to which it belongs, and as an expression of the sense of the stronger and subli<br/><strong>------ temperature: 0.5<br/></strong>and as an expression of the sense of the stronger and sublication of possess and more spirit and in<br/><strong>------ temperature: 1.0<br/></strong>e stronger and sublication of possess and more spirit and instinge, and it: he ventlumentles, no dif<br/><strong>------ temperature: 1.2</strong><br/>d more spirit and instinge, and it: he ventlumentles, no differific and does amongly domen--whete ac</pre></div>
+</div>
+<p>We find that, with low values for the <kbd>temperature</kbd> hyperparameter, the model is able to generate more practical and realistic words. When we use <span>higher temperatures, the generated text becomes more interesting and unusual—some might even say creative. Sometimes, the model will even invent new words that often sound vaguely credible. So, the idea of using low temperature is more reasonable for</span> business<span> use cases where you need to be realistic, while higher temperature values can be used in more creative and artistic use cases.</span></p>
+<div class="packt_tip">
+<div class="page">
+<div class="layoutArea">
+<div class="column">
+<p><span>The art of deep learning and generative linguistic models is a balance between the learned structure and randomness, which makes the output interesting.<br/></span></p>
+</div>
+</div>
+</div>
+</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating lyrics using deep (multi-layer) LSTM</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have built a basic LSTM model for text generation and learned its value, let's move one step further and create a deep LSTM model suited for the task of generating music lyrics. We now have a new goal: to build and train a model that outputs entirely new and original lyrics that is in the style of an arbitrary number of artists.</p>
+<p>Let's begin. You can refer to the code file found at <kbd>Lyrics-ai</kbd><span class="separator"> (</span><span class="separator"><a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Lyrics-ai" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Lyrics-ai</a>) for this exercise.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data pre-processing</h1>
+                </header>
+            
+            <article>
+                
+<p>To build a model that can generate lyrics, we will need a huge amount of lyric data, which can easily be extracted from various sources. We collected lyrics from around 10,000 songs and stored them in a text file called <kbd>lyrics_data.txt</kbd>. You can find the data file in our GitHub repository (<a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Lyrics-ai/lyrics_data.txt" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/blob/master/Chapter06/Lyrics-ai/lyrics_data.txt</a>).</p>
+<p>Now that we have our data, we need to convert this raw text into the one-hot encoding version:</p>
+<pre>import numpy as np<br/>import codecs<br/><br/><strong># Class to perform all preprocessing operations</strong><br/>class Preprocessing:<br/>    vocabulary = {}<br/>    binary_vocabulary = {}<br/>    char_lookup = {}<br/>    size = 0<br/>    separator = '-&gt;'<br/><strong># This will take the data file and convert data into one hot encoding and dump the vocab into the file.</strong><br/>    def generate(self, input_file_path):<br/>        input_file = codecs.open(input_file_path, 'r', 'utf_8')<br/>        index = 0<br/>        for line in input_file:<br/>            for char in line:<br/>                if char not in self.vocabulary:<br/>                    self.vocabulary[char] = index<br/>                    self.char_lookup[index] = char<br/>                    index += 1<br/>        input_file.close()<br/>        self.set_vocabulary_size()<br/>        self.create_binary_representation()<br/><br/><strong># This method is to load the vocab into the memory</strong><br/>    def retrieve(self, input_file_path):<br/>        input_file = codecs.open(input_file_path, 'r', 'utf_8')<br/>        buffer = ""<br/>        for line in input_file:<br/>            try:<br/>                separator_position = len(buffer) + line.index(self.separator)<br/>                buffer += line<br/>                key = buffer[:separator_position]<br/>                value = buffer[separator_position + len(self.separator):]<br/>                value = np.fromstring(value, sep=',')<br/><br/>                self.binary_vocabulary[key] = value<br/>                self.vocabulary[key] = np.where(value == 1)[0][0]<br/>                self.char_lookup[np.where(value == 1)[0][0]] = key<br/><br/>                buffer = ""<br/>            except ValueError:<br/>                buffer += line<br/>        input_file.close()<br/>        self.set_vocabulary_size()<br/><br/><strong># Below are some helper functions to perform pre-processing.</strong><br/>    def create_binary_representation(self):<br/>        for key, value in self.vocabulary.iteritems():<br/>            binary = np.zeros(self.size)<br/>            binary[value] = 1<br/>            self.binary_vocabulary[key] = binary<br/><br/>    def set_vocabulary_size(self):<br/>        self.size = len(self.vocabulary)<br/>        print "Vocabulary size: {}".format(self.size)<br/><br/>    def get_serialized_binary_representation(self):<br/>        string = ""<br/>        np.set_printoptions(threshold='nan')<br/>        for key, value in self.binary_vocabulary.iteritems():<br/>            array_as_string = np.array2string(value, separator=',', max_line_width=self.size * self.size)<br/>            string += "{}{}{}\n".format(key.encode('utf-8'), self.separator, array_as_string[1:len(array_as_string) - 1])<br/>        return string<br/><br/></pre>
+<p>The overall objective of the pre-processing module is to convert the raw text data into one-hot encoding, as shown in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1393 image-border" src="assets/e4d420da-9566-43e9-9e58-6bb5d412098f.png" style="width:53.75em;height:47.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">This figure represents the data preprocessing part. The law lyrics data is used to build the vocabulary mapping which is further been transformed into the on-hot encoding.</div>
+<p>After the successful execution of the pre-processing module, a binary file will be dumped as <kbd>{dataset_filename}.vocab</kbd>. This <kbd>vocab</kbd> file is one of the mandatory files that needs to be fed into the model during the training process, along with the dataset.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the model</h1>
+                </header>
+            
+            <article>
+                
+<p>We will be using a approach from the Keras model that we used earlier in this project to build this model. To build a more complex model, we will use TensorFlow to write each layer from scratch. TensorFlow gives us, as data scientists and deep learning engineers, more fine-tuned control over our model's architecture. </p>
+<p>For this model, we will use the code in the following block to create two placeholders that will store the input and output values:</p>
+<pre class="p1"><span class="s1">import</span> tensorflow <span class="s1">as</span> tf<br/><span class="s1">import</span> pickle<br/><span class="s1">from</span> tensorflow.contrib <span class="s1">import</span> rnn<br/><br/>    def build(self, input_number, sequence_length, layers_number, units_number, output_number):<br/>        self.x = tf.placeholder("float", [None, sequence_length, input_number])<br/>        self.y = tf.placeholder("float", [None, output_number])<br/>        self.sequence_length = sequence_length</pre>
+<p><span>Next, we need to store the weights and bias in the variables that we've created:</span></p>
+<pre class="p1">        self.weights = {<br/>            'out': tf.Variable(tf.random_normal([units_number, output_number]))<br/>        }<br/>        self.biases = {<br/>            'out': tf.Variable(tf.random_normal([output_number]))<br/>        }<br/><br/>        x = tf.transpose(self.x, [1, 0, 2])<br/>        x = tf.reshape(x, [-1, input_number])<br/>        x = tf.split(x, sequence_length, 0)<br/><br/></pre>
+<p>We can build this model by using multiple LSTM layers, with the basic LSTM cells assigning each layer with the specified number of cells, as shown in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/98851e09-270a-41e3-92b0-8a269e5f7bd6.png" style="width:44.75em;height:41.00em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Tensorboard visualization of the LSTM architecture</div>
+<p>The following is the code for this:</p>
+<pre class="p1">        lstm_layers = []<br/>        for i in range(0, layers_number):<br/>            lstm_layer = rnn.BasicLSTMCell(units_number)<br/>            lstm_layers.append(lstm_layer)<br/><br/>        deep_lstm = rnn.MultiRNNCell(lstm_layers)<br/><br/>        self.outputs, states = rnn.static_rnn(deep_lstm, x, dtype=tf.float32)<br/><br/>        print "Build model with input_number: {}, sequence_length: {}, layers_number: {}, " \<br/>              "units_number: {}, output_number: {}".format(input_number, sequence_length, layers_number,<br/>                                                           units_number, output_number)<br/><strong># This method is using to dump the model configurations</strong> <br/>        self.save(input_number, sequence_length, layers_number, units_number, output_number)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training the deep TensorFlow-based LSTM model</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that we have the mandatory inputs, that is, the dataset file path, the <kbd>vocab</kbd> file path, and the model name, we will initiate the training process. Let's define all of the hyperparameters for the model:</p>
+<pre>import os<br/>import argparse<br/>from modules.Model import *<br/>from modules.Batch import *<br/><br/>def main():<br/>    parser = argparse.ArgumentParser()<br/>    parser.add_argument('--training_file', type=str, required=True)<br/>    parser.add_argument('--vocabulary_file', type=str, required=True)<br/>    parser.add_argument('--model_name', type=str, required=True)<br/><br/>    parser.add_argument('--epoch', type=int, default=200)<br/>    parser.add_argument('--batch_size', type=int, default=50)<br/>    parser.add_argument('--sequence_length', type=int, default=50)<br/>    parser.add_argument('--log_frequency', type=int, default=100)<br/>    parser.add_argument('--learning_rate', type=int, default=0.002)<br/>    parser.add_argument('--units_number', type=int, default=128)<br/>    parser.add_argument('--layers_number', type=int, default=2)<br/>    args = parser.parse_args()</pre>
+<p>Since we are batch training the model, we will divide the dataset into batches of a defined <kbd>batch_size</kbd> using the <kbd>Batch</kbd> module:</p>
+<pre>batch = Batch(training_file, vocabulary_file, batch_size, sequence_length)</pre>
+<p>Each batch will return two arrays. One will be the input vector of the input sequence, which will have a shape of [<kbd>batch_size</kbd>, <kbd>sequence_length</kbd>, <kbd>vocab_size</kbd>], and the other array will hold the label vector, which will have a shape of [<kbd>batch_size</kbd>, <kbd>vocab_size</kbd>].</p>
+<p>Now, we initialize our model and create the optimizer function. In this model, we used the <kbd>Adam</kbd> Optimizer.</p>
+<div class="packt_tip packt_infobox">The Adam Optimizer is a powerful tool. You can read up on it from the official TensorFlow documentation at<br/>
+<a href="https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer">https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer</a>.</div>
+<p>Then, we will train our model and perform the optimization over each batch:</p>
+<pre><strong># Building model instance and classifier</strong><br/>    model = Model(model_name)<br/>    model.build(input_number, sequence_length, layers_number, units_number, classes_number)<br/>    classifier = model.get_classifier()<br/><br/><strong># Building cost functions</strong><br/>    cost = tf.reduce_mean(tf.square(classifier - model.y))<br/>    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(cost)<br/><br/><strong># Computing the accuracy metrics</strong><br/>    expected_prediction = tf.equal(tf.argmax(classifier, 1), tf.argmax(model.y, 1))<br/>    accuracy = tf.reduce_mean(tf.cast(expected_prediction, tf.float32))<br/><strong><br/># Preparing logs for Tensorboard</strong><br/>    loss_summary = tf.summary.scalar("loss", cost)<br/>    acc_summary = tf.summary.scalar("accuracy", accuracy)<br/>    <br/>    train_summary_op = tf.summary.merge_all()<br/>    out_dir = "{}/{}".format(model_name, model_name)<br/>    train_summary_dir = os.path.join(out_dir, "summaries")<br/><br/>##<br/><br/># Initializing the session and executing the training<br/><br/>init = tf.global_variables_initializer()<br/>with tf.Session() as sess:<br/>        sess.run(init)<br/>        iteration = 0<br/><br/>        while batch.dataset_full_passes &lt; epoch:<br/>            iteration += 1<br/>            batch_x, batch_y = batch.get_next_batch()<br/>            batch_x = batch_x.reshape((batch_size, sequence_length, input_number))<br/><br/>            sess.run(optimizer, feed_dict={model.x: batch_x, model.y: batch_y})<br/>            if iteration % log_frequency == 0:<br/>                acc = sess.run(accuracy, feed_dict={model.x: batch_x, model.y: batch_y})<br/>                loss = sess.run(cost, feed_dict={model.x: batch_x, model.y: batch_y})<br/>                print("Iteration {}, batch loss: {:.6f}, training accuracy: {:.5f}".format(iteration * batch_size,<br/>                                                                                           loss, acc))<br/>        batch.clean()</pre>
+<p class="CDPAlignLeft CDPAlign">Once the model completes its training, the checkpoints are stored. We can use later on for inferencing. The following is a graph of the accuracy and the loss that occurred during the training process:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8ec64ecd-bb63-4680-aa9e-9bc1965e6a4f.png" style="width:51.75em;height:34.92em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The accuracy (top) and the loss (bottom) plot with respect to the time. We can see that accuracy getting increased and loss getting reduced over the period of time.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Inference</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that the model is ready, we can use it to make predictions. We will start by defining all of the parameters. While building inference, we need to provide some seed text, just like we did in the previous model. Along with that, we will also provide the path of the <kbd>vocab</kbd> file and the output file in which we will store the generated lyrics. We will also provide the length of the text that we need to generate:</p>
+<pre>import argparse<br/>import codecs<br/>from modules.Model import *<br/>from modules.Preprocessing import *<br/>from collections import deque<br/><br/>def main():<br/>    parser = argparse.ArgumentParser()<br/>    parser.add_argument('--model_name', type=str, required=True)<br/>    parser.add_argument('--vocabulary_file', type=str, required=True)<br/>    parser.add_argument('--output_file', type=str, required=True)<br/><br/>    parser.add_argument('--seed', type=str, default="Yeah, oho ")<br/>    parser.add_argument('--sample_length', type=int, default=1500)<br/>    parser.add_argument('--log_frequency', type=int, default=100)<br/><br/></pre>
+<p>Next, we will load the model by providing the name of model that we used in the training step in the preceding code, and we will restore the vocabulary from the file:</p>
+<pre>    model = Model(model_name)<br/>    model.restore()<br/>    classifier = model.get_classifier()<br/><br/>    vocabulary = Preprocessing()<br/>    vocabulary.retrieve(vocabulary_file)</pre>
+<p>We will be using the stack methods to store the generated characters, append the stack, and then use the same stack to feed it into the model in an interactive fashion:</p>
+<pre><strong># Preparing the raw input data</strong> <br/>    for char in seed:<br/>        if char not in vocabulary.vocabulary:<br/>            print char,"is not in vocabulary file"<br/>            char = u' '<br/>        stack.append(char)<br/>        sample_file.write(char)<br/><br/><strong># Restoring the models and making inferences</strong><br/>    with tf.Session() as sess:<br/>        tf.global_variables_initializer().run()<br/><br/>        saver = tf.train.Saver(tf.global_variables())<br/>        ckpt = tf.train.get_checkpoint_state(model_name)<br/><br/>        if ckpt and ckpt.model_checkpoint_path:<br/>            saver.restore(sess, ckpt.model_checkpoint_path)<br/><br/>            for i in range(0, sample_length):<br/>                vector = []<br/>                for char in stack:<br/>                    vector.append(vocabulary.binary_vocabulary[char])<br/>                vector = np.array([vector])<br/>                prediction = sess.run(classifier, feed_dict={model.x: vector})<br/>                predicted_char = vocabulary.char_lookup[np.argmax(prediction)]<br/><br/>                stack.popleft()<br/>                stack.append(predicted_char)<br/>                sample_file.write(predicted_char)<br/><br/>                if i % log_frequency == 0:<br/>                    print "Progress: {}%".format((i * 100) / sample_length)<br/><br/>            sample_file.close()<br/>            print "Sample saved in {}".format(output_file)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Output</h1>
+                </header>
+            
+            <article>
+                
+<p>After successful execution, we will get our own freshly brewed, AI generated lyrics reviewed and published. The following is one sample of such lyrics. We have modified some of the spelling so that the sentence makes sense:</p>
+<pre>Yeah, oho once upon a time, on ir intasd<br/><br/>I got monk that wear your good<br/>So heard me down in my clipp<br/><br/>Cure me out brick<br/>Coway got baby, I wanna sheart in faic<br/><br/>I could sink awlrook and heart your all feeling in the firing of to the still hild, gavelly mind, have before you, their lead<br/>Oh, oh shor,s sheld be you und make<br/><br/>Oh, fseh where sufl gone for the runtome<br/>Weaaabe the ligavus I feed themust of hear</pre>
+<p>Here, we can see that the model has learned in the way it has generated the paragraphs and sentences with appropriate spacing. It still lacks perfection and also doesn't make sense. </p>
+<div class="packt_tip"><strong>Seeing signs of success</strong>: The first task is to create a model that can learn, and then the second one is used to improve on that model. This can be obtained by training the model with a larger training dataset and longer training durations.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating music using a multi-layer LSTM</h1>
+                </header>
+            
+            <article>
+                
+<p>Our (hypothetical) creative agency client loves what we've done in how we can generate music lyrics. Now, they want us to create some music. We will be using multiple layers of LSTMs, as shown in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/bd77caaf-1d4a-47a4-8cdf-8808426666d5.png" style="width:26.50em;height:19.17em;"/></p>
+<p>By now, we know that RNNs are good for sequential data, and we can also represent a music track as notes and chord sequences.<span> In this paradigm, notes become data objects containing octave, offset, and pitch information</span><span>. Chords become data container objects holding information for the combination of notes played at one time.</span></p>
+<div class="packt_infobox"><strong>Pitch</strong><span> is </span>the sound frequency of a note. Musicians represent notes with letter designations [A, B, C, D, E, F, G], with G being the lowest and A being the highest.<br/>
+<strong><br/>
+Octave</strong><strong><span> </span></strong>identifies the set of pitches used at any one time while playing an instrument.<br/>
+<strong><br/>
+Offset<span> </span></strong>identifies the location of a note in the piece of music.</div>
+<p>Let's explore the following section to build our intuition on how to generate music by first processing the sound files, converting them into the sequential mapping data, and then using the RNN to train the model.</p>
+<p>Let's do it. You can refer to the Music-ai code for this exercise, which can be found at <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai" target="_blank"><span>https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai</span></a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Pre-processing data</h1>
+                </header>
+            
+            <article>
+                
+<p>To generate music, we will need a good size set of training data of music files. These will be used to extract sequences while building our training dataset. To simplify this process, in this chapter, we are using the soundtrack of a single instrument. <span>We collected some melodies and stored them in MIDI files. The following sample of a MIDI file shows you what this looks like:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/4259903c-6f13-47a5-b084-50843c671689.png"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The image represents the pitch and note distribution for a sample MIDI file</div>
+<p><span>We can see the intervals between notes, the offset for each note, and the pitch. </span></p>
+<div class="packt_infobox"><span>To extract the contents of our dataset, we will be using music21. This also takes the output of the model and translates it into musical notation. Music21 (<em><a href="http://web.mit.edu/music21/" target="_blank"/></em><a href="http://web.mit.edu/music21/" target="_blank">http://web.mit.edu/music21/</a>) is a</span> very helpful <span>Python toolkit that's used for computer-aided musicology.</span></div>
+<p><span>To get started, we will load each file and use the <kbd>converter.parse(file)</kbd> function to create a music21 <kbd>stream</kbd> object</span><em>.<span> </span></em><span>We will get a list of all of the notes and chords in the file by using this <kbd>stream</kbd> object later.</span><span> Because the most salient features of a note's pitch can be recreated from string notation, we'll</span><span> append the pitch of every note. To handle chords, we will encode the ID of every note in the chord as a single string, where each note is separated by a dot, and append this to the chord. This encoding process makes it possible for us to decode the model generated output with ease into the correct notes and chords.</span></p>
+<p><span>We will load the data from the MIDI files into an array, as you can see in the following code snippet:</span></p>
+<pre>from music21 import converter, instrument, note, chord<br/>import glob<br/><br/>notes = []<br/><br/>for file in glob.glob("/data/*.mid"):<br/>    midi = converter.parse(file)<br/>    notes_to_parse = None<br/>    parts = instrument.partitionByInstrument(midi)<br/>    if parts: # file has instrument parts<br/>        notes_to_parse = parts.parts[0].recurse()<br/>    else: # file has notes in a flat structure<br/>        notes_to_parse = midi.flat.notes<br/>    for element in notes_to_parse:<br/>        if isinstance(element, note.Note):<br/>            notes.append(str(element.pitch))<br/>        elif isinstance(element, chord.Chord):<br/>            notes.append('.'.join(str(n) for n in element.normalOrder))<br/><br/></pre>
+<p><span>The next step is to create input sequences for the model and the corresponding outputs, as shown in the following diagram:</span><span> </span></p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1394 image-border" src="assets/a2924167-d48a-495a-8162-7c797127dd54.png" style="width:34.42em;height:42.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The overview of data processing part in which we take the MIDI files, extract the notes and chords from each file and strore them as an array.</div>
+<p><span>The model outputs a note or chord for each input sequence. We use the first note or chord, following the input sequence in our list of notes. To complete the final step in data preparation for our network, we need to one-hot encode the output. This normalizes the input for the next iteration.</span></p>
+<p><span>We can do this with the following code:</span></p>
+<pre>sequence_length = 100<br/><strong># get all pitch names</strong><br/>pitchnames = sorted(set(item for item in notes))<br/><br/><strong># create a dictionary to map pitches to integers</strong><br/>note_to_int = dict((note, number) for number, note in enumerate(pitchnames))<br/>network_input = []<br/>network_output = []<br/><strong># create input sequences and the corresponding outputs</strong><br/>for i in range(0, len(notes) - sequence_length, 1):<br/>    sequence_in = notes[i:i + sequence_length]<br/>    sequence_out = notes[i + sequence_length]<br/>    network_input.append([note_to_int[char] for char in sequence_in])<br/>    network_output.append(note_to_int[sequence_out])<br/>n_patterns = len(network_input)<br/><strong># reshape the input into a format compatible with LSTM layers</strong><br/>network_input = numpy.reshape(network_input, (n_patterns, sequence_length, 1))<br/><strong># normalize input</strong><br/>network_input = network_input / float(n_vocab)<br/>network_output = np_utils.to_categorical(network_output)</pre>
+<p>Now that we have all the notes and chords extracted. We will create our training data X and Y as shown in the following figure:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f70cadbb-c649-4c33-aba7-dc12505592a5.png" style="width:42.42em;height:24.92em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The captured notes any chords in the array is further transformed into a one -hot encoding vector by mapping the values from the vocabulary. So we will fed the sequences in X matrix and expect the model to learn to predict Y for the given sequence.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining the model and training</h1>
+                </header>
+            
+            <article>
+                
+<p class="graf graf--p graf-after--h4">Now, we are getting to the part that all deep learning engineers love: designing the model's architecture!  We will be using four distinctive types of layers in our model architecture:</p>
+<ul>
+<li><strong>LSTM</strong>: This is a type of RNN layer.</li>
+<li><strong>Dropout</strong>:<strong> </strong><span>A technique for regularization. This helps prevent the model from overfitting by randomly dropping some nodes.</span></li>
+<li><strong>Dense:</strong> This <span>is a fully connected layer where every input node is connected to every output node.</span></li>
+<li><strong>Activation</strong>: <span>This </span><span>determines the <kbd>activation</kbd> function that's going to be used to produce the node's output.</span></li>
+</ul>
+<p>We will again employ the Keras APIs to make the implementation quick:</p>
+<pre>model = Sequential()<br/>model.add(LSTM(<br/>    256,<br/>    input_shape=(network_input.shape[1], network_input.shape[2]),<br/>    return_sequences=True<br/>))<br/>model.add(Dropout(0.5))<br/>model.add(LSTM(512, return_sequences=True))<br/>model.add(Dropout(0.3))<br/>model.add(LSTM(256))<br/>model.add(Dense(256))<br/>model.add(Dropout(0.3))<br/>model.add(Dense(n_vocab))<br/>model.add(Activation('softmax'))<br/>model.compile(loss='categorical_crossentropy', <br/>                  optimizer='rmsprop', <br/>                  metrics=['accuracy'])<br/><br/></pre>
+<p>The generative model architecture we designed has<span> three LSTM layers, three <kbd>Dropout</kbd> layers, two <kbd>Dense</kbd> layers, and one <kbd>Activation</kbd> layer, as shown in the following diagram:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/7d431f84-1eb2-4ed9-95d8-dc10562177d7.png" style="width:20.50em;height:54.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The model architecture for music generation</div>
+<p><span>C</span><span>ategorical cross entropy will be used to calculate the loss for each iteration of the training. We will once again use the Adam optimizer in this network. Now that</span> we have our deep learning model architecture configured, it's time to train the model. We have decided to train the model for 200 epochs, each with 25 batches, by using <kbd>model.fit()</kbd>. We also want to track the reduction in loss over each epoch and will use checkpoints for this purpose.</p>
+<p>Now we will perform the training operation and dump the model in the file mentioned in the following code:</p>
+<pre>filepath = "weights-{epoch:02d}-{loss:.4f}.hdf5"<br/>checkpoint = ModelCheckpoint(<br/>    filepath,<br/>    monitor='loss',<br/>    verbose=0,<br/>    save_best_only=True,<br/>    mode='min'<br/>)<br/>callbacks_list = [checkpoint]<br/><br/>history = model.fit(network_input, network_output, epochs=200, batch_size=64, callbacks=callbacks_list)</pre>
+<p>The performance of the model can be seen as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1397 image-border" src="assets/bb82d271-5ac9-40c9-9342-ce2f84d03c58.png" style="width:136.75em;height:53.25em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The accuracy and the loss plot over the epochs</div>
+<p><span>Now that the training process is </span><span>completed,</span><span> we will load the trained models </span><span>and generate our own music.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating music</h1>
+                </header>
+            
+            <article>
+                
+<p>It's time for the real fun! Let's generate some instrumental music. We will use the code from the model setup and training, but instead of executing the training (as our model is already trained), we will insert the learned weights that we obtained in earlier training.</p>
+<p><span>The following code block executes these two steps:</span></p>
+<pre>model = Sequential()<br/>model.add(LSTM(<br/>    512,<br/>    input_shape=(network_input.shape[1], network_input.shape[2]),<br/>    return_sequences=True<br/>))<br/>model.add(Dropout(0.5))<br/>model.add(LSTM(512, return_sequences=True))<br/>model.add(Dropout(0.3))<br/>model.add(LSTM(512))<br/>model.add(Dense(256))<br/>model.add(Dropout(0.3))<br/>model.add(Dense(n_vocab))<br/>model.add(Activation('softmax'))<br/>model.compile(loss='categorical_crossentropy', optimizer='adam')<br/><br/><strong># Load the weights to each node</strong><br/>model.load_weights('weights_file.hdf5')</pre>
+<p>By doing this, we created the same model, but this time for prediction purposes, and added one extra line of code to load the weights into memory.</p>
+<p>Because we need a seed input so that the model can start generating music, we chose to use a random sequence of notes that we obtained from our processed files. You can also send your own nodes as long as you can ensure that the sequence length is precisely 100:</p>
+<pre><strong># Randomly selected a note from our processed data</strong><br/>start = numpy.random.randint(0, len(network_input)-1)<br/>pattern = network_input[start]<br/><br/>int_to_note = dict((number, note) for number, note in enumerate(pitchnames))<br/><br/>prediction_output = []<br/><br/><strong># Generate 1000 notes of music</strong><br/>for note_index in range(1000):<br/>    prediction_input = numpy.reshape(pattern, (1, len(pattern), 1))<br/>    prediction_input = prediction_input / float(n_vocab)<br/><br/>    prediction = model.predict(prediction_input, verbose=0)<br/><br/>    index = numpy.argmax(prediction)<br/>    result = int_to_note[index]<br/>    prediction_output.append(result)<br/><br/>    pattern.append(index)<br/>    pattern = pattern[1:len(pattern)]</pre>
+<p>We iterated the model generation 1,000 times, which created 1,000 notes using the network, producing approximately five minutes of music. The process we used to select the next sequence for each iteration was that we'd start with the<span> first sequence to submit, since it was of the sequence of notes that was at the starting index. For subsequent input sequences, we removed the first note and appended the output from the previous iteration at the end of the sequence. This is a very crude way to do this and is known as the sliding window approach. You can play around and add some randomness to each sequence we select, which could give more creativity to the music that is generated.</span></p>
+<p><span>It is at this point that we have an array of all of the encoded representations of the notes and chords. To turn this array back into <kbd>Note</kbd> and <kbd>Chord</kbd> objects, we need to decode it. </span></p>
+<p><span>When we detect that the pattern is that of a</span><span> </span><kbd>Chord</kbd> object, we will separate the string into an array of notes. We will then loop through the string's representation of each note to create a <kbd>Note</kbd> object for each item. The <kbd>Chord</kbd> object is then created, which contains each of these notes.</p>
+<p class="graf graf--p graf-after--p">When the pattern is that of a<span> </span><kbd>Note</kbd> object, we will use the string representation of the pitch pattern to create a <kbd>Note</kbd> object. At the end of each iteration, we increase the offset by <kbd>0.5</kbd>, which can again be changed and randomness <span>can be </span>introduced to it. </p>
+<p class="graf graf--p graf-after--p"><span>The following function is responsible for determining whether the output is a <kbd>Note</kbd> or <kbd>Chord</kbd></span> object<span>. Finally, can we use the music21 output <kbd>stream</kbd> object to create the MIDI file. Here are a few samples of generated music: <a href="https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai/generated_music" target="_blank">https://github.com/PacktPublishing/Python-Deep-Learning-Projects/tree/master/Chapter06/Music-ai/generated_music</a>.</span></p>
+<p class="graf graf--p graf-after--p"><span>To execute these steps, you can make use of this <kbd>helper</kbd> function, as shown in the following code block:</span></p>
+<pre>def create_midi_file(prediction_output):<br/>    """ convert the output from the prediction to notes and create a midi file"""<br/>    offset = 0<br/>    output_notes = []<br/><br/>    for pattern in prediction_output:<br/>        <strong># pattern is a chord</strong><br/>        if ('.' in pattern) or pattern.isdigit():<br/>            notes_in_chord = pattern.split('.')<br/>            notes = []<br/>            for current_note in notes_in_chord:<br/>                new_note = note.Note(int(current_note))<br/>                new_note.storedInstrument = instrument.Piano()<br/>                notes.append(new_note)<br/>            new_chord = chord.Chord(notes)<br/>            new_chord.offset = offset<br/>            output_notes.append(new_chord)<br/>        <strong># pattern is a note</strong><br/>        else:<br/>            new_note = note.Note(pattern)<br/>            new_note.offset = offset<br/>            new_note.storedInstrument = instrument.Piano()<br/>            output_notes.append(new_note)<br/><br/>        <strong># increase offset each iteration so that notes do not stack</strong><br/>        offset += 0.5<br/><br/>    midi_stream = stream.Stream(output_notes)<br/><br/>    midi_stream.write('midi', fp='generated.mid')<br/><br/></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>Wow, that's an impressive set of practical examples of using deep learning projects in Python to build solutions in a creative space! Let's revisit the goals we set up for ourselves.</p>
+<div class="packt_tip"><strong>Defining the goal</strong>:<br/>
+In this project, we're going to take the next step in our computational linguistics journey in deep learning projects in Python and generate new content for our client. We need to help them by providing a deep learning solution that generates new content that can be used in movie scripts, song lyrics, and music.</div>
+<p>Deep learning generated content for creative purposes is obviously very tricky. Our realistic goal in this chapter was to demonstrate and train you on the skills and architecture needed to get started on these types of projects. Producing acceptable results takes interacting with the data, the model, and the outputs and testing it with the appropriate audiences. The key takeaway to remember is that the outputs of your models can be quite personalized to the task at hand and that you can expand your thinking of what types of business use cases you should feel comfortable working on in your career.</p>
+<p class="mce-root">In this chapter, we implemented a generative model, which generated content with the use of LSTMs. We implemented models for both text and audio that generated content for artists and various businesses in the creative space (hypothetically): the music and movie industries.</p>
+<p class="mce-root">What we learned in this chapter was the following:</p>
+<ul>
+<li>Text generation with LSTM</li>
+<li><span>The additional </span>power of a Bi-directional LSTM for text generation</li>
+<li>Deep (multi-layer) LSTM to generate lyrics for a song</li>
+<li>Deep (multi-layer) LSTM to generate the music for a song</li>
+</ul>
+<p>This is some exciting work regarding deep learning, and it keeps on coming in the next chapter. Let's see what's in store!</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>
