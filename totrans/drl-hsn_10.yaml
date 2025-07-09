@@ -1,35 +1,49 @@
 - en: '10'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: '10'
 - en: Stocks Trading Using RL
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 使用强化学习进行股票交易
 - en: 'Rather than learning new methods to solve toy reinforcement learning (RL) problems
     in this chapter, we will try to utilize our deep Q-network (DQN) knowledge to
     deal with the much more practical problem of financial trading. I can’t promise
     that the code will make you super rich on the stock market or Forex, because my
     goal is much less ambitious: to demonstrate how to go beyond the Atari games and
     apply RL to a different practical domain.'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章我们不会学习解决玩具强化学习（RL）问题的新方法，而是尝试利用我们在深度 Q 网络（DQN）方面的知识来处理更实际的金融交易问题。我不能保证代码会让你在股市或外汇市场上变得超级富有，因为我的目标远没有那么雄心勃勃：我想展示如何超越雅达利游戏，并将强化学习应用于不同的实际领域。
 - en: 'In this chapter, we will:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们将：
 - en: Implement our own OpenAI Gym environment to simulate the stock market
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 实现我们自己的 OpenAI Gym 环境以模拟股市
 - en: Apply the DQN method that you learned in Chapter [6](#) and Chapter [8](ch012.xhtml#x1-1240008)
     to train an agent to trade stocks to maximize profit
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 应用你在第[6](#)章和第[8](ch012.xhtml#x1-1240008)章中学到的 DQN 方法，训练一个智能体进行股票交易，以最大化利润
 - en: Why trading?
+  id: totrans-6
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 为什么做交易？
 - en: 'There are a lot of financial instruments traded on markets every day: goods,
     stocks, and currencies. Even weather forecasts can be bought or sold using so-called
     “weather derivatives,” which is just a consequence of the complexity of the modern
@@ -40,28 +54,36 @@
     with different goals, like making a profit (investment), gaining protection from
     future price movement (hedging), or just getting what you need (like buying steel
     or exchanging USD for JPY to pay a contract).'
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
+  zh: 每天在市场上交易的金融工具种类繁多：商品、股票和货币。即使是天气预报也可以通过所谓的“天气衍生品”进行买卖，这只是现代世界和金融市场复杂性的一个表现。如果你的收入取决于未来的天气条件，就像种植作物的企业一样，你可能会通过购买天气衍生品来对冲风险。所有这些不同的物品都有随时间变化的价格。交易是买卖金融工具的活动，目的是为了不同的目标，如获取利润（投资）、从未来的价格波动中获得保护（对冲）或只是获取所需的东西（例如购买钢铁或将美元兑换为日元支付合同）。
 - en: Since the first financial market was established, people have been trying to
     predict future price movements, as this promises many benefits, like “profit from
     nowhere” or protecting capital from sudden market movements. This problem is known
     to be complex, and there are a lot of financial consultants, investment funds,
     banks, and individual traders trying to predict the market and find the best moments
     to buy and sell to maximize profit.
+  id: totrans-8
   prefs: []
   type: TYPE_NORMAL
+  zh: 自从第一个金融市场建立以来，人们就一直在尝试预测未来的价格走势，因为这能带来很多好处，比如“从无中赚取利润”或保护资本免受突如其来的市场波动。这一问题被认为是复杂的，因此有很多金融顾问、投资基金、银行和个人交易者在尝试预测市场，并寻找最佳的买卖时机以最大化利润。
 - en: 'The question is: can we look at the problem from the RL angle? Let’s say that
     we have some observation of the market, and we want to make a decision: buy, sell,
     or wait. If we buy before the price goes up, our profit will be positive; otherwise,
     we will get a negative reward. What we’re trying to do is get as much profit as
     possible. The connections between market trading and RL are quite obvious. First,
     let’s define the problem statement more clearly.'
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
+  zh: 问题是：我们能否从强化学习的角度来看待这个问题？假设我们对市场有一些观察，并且我们需要做出一个决策：买入、卖出或等待。如果我们在价格上涨之前买入，我们的利润将是正的；否则，我们将获得负奖励。我们试图做的是尽可能获得更多的利润。市场交易和强化学习之间的联系非常明显。首先，让我们更清楚地定义问题陈述。
 - en: Problem statement and key decisions
+  id: totrans-10
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 问题陈述与关键决策
 - en: The finance domain is large and complex, so you can easily spend several years
     learning something new every day. In our example, we will just scratch the surface
     a bit with our RL tools, and our problem will be formulated as simply as possible,
@@ -70,8 +92,10 @@
     close the position to maximize the profit. The purpose of this example is to show
     how flexible the RL model can be and what the first steps are that you usually
     need to take to apply RL to a real-life use case.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
+  zh: 金融领域庞大而复杂，因此你很容易花费几年时间每天学习新的内容。在我们的例子中，我们将仅仅使用强化学习（RL）工具稍微触及一下表面，问题将尽可能简单地被表述，使用价格作为观察值。我们将研究我们的智能体是否能够学习在最佳时机购买一只股票，并在随后平仓以最大化利润。这个例子的目的是展示RL模型的灵活性，以及你通常需要采取的第一步来将RL应用到实际的使用案例中。
 - en: 'As you already know, to formulate RL problems, three things are needed: observation
     of the environment, possible actions, and a reward system. In previous chapters,
     all three were already given to us, and the internal machinery of the environment
@@ -79,8 +103,10 @@
     what our agent will see and what set of actions it can take. The reward system
     is also not given as a strict set of rules; rather, it will be guided by our feelings
     and knowledge of the domain, which gives us lots of flexibility.'
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 正如你已经知道的，要制定RL问题，需要三件事：环境观察、可能的动作和奖励系统。在之前的章节中，所有三者已经给定，并且环境的内部机制是隐藏的。现在我们处于不同的情况，所以我们需要自己决定智能体将看到什么以及它可以采取哪些动作。奖励系统也没有严格的规则，而是由我们对领域的感觉和知识引导，这给了我们很大的灵活性。
 - en: 'Flexibility, in this case, is good and bad at the same time. It’s good that
     we have the freedom to pass some information to the agent that we feel will be
     important to learn efficiently. For example, you can provide to the trading agent
@@ -89,77 +115,103 @@
     that to find a good agent, you need to try a lot of variants of data representation,
     and it’s not always obvious which will work better. In our case, we will implement
     the basic trading agent in its simplest form, as we discussed in Chapter [1](ch005.xhtml#x1-190001):'
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 灵活性在这种情况下既是好事，也是坏事。好的一面是，我们可以自由地传递一些我们认为对高效学习很重要的信息给智能体。例如，除了价格，你还可以向交易智能体提供新闻或重要统计数据（这些被认为对金融市场有很大影响）。坏的一面是，这种灵活性通常意味着为了找到一个优秀的智能体，你需要尝试许多不同的数据表示方式，而哪些方式更有效通常并不明显。在我们的案例中，我们将实现最基本的交易智能体，以其最简单的形式，就像我们在第[1](ch005.xhtml#x1-190001)章中讨论的那样：
 - en: '**Observation:** The observation will include the following information:'
+  id: totrans-14
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**观察：** 观察将包括以下信息：'
 - en: N past bars, where each has open, high, low, and close prices
+  id: totrans-15
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: N个过去的时段，其中每个时段都有开盘价、最高价、最低价和收盘价。
 - en: An indication that the share was bought some time ago (only one share at a time
     will be possible)
+  id: totrans-16
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 一个指示，表明股票在一段时间前已被购买（一次只能购买一只股票）。
 - en: The profit or loss that we currently have from our current position (the share
     bought)
+  id: totrans-17
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们当前持仓（已购入的股票）所带来的盈亏。
 - en: '**Action:** At every step, after every minute’s bar, the agent can take one
     of the following actions:'
+  id: totrans-18
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**动作：** 在每一步，每一分钟的时段结束后，智能体可以采取以下之一的动作：'
 - en: 'Do nothing: Skip the bar without taking an action'
+  id: totrans-19
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 什么都不做：跳过当前的时段，不采取任何行动。
 - en: 'Buy a share: If the agent has already got the share, nothing will be bought;
     otherwise, we will pay the commission, which is usually some small percentage
     of the current price'
+  id: totrans-20
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 买入股票：如果智能体已经拥有股票，则不会进行购买；否则，我们将支付佣金，通常是当前价格的一小部分。
 - en: 'Close the position: If we do not have a previously purchased share, nothing
     will happen; otherwise, we will pay the commission for the trade'
+  id: totrans-21
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 平仓：如果我们没有之前购买的股票，什么都不会发生；否则，我们将支付交易佣金。
 - en: '**Reward:** The reward that the agent receives can be expressed in various
     ways:'
+  id: totrans-22
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**奖励：** 智能体收到的奖励可以通过以下方式表达：'
 - en: As the first option, we can split the reward into multiple steps during our
     ownership of the share. In that case, the reward on every step will be equal to
     the last bar’s movement.
+  id: totrans-23
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 作为第一种选择，我们可以将奖励分成多个步骤，在我们持有股票期间每一步的奖励将等于最后一个时段的价格波动。
 - en: Alternatively, the agent can receive the reward only after the close action
     and get the full reward at once.
+  id: totrans-24
   prefs:
   - PREF_IND
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 或者，智能体可以在平仓动作之后才收到奖励，并一次性获得全部奖励。
 - en: At first sight, both variants should have the same final result, but maybe with
     different convergence speeds. However, in practice, the difference could be dramatic.
     The environment in my implementation supports both variants, so you can experiment
     with the difference.
+  id: totrans-25
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 初看起来，两种变体应该有相同的最终结果，只是收敛速度可能不同。然而，在实践中，差异可能是巨大的。我的实现中的环境支持这两种变体，因此您可以实验它们之间的差异。
 - en: One last decision to make is how to represent the prices in our environment
     observation. Ideally, we would like our agent to be independent of actual price
     values and take into account relative movement, such as “the stock has grown 1%
@@ -170,8 +222,10 @@
     discover the patterns (if they exist). To achieve this, we will convert every
     bar’s open, high, low, and close prices to three numbers showing high, low, and
     close prices represented as a percentage of the open price.
+  id: totrans-26
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一个需要做出的决策是如何在我们的环境观察中表示价格。理想情况下，我们希望我们的代理能够独立于实际的价格值，并考虑相对变动，比如“股票在上一根K线中增长了1%”或“股票下降了5%”。这是合理的，因为不同股票的价格可能不同，但它们可能有类似的变动模式。在金融领域，有一门分析学科叫做技术分析，专门研究这种模式，并通过它们来进行预测。我们希望我们的系统能够发现这些模式（如果它们存在）。为了实现这一点，我们将把每根K线的开盘、最高、最低和收盘价格转换为三个数值，表示开盘价的百分比形式的最高价、最低价和收盘价。
 - en: This representation has its own drawbacks, as we’re potentially losing the information
     about key price levels. For example, it’s known that markets have a tendency to
     bounce from round price numbers (like $70,000 per bitcoin) and levels that were
@@ -182,114 +236,167 @@
     the neural network (NN) could learn this on its own (it’s just the mean price
     that needs to be subtracted from the absolute price values), but relative representation
     simplifies the NN’s task.
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种表示方法有其自身的缺点，因为我们可能会失去关于关键价格水平的信息。例如，已知市场有一个倾向，即从整数价格水平（如每个比特币70,000美元）和过去曾经是转折点的价格水平反弹。然而，正如前面所说，我们这里只是玩弄数据并检查这个概念。以相对价格变动的形式表示将有助于系统在价格水平中发现重复的模式（如果存在的话），而不管绝对价格位置如何。潜在地，神经网络（NN）可能会自己学会这一点（只需从绝对价格值中减去均价），但相对表示简化了神经网络的任务。
 - en: Data
+  id: totrans-28
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 数据
 - en: In our example, we will use the Russian stock market prices from the period
     of 2015-2016, which are placed in Chapter10/data/ch10-small-quotes.tgz and have
     to be unpacked before model training.
+  id: totrans-29
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的例子中，我们将使用2015-2016年期间的俄罗斯股市价格，这些数据存放在Chapter10/data/ch10-small-quotes.tgz中，模型训练之前需要解压。
 - en: 'Inside the archive, we have CSV files with M1 bars, which means that every
     row in each CSV file corresponds to a single minute in time, and price movement
     during that minute is captured with four prices:'
+  id: totrans-30
   prefs: []
   type: TYPE_NORMAL
+  zh: 在档案中，我们有包含M1条形图的CSV文件，这意味着每行对应一个时间单位内的单一分钟，并且该分钟内的价格变动由四个价格记录：
 - en: 'Open: The price at the beginning of the minute'
+  id: totrans-31
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 开盘：一分钟开始时的价格
 - en: 'High: The maximum price during the interval'
+  id: totrans-32
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 高：区间内的最高价格
 - en: 'Low: The minimum price'
+  id: totrans-33
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 最低：最低价格
 - en: 'Close: The last price of the minute time interval'
+  id: totrans-34
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 收盘：这一分钟时间区间的最后价格
 - en: 'Every minute interval is called a bar and allows us to have an idea of price
     movement within the interval. For example, in the YNDX_160101_161231.csv file
     (which has Yandex company stocks for 2016), we have 130k lines in this form:'
+  id: totrans-35
   prefs: []
   type: TYPE_NORMAL
+  zh: 每一分钟的时间间隔称为一个K线，它让我们能够了解这一时间段内的价格变动。例如，在YNDX_160101_161231.csv文件中（包含2016年Yandex公司股票数据），我们有130,000行数据，格式如下：
 - en: '[PRE0]'
+  id: totrans-36
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: The first two columns are the date and time for the minute; the next four columns
     are open, high, low, and close prices; and the last value represents the number
     of buy and sell orders performed during the bar (also called volume). The exact
     interpretation of volume is market-dependent, but usually, it give you an idea
     about how active the market was.
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
+  zh: 前两列是日期和分钟时间；接下来的四列是开盘、最高、最低和收盘价格；最后一个值表示在该K线期间执行的买卖订单数量（也称为成交量）。成交量的具体解释取决于市场，但通常它能让你了解市场的活跃度。
 - en: 'The typical way to represent those prices is called a candlestick chart, where
     every bar is shown as a candle. Part of Yandex’s quotes for one day in February
     2016 is shown in the following chart:'
+  id: totrans-38
   prefs: []
   type: TYPE_NORMAL
+  zh: 表示这些价格的典型方式被称为蜡烛图，每个条形图显示为一根蜡烛。以下是 Yandex 2016 年 2 月一天部分报价的图表：
 - en: '![PIC](img/file95.png)'
+  id: totrans-39
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file95.png)'
 - en: 'Figure 10.1: Price data for Yandex in February 2016'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.1：2016 年 2 月 Yandex 的价格数据
 - en: The archive contains two files with M1 data for 2016 and 2015\. We will use
     data from 2016 for model training and data from 2015 for validation (but the order
     is arbitrary; you can swap them or even use different time intervals and check
     the effect).
+  id: totrans-41
   prefs: []
   type: TYPE_NORMAL
+  zh: 存档中包含 2016 年和 2015 年的 M1 数据文件。我们将使用 2016 年的数据进行模型训练，使用 2015 年的数据进行验证（但顺序是任意的，你可以交换它们，甚至使用不同的时间间隔并检查效果）。
 - en: The trading environment
+  id: totrans-42
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 交易环境
 - en: As we have a lot of code that is supposed to work with the Gym API, we will
     implement the trading functionality following Gym’s Env class, which should be
     already familiar to you. Our environment is implemented in the StocksEnv class
     in the Chapter10/lib/environ.py module. It uses several internal classes to keep
     its state and encode observations.
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于我们有很多代码需要与 Gym API 配合工作，我们将实现交易功能，遵循 Gym 的 Env 类，您应该已经熟悉这个类了。我们的环境在 Chapter10/lib/environ.py
+    模块中的 StocksEnv 类中实现。它使用几个内部类来保持其状态并编码观察。
 - en: 'Let’s first look at the public API class:'
+  id: totrans-44
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先让我们看看公共 API 类：
 - en: '[PRE1]'
+  id: totrans-45
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: 'We encode all available actions as an enumerator’s fields and provide just
     three actions: do nothing, buy a single share, and close the existing position.'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将所有可用的操作编码为枚举字段，并仅提供三个操作：什么都不做，买入单一股票，关闭现有仓位。
 - en: In our market model, we allow only the single share to be bought, neither supporting
     extending existing positions nor opening “short positions” (when you selling the
     share you don’t have, expecting the price to decrease in the future). That was
     an intentional decision, as I tried to keep the example simple and to avoid overcomplications.
     Why don’t you try experimenting with other options?
+  id: totrans-47
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的市场模型中，我们只允许购买单一股票，不支持扩展现有仓位或开设“卖空仓位”（即当你卖出你没有的股票时，预计未来股价会下降）。这是一个有意的决策，因为我试图保持例子简洁，避免过于复杂。为什么不尝试用其他选项进行实验呢？
 - en: 'Next, we have the environment class:'
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们有环境类：
 - en: '[PRE2]'
+  id: totrans-49
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: The field spec is required for gym.Env compatibility and registers our environment
     in the Gym internal registry.
+  id: totrans-50
   prefs: []
   type: TYPE_NORMAL
+  zh: 字段规范对于 gym.Env 兼容性是必需的，并将我们的环境注册到 Gym 的内部注册表中。
 - en: 'This class provides two ways to create its instance:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个类提供了两种方式来创建其实例：
 - en: '[PRE3]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: As you can see in the preceding code, the first way is to call the class method
     from_dir with the data directory as the argument. In that case, it will load all
     quotes from the CSV files in the directory and construct the environment. To deal
@@ -300,41 +407,59 @@
     and volume time series as one-dimensional NumPy arrays. The module data.py also
     provides several helping functions, like converting the prices into relative format,
     enumerating files in the given directory, etc.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前面的代码所示，第一种方式是调用类方法 from_dir，将数据目录作为参数。在这种情况下，它将从目录中的 CSV 文件加载所有报价，并构建环境。为了处理我们格式的价格数据，Chapter10/lib/data.py
+    中有几个辅助函数。另一种方式是直接构造类实例。在这种情况下，你应该传递价格字典，该字典必须将报价名称映射到 data.py 中声明的 Prices 数据类。这个对象有五个字段，包含开盘、最高、最低、收盘和成交量的时间序列，这些字段都是一维的
+    NumPy 数组。data.py 模块还提供了几个帮助函数，如将价格转换为相对格式、枚举给定目录中的文件等。
 - en: 'The following is the constructor of the environment:'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
+  zh: 以下是环境的构造函数：
 - en: '[PRE4]'
+  id: totrans-55
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: 'It accepts a lot of arguments to tweak the environment’s behavior and observation
     representation:'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
+  zh: 它接受很多参数来调整环境的行为和观察表示：
 - en: 'prices: Contains one or more stock prices for one or more instruments as a
     dict, where keys are the instrument’s name and the value is a container object
     data.Prices, which holds price data arrays.'
+  id: totrans-57
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'prices: 包含一个或多个股票价格的数据字典，其中键是工具的名称，值是一个容器对象 data.Prices，包含价格数据数组。'
 - en: 'bars_count: The count of bars that we pass in the observation. By default,
     this is 10 bars.'
+  id: totrans-58
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'bars_count: 我们在观察中传入的条形数量。默认情况下，这是 10 个条形。'
 - en: 'commission: The percentage of the stock price that we have to pay to the broker
     on buying and selling the stock. By default, it’s 0.1%.'
+  id: totrans-59
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'commission: 我们在买卖股票时需要支付给经纪人的股价百分比。默认情况下，它是0.1%。'
 - en: 'reset_on_close: If this parameter is set to True, which it is by default, every
     time the agent asks us to close the existing position (in other words, sell a
     share), we stop the episode. Otherwise, the episode will continue until the end
     of our time series, which is one year of data.'
+  id: totrans-60
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'reset_on_close: 如果此参数设置为True（默认设置），则每当代理请求我们关闭现有仓位（即卖出股票）时，我们将停止当前回合。否则，回合将继续，直到时间序列结束，即一年数据。'
 - en: 'conv_1d: This Boolean argument switches between different representations of
     price data in the observation passed to the agent. If it is set to True, observations
     have a 2D shape, with different price components for subsequent bars organized
@@ -346,70 +471,101 @@
     every bar’s components placed together. This organization is convenient for a
     fully connected network architecture. Both representations are illustrated in
     Figure [10.2](#x1-173037r2).'
+  id: totrans-61
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'conv_1d: 这个布尔参数用于在传递给代理的观察值中切换不同的价格数据表示方式。如果设置为True，观察值将具有二维形状，不同价格成分的后续条目将按行组织。例如，最高价格（该条目的最大价格）放在第一行，最低价格放在第二行，收盘价格放在第三行。这种表示方式适用于对时间序列进行1D卷积，在这种情况下，数据中的每一行都像Atari
+    2D图像中的不同色彩平面（红色、绿色或蓝色）。如果我们将此选项设置为False，我们将得到一个包含每个条目组成部分的单一数据数组。这种组织方式适合全连接网络架构。两种表示方式见图[10.2](#x1-173037r2)。'
 - en: 'random_ofs_on_reset: If the parameter is True (by default), on every reset
     of the environment, the random offset in the time series will be chosen. Otherwise,
     we will start from the beginning of the data.'
+  id: totrans-62
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'random_ofs_on_reset: 如果该参数为True（默认值），则在每次重置环境时，都会选择时间序列中的随机偏移量。否则，我们将从数据的开头开始。'
 - en: 'reward_on_close: This Boolean parameter switches between the two reward schemes
     discussed previously. If it is set to True, the agent will receive a reward only
     on the “close” action issue. Otherwise, we will give a small reward every bar,
     corresponding to price movement during that bar.'
+  id: totrans-63
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'reward_on_close: 这个布尔参数在前面讨论的两种奖励方案之间切换。如果设置为True，代理仅在“收盘”动作时获得奖励。否则，我们会在每个条目上给予一个小奖励，对应于该条目期间的价格波动。'
 - en: 'volumes: This argument switches on volumes in observations and is disabled
     by default.'
+  id: totrans-64
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 'volumes: 这个参数控制观察值中的成交量，默认情况下是禁用的。'
 - en: '![PIC](img/file96.png)'
+  id: totrans-65
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/file96.png)'
 - en: 'Figure 10.2: Different data representations for the NN'
+  id: totrans-66
   prefs: []
   type: TYPE_NORMAL
+  zh: 图10.2：神经网络的不同数据表示方式
 - en: 'Now we will continue looking at the environment constructor:'
+  id: totrans-67
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们将继续查看环境构造器：
 - en: '[PRE5]'
+  id: totrans-68
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'Most of the functionality of the StocksEnv class is implemented in two internal
     classes: State and State1D. They are responsible for observation preparation and
     our bought share state and reward. They implement a different representation of
     our data in the observations, and we will take a look at their code later. In
     the constructor, we create the state object, action space, and observation space
     fields that are required by Gym.'
+  id: totrans-69
   prefs: []
   type: TYPE_NORMAL
+  zh: StocksEnv类的大部分功能实现于两个内部类：State和State1D。它们负责观察值的准备、我们购买的股票状态和奖励。它们实现了我们数据在观察值中的不同表示方式，我们稍后会查看它们的代码。在构造器中，我们创建了Gym所需的状态对象、动作空间和观察空间字段。
 - en: 'This method defines the reset() functionality for our environment:'
+  id: totrans-70
   prefs: []
   type: TYPE_NORMAL
+  zh: 该方法定义了我们环境的reset()功能：
 - en: '[PRE6]'
+  id: totrans-71
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: According to the gym.Env semantics, we randomly switch the time series that
     we will work on and select the starting offset in this time series. The selected
     price and offset are passed to our internal state instance, which then asks for
     an initial observation using its encode() function.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
+  zh: 根据gym.Env的语义，我们随机切换将要处理的时间序列，并选择该时间序列中的起始偏移量。选定的价格和偏移量被传递给我们的内部状态实例，然后使用其encode()函数请求初始观察值。
 - en: 'This method has to handle the action chosen by the agent and return the next
     observation, reward, and done flag:'
+  id: totrans-73
   prefs: []
   type: TYPE_NORMAL
+  zh: 该方法需要处理代理选择的动作，并返回下一个观察值、奖励和完成标志：
 - en: '[PRE7]'
+  id: totrans-74
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: All real functionality is implemented in our state classes, so this method is
     a very simple wrapper around the call to state methods.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
+  zh: 所有的实际功能都在我们的状态类中实现，因此这个方法只是对状态方法调用的一个简单包装。
 - en: The API for gym.Env allows you to define the render() method handler, which
     is supposed to render the current state in human or machine-readable format. Generally,
     this method is used to peek inside the environment state and is useful for debugging
@@ -417,125 +573,189 @@
     current prices as a chart to visualize what the agent sees at that moment. Our
     environment doesn’t support rendering (as this functionality is optional), so
     we don’t define this function at all.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
+  zh: gym.Env 的 API 允许你定义 render() 方法处理器，它应该以人类或机器可读的格式渲染当前状态。通常，这个方法用于查看环境状态的内部内容，对调试或追踪代理行为非常有用。例如，市场环境可以将当前价格渲染为图表，以可视化代理在那一刻所看到的内容。我们的环境不支持渲染（因为这个功能是可选的），所以我们根本不定义这个函数。
 - en: 'Let’s now look at the internal environ.State class, which implements the core
     of the environment’s functionality:'
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在让我们来看一下内部的 environ.State 类，它实现了环境功能的核心：
 - en: '[PRE8]'
+  id: totrans-78
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: The constructor does nothing more than just check and remember the arguments
     in the object’s fields.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
+  zh: 构造函数仅仅是检查并将参数保存在对象的字段中，没有做其他事情。
 - en: 'The reset() method is called every time that the environment is asked to reset
     and has to save the passed prices data and starting offset:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
+  zh: reset() 方法在每次环境请求重置时被调用，必须保存传入的价格数据和起始偏移量：
 - en: '[PRE9]'
+  id: totrans-81
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: In the beginning, we don’t have any shares bought, so our state has have_position=False
     and open_price=0.0.
+  id: totrans-82
   prefs: []
   type: TYPE_NORMAL
+  zh: 一开始，我们没有购买任何股票，因此我们的状态中有 `have_position=False` 和 `open_price=0.0`。
 - en: 'The shape property returns the tuple with dimensions of the NumPy array with
     encoded state:'
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
+  zh: shape 属性返回包含编码状态的 NumPy 数组维度的元组：
 - en: '[PRE10]'
+  id: totrans-84
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: The State class is encoded into a single vector (top part in the Figure [10.2](#x1-173037r2)),
     which includes prices with optional volumes and two numbers indicating the presence
     of a bought share and position profit.
+  id: totrans-85
   prefs: []
   type: TYPE_NORMAL
+  zh: State 类被编码为一个单一的向量（图[10.2](#x1-173037r2)中的顶部部分），该向量包括价格（可选的成交量）和两个数字，表示是否持有股票以及仓位利润。
 - en: 'The encode() method packs prices at the current offset into a NumPy array,
     which will be the observation of the agent:'
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
+  zh: encode() 方法将当前偏移量的价格打包成一个 NumPy 数组，这将作为代理的观察值：
 - en: '[PRE11]'
+  id: totrans-87
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: 'This helper method calculates the current bar’s close price:'
+  id: totrans-88
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个辅助方法计算当前 K 线的收盘价：
 - en: '[PRE12]'
+  id: totrans-89
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: 'Prices passed to the State class have the relative form with respect to the
     open price: the high, low, and close components are relative ratios to the open
     price. This representation was already discussed when we talked about the training
     data, and it will (probably) help our agent to learn price patterns that are independent
     of actual price value.'
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
+  zh: 传递给 State 类的价格相对于开盘价是相对形式：高、低和收盘价组件是相对于开盘价的比例。我们在讨论训练数据时已经讨论过这种表示法，它（可能）有助于我们的代理学习与实际价格值无关的价格模式。
 - en: 'The step() method is the most complicated piece of code in the State class:'
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: step() 方法是 State 类中最复杂的代码部分：
 - en: '[PRE13]'
+  id: totrans-92
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: It is responsible for performing one step in our environment. On exit, it has
     to return the reward in a percentage and an indication of the episode ending.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 它负责在我们的环境中执行一步操作。退出时，它必须返回一个百分比形式的奖励，并指示剧集是否结束。
 - en: 'If the agent has decided to buy a share, we change our state and pay the commission:'
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果代理决定购买一只股票，我们会改变状态并支付佣金：
 - en: '[PRE14]'
+  id: totrans-95
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: In our state, we assume the instant order execution at the current bar’s close
     price, which is a simplification on our side; normally, an order can be executed
     on a different price, which is called price slippage.
+  id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的状态下，我们假设在当前 K 线的收盘价进行即时订单执行，这对我们来说是一个简化；通常，订单可能在不同的价格上执行，这被称为价格滑点。
 - en: 'If we have a position and the agent asks us to close it, we pay commission
     again, change the done flag if we’re in reset_on_close mode, give a final reward
     for the whole position, and change our state:'
+  id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们有持仓，且代理要求我们平仓，我们需要再次支付佣金，在重置模式下改变已完成标志，给整个仓位一个最终的奖励，并改变我们的状态：
 - en: '[PRE15]'
+  id: totrans-98
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'In the rest of the function, we modify the current offset and give the reward
     for the last bar movement:'
+  id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 在函数的其余部分，我们修改当前偏移量并给予最后一根 K 线运动的奖励：
 - en: '[PRE16]'
+  id: totrans-100
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'That’s it for the State class, so let’s look at State1D, which has the same
     behavior and just overrides the representation of the state passed to the agent:'
+  id: totrans-101
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是 State 类的全部内容，让我们来看一下 State1D，它具有相同的行为，仅仅是重写了传递给代理的状态表示：
 - en: '[PRE17]'
+  id: totrans-102
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: The shape of this representation is different, as our prices are encoded as
     a 2D matrix suitable for a 1D convolution operator.
+  id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 这种表示的形状有所不同，因为我们的价格被编码为适用于 1D 卷积操作符的 2D 矩阵。
 - en: 'This method encodes the prices in our matrix, depending on the current offset,
     whether we need volumes, and whether we have stock:'
+  id: totrans-104
   prefs: []
   type: TYPE_NORMAL
+  zh: 该方法根据当前偏移量、是否需要成交量以及是否拥有股票，将价格编码到我们的矩阵中：
 - en: '[PRE18]'
+  id: totrans-105
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: That’s it for our trading environment. Compatibility with the Gym API allows
     us to plug it into the familiar classes that we used to handle the Atari games.
     Let’s do that now.
+  id: totrans-106
   prefs: []
   type: TYPE_NORMAL
+  zh: 这就是我们的交易环境。与 Gym API 的兼容性使得我们能够将其插入到我们用来处理 Atari 游戏的熟悉类中。现在我们来做这个。
 - en: Models
+  id: totrans-107
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 模型
 - en: 'In this example, two architectures of DQN are used: a simple feed-forward network
     with three layers and a network with 1D convolution as a feature extractor, followed
     by two fully connected layers to output Q-values. Both of them use the dueling
@@ -543,62 +763,91 @@
     two-step Bellman unrolling have also been used. The rest of the process is the
     same as in a classical DQN (from Chapter [6](#)). Both models are in Chapter10/lib/models.py
     and are very simple. Let’s start with the feed-forward model:'
+  id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本示例中，使用了两种 DQN 架构：一个是简单的三层前馈网络，另一个是使用 1D 卷积作为特征提取器的网络，后接两层全连接层输出 Q 值。它们都使用了第
+    [8](ch012.xhtml#x1-1240008) 章中描述的对战架构。同时，也使用了双重 DQN 和两步贝尔曼展开。其余过程与经典 DQN 相同（见第
+    [6](#) 章）。这两种模型位于 Chapter10/lib/models.py 中，并且非常简单。我们先从前馈模型开始：
 - en: '[PRE19]'
+  id: totrans-109
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: The feed forward model uses independent networks for Q-value and advantage prediction.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 前馈模型使用独立的网络进行 Q 值和优势预测。
 - en: 'The convolutional model has a common feature extraction layer with the 1D convolution
     operations and two fully connected heads to output the value of the state and
     advantages for actions:'
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 卷积模型具有一个常见的特征提取层，使用 1D 卷积操作，并且有两个全连接头用于输出状态值和动作优势：
 - en: '[PRE20]'
+  id: totrans-112
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: As you can see, the model is very similar to the DQN Dueling architecture we
     used in Atari examples.
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 如你所见，该模型与我们在 Atari 示例中使用的 DQN Dueling 架构非常相似。
 - en: Training code
+  id: totrans-114
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 训练代码
 - en: 'We have two very similar training modules in this example: one for the feed-forward
     model and one for 1D convolutions. For both of them, there is nothing new added
     to our examples from Chapter [8](ch012.xhtml#x1-1240008):'
+  id: totrans-115
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本示例中，我们有两个非常相似的训练模块：一个用于前馈模型，另一个用于 1D 卷积。对于这两个模块，除了第 [8](ch012.xhtml#x1-1240008)
+    章中提供的内容外，没有任何新的内容：
 - en: They’re using epsilon-greedy action selection to perform exploration. The epsilon
     linearly decays over the first 1M steps from 1.0 to 0.1.
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 它们使用 epsilon-greedy 动作选择来进行探索。epsilon 在前 100 万步内从 1.0 线性衰减到 0.1。
 - en: A simple experience replay buffer of size 100k is being used, which is initially
     populated with 10k transitions.
+  id: totrans-117
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 正在使用一个简单的经验回放缓冲区，大小为 100k，最初填充有 10k 个过渡。
 - en: For every 1,000 steps, we calculate the mean value for the fixed set of states
     to check the dynamics of the Q-values during the training.
+  id: totrans-118
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每 1,000 步，我们会计算固定状态集合的均值，以检查训练过程中 Q 值的动态变化。
 - en: 'For every 100k steps, we perform validation: 100 episodes are played on the
     training data and on previously unseen quotes. Validation results are recorded
     in TensorBoard, such as the mean profit, the mean count of bars, and the share
     held. This step allows us to check for overfitting conditions.'
+  id: totrans-119
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 每 100k 步，我们进行验证：在训练数据和之前未见过的报价上各进行 100 轮测试。验证结果会记录在 TensorBoard 中，包括平均利润、平均条数以及持股比例。此步骤可以帮助我们检查是否存在过拟合情况。
 - en: The training modules are in Chapter10/train_model.py (feed-forward model) and
     Chapter10/train_model_conv.py (with a 1D convolutional layer). Both versions accept
     the same command-line options.
+  id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练模块位于 Chapter10/train_model.py（前馈模型）和 Chapter10/train_model_conv.py（含 1D 卷积层）。两个版本都接受相同的命令行选项。
 - en: To start the training, you need to pass training data with the --data option,
     which could be an individual CSV file or the whole directory with files. By default,
     the training module uses Yandex quotes for 2016 (file data/YNDX_160101_161231.csv).
@@ -606,80 +855,123 @@
     by default. Another required option will be -r, which is used to pass the name
     of the run. This name will be used in the TensorBoard run name and to create directories
     with saved models.
+  id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 要开始训练，您需要使用 `--data` 选项传递训练数据，可以是单个 CSV 文件或包含文件的整个目录。默认情况下，训练模块使用 2016 年的 Yandex
+    行情（文件 `data/YNDX_160101_161231.csv`）。对于验证数据，有一个 `--val` 选项，默认使用 Yandex 2015 年的行情。另一个必需选项是
+    `-r`，用于传递运行名称。此名称将用作 TensorBoard 运行名称和用于创建保存模型的目录。
 - en: Results
+  id: totrans-122
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 结果
 - en: Now that we’ve implemented them, let’s compare the performance of our two models,
     starting with feed-forward variant.
+  id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在我们已经实施了它们，让我们比较一下我们两个模型的表现，首先从前馈变体开始。
 - en: The feed-forward model
+  id: totrans-124
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 前馈模型
 - en: 'During the training, the average reward obtained by the agent was slowly but
     consistently growing. After 300k episodes, the growth slowed down. The following
     are charts (Figure [10.3](#x1-177003r3)) showing the raw reward during the training
     and the same data smoothed with the simple moving average of the last 15 values:'
+  id: totrans-125
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练过程中，代理每次获得的平均奖励都在缓慢但稳步增长。在 300k 个 episode 后，增长放缓。以下是显示训练期间原始奖励和简单移动平均值的图表（图 [10.3](#x1-177003r3)）：
 - en: '![PIC](img/B21150_10_03.png)'
+  id: totrans-126
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_03.png)'
 - en: 'Figure 10.3: Reward during the training. Raw values (left) and smoothed (right)'
+  id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: '图 10.3: 训练过程中的奖励。原始值（左）和平滑后（右）'
 - en: 'Another pair of charts (Figure [10.4](#x1-177004r4)) shows the reward obtained
     from testing performed on the same training data but without random actions (𝜖
     = 0):'
+  id: totrans-128
   prefs: []
   type: TYPE_NORMAL
+  zh: 另一对图表（图 [10.4](#x1-177004r4)）显示了在相同的训练数据上进行测试时，不执行随机动作（𝜖 = 0）所获得的奖励：
 - en: '![PIC](img/B21150_10_04.png)'
+  id: totrans-129
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_04.png)'
 - en: 'Figure 10.4: Reward from the tests. Raw values (left) and smoothed (right)'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: '图 10.4: 测试的奖励。原始值（左）和平滑后（右）'
 - en: Both the training and testing reward charts show that the agent is learning
     how to increase the profit over time.
+  id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练和测试奖励图表显示，代理正在学习如何随时间增加利润。
 - en: '![PIC](img/B21150_10_05.png)'
+  id: totrans-132
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_05.png)'
 - en: 'Figure 10.5: Length of the episodes. Raw values (left) and smoothed (right)'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: '图 10.5: episode 的长度。原始值（左）和平滑后（右）'
 - en: The length of each episode also increased after 100k episodes, as the agent
     learned that holding the share might be profitable.
+  id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 每个 episode 的长度在 100k 个 episode 后也有所增加，因为代理学到了持有股份可能是有利的。
 - en: 'In addition, we monitor the predicted value of the random set of states. The
     following chart shows that the network becomes more and more optimistic about
     those states during the training:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 此外，我们监控随机状态集的预测值。以下图表显示，在训练过程中网络对这些状态变得越来越乐观：
 - en: '![PIC](img/B21150_10_06.png)'
+  id: totrans-136
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_06.png)'
 - en: 'Figure 10.6: Value predicted for a random set of states'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: '图 10.6: 随机状态集的预测值'
 - en: 'All charts look good so far, but all of them were obtained using the training
     data. It is great that our agent is learning how to get profits on the historical
     data. But will it work on data never seen before? To check that, we perform validation
     on 2,015 quotes, and the reward is shown in the Figure [10.7](#x1-177009r7):'
+  id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 到目前为止，所有图表看起来都很好，但所有这些图表都是使用训练数据获取的。很棒，我们的代理正在学习如何在历史数据上获利。但它会在以前从未见过的数据上工作吗？为了检查这一点，我们在
+    2,015 年的报价上进行验证，奖励显示在图 [10.7](#x1-177009r7) 中：
 - en: '![PIC](img/B21150_10_07.png)'
+  id: totrans-139
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_07.png)'
 - en: 'Figure 10.7: Reward on validation dataset. Raw values (left) and smoothed (right)'
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: '图 10.7: 验证数据集上的奖励。原始值（左）和平滑后（右）'
 - en: 'This chart is a bit disappointing: the reward doesn’t have an uptrend. In the
     smoothed version of the chart, we might even see the opposite — the reward is
     slowly decreasing after the first hour of training (at that point, we had a significant
@@ -689,172 +981,242 @@
     is a broker commission in our environment — 0.1% when we buy stock and 0.1% for
     selling it) and means that our agent is better than a random “buying-and-selling
     monkey.”'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 这张图有点令人失望：奖励没有上升趋势。在图表的平滑版本中，我们甚至可能看到相反的情况——奖励在训练的第一小时后缓慢下降（在那个时刻，我们在图[10.5](#x1-177005r5)上有了显著的训练周期增长）。这可能是代理过拟合的表现，过拟合始于100万次训练迭代。然而，在训练的前4小时，奖励仍然高于-0.2%（这是我们环境中的经纪商佣金——买入股票时是0.1%，卖出时也是0.1%），意味着我们的代理比随机的“买入卖出猴子”表现得更好。
 - en: 'During the training, our code saves models for later experiments. It does this
     every time the mean Q-values on our held-out-states set update the maximum or
     when the reward on the validation sets beats the previous record. There is a tool
     that loads the model, trades on prices you’ve provided to it with the command-line
     option, and draws the plots with the profit change over time. The tool is called
     Chapter10/run_model.py and it can be used like this:'
+  id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练过程中，我们的代码会保存模型以供以后实验使用。每当我们持有状态集上的平均Q值更新最大值，或当验证集上的奖励突破以前的记录时，它都会这样做。还有一个工具可以加载模型，并使用命令行选项在你提供的价格上进行交易，并绘制利润随时间变化的图表。该工具名为`Chapter10/run_model.py`，使用方式如下：
 - en: '[PRE21]'
+  id: totrans-143
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: 'The options that the tool accepts are as follows:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 该工具接受的选项如下：
 - en: '-d: This is the path to the quotes to use. In the shown command, we apply the
     model to the data that it was trained on.'
+  id: totrans-145
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: -d：这是用于的报价路径。在所示命令中，我们将模型应用于它训练时的数据。
 - en: '-m: This is the path to the model file. By default, the training code saves
     it in the saves directory.'
+  id: totrans-146
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: -m：这是模型文件的路径。默认情况下，训练代码会将其保存在`saves`目录中。
 - en: '-b: This shows how many bars to pass to the model in the context. It has to
     match the count of bars used on training, which is 10 by default and can be changed
     in the training code.'
+  id: totrans-147
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: -b：此选项显示在上下文中传递给模型的条形图数。它必须与训练时使用的条形图数量匹配，默认值为10，可以在训练代码中更改。
 - en: '-n: This is the suffix to be appended to the images produced.'
+  id: totrans-148
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: -n：这是附加到生成的图像上的后缀。
 - en: '--commission: This allows you to redefine the broker’s commission, which has
     a default of 0.1%.'
+  id: totrans-149
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: --commission：此选项允许你重新定义经纪商的佣金，默认值为0.1%。
 - en: 'At the end, the tool creates a chart of the total profit dynamics (in percentages).
     The following is the reward chart on Yandex 2016 quotes (used for training):'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，工具会创建一个总利润动态图（以百分比表示）。以下是Yandex 2016年报价（用于训练）的奖励图：
 - en: '![PIC](img/B21150_10_08.png)'
+  id: totrans-151
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/B21150_10_08.png)'
 - en: 'Figure 10.8: Trading profit on the training data (left) and validation (right)'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 图10.8：训练数据上的交易利润（左）与验证数据上的交易利润（右）
 - en: 'The result on the training data looks amazing: 150% profit in just a year.
     However, the result on the validation dataset is much worse, as we’ve seen from
     the validation plots in TensorBoard.'
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练数据上的结果看起来非常惊人：仅仅一年就获得了150%的利润。然而，在验证数据集上的结果要差得多，正如我们从TensorBoard中的验证图表中看到的那样。
 - en: 'To check that our system is profitable with zero commission, we can rerun on
     the same data with the --commission 0.0 option:'
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了检查我们的系统在零佣金下是否有盈利，我们可以使用`--commission 0.0`选项重新运行相同的数据：
 - en: '![PIC](img/file108.png)'
+  id: totrans-155
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file108.png)'
 - en: 'Figure 10.9: Trading profit on validation data without broker’s commission'
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 图10.9：没有经纪商佣金的验证数据交易利润
 - en: 'We have some bad days with drawdown, but the overall results are good: without
     commission, our agent can be profitable. Of course, the commission is not the
     only issue. Our order simulation is very primitive and doesn’t take into account
     real-life situations, such as price spread and a slip in order execution.'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们有一些回撤较大的糟糕日子，但整体结果还是不错的：没有佣金时，我们的代理是可以盈利的。当然，佣金并不是唯一的问题。我们的订单模拟非常原始，并没有考虑到现实中的情况，例如价格差距和订单执行的滑点。
 - en: 'If we take the model with the best reward on the validation set, the reward
     dynamics are a bit better. Profitability is lower, but the drawdown on unseen
     quotes is much lower (and commission was enabled for the following charts):'
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果我们选择在验证集上获得最佳奖励的模型，奖励动态会稍好一些。盈利能力较低，但在未见过的报价上的回撤要低得多（并且在以下图表中启用了佣金）：
 - en: '![PIC](img/B21150_10_10.png)'
+  id: totrans-159
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/B21150_10_10.png)'
 - en: 'Figure 10.10: The reward from the model with the best validation reward. Training
     data (left) and validation (right)'
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.10：最佳验证奖励模型的奖励。训练数据（左）和验证数据（右）
 - en: But, of course, taking the best model based on validation data is cheating —
     by using validation results for model’s selection, we are ruining the idea of
     validation. So, the charts above are just to illustrate that there are some models
     that might work alright even on unseen data.
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 但是，当然，基于验证数据选择最佳模型是作弊——通过使用验证结果来选择模型，我们实际上破坏了验证的意义。因此，上述图表仅用于说明有些模型即使在未见过的数据上也能表现得还不错。
 - en: The convolution model
+  id: totrans-162
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
+  zh: 卷积模型
 - en: The second model implemented in this example uses 1D convolution filters to
     extract features from the price data. This allows us to increase the number of
     bars in the context window that our agent sees on every step without a significant
     increase in the network size. By default, the convolution model example uses 50
     bars of context. The training code is in Chapter10/train_model_conv.py, and it
     accepts the same set of command-line parameters as the feed-forward version.
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
+  zh: 本示例中实现的第二个模型使用一维卷积滤波器从价格数据中提取特征。这使我们能够在不显著增加网络规模的情况下，增加每步操作中代理所看到的上下文窗口中的条形数量。默认情况下，卷积模型示例使用50个条形数据作为上下文。训练代码位于Chapter10/train_model_conv.py，并且接受与前馈版本相同的一组命令行参数。
 - en: 'Training dynamics are almost identical, but the reward obtained on the validation
     set is slightly higher and starts to overfit later:'
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练动态几乎相同，但在验证集上的奖励稍微高一些，并且开始过拟合得更晚：
 - en: '![PIC](img/B21150_10_11.png)'
+  id: totrans-165
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_11.png)'
 - en: 'Figure 10.11: Reward during the training. Raw values (left) and smoothed (right)'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.11：训练过程中的奖励。原始值（左）和平滑值（右）
 - en: '![PIC](img/B21150_10_12.png)'
+  id: totrans-167
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_10_12.png)'
 - en: 'Figure 10.12: Reward on validation dataset. Raw values (left) and smoothed
     (right)'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 10.12：验证数据集上的奖励。原始值（左）和平滑值（右）
 - en: Things to try
+  id: totrans-169
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 待尝试的事项
 - en: 'As already mentioned, financial markets are large and complicated. The methods
     that we’ve tried are just the very beginning. Using RL to create a complete and
     profitable trading strategy is a large project, which can take several months
     of dedicated labor. However, there are things that we can try to get a better
     understanding of the topic:'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
+  zh: 如前所述，金融市场庞大且复杂。我们尝试的方法只是一个开始。使用强化学习（RL）来创建一个完整且有利可图的交易策略是一个庞大的项目，可能需要数月的专注工作。然而，我们可以尝试一些方法来更好地理解这个主题：
 - en: Our data representation is definitely not perfect. We don’t take into account
     significant price levels (support and resistance), round price values, and other
     financial markets information. Incorporating them into the observation could be
     a challenging problem, which you could try exploring.
+  id: totrans-171
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 我们的数据表示方式显然并不完美。我们没有考虑重要的价格水平（支撑位和阻力位）、整数价格值和其他金融市场信息。将这些信息纳入观察范围可能是一个具有挑战性的问题，您可以尝试进一步探索。
 - en: Analyze market prices at different timeframes. Low-level data like one-minute
     bars are noisy (as they include lots of small price movements caused by individual
     trades), and it is like looking at the market using a microscope. At larger scales,
     such as one-hour or one-day bars, you can see large, long trends in data movement,
     which could be extremely important for price prediction.
+  id: totrans-172
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在不同时间框架下分析市场价格。像一分钟条形数据这样的低级数据非常嘈杂（因为它们包含了由单个交易导致的大量小幅价格波动），就像用显微镜观察市场一样。在更大的尺度下，如一小时或一天的条形数据，您可以看到数据运动中的大规模、长周期趋势，这对价格预测可能非常重要。
 - en: In principle, our agent can look at price at various scales at the same time,
     taking into account not just recent low-level movements but overall trends (and
     recent natural language processing (NLP) innovations like transformers, attention
     mechanisms, and long context windows might be really helpful there).
+  id: totrans-173
   prefs:
   - PREF_IND
   type: TYPE_NORMAL
+  zh: 原则上，我们的代理可以同时从多个尺度上查看价格，考虑到的不仅仅是最近的低级别波动，还包括整体趋势（近年来的自然语言处理（NLP）创新，如transformers、注意力机制和长时间上下文窗口，可能在这里非常有帮助）。
 - en: More training data is needed. One year of data for one stock is just 130k bars,
     which might be not enough to capture all market situations. Ideally, a real-life
     agent should be trained on a much larger dataset, such as the prices for hundreds
     of stocks for the past 10 years or more.
+  id: totrans-174
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 需要更多的训练数据。单只股票一年的数据仅有13万条数据，这可能不足以捕捉所有市场情形。理想情况下，真实生活中的代理应该在更大的数据集上进行训练，例如过去10年或更长时间内数百只股票的价格数据。
 - en: 'Experiment with the network architecture. The convolution model has shown a
     bit faster convergence than the feed-forward model, but there are a lot of things
     to optimize: the count of layers, kernel size, residual architecture, attention
     mechanism, and so on.'
+  id: totrans-175
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 尝试不同的网络架构。卷积模型比前馈模型稍微快一点收敛，但有很多需要优化的地方：层数、卷积核大小、残差架构、注意力机制等等。
 - en: 'There are lots of similarities between NLP and financial data analysis: both
     work with human-created sequences of data that have variable length. You can try
     to represent price bars as “words” in some “financial language” (like “up price
@@ -862,45 +1224,64 @@
     to this language. For example, train embeddings from the “sentences” to capture
     financial markets’ structure, or use transformers or even LLMs for data prediction
     and classification.'
+  id: totrans-176
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 自然语言处理（NLP）与金融数据分析之间有许多相似之处：两者都处理人类创作的、具有可变长度的数据序列。你可以尝试将价格条表示为某种“金融语言”中的“词汇”（例如，“价格上涨1%”→符号A，“价格上涨2%”→符号B），然后将NLP方法应用于这种语言。例如，从“句子”中训练嵌入，以捕捉金融市场的结构，或者使用变换器（transformers）甚至大规模语言模型（LLMs）进行数据预测和分类。
 - en: Summary
+  id: totrans-177
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: 'In this chapter, we saw a practical example of RL and implemented a trading
     agent and a custom Gym environment. We tried two different architectures: a feed-forward
     network with price history on input and a 1D convolution network. Both architectures
     used the DQN method, with some of the extensions described in Chapter [8](ch012.xhtml#x1-1240008).'
+  id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，我们看到一个强化学习的实际例子，并实现了一个交易代理和一个自定义的Gym环境。我们尝试了两种不同的架构：一种是将价格历史作为输入的前馈网络，另一种是1D卷积网络。两种架构都使用了DQN方法，并且加入了第[8](ch012.xhtml#x1-1240008)章中描述的一些扩展。
 - en: 'This was the last chapter in Part 2 of this book. In Part 3, we will talk about
     a different family of RL methods: policy gradients. We’ve touched on this approach
     a bit, but in the upcoming chapters, we will go much deeper into the subject,
     covering the REINFORCE method and the best method in the family: Asynchronous
     Advantage Actor-Critic, also known as A3C.'
+  id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是本书第二部分的最后一章。在第三部分，我们将讨论另一类强化学习方法：策略梯度。我们已经简单提到过这种方法，但在接下来的章节中，我们将深入探讨这一主题，介绍REINFORCE方法以及该家族中最好的方法：异步优势演员-评论员（Asynchronous
+    Advantage Actor-Critic），也称为A3C。
 - en: Leave a Review!
+  id: totrans-180
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 留下您的评论！
 - en: Thank you for purchasing this book from Packt Publishing—we hope you enjoy it!
     Your feedback is invaluable and helps us improve and grow. Once you’ve completed
     reading it, please take a moment to leave an Amazon review; it will only take
     a minute, but it makes a big difference for readers like you. Scan the QR code
     below to receive a free ebook of your choice. [https://packt.link/NzOWQ](https://packt.link/NzOWQ)
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 感谢您从Packt Publishing购买本书——我们希望您喜欢它！您的反馈对我们至关重要，帮助我们不断改进和成长。阅读完毕后，请花一点时间在亚马逊上留下评论；这只需要一分钟，但对像您这样的读者意义重大。扫描下方二维码，获取您选择的免费电子书。[https://packt.link/NzOWQ](https://packt.link/NzOWQ)
 - en: '![PIC](img/file3.png)'
+  id: totrans-182
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file3.png)'
 - en: Part 3
+  id: totrans-183
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 第三部分
 - en: Policy-based methods
+  id: totrans-184
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 基于策略的方法

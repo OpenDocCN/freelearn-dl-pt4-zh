@@ -738,17 +738,21 @@
   id: totrans-91
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的Pong环境中，这看起来像是对代码的一个不必要的复杂化，但这种分离在某些情况下可能非常有用。想象一下你有一个非常慢且复杂的环境，每一步都需要数秒的计算。这并不是一个人为的例子；例如，过去的NeurIPS竞赛，如Learning
+    to Run、AI for Prosthetics Challenge和Learn to Move（[https://www.aicrowd.com/challenges/neurips-2019-learn-to-move-walk-around](https://www.aicrowd.com/challenges/neurips-2019-learn-to-move-walk-around)）中使用了非常缓慢的神经肌肉模拟器，因此你必须将经验收集与训练过程分开。在这种情况下，你可以有许多并行的环境，将经验传递给中央训练过程。
 - en: To turn our serial code into parallel code, some modifications are needed. In
     the file Chapter09/03_parallel.py, you can find the full source of the example.
     In the following, I’ll focus only on major differences.
   id: totrans-92
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了将我们的串行代码转变为并行代码，需要做一些修改。在文件Chapter09/03_parallel.py中，你可以找到这个示例的完整源码。接下来，我将只关注主要的区别。
 - en: 'First, we use the torch.multiprocessing module as a drop-in replacement for
     the standard Python multiprocessing module:'
   id: totrans-93
   prefs: []
   type: TYPE_NORMAL
+  zh: 首先，我们使用torch.multiprocessing模块来替代标准的Python multiprocessing模块：
 - en: '[PRE6]'
   id: totrans-94
   prefs: []
@@ -765,6 +769,7 @@
   id: totrans-95
   prefs: []
   type: TYPE_NORMAL
+  zh: 标准库中的版本提供了几个用于处理在独立进程中执行的代码的原语，例如mp.Queue（分布式队列）、mp.Process（子进程）等。PyTorch提供了一个对标准multiprocessing库的封装，它允许在进程间共享torch张量，而无需复制它们。这是通过共享内存实现的，针对CPU张量使用共享内存，或者针对GPU上的张量使用CUDA引用。这种共享机制消除了在单台计算机内部进行通信时的主要瓶颈。当然，在真正分布式的通信中，你需要自行序列化数据。
 - en: The function play_func implements our “play process” and will be running in
     a separate child process started by the main process. Its responsibility is to
     get experience from the environment and push it into the shared queue. In addition,
@@ -774,10 +779,12 @@
   id: totrans-96
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数play_func实现了我们的“播放进程”，并将在由主进程启动的单独子进程中运行。它的职责是从环境中获取经验并将其推送到共享队列中。此外，它将关于回合结束的信息封装成一个数据类，并将其推送到同一个队列中，以便训练过程可以获得关于回合奖励和步数的信息。
 - en: 'The function batch_generator is replaced by the class BatchGenerator:'
   id: totrans-97
   prefs: []
   type: TYPE_NORMAL
+  zh: 函数batch_generator被类BatchGenerator所替代：
 - en: '[PRE7]'
   id: totrans-98
   prefs: []
@@ -793,11 +800,13 @@
   id: totrans-99
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个类提供了一个批次的迭代器，并且通过方法pop_reward_steps()额外模拟了ExperienceSource接口。这个类的逻辑很简单：它消费队列（由“播放进程”填充），如果接收到EpisodeEnded对象，它会记住关于epsilon的信息和游戏所经历的步骤数；否则，该对象就是一条需要添加到重放缓冲区的经验。从队列中，我们消费当前可用的所有对象，然后从缓冲区中抽样训练批次并返回。
 - en: 'In the beginning of the training process, we need to tell torch.multiprocessing
     which start method to use:'
   id: totrans-100
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练过程的开始，我们需要告诉torch.multiprocessing使用哪种启动方法：
 - en: '[PRE8]'
   id: totrans-101
   prefs: []
@@ -807,12 +816,14 @@
   id: totrans-102
   prefs: []
   type: TYPE_NORMAL
+  zh: 它们有几个，但 spawn 是最灵活的。
 - en: 'Then, the queue for communication is created, and we start our play_func as
     a separate process. As arguments, we pass the NN, hyperparameters, and queue to
     be used for experience:'
   id: totrans-103
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，创建用于通信的队列，并将 play_func 作为单独的进程启动。我们传递的参数包括神经网络（NN）、超参数以及用于经验的队列：
 - en: '[PRE9]'
   id: totrans-104
   prefs: []
@@ -824,31 +835,38 @@
   id: totrans-105
   prefs: []
   type: TYPE_NORMAL
+  zh: 其余的代码几乎相同，唯一不同的是我们使用 BatchGenerator 实例作为 Ignite 和 EndOfEpisodeHandler 的数据源（后者需要使用方法
+    pop_rewards_steps()）。以下图表是从我的基准测试中获得的：
 - en: '![PIC](img/B21150_09_08.png)'
   id: totrans-106
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_09_08.png)'
 - en: 'Figure 9.8: Reward and FPS in the baseline and parallel version'
   id: totrans-107
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.8：基线版本和并行版本中的奖励和 FPS
 - en: 'As you can see, in terms of FPS, we got an increase of 27%: 290 FPS in the
     parallel version versus 228 in the baseline. The average time to solve the environment
     decreased by 41%.'
   id: totrans-108
   prefs: []
   type: TYPE_NORMAL
+  zh: 如你所见，在 FPS 方面，我们获得了 27% 的提升：并行版本的 FPS 为 290，而基线为 228。解决环境的平均时间减少了 41%。
 - en: In terms of FPS increase, the parallel version looks worse than the best result
     from the previous section (with 3 game environments, we got almost 400 FPS), but
     the convergence speed is better.
   id: totrans-109
   prefs: []
   type: TYPE_NORMAL
+  zh: 就 FPS 增加而言，尽管并行版本比前一节中的最佳结果（使用 3 个游戏环境时，我们获得了接近 400 FPS）看起来要差，但收敛速度更快。
 - en: Tweaking wrappers
   id: totrans-110
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 调整封装器
 - en: 'The final step in our sequence of experiments will be tweaking wrappers applied
     to the environment. This is very easy to overlook, as wrappers are normally written
     once or just borrowed from other code, applied to the environment, and left to
@@ -858,12 +876,15 @@
   id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们实验序列中的最后一步是调整应用于环境的封装器。这个步骤很容易被忽视，因为封装器通常是写一次或从其他代码借用后应用到环境中的，并且被留在那里。但你应该意识到它们在方法的速度和收敛性方面的重要性。例如，DeepMind
+    风格的正常 Atari 游戏封装器堆栈如下：
 - en: 'NoopResetEnv: Applies a random amount of NOOP operations to the game reset.
     In some Atari games, this is needed to remove weird initial observations.'
   id: totrans-112
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: NoopResetEnv：对游戏重置应用随机数量的 NOOP 操作。在某些 Atari 游戏中，需要这个操作来去除奇怪的初始观察值。
 - en: 'MaxAndSkipEnv: Applies max to N observations (four by default) and returns
     this as an observation for the step. This solves the “flickering” problem in some
     Atari games, when the game draws different portions of the screen on even and
@@ -873,6 +894,8 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: MaxAndSkipEnv：对 N 次观察应用最大值（默认四次），并将其作为该步的观察返回。这样解决了某些 Atari 游戏中的“闪烁”问题，因为这些游戏在偶数帧和奇数帧上绘制屏幕的不同部分（这是
+    Atari 开发者常用的做法，以克服平台的限制并增加游戏精灵的复杂度）。
 - en: 'EpisodicLifeEnv: In some games, this detects a lost life and turns this situation
     into the end of the episode. This significantly increases convergence, as our
     episodes become shorter (one single life versus several given by the game logic).
@@ -881,6 +904,8 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: EpisodicLifeEnv：在某些游戏中，这会检测丢失的生命并将其转化为该集的结束。这显著提高了收敛性，因为我们的回合变得更短（一次生命而非游戏逻辑给出的多次生命）。这仅对
+    Atari 2600 学习环境支持的某些游戏相关。
 - en: 'FireResetEnv: Executes a FIRE action on game reset. Some games require this
     to start the gameplay. Without this, our environment becomes a partially observable
     Markov decision process (POMDP), which makes it impossible to converge.'
@@ -888,12 +913,14 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: FireResetEnv：在游戏重置时执行 FIRE 操作。有些游戏需要这个操作才能开始游戏。如果没有这个操作，我们的环境就变成了部分可观察的马尔可夫决策过程（POMDP），这使得无法收敛。
 - en: 'WarpFrame: Also known as ProcessFrame84, this converts an image to grayscale
     and resizes it to 84 × 84.'
   id: totrans-116
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: WarpFrame：也称为 ProcessFrame84， 将图像转换为灰度并将其调整为 84 × 84 大小。
 - en: 'ClipRewardEnv: Clips the reward to a −1…1 range, which unifies wide variability
     in scoring among different Atari games. For example, Pong might have a −21…21
     score range, but the score in the River Raid game could be 0…∞.'
@@ -901,6 +928,8 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: ClipRewardEnv：将奖励裁剪到 −1…1 范围，这统一了不同 Atari 游戏中分数的广泛变化。例如，Pong 的分数范围可能是 −21…21，而
+    River Raid 游戏的分数可能是 0…∞。
 - en: 'FrameStack: Stacks N sequential observations into the stack (the default is
     four). As we already discussed in Chapter [6](#), in some games, this is required
     to fulfill the Markov property. For example, in Pong, from one single frame, it
@@ -909,12 +938,14 @@
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
+  zh: FrameStack：将N个连续的观察堆叠到栈中（默认是四个）。正如我们在第[6](#)章中讨论的那样，在某些游戏中，这是实现马尔可夫性质所必需的。例如，在Pong游戏中，从单一的一帧图像中无法得知球的运动方向。
 - en: 'The code of those wrappers was heavily optimized by many people and several
     versions exist. My personal favorite is the Stable Baselines3, which is a fork
     from the OpenAI Baselines project. You can find it here: [https://stable-baselines3.readthedocs.io/.](https://stable-baselines3.readthedocs.io/.)'
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些包装器的代码经过了许多人的精心优化，并且存在多个版本。个人最喜欢的是 Stable Baselines3，它是 OpenAI Baselines 项目的一个分支。你可以在这里找到它：[https://stable-baselines3.readthedocs.io/.](https://stable-baselines3.readthedocs.io/.)
 - en: But you shouldn’t take this code as the final source of truth, as your concrete
     environment might have different requirements and specifics. For example, if you
     are interested in speeding up one specific game from the Atari suite, NoopResetEnv
@@ -928,6 +959,9 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 但你不应该将这段代码视为最终的真理源，因为你的具体环境可能有不同的需求和细节。例如，如果你有兴趣加速 Atari 套件中的某个特定游戏，NoopResetEnv
+    和 MaxAndSkipEnv（更准确地说，是 MaxAndSkipEnv 中的最大池化操作）可能并不需要。另一个可以调整的地方是 FrameStack 包装器中的帧数。通常做法是使用四帧，但你需要理解，这个数字是
+    DeepMind 和其他研究人员在对完整的 Atari 2600 游戏套件进行训练时使用的，该套件目前包含超过 50 个游戏。对于你的特定情况，使用两帧的历史可能足以提供性能提升，因为神经网络需要处理的数据会更少。
 - en: Finally, the image resize could be the bottleneck of wrappers, so you might
     want to optimize libraries used by wrappers, for example, rebuilding them or replacing
     them with faster versions. Prior to 2020, replacing the OpenCV2 library with the
@@ -937,50 +971,62 @@
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，图像调整大小可能是包装器的瓶颈，因此你可能需要优化包装器使用的库，例如重新构建它们或替换为更快速的版本。2020年之前，将 OpenCV2 库替换为
+    pillow-simd 库能提高大约 50 帧每秒的速度。如今，OpenCV2 使用了优化的重新缩放操作，因此这种替换已不再有效。但你仍然可以尝试不同的缩放方法和不同的库。
 - en: 'Here, we’ll apply the following changes to the Pong wrappers:'
   id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这里，我们将对 Pong 的包装器应用以下更改：
 - en: Disable NoopResetEnv
   id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 禁用 NoopResetEnv
 - en: Replace MaxAndSkipEnv with a simplified version, which just skips four frames
     without max pooling
   id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 用简化版本替换 MaxAndSkipEnv，只跳过四帧而不进行最大池化。
 - en: Keep only two frames in FrameStack
   id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 只保留两个帧在 FrameStack 中
 - en: 'To check the combined effect of our tweaks, we’ll add the above changes to
     the modifications done in the previous two sections: several environments and
     parallel execution of playing and training.'
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了检查我们调整的综合效果，我们将把上面的更改添加到前两节所做的修改中：多个环境和并行执行游戏与训练。
 - en: 'As the changes are not complex, let’s just quickly discuss them without the
     actual code (the full code can be found in the files Chapter09/04_wrappers_n_env.py,
     Chapter09/04_wrappers_parallel.py, and Chapter09/lib/atari_wrappers.py):'
   id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于这些更改并不复杂，我们就不展示具体代码了（完整代码可以在文件 Chapter09/04_wrappers_n_env.py、Chapter09/04_wrappers_parallel.py
+    和 Chapter09/lib/atari_wrappers.py 中找到）：
 - en: Library atari_wrappers.py is quite simple — it contains the copy of the wrap_dqn
     function from PTAN and the AtariWrapper class from Stable Baselines3.
   id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 库 atari_wrappers.py 相当简单——它包含了 PTAN 中 wrap_dqn 函数的副本和 Stable Baselines3 中的 AtariWrapper
+    类。
 - en: In AtariWrapper, the class MaxAndSkipEnv was replaced with a simplified version
     without max pooling between frames.
   id: totrans-129
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在 AtariWrapper 中，MaxAndSkipEnv 类被一个简化版本替代，去除了帧间的最大池化操作。
 - en: Two modules, 04_wrappers_n_env.py and 04_wrappers_prallel.py, are just copies
     of 02_n_env.py and 03_parallel.py we’ve already seen, with tweaked environment
     creation.
@@ -988,27 +1034,34 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 两个模块，04_wrappers_n_env.py 和 04_wrappers_prallel.py，仅仅是我们之前见过的 02_n_env.py 和
+    03_parallel.py 的副本，环境创建经过调整。
 - en: 'That’s it! The following are charts with reward dynamics and FPS for both versions:'
   id: totrans-131
   prefs: []
   type: TYPE_NORMAL
+  zh: 就是这样！以下是两种版本的奖励动态和FPS图表：
 - en: '![PIC](img/B21150_09_09.png)'
   id: totrans-132
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_09_09.png)'
 - en: 'Figure 9.9: Reward and FPS in the baseline and “3 environments and 2 frames”
     version'
   id: totrans-133
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.9：基准版和“3 个环境与 2 帧版本”的奖励与 FPS
 - en: '![PIC](img/B21150_09_10.png)'
   id: totrans-134
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B21150_09_10.png)'
 - en: 'Figure 9.10: Reward and FPS in the baseline and “parallel and 2 frames” version'
   id: totrans-135
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 9.10：基准版和“并行与 2 帧版本”的奖励与 FPS
 - en: Out of curiosity, I also tried to reduce the number of frames kept in FrameStack
     to just one frame (you can repeat the experiment with the command-line argument
     --stack 1). Surprisingly, such a version was able to solve the game, but it took
@@ -1020,53 +1073,66 @@
   id: totrans-136
   prefs: []
   type: TYPE_NORMAL
+  zh: 出于好奇，我还尝试将 FrameStack 中保持的帧数减少到仅一个帧（你可以通过命令行参数 --stack 1 重复实验）。令人惊讶的是，这样的版本也能解决游戏，但所需的游戏次数显著增加，训练变得不稳定（大约
+    8 次训练中的 3 次完全没有收敛）。这可能表明，只有一个帧的 Pong 并不是 POMDP，代理仍然可以仅凭一个帧作为观察，学习如何赢得游戏。但训练效率肯定会受到影响。
 - en: Benchmark results
   id: totrans-137
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 基准结果
 - en: 'I’ve summarized our experiments in the following table. The percentages show
     the changes versus the baseline version:'
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 我已将我们的实验总结在以下表格中。百分比显示相对于基准版的变化：
 - en: '| Step | FPS | FPS Δ | Time, mins | Time Δ |'
   id: totrans-139
   prefs: []
   type: TYPE_TB
+  zh: '| 步骤 | FPS | FPS Δ | 时间（分钟） | 时间 Δ |'
 - en: '| Baseline | 229 |  | 52.2 |  |'
   id: totrans-140
   prefs: []
   type: TYPE_TB
+  zh: '| 基准 | 229 |  | 52.2 |  |'
 - en: '| Without torch.no_grad() | 219 | -4.3% | 51.0 | -2.3% |'
   id: totrans-141
   prefs: []
   type: TYPE_TB
+  zh: '| 没有 torch.no.grad() | 219 | -4.3% | 51.0 | -2.3% |'
 - en: '| 3 environments | 395 | +72.5% | 36.0 | -31.0% |'
   id: totrans-142
   prefs: []
   type: TYPE_TB
+  zh: '| 3 个环境 | 395 | +72.5% | 36.0 | -31.0% |'
 - en: '| Parallel version | 290 | +26.6% | 31.2 | -40.2% |'
   id: totrans-143
   prefs: []
   type: TYPE_TB
+  zh: '| 并行版本 | 290 | +26.6% | 31.2 | -40.2% |'
 - en: '| Wrappers + 3 environments | 448 | +95.6% | 47.4 | -9.2% |'
   id: totrans-144
   prefs: []
   type: TYPE_TB
+  zh: '| 包装器 + 3 个环境 | 448 | +95.6% | 47.4 | -9.2% |'
 - en: '| Wrappers + parallel | 325 | +41.9% | 30.0 | -42.5% |'
   id: totrans-145
   prefs: []
   type: TYPE_TB
+  zh: '| 包装器 + 并行 | 325 | +41.9% | 30.0 | -42.5% |'
 - en: 'Table 9.1: Optimization results'
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 表 9.1：优化结果
 - en: Summary
   id: totrans-147
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 摘要
 - en: In this chapter, you saw several ways to improve the performance of the RL method
     using a pure engineering approach, which was in contrast to the “algorithmic”
     or “theoretical” approach covered in Chapter [8](ch012.xhtml#x1-1240008). From
@@ -1076,8 +1142,11 @@
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一章中，你看到了几种通过纯工程方法提高 RL 方法性能的方式，这与第 [8](ch012.xhtml#x1-1240008) 章中介绍的“算法”或“理论”方法形成对比。从我的角度来看，这两种方法是互补的，一个优秀的
+    RL 从业者需要既了解研究人员发现的最新技巧，也要了解实现细节。
 - en: In the next chapter, we will begin applying our DQN knowledge to stocks trading
     as a practical example.
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一章，我们将开始将我们的 DQN 知识应用于股票交易作为实际示例。
