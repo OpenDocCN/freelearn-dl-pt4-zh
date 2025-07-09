@@ -904,11 +904,14 @@
   id: totrans-137
   prefs: []
   type: TYPE_NORMAL
+  zh: 这段代码非常直接。我们将使用 `sample_videos` 函数获取图像路径和标签的列表。然后，我们将调用 `train_enqueue_op` 操作将这些图像路径和标签添加到
+    `RandomShuffleQueue` 中。之后，训练过程可以通过使用 `train_op` 来运行，而无需使用 `feed_dict` 机制。
 - en: 'Now, we can run the training process by calling the following command in the
     `root` folder:'
   id: totrans-138
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们可以通过在 `root` 文件夹中运行以下命令来启动训练过程：
 - en: '[PRE27]'
   id: totrans-139
   prefs: []
@@ -920,16 +923,20 @@
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果您的 GPU 内存不足以处理批大小为 32 时，您可能会看到 `OUT_OF_MEMORY` 错误。在训练过程中，我们创建了一个会话并设置了 `gpu_options.allow_growth`，因此您可以尝试更改
+    `batch_size` 来有效使用您的 GPU 内存。
 - en: The training process takes a few hours before it converges. We will take a look
     at the training process on TensorBoard.
   id: totrans-141
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练过程需要几个小时才能收敛。我们将通过 TensorBoard 查看训练过程。
 - en: 'In the directory that you have chosen to save the checkpoints, run the following
     command:'
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 在您选择保存检查点的目录中，运行以下命令：
 - en: '[PRE28]'
   id: totrans-143
   prefs: []
@@ -939,39 +946,47 @@
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，打开您的 web 浏览器并导航至 `http://localhost:6006`：
 - en: '![](img/8bef41ea-1d59-44ee-9e19-ff375d4e6768.png)'
   id: totrans-145
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/8bef41ea-1d59-44ee-9e19-ff375d4e6768.png)'
 - en: 'The regularization loss and total loss with one GPU are as follows:'
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 使用单个 GPU 的正则化损失和总损失如下：
 - en: '![](img/2a9a5bdf-2a3d-4a94-b80f-5baf06586d7f.png)'
   id: totrans-147
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/2a9a5bdf-2a3d-4a94-b80f-5baf06586d7f.png)'
 - en: As you can see in these images, the training accuracy took about 10,000 steps
     to reach 100% accuracy on training data. These 10,000 steps took 6 hours on our
     machine. It may be different on your configuration.
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 如您在这些图像中所见，训练准确率大约经过 10,000 步达到了训练数据的 100% 准确率。这 10,000 步在我们的机器上花费了 6 小时，您的配置可能会有所不同。
 - en: The training loss is decreasing, and it may reduce if we train longer. However,
     the training accuracy is almost unchanged after 10,000 steps.
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练损失在下降，如果我们训练更长时间，它可能会进一步减少。然而，训练准确率在 10,000 步后几乎没有变化。
 - en: Now, let's move on to the most interesting part of this chapter. We will use
     multiple GPUs to train and see how that helps.
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们进入本章最有趣的部分。我们将使用多个 GPU 进行训练，并观察这对训练的帮助。
 - en: Training routine with multiple GPU
   id: totrans-151
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 多 GPU 训练流程
 - en: In our experiment, we will use our custom machine instead of Amazon EC2\. However,
     you can achieve the same result on any server with GPUs. In this section, we will
     use two Titan X GPUs with a batch size of 32 on each GPU. That way, we can compute
@@ -979,11 +994,14 @@
   id: totrans-152
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的实验中，我们将使用我们定制的机器，而不是 Amazon EC2。但是，您可以在任何有 GPU 的服务器上获得相同的结果。在本节中，我们将使用两块
+    Titan X GPU，每块 GPU 的批大小为 32。这样，我们可以在一个步骤中处理最多 64 个视频，而不是单 GPU 配置下的 32 个视频。
 - en: 'Now, let''s create a new Python file named `train_multi.py` in the `scripts`
     package. In this file, add the following code to define some parameters:'
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们在 `scripts` 包中创建一个名为 `train_multi.py` 的新 Python 文件。在这个文件中，添加以下代码以定义一些参数：
 - en: '[PRE29]'
   id: totrans-154
   prefs: []
@@ -998,10 +1016,13 @@
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 这些参数与之前的 `train.py` 文件相同，唯一不同的是 `batch_size`。在本实验中，我们将使用数据并行策略，通过多个 GPU 进行训练。因此，批大小不再使用
+    32，而是使用 64。然后，我们将批次拆分成两部分，每部分由一块 GPU 处理。之后，我们将结合两块 GPU 的梯度来更新网络的权重和偏差。
 - en: 'Next, we will use the same operations as before, as follows:'
   id: totrans-156
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将使用与之前相同的操作，具体如下：
 - en: '[PRE30]'
   id: totrans-157
   prefs: []
@@ -1011,10 +1032,12 @@
   id: totrans-158
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，不再使用 `models.train` 创建训练操作，
 - en: we will create a optimizer and compute gradients in each GPU.
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们将创建一个优化器，并在每个 GPU 上计算梯度。
 - en: '[PRE31]'
   id: totrans-160
   prefs: []
@@ -1027,11 +1050,14 @@
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 梯度将在每个 GPU 上计算，并添加到名为 `total_gradients` 的列表中。最终的梯度将在 CPU 上使用 `average_gradients`
+    计算，我们将很快创建这个函数。然后，通过调用优化器的 `apply_gradients` 来创建训练操作。
 - en: 'Now, let''s add the following function to the `models.py` file in the `root`
     folder to compute the `average_gradient`:'
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们在 `root` 文件夹中的 `models.py` 文件中添加以下函数来计算 `average_gradient`：
 - en: '[PRE32]'
   id: totrans-163
   prefs: []
@@ -1042,6 +1068,8 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，在 `train_multi.py` 文件中，我们将创建 `saver` 和 `summaries` 操作，用来保存 `checkpoints`
+    和 `summaries`，就像以前一样：
 - en: '[PRE33]'
   id: totrans-165
   prefs: []
@@ -1051,6 +1079,7 @@
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: 最后，让我们添加训练循环来训练网络：
 - en: '[PRE34]'
   id: totrans-167
   prefs: []
@@ -1062,10 +1091,13 @@
   id: totrans-168
   prefs: []
   type: TYPE_NORMAL
+  zh: 训练循环与之前类似，不同之处在于我们为会话配置添加了 `allow_soft_placement=True` 选项。这个选项将允许 TensorFlow
+    在必要时更改 `variables` 的位置。
 - en: 'Now we can run the training scripts like before:'
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们可以像之前一样运行训练脚本：
 - en: '[PRE35]'
   id: totrans-170
   prefs: []
@@ -1076,33 +1108,40 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 经过几小时的训练后，我们可以查看 TensorBoard 来比较结果：
 - en: '![](img/be48229b-8546-428e-b38f-c7663b088447.png)![](img/fcb1ec27-d394-49db-b93b-c918b587d0dc.png)'
   id: totrans-172
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/be48229b-8546-428e-b38f-c7663b088447.png)![](img/fcb1ec27-d394-49db-b93b-c918b587d0dc.png)'
 - en: Figure 04—Plot on Tensorboard of multiple GPUs training process
   id: totrans-173
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 04—多个 GPU 训练过程在 Tensorboard 上的绘图
 - en: As you can see, the training on multiple GPUs achieves 100% accuracy after about
     6,000 steps in about four hours on our computer. This almost reduces the training
     time by half.
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 如你所见，在我们的计算机上，多个 GPU 训练大约经过 6000 步后，约四小时内达到了 100% 的准确率。这几乎将训练时间缩短了一半。
 - en: 'Now, let''s see how the two training strategies compare:'
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，让我们看看这两种训练策略的对比：
 - en: '![](img/c7041563-2279-42b8-b48d-3c5aa41d3289.png)![](img/aa1e5d15-8f4f-4c60-9a87-7d4e003dbd43.png)'
   id: totrans-176
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/c7041563-2279-42b8-b48d-3c5aa41d3289.png)![](img/aa1e5d15-8f4f-4c60-9a87-7d4e003dbd43.png)'
 - en: Figure 05—Plot on TensorBoard with single and multiple GPUs compared side by
     side
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 05—在 TensorBoard 上，单个 GPU 和多个 GPU 结果并排对比的绘图
 - en: The orange line is the multiple GPUs result and the blue line is the single
     GPU result. We can see that the multiple GPUs setup can achieve better results
     sooner than the single GPU. The different is not very large. However, we can achieve
@@ -1113,16 +1152,21 @@
   id: totrans-178
   prefs: []
   type: TYPE_NORMAL
+  zh: 橙色线表示多个 GPU 的结果，蓝色线表示单个 GPU 的结果。我们可以看到，多个 GPU 设置比单个 GPU 更早地实现了更好的结果，虽然差异不大。然而，随着
+    GPU 数量的增加，我们可以实现更快的训练。在 Amazon EC2 的 P1 实例上，甚至有 8 个和 16 个 GPU。如果我们在大规模数据集上进行训练，例如
+    ActivityNet 或 Sports 1M，多个 GPU 的训练优势将更加明显，因为单个 GPU 需要很长时间才能收敛。
 - en: In the next section, we will take a quick look at another Amazon Service, Mechanical
     Turk.
   id: totrans-179
   prefs: []
   type: TYPE_NORMAL
+  zh: 在下一部分，我们将快速了解另一个 Amazon 服务——机械土耳其。
 - en: Overview of Mechanical Turk
   id: totrans-180
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 机械土耳其概览
 - en: Mechanical Turk is a service that allows us to create and manage online human
     intelligence tasks that will be completed by human workers. There are lots of
     tasks that humans can do better than computers. Therefore, we can take advantage
@@ -1130,20 +1174,24 @@
   id: totrans-181
   prefs: []
   type: TYPE_NORMAL
+  zh: 机械土耳其是一项服务，允许我们创建和管理在线人类智能任务，这些任务将由人类工作者完成。很多任务是人类比计算机更擅长的。因此，我们可以利用这项服务来支持我们的机器学习系统。
 - en: 'You can view this system at [https://www.mturk.com](https://www.mturk.com).
     Here is the website of the service:'
   id: totrans-182
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在 [https://www.mturk.com](https://www.mturk.com) 查看这个系统。这里是该服务的网站：
 - en: '![](img/623738e4-e367-4e9e-92a0-333b8fe78185.png)'
   id: totrans-183
   prefs: []
   type: TYPE_IMG
+  zh: '![](img/623738e4-e367-4e9e-92a0-333b8fe78185.png)'
 - en: 'Here are a couple of examples of tasks that you can use to support your machine
     learning system:'
   id: totrans-184
   prefs: []
   type: TYPE_NORMAL
+  zh: 下面是一些你可以用来支持机器学习系统的任务示例：
 - en: '**Dataset labeling**: You usually have a lot of unlabeled data, and you can
     use Mechanical Turk to help you build a consistent ground truth for your machine
     learning workflow.'
@@ -1151,6 +1199,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: '**数据集标注**：你通常会有很多未标记的数据，可以利用机械土耳其帮助你为机器学习工作流构建一致的真实标签。'
 - en: '**Generate dataset**: You can ask the workers to build a large amount of training
     data. For example, we can ask workers to create text translations or chat sentences
     for a natural language system. You can ask them to annotate the sentiments of
