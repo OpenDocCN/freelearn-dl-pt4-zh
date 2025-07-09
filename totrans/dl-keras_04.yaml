@@ -839,6 +839,11 @@
   id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于引入*空洞*这一简单思想，能够堆叠多个膨胀卷积层，并使滤波器指数增长，从而在不需要过深网络的情况下学习长距离输入依赖关系。因此，WaveNet 是一种卷积神经网络（ConvNet），其中卷积层具有不同的膨胀因子，允许感受野随着深度的增加而指数增长，从而高效地覆盖成千上万个音频时间步长。在训练时，输入是来自人类发音者的声音。波形被量化为固定的整数范围。WaveNet
+    定义了一个初始卷积层，只访问当前和先前的输入。然后是一个堆叠的膨胀卷积网络层，依然只访问当前和先前的输入。最后，有一系列密集层将先前的结果结合起来，后跟一个用于分类输出的
+    softmax 激活函数。在每一步，网络会预测一个值并将其反馈到输入中，同时计算下一步的预测。损失函数是当前步骤输出和下一步输入之间的交叉熵。由 Bas Veeling
+    开发的一个 Keras 实现可以在此获取：[https://github.com/basveeling/wavenet](https://github.com/basveeling/wavenet)，并可以通过
+    `git` 轻松安装：
 - en: '[PRE28]'
   id: totrans-115
   prefs: []
@@ -852,6 +857,8 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 请注意，此代码与 Keras 1.x 兼容，详情请查看 [https://github.com/basveeling/wavenet/issues/29](https://github.com/basveeling/wavenet/issues/29)，了解将其迁移到
+    Keras 2.x 上的进展情况。训练非常简单，但需要大量的计算能力（因此请确保你有良好的 GPU 支持）：
 - en: '[PRE29]'
   id: totrans-117
   prefs: []
@@ -861,6 +868,7 @@
   id: totrans-118
   prefs: []
   type: TYPE_NORMAL
+  zh: 在训练后采样网络同样非常简单：
 - en: '[PRE30]'
   id: totrans-119
   prefs: []
@@ -878,6 +886,10 @@
   id: totrans-120
   prefs: []
   type: TYPE_NORMAL
+  zh: 你可以在网上找到大量的超参数，用于微调我们的训练过程。正如这个内部层的转储所解释的，网络确实非常深。请注意，输入波形被划分为（`fragment_length
+    = 1152` 和 `nb_output_bins = 256`），这就是传递到 WaveNet 的张量。WaveNet 以重复的块组织，称为残差块，每个残差块由两个膨胀卷积模块的乘积合并组成（一个使用
+    `sigmoid` 激活，另一个使用 `tanh` 激活），然后是一个合并的卷积求和。请注意，每个膨胀卷积都有逐渐增大的空洞，空洞大小按指数增长（`2 **
+    i`），从 1 到 512，如下文所定义：
 - en: '[PRE31]'
   id: totrans-121
   prefs: []
@@ -889,6 +901,7 @@
   id: totrans-122
   prefs: []
   type: TYPE_NORMAL
+  zh: 在残差膨胀块之后，有一系列合并的卷积模块，接着是两个卷积模块，最后是 `nb_output_bins` 类别中的 `softmax` 激活函数。完整的网络结构如下：
 - en: '[PRE32]'
   id: totrans-123
   prefs: []
@@ -907,11 +920,13 @@
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: DeepMind尝试使用包含多个发言者的数据集进行训练，这显著提高了学习共享语言和语调的能力，从而使得生成的结果接近自然语音。你可以在线找到一系列合成语音的精彩例子([https://deepmind.com/blog/wavenet-generative-model-raw-audio/](https://deepmind.com/blog/wavenet-generative-model-raw-audio/))，有趣的是，音频质量在WaveNet使用额外文本条件时得到了提升，这些文本会被转化为语言学和语音学特征序列，并与音频波形一起使用。我的最爱例子是同一句话由网络以不同的语调发音。当然，听到WaveNet自己创作钢琴音乐也非常令人着迷。去网上看看吧！
 - en: Summary
   id: totrans-125
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 总结
 - en: In this chapter, we discussed GANs. A GAN typically consists of two networks;
     one is trained to forge synthetic data that looks authentic, and the second is
     trained to discriminate authentic data against forged data. The two networks continuously
@@ -931,3 +946,5 @@
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 在这一章中，我们讨论了生成对抗网络（GAN）。一个GAN通常由两个网络组成；一个被训练用来伪造看起来真实的合成数据，另一个则被训练用来区分真实数据与伪造数据。这两个网络持续竞争，通过这种方式，它们相互促进和改进。我们回顾了一个开源代码，学习如何伪造看起来真实的MNIST和CIFAR-10图像。此外，我们还讨论了WaveNet，这是一种由Google
+    DeepMind提出的深度生成网络，用于教计算机如何以惊人的质量再现人类语音和乐器声音。WaveNet通过基于扩张卷积网络的参数化语音合成方法直接生成原始音频。扩张卷积网络是一种特殊的卷积神经网络（ConvNets），其中卷积滤波器具有孔洞，这使得感受野在深度上呈指数增长，因此能够高效地覆盖成千上万的音频时间步长。DeepMind展示了如何使用WaveNet合成人的声音和乐器，并在此基础上改进了之前的最先进技术。在下一章中，我们将讨论词嵌入——一组用于检测词语之间关系并将相似词语归类在一起的深度学习方法。
