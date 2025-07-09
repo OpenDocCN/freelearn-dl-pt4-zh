@@ -1,8 +1,10 @@
 - en: '6'
+  id: totrans-0
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
 - en: Deep Q-Networks
+  id: totrans-1
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -13,23 +15,28 @@
     we will apply the same approach to problems of much greater complexity: arcade
     games from the Atari 2600 platform, which are the de facto benchmark of the reinforcement
     learning (RL) research community.'
+  id: totrans-2
   prefs: []
   type: TYPE_NORMAL
 - en: 'To deal with this new and more challenging goal, in this chapter, we will:'
+  id: totrans-3
   prefs: []
   type: TYPE_NORMAL
 - en: Talk about problems with the value iteration method and consider its variation,
     called Q-learning.
+  id: totrans-4
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Apply Q-learning to so-called grid world environments, which is called tabular
     Q-learning.
+  id: totrans-5
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Discuss Q-learning in conjunction with neural networks (NNs). This combination
     has the name deep Q-network (DQN).
+  id: totrans-6
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -38,9 +45,11 @@
     in 2013 and started a new era in RL development. Although it is too early to discuss
     the practical applicability of these basic methods, this will become clearer to
     you as you progress with the book.
+  id: totrans-7
   prefs: []
   type: TYPE_NORMAL
 - en: Real-life value iteration
+  id: totrans-8
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -54,6 +63,7 @@
     of the same method for Q-values (values for actions) is almost the same, but we
     approximate and store values for every state and action. So what’s wrong with
     this process?
+  id: totrans-9
   prefs: []
   type: TYPE_NORMAL
 - en: The first obvious problem is the count of environment states and our ability
@@ -61,6 +71,7 @@
     our environment in advance, can iterate over them, and can store their value approximations.
     It’s easy to do for the simple grid world environment of FrozenLake, but what
     about other tasks?
+  id: totrans-10
   prefs: []
   type: TYPE_NORMAL
 - en: To understand this, let’s first look at how scalable the value iteration approach
@@ -69,6 +80,7 @@
     (8.5 billion in 32 GB of RAM), so the memory required for value tables doesn’t
     look like a huge constraint. Iteration over billions of states and actions will
     be more central processing unit (CPU)-demanding but is not an insurmountable problem.
+  id: totrans-11
   prefs: []
   type: TYPE_NORMAL
 - en: Nowadays, we have multicore systems that are mostly idle, so by using parallelism,
@@ -79,8 +91,11 @@
     To calculate even a rough approximation for every state of this environment, we
     would need hundreds of billions of transitions evenly distributed over our states,
     which is not practical.
+  id: totrans-12
   prefs: []
   type: TYPE_NORMAL
+  zh: 现在，我们有了多核系统，这些系统大多是闲置的，所以通过使用并行处理，我们可以在合理的时间内遍历数十亿个值。真正的问题在于，获取状态转换动态的良好近似所需的样本数量。假设你有一个环境，假设有十亿个状态（这大约对应一个
+    31600 × 31600 大小的 FrozenLake）。要计算这个环境中每个状态的粗略近似，我们需要数百亿个状态之间均匀分布的转换，这在实践中是不可行的。
 - en: To give you an example of an environment with an even larger number of potential
     states, let’s consider the Atari 2600 game console again. This was very popular
     in the 1980s, and many arcade-style games were available for it. The Atari console
@@ -88,8 +103,11 @@
     of RL problems that humans can master fairly quickly, yet are still challenging
     for computers. Not surprisingly, this platform (using an emulator, of course)
     is a very popular benchmark within RL research, as I mentioned.
+  id: totrans-13
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了给你一个更大潜在状态数量的环境示例，我们再来看看 Atari 2600 游戏主机。这款主机在1980年代非常流行，并且有许多街机风格的游戏可供选择。虽然按照今天的游戏标准，Atari
+    主机显得过时，但它的游戏提供了一组很好的强化学习（RL）问题，人类可以相对快速地掌握这些问题，但对计算机来说仍然具有挑战性。不足为奇的是，正如我之前提到的，这个平台（当然是使用模拟器）在强化学习研究中是一个非常受欢迎的基准。
 - en: Let’s calculate the state space for the Atari platform. The resolution of the
     screen is 210 × 160 pixels, and every pixel has one of 128 colors. So every frame
     of the screen has 210 ⋅ 160 = 33600 pixels and the total number of different screens
@@ -99,8 +117,11 @@
     job will be a waste of time, as most of the combinations will never be shown during
     even long gameplay, so we will never have samples of those states. However, the
     value iteration method wants to iterate over them just in case.
+  id: totrans-14
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来计算一下 Atari 平台的状态空间。屏幕的分辨率是 210 × 160 像素，每个像素有 128 种颜色。因此，每一帧屏幕有 210 ⋅ 160
+    = 33600 个像素，而所有可能的不同屏幕总数是 128^(33600)，约等于 10^(70802)。如果我们决定只列举一次 Atari 所有可能的状态，即使是最快的超级计算机也需要数十亿年。而且，这项工作中99(.9)%的时间都将是浪费，因为大多数组合在长时间的游戏过程中从未出现过，我们也不会有这些状态的样本。然而，值迭代方法仍然想遍历这些状态，以防万一。
 - en: The second main problem with the value iteration approach is that it limits
     us to discrete action spaces. Indeed, both Q(s,a) and V (s) approximations assume
     that our actions are a mutually exclusive discrete set, which is not true for
@@ -111,26 +132,33 @@
     space problems. For now, let’s assume that we have a discrete count of actions
     and that this count is not very large (i.e., orders of 10s). How should we handle
     the state space size issue?
+  id: totrans-15
   prefs: []
   type: TYPE_NORMAL
+  zh: 值迭代方法的第二个主要问题是，它将我们限制在离散动作空间中。实际上，Q(s,a) 和 V(s) 的近似都假设我们的动作是一个相互排斥的离散集合，但对于连续控制问题来说，动作可以表示连续的变量，例如方向盘的角度、执行器上的力，或者加热器的温度，这在此类问题中并不成立。这个问题比第一个问题更具挑战性，我们将在书的最后部分，专门讨论连续动作空间问题的章节中进行讲解。现在，假设我们有一个离散的动作计数，并且这个计数不是很大（即数量级为10的数量）。我们应该如何处理状态空间大小的问题呢？
 - en: Tabular Q-learning
+  id: totrans-16
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 表格 Q 学习
 - en: The key question to focus on when trying to handle the state space issue is,
     do we really need to iterate over every state in the state space? We have an environment
     that can be used as a source of real-life samples of states. If some state in
     the state space is not shown to us by the environment, why should we care about
     its value? We can only use states obtained from the environment to update the
     values of states, which can save us a lot of work.
+  id: totrans-17
   prefs: []
   type: TYPE_NORMAL
 - en: 'This modification of the value iteration method is known as Q-learning, as
     mentioned earlier, and for cases with explicit state-to-value mappings, it entails
     the following steps:'
+  id: totrans-18
   prefs: []
   type: TYPE_NORMAL
 - en: Start with an empty table, mapping states to values of actions.
+  id: totrans-19
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -139,18 +167,22 @@
     and there is no single proper way to make this decision. We discussed this problem
     as exploration versus exploitation in Chapter [1](ch005.xhtml#x1-190001) and will
     talk a lot about it in this chapter.
+  id: totrans-20
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Update the Q(s,a) value using the Bellman approximation:'
+  id: totrans-21
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq18.png)'
+  id: totrans-22
   prefs:
   - PREF_IND
   type: TYPE_IMG
 - en: Repeat from step 2.
+  id: totrans-23
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -159,107 +191,137 @@
     Another thing to note here is how to update the Q-values. As we take samples from
     the environment, it’s generally a bad idea to just assign new values on top of
     existing values, as training can become unstable.
+  id: totrans-24
   prefs: []
   type: TYPE_NORMAL
 - en: 'What is usually done in practice is updating the Q(s,a) with approximations
     using a “blending” technique, which is just averaging between old and new values
     of Q using learning rate α with a value from 0 to 1:'
+  id: totrans-25
   prefs: []
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq19.png)'
+  id: totrans-26
   prefs: []
   type: TYPE_IMG
 - en: 'This allows values of Q to converge smoothly, even if our environment is noisy.
     The final version of the algorithm is as follows:'
+  id: totrans-27
   prefs: []
   type: TYPE_NORMAL
 - en: Start with an empty table for Q(s,a).
+  id: totrans-28
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Obtain (s, a, r, s′) from the environment.
+  id: totrans-29
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Make a Bellman update:'
+  id: totrans-30
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq19.png)'
+  id: totrans-31
   prefs:
   - PREF_IND
   type: TYPE_IMG
 - en: Check convergence conditions. If not met, repeat from step 2.
+  id: totrans-32
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'As mentioned earlier, this method is called tabular Q-learning, as we keep
     a table of states with their Q-values. Let’s try it on our FrozenLake environment.
     The whole example code is in Chapter06/01_frozenlake_q_learning.py:'
+  id: totrans-33
   prefs: []
   type: TYPE_NORMAL
 - en: 'First, we import packages and define constants and used types:'
+  id: totrans-34
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE0]'
+  id: totrans-35
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE0]'
 - en: The new thing here is the value of α, which will be used as the learning rate
     in the value update. The initialization of our Agent class is simpler now, as
     we don’t need to track the history of rewards and transition counters, just our
     value table. This will make our memory footprint smaller, which is not a big issue
     for FrozenLake but can be critical for larger environments.
+  id: totrans-36
   prefs: []
   type: TYPE_NORMAL
 - en: 'The method sample_env is used to obtain the next transition from the environment:'
+  id: totrans-37
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE1]'
+  id: totrans-38
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE1]'
 - en: We sample a random action from the action space and return the tuple of the
     old state, the action taken, the reward obtained, and the new state. The tuple
     will be used in the training loop later.
+  id: totrans-39
   prefs: []
   type: TYPE_NORMAL
 - en: 'The next method receives the state of the environment:'
+  id: totrans-40
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE2]'
+  id: totrans-41
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE2]'
 - en: 'This method finds the best action to take from the given state of the environment
     by taking the action with the largest value that we have in the table. If we don’t
     have the value associated with the state and action pair, then we take it as zero.
     This method will be used two times: first, in the test method that plays one episode
     using our current values table (to evaluate our policy’s quality), and second,
     in the method that performs the value update to get the value of the next state.'
+  id: totrans-42
   prefs: []
   type: TYPE_NORMAL
 - en: 'Next, we update our values table using one step from the environment:'
+  id: totrans-43
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE3]'
+  id: totrans-44
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE3]'
 - en: Here, we first calculate the Bellman approximation for our state, s, and action,
     a, by summing the immediate reward with the discounted value of the next state.
     Then, we obtain the previous value of the state and action pair and blend these
     values together using the learning rate. The result is the new approximation for
     the value of state s and action a, which is stored in our table.
+  id: totrans-45
   prefs: []
   type: TYPE_NORMAL
 - en: 'The last method in our Agent class plays one full episode using the provided
     test environment:'
+  id: totrans-46
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE4]'
+  id: totrans-47
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE4]'
 - en: The action on every step is taken using our current value table of Q-values.
     This method is used to evaluate our current policy to check the progress of learning.
     Note that this method doesn’t alter our value table; it only uses it to find the
     best action to take.
+  id: totrans-48
   prefs: []
   type: TYPE_NORMAL
 - en: 'The rest of the example is the training loop, which is very similar to examples
@@ -267,17 +329,23 @@
     and summary writer, and then, in the loop, we do one step in the environment and
     perform a value update using the obtained data. Next, we test our current policy
     by playing several test episodes. If a good reward is obtained, then we stop training:'
+  id: totrans-49
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE5]'
+  id: totrans-50
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE5]'
 - en: 'The result of the example is shown here:'
+  id: totrans-51
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE6]'
+  id: totrans-52
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE6]'
 - en: You may have noticed that this version used more iterations (but your experiment
     might have a different count of steps) to solve the problem compared to the value
     iteration method from the previous chapter. The reason for that is that we are
@@ -285,26 +353,32 @@
     periodical tests caused an update of Q-table statistics. Here, we don’t touch
     Q-values during the test, which causes more iterations before the environment
     gets solved.
+  id: totrans-53
   prefs: []
   type: TYPE_NORMAL
 - en: 'Overall, the total number of samples required from the environment is almost
     the same. The reward chart in TensorBoard also shows good training dynamics, which
     is very similar to the value iteration method (the reward plot for value iteration
     is shown in Figure [5.9](ch009.xhtml#x1-87114r9)):'
+  id: totrans-54
   prefs: []
   type: TYPE_NORMAL
 - en: '![PIC](img/B22150_06_01.png)'
+  id: totrans-55
   prefs: []
   type: TYPE_IMG
 - en: 'Figure 6.1: Reward dynamics of FrozenLake'
+  id: totrans-56
   prefs: []
   type: TYPE_NORMAL
 - en: In the next section, we will extend the Q-learning method with NNs’ preprocessing
     environment states. This will greatly extend the flexibility and applicability
     of the method we discussed.
+  id: totrans-57
   prefs: []
   type: TYPE_NORMAL
 - en: Deep Q-learning
+  id: totrans-58
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -314,6 +388,7 @@
     can have a large variety of different screens, so if we decide to use raw pixels
     as individual states, we will quickly realize that we have too many states to
     track and approximate values for.
+  id: totrans-59
   prefs: []
   type: TYPE_NORMAL
 - en: In some environments, the count of different observable states could be almost
@@ -328,11 +403,13 @@
     states and what ranges could be clustered together. As we’re trying to implement
     RL methods in a general way (without looking inside the environment’s internals),
     this is not a very promising direction.
+  id: totrans-60
   prefs: []
   type: TYPE_NORMAL
 - en: In the case of Atari, one single pixel change doesn’t make much difference,
     so we might want to treat similar images as one state. However, we still need
     to distinguish some of the states.
+  id: totrans-61
   prefs: []
   type: TYPE_NORMAL
 - en: The following image shows two different situations in a game of Pong. We’re
@@ -346,14 +423,17 @@
     is moving toward our side, so we need to move our paddle quickly to avoid losing
     a point. The situations in Figure [6.2](#x1-93003r2) are just two from the 10^(70802)
     possible situations, but we want our agent to act on them differently.
+  id: totrans-62
   prefs: []
   type: TYPE_NORMAL
 - en: '![PIC](img/file32.png)'
+  id: totrans-63
   prefs: []
   type: TYPE_IMG
 - en: 'Figure 6.2: The ambiguity of observations in Pong. In the left image, the ball
     is moving to the right, toward our paddle, and on the right, its direction is
     opposite'
+  id: totrans-64
   prefs: []
   type: TYPE_NORMAL
 - en: 'As a solution to this problem, we can use a nonlinear representation that maps
@@ -363,40 +443,49 @@
     a deep NN is one of the most popular options, especially when dealing with observations
     represented as screen images. With this in mind, let’s make modifications to the
     Q-learning algorithm:'
+  id: totrans-65
   prefs: []
   type: TYPE_NORMAL
 - en: Initialize Q(s,a) with some initial approximation.
+  id: totrans-66
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: By interacting with the environment, obtain the tuple (s, a, r, s′).
+  id: totrans-67
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'Calculate the loss:'
+  id: totrans-68
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq20.png)![π (a |s) = P[At = a|St = s]
     ](img/eq21.png)'
+  id: totrans-69
   prefs:
   - PREF_IND
   type: TYPE_IMG
 - en: Update Q(s,a) using the stochastic gradient descent (SGD) algorithm, by minimizing
     the loss with respect to the model parameters.
+  id: totrans-70
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Repeat from step 2 until converged.
+  id: totrans-71
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: This algorithm looks simple, but, unfortunately, it won’t work very well. Let’s
     discuss some of the aspects that could go wrong and the potential ways we could
     approach these scenarios.
+  id: totrans-72
   prefs: []
   type: TYPE_NORMAL
 - en: Interaction with the environment
+  id: totrans-73
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -408,6 +497,7 @@
     for such a rare situation. As an alternative, we can use our Q-function approximation
     as a source of behavior (as we did before in the value iteration method, when
     we remembered our experience during testing).
+  id: totrans-74
   prefs: []
   type: TYPE_NORMAL
 - en: If our representation of Q is good, then the experience that we get from the
@@ -421,6 +511,7 @@
     we should use interaction with the environment efficiently; we shouldn’t waste
     time by randomly trying actions that we have already tried and learned outcomes
     for.
+  id: totrans-75
   prefs: []
   type: TYPE_NORMAL
 - en: As you can see, random behavior is better at the beginning of the training when
@@ -428,6 +519,7 @@
     about the environment states. As our training progresses, random behavior becomes
     inefficient, and we want to fall back to our Q approximation to decide how to
     act.
+  id: totrans-76
   prefs: []
   type: TYPE_NORMAL
 - en: A method that performs such a mix of two extreme behaviors is known as an epsilon-greedy
@@ -440,9 +532,11 @@
     versus exploitation problem, and we will discuss some of them in the third part
     of the book. This problem is one of the fundamental open questions in RL and an
     active area of research that is not even close to being resolved completely.
+  id: totrans-77
   prefs: []
   type: TYPE_NORMAL
 - en: SGD optimization
+  id: totrans-78
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -454,15 +548,18 @@
     data is independent and identically distributed (frequently abbreviated as iid),
     which means that our training data is randomly sampled from the underlying dataset
     we’re trying to learn on.
+  id: totrans-79
   prefs: []
   type: TYPE_NORMAL
 - en: 'In our case, data that we are going to use for the SGD update doesn’t fulfill
     these criteria:'
+  id: totrans-80
   prefs: []
   type: TYPE_NORMAL
 - en: Our samples are not independent. Even if we accumulate a large batch of data
     samples, they will all be very close to each other, as they will belong to the
     same episode.
+  id: totrans-81
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -471,6 +568,7 @@
     some other policy (our current policy, a random one, or both in the case of epsilon-greedy),
     but we don’t want to learn how to play randomly: we want an optimal policy with
     the best reward.'
+  id: totrans-82
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
@@ -479,15 +577,18 @@
     This technique is called a replay buffer. The simplest implementation is a buffer
     of a fixed size, with new data added to the end of the buffer so that it pushes
     the oldest experience out of it.
+  id: totrans-83
   prefs: []
   type: TYPE_NORMAL
 - en: The replay buffer allows us to train on more-or-less independent data, but the
     data will still be fresh enough to train on samples generated by our recent policy.
     In Chapter [8](ch012.xhtml#x1-1240008), we will check another kind of replay buffer,
     prioritized, which provides a more sophisticated sampling approach.
+  id: totrans-84
   prefs: []
   type: TYPE_NORMAL
 - en: Correlation between steps
+  id: totrans-85
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -502,6 +603,7 @@
     unstable, like chasing our own tail; when we update Q for state s, then on subsequent
     states, we will discover that Q(s′,a′) becomes worse but attempts to update it
     can spoil our Q(s,a) approximation even more, and so on.
+  id: totrans-86
   prefs: []
   type: TYPE_NORMAL
 - en: To make training more stable, there is a trick, called target network, by which
@@ -509,9 +611,11 @@
     equation. This network is synchronized with our main network only periodically,
     for example, once in N steps (where N is usually quite a large hyperparameter,
     such as 1k or 10k training iterations).
+  id: totrans-87
   prefs: []
   type: TYPE_NORMAL
 - en: The Markov property
+  id: totrans-88
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -519,6 +623,7 @@
     which assumes that the environment obeys the Markov property: observations from
     the environment are all that we need to act optimally. In other words, our observations
     allow us to distinguish states from one another.'
+  id: totrans-89
   prefs: []
   type: TYPE_NORMAL
 - en: As you saw from the preceding Pong screenshot in Figure [6.2](#x1-93003r2),
@@ -531,6 +636,7 @@
     games in which you don’t see your opponents’ cards, game observations are POMDPs
     because the current observation (i.e., your cards and the cards on the table)
     could correspond to different cards in your opponents’ hands.
+  id: totrans-90
   prefs: []
   type: TYPE_NORMAL
 - en: We won’t discuss POMDPs in detail in this book, but we will use a small technique
@@ -541,9 +647,11 @@
     for instance, to get the speed of the ball and its direction. The usual “classical”
     number of k for Atari is four. Of course, it’s just a hack, as there can be longer
     dependencies in the environment, but for most of the games, it works well.
+  id: totrans-91
   prefs: []
   type: TYPE_NORMAL
 - en: The final form of DQN training
+  id: totrans-92
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -553,6 +661,7 @@
     and the target network form a basis that has allowed the company DeepMind to successfully
     train a DQN on a set of 49 Atari games, demonstrating the efficiency of this approach
     when applied to complicated environments.
+  id: totrans-93
   prefs: []
   type: TYPE_NORMAL
 - en: The original paper Playing Atari with deep reinforcement learning [[Mni13](#)]
@@ -560,63 +669,78 @@
     for testing. Later, at the beginning of 2015, a revised version of the article
     with the title Human-level control through deep reinforcement learning [[Mni+15](#)],
     already with 49 different games, was published in Nature.
+  id: totrans-94
   prefs: []
   type: TYPE_NORMAL
 - en: 'The algorithm for DQN from the preceding papers has the following steps:'
+  id: totrans-95
   prefs: []
   type: TYPE_NORMAL
 - en: Initialize parameters for Q(s,a) and Q̂(s,a) with random weights, 𝜖 ← 1.0, and
     empty the replay buffer.
+  id: totrans-96
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: With probability 𝜖, select a random action a; otherwise, a = arg max[a]Q(s,a).
+  id: totrans-97
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Execute action a in an emulator and observe the reward, r, and the next state,
     s′.
+  id: totrans-98
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Store the transition (s, a, r, s′) in the replay buffer.
+  id: totrans-99
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Sample a random mini-batch of transitions from the replay buffer.
+  id: totrans-100
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: 'For every transition in the buffer, calculate the target:'
+  id: totrans-101
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq22.png) ![π (a |s) = P[At = a|St = s]
     ](img/eq23.png)'
+  id: totrans-102
   prefs:
   - PREF_IND
   type: TYPE_IMG
 - en: 'Calculate the loss: ℒ = (Q(s,a) −y)².'
+  id: totrans-103
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Update Q(s,a) using the SGD algorithm by minimizing the loss in respect to the
     model parameters.
+  id: totrans-104
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Every N steps, copy weights from Q to Q̂.
+  id: totrans-105
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Repeat from step 2 until converged.
+  id: totrans-106
   prefs:
   - PREF_OL
   type: TYPE_NORMAL
 - en: Let’s implement this algorithm now and try to beat some of the Atari games!
+  id: totrans-107
   prefs: []
   type: TYPE_NORMAL
 - en: DQN on Pong
+  id: totrans-108
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -625,6 +749,7 @@
     complexity of the problems that we are trying to tackle is also growing. The examples
     are as simple and concise as possible, but some of the code may be difficult to
     understand at first.
+  id: totrans-109
   prefs: []
   type: TYPE_NORMAL
 - en: Another thing to note is performance. Our previous examples for FrozenLake,
@@ -635,6 +760,7 @@
     and stored in the replay buffer. One extra copy of this data array can cost you
     training speed, which will not be seconds and minutes anymore but, instead, hours
     on even the fastest graphics processing unit (GPU) available.
+  id: totrans-110
   prefs: []
   type: TYPE_NORMAL
 - en: The NN training loop could also be a bottleneck. Of course, RL models are not
@@ -643,6 +769,7 @@
     of times. So, to cut a long story short, performance matters, especially when
     you are experimenting with hyperparameters and need to wait not for a single model
     to train but dozens of them.
+  id: totrans-111
   prefs: []
   type: TYPE_NORMAL
 - en: PyTorch is quite expressive, so more-or-less efficient processing code could
@@ -652,28 +779,34 @@
     about two times slower than a parallel version. However, a single extra copy of
     the data batch could make the speed of the same code 13 times slower, which is
     quite significant.
+  id: totrans-112
   prefs: []
   type: TYPE_NORMAL
 - en: 'This example has been split into three modules due to its length, logical structure,
     and reusability. The modules are as follows:'
+  id: totrans-113
   prefs: []
   type: TYPE_NORMAL
 - en: 'Chapter06/lib/wrappers.py: These are Atari environment wrappers, mostly taken
     from the Stable Baselines3 (SB3) project: [https://github.com/DLR-RM/stable-baselines3](https://github.com/DLR-RM/stable-baselines3).'
+  id: totrans-114
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Chapter06/lib/dqn_model.py: This is the DQN NN layer, with the same architecture
     as the DeepMind DQN from the Nature paper.'
+  id: totrans-115
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Chapter06/02_dqn_pong.py: This is the main module, with the training loop,
     loss function calculation, and experience replay buffer.'
+  id: totrans-116
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Wrappers
+  id: totrans-117
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -685,6 +818,7 @@
     various kinds. The full list is quite lengthy and there are several implementations
     of the same wrappers in various sources. My personal favorite is the SB3 repository,
     which is an evolution of OpenAI Baselines code.
+  id: totrans-118
   prefs: []
   type: TYPE_NORMAL
 - en: 'SB3 includes lots of RL methods implemented using PyTorch and is supposed to
@@ -693,6 +827,7 @@
     but some wrappers are very useful. The repository is avaliable at [https://github.com/DLR-RM/stable-baselines3](https://github.com/DLR-RM/stable-baselines3)
     and wrappers are documented at [https://stable-baselines3.readthedocs.io/en/master/common/atari_wrappers.xhtml](https://stable-baselines3.readthedocs.io/en/master/common/atari_wrappers.xhtml).
     The list of the most popular Atari transformations used by RL researchers includes:'
+  id: totrans-119
   prefs: []
   type: TYPE_NORMAL
 - en: 'Converting individual lives in the game into separate episodes: In general,
@@ -705,12 +840,14 @@
     this feature (although Pong does), but for the supported environments, it usually
     helps to speed up convergence, as our episodes become shorter. This logic is implemented
     in the EpisodicLifeEnv wrapper in SB3 code.'
+  id: totrans-120
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'At the beginning of the game, performing a random amount (up to 30) of empty
     actions (also called “no-op”): This skips intro screens in some Atari games, which
     are not relevant for the gameplay. It is implemented in the NoopResetEnv wrapper.'
+  id: totrans-121
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -720,6 +857,7 @@
     but the difference between consequent frames is usually minor. This is implemented
     in the MaxAndSkipEnv wrapper, which also includes the next transformation in the
     list (the maximum between two frames).'
+  id: totrans-122
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -728,6 +866,7 @@
     limitation. (Atari has a limited number of sprites that can be shown on a single
     frame.) For the human eye, such quick changes are not visible, but they can confuse
     NNs.'
+  id: totrans-123
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -735,6 +874,7 @@
     Breakout) require a user to press the FIRE button to start the game. Without this,
     the environment becomes a POMDP, as from observation, an agent cannot tell whether
     FIRE was already pressed. This is implemented in the FireResetEnv wrapper class.'
+  id: totrans-124
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -745,6 +885,7 @@
     do grayscale transformation, cropping non-relevant parts of an image and then
     scaling down. In the SB3 repository, the latter approach is used. This is implemented
     in the WarpFrame wrapper class.'
+  id: totrans-125
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -752,6 +893,7 @@
     information about the dynamics of the game’s objects: This approach was already
     discussed as a quick solution to the lack of game dynamics in a single game frame.
     There is no wrapper in the SB3 project, I implemented my version in wrappers.BufferWrapper.'
+  id: totrans-126
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -762,6 +904,7 @@
     our loss have completely different scales between the games, which makes it harder
     to find common hyperparameters for a set of games. To fix this, the reward just
     gets clipped to the range −1…1\. This is implemented in the ClipRewardEnv wrapper.'
+  id: totrans-127
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -770,6 +913,7 @@
     expects them. The Atari environment returns the observation in a (height, width,
     color) format, but the PyTorch convolution layer wants the channel layer to come
     first. This is implemented in wrappers.ImageToPyTorch.'
+  id: totrans-128
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -782,52 +926,67 @@
     problem is not in the code but in the wrongly wrapped environment. I once spent
     several days debugging convergence issues, which were caused by missing the FIRE
     button press at the beginning of a game!
+  id: totrans-129
   prefs: []
   type: TYPE_NORMAL
 - en: 'Let’s take a look at the implementation of individual wrappers. We will start
     with classes provided by stable-baseline3:'
+  id: totrans-130
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE7]'
+  id: totrans-131
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE7]'
 - en: The preceding wrapper presses the FIRE button in environments that require that
     for the game to start. In addition to pressing FIRE, this wrapper checks for several
     corner cases that are present in some games.
+  id: totrans-132
   prefs: []
   type: TYPE_NORMAL
 - en: 'This wrapper combines the repetition of actions during K frames and pixels
     from two consecutive frames:'
+  id: totrans-133
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE8]'
+  id: totrans-134
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE8]'
 - en: 'The goal of the following wrapper is to convert input observations from the
     emulator, which has a resolution of 210 × 160 pixels with RGB color channels,
     to a grayscale 84 × 84 image. It does this using CV2 library’s function cvtColor,
     which does a colorimetric grayscale conversion (which is closer to human color
     perception than a simple averaging of color channels), and then the image is resized:'
+  id: totrans-135
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE9]'
+  id: totrans-136
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE9]'
 - en: 'So far, we’ve used wrappers from stable-baseline3 (I skipped EpisodicLifeEnv
     wrapper, as it is a bit complicated and not very relevant); you can find the code
     of other available wrappers in the repo stable_baselines3/common/atari_wrappers.py.
     Now, let’s check out two wrappers from lib/wrappers.py:'
+  id: totrans-137
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE10]'
+  id: totrans-138
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE10]'
 - en: The BufferWrapper class creates a stack (implemented with the deque class) of
     subsequent frames along the first dimension and returns them as an observation.
     The purpose is to give the network an idea about the dynamics of the objects,
     such as the speed and direction of the ball in Pong or how enemies are moving.
     This is very important information, which it is not possible to obtain from a
     single image.
+  id: totrans-139
   prefs: []
   type: TYPE_NORMAL
 - en: One very important but not very obvious detail about this wrapper is that the
@@ -839,35 +998,46 @@
     require much more sophisticated data structure management. What is important currently
     is that this wrapper has to be the last in the chain of the wrappers applied to
     the environment.
+  id: totrans-140
   prefs: []
   type: TYPE_NORMAL
 - en: 'The last wrapper is ImageToPyTorch, and it changes the shape of the observation
     from height, width, channel (HWC) to the channel, height, width (CHW) format required
     by PyTorch:'
+  id: totrans-141
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE11]'
+  id: totrans-142
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE11]'
 - en: The input shape of the tensor has a color channel as the last dimension, but
     PyTorch’s convolution layers assume the color channel to be the first dimension.
+  id: totrans-143
   prefs: []
   type: TYPE_NORMAL
 - en: 'At the end of the file is a simple function that creates an environment with
     a name and applies all the required wrappers to it:'
+  id: totrans-144
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE12]'
+  id: totrans-145
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE12]'
 - en: As you can see, we’re using the AtariWrapper class from stable-baseline3 and
     disabling some unnecessary wrappers.
+  id: totrans-146
   prefs: []
   type: TYPE_NORMAL
 - en: That’s it for wrappers; let’s look at our model.
+  id: totrans-147
   prefs: []
   type: TYPE_NORMAL
 - en: The DQN model
+  id: totrans-148
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -878,18 +1048,23 @@
     having all Q-values calculated with one pass through the network helps us to increase
     speed significantly in comparison to treating Q(s,a) literally, feeding observations
     and actions to the network to obtain the value of the action.
+  id: totrans-149
   prefs: []
   type: TYPE_NORMAL
 - en: 'The code of the model is in Chapter06/lib/dqn_model.py:'
+  id: totrans-150
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE13]'
+  id: totrans-151
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE13]'
 - en: 'To be able to write our network in a generic way, it was implemented in two
     parts: convolution and linear. The convolution part processes the imput image,
     which is a 4 × 84 × 84 tensor. The output from the last convolution filter is
     flattened into a one-dimensional vector and fed into two Linear layers.'
+  id: totrans-152
   prefs: []
   type: TYPE_NORMAL
 - en: Another small problem is that we don’t know the exact number of values in the
@@ -904,19 +1079,24 @@
     number of parameters returned by this application. It would be fast, as this call
     would be done once on model creation, and it would also allow us to have generic
     code.
+  id: totrans-153
   prefs: []
   type: TYPE_NORMAL
 - en: 'The final piece of the model is the forward() function, which accepts the 4D
     input tensor. The first dimension is the batch size and the second is the color
     channel, which is our stack of subsequent frames; the third and fourth are image
     dimensions:'
+  id: totrans-154
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE14]'
+  id: totrans-155
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE14]'
 - en: Here, before applying our network, we perform the scaling and type conversion
     of the input data. This requires a bit of explanation.
+  id: totrans-156
   prefs: []
   type: TYPE_NORMAL
 - en: 'Every pixel in the Atari image is represented as an unsigned byte with a value
@@ -927,6 +1107,7 @@
     those observations into GPU memory to calculate the gradients and update the network
     parameters. The bandwidth between the main memory and GPU is a limited resource,
     so it also makes sense to keep observations as small as possible.'
+  id: totrans-157
   prefs: []
   type: TYPE_NORMAL
 - en: That’s why we keep observations as a numpy array with dtype=uint8, and the input
@@ -935,15 +1116,18 @@
     and do type conversion. This is fast, as the input byte tensor is already inside
     the GPU memory. After that, we apply both parts of our network to the resulting
     scaled tensor.
+  id: totrans-158
   prefs: []
   type: TYPE_NORMAL
 - en: Training
+  id: totrans-159
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
 - en: The third module contains the experience replay buffer, the agent, the loss
     function calculation, and the training loop itself. Before going into the code,
     something needs to be said about the training hyperparameters.
+  id: totrans-160
   prefs: []
   type: TYPE_NORMAL
 - en: 'DeepMind’s Nature paper contained a table with all the details about the hyperparameters
@@ -953,6 +1137,7 @@
     enough to solve lots of games with varying complexity, action space, reward structure,
     and other details using one single model architecture and hyperparameters. However,
     our goal here is much more modest: we want to solve just the Pong game.'
+  id: totrans-161
   prefs: []
   type: TYPE_NORMAL
 - en: Pong is quite simple and straightforward in comparison to other games in the
@@ -960,6 +1145,7 @@
     For example, to get the best result on all 49 games, DeepMind used a million-observations
     replay buffer, which requires approximately 20 GB of RAM to store it and lots
     of samples from the environment to populate it.
+  id: totrans-162
   prefs: []
   type: TYPE_NORMAL
 - en: 'The epsilon decay schedule that was used is also not the best for a single
@@ -968,73 +1154,94 @@
     experiments have shown that for Pong, it’s enough to decay epsilon over the first
     150k frames and then keep it stable. The replay buffer also can be much smaller:
     10k transitions will be enough.'
+  id: totrans-163
   prefs: []
   type: TYPE_NORMAL
 - en: In the following example, I’ve used my parameters. These differ from the parameters
     in the paper but will allow us to solve Pong about 10 times faster. On a GeForce
     GTX 1080 Ti, the following version converges to a mean score of 19.0 in about
     50 minutes, but with DeepMind’s hyperparameters, it will require at least a day.
+  id: totrans-164
   prefs: []
   type: TYPE_NORMAL
 - en: This speedup, of course, involves fine-tuning for one particular environment
     and can break convergence on other games. You are free to play with the options
     and other games from the Atari set.
+  id: totrans-165
   prefs: []
   type: TYPE_NORMAL
 - en: 'First, we import the required modules:'
+  id: totrans-166
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE15]'
+  id: totrans-167
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE15]'
 - en: 'We then define the hyperparameters:'
+  id: totrans-168
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE16]'
+  id: totrans-169
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE16]'
 - en: 'These two values set the default environment to train on and the reward boundary
     for the last 100 episodes to stop training. If you want, you can redefine the
     environment name using the command-line --env argument:'
+  id: totrans-170
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE17]'
+  id: totrans-171
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE17]'
 - en: 'The preceding parameters define the following:'
+  id: totrans-172
   prefs: []
   type: TYPE_NORMAL
 - en: Our γ value used for the Bellman approximation (GAMMA)
+  id: totrans-173
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The batch size sampled from the replay buffer (BATCH_SIZE)
+  id: totrans-174
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The maximum capacity of the buffer (REPLAY_SIZE)
+  id: totrans-175
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The count of frames we wait for before starting training to populate the replay
     buffer (REPLAY_START_SIZE)
+  id: totrans-176
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: The learning rate used in the Adam optimizer, which is used in this example
     (LEARNING_RATE)
+  id: totrans-177
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: How frequently we sync model weights from the training model to the target model,
     which is used to get the value of the next state in the Bellman approximation
     (SYNC_TARGET_FRAMES)
+  id: totrans-178
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: '[PRE18]'
+  id: totrans-179
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE18]'
 - en: The last batch of hyperparameters is related to the epsilon decay schedule.
     To achieve proper exploration, we start with 𝜖 = 1.0 at the early stages of training,
     which causes all actions to be selected randomly. Then, during the first 150,000
@@ -1042,85 +1249,110 @@
     taken in 1% of steps. A similar scheme was used in the original DeepMind paper,
     but the duration of decay was almost 10 times longer (so 𝜖 = 0.01 was reached
     after a million frames).
+  id: totrans-180
   prefs: []
   type: TYPE_NORMAL
 - en: 'Here, we define our type aliases and the dataclass Experience, used to keep
     entries in the experience replay buffer. It contains the current state, the action
     taken, the reward obtained, the termination or truncation flag, and the new state:'
+  id: totrans-181
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE19]'
+  id: totrans-182
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE19]'
 - en: 'The next chunk of code defines our experience replay buffer, the purpose of
     which is to keep the transitions obtained from the environment:'
+  id: totrans-183
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE20]'
+  id: totrans-184
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE20]'
 - en: Each time we do a step in the environment, we push the transition into the buffer,
     keeping only a fixed number of steps (in our case, 10k transitions). For training,
     we randomly sample the batch of transitions from the replay buffer, which allows
     us to break the correlation between subsequent steps in the environment.
+  id: totrans-185
   prefs: []
   type: TYPE_NORMAL
 - en: 'Most of the experience replay buffer code is quite straightforward: it basically
     exploits the capability of the deque class to maintain the given number of entries
     in the buffer. In the sample() method, we create a list of random indices and
     return a list of Experience items to be repackaged and converted into tensors.'
+  id: totrans-186
   prefs: []
   type: TYPE_NORMAL
 - en: 'The next class we need to have is an Agent, which interacts with the environment
     and saves the result of the interaction in the experience replay buffer that you
     have just seen:'
+  id: totrans-187
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE21]'
+  id: totrans-188
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE21]'
 - en: During the agent’s initialization, we need to store references to the environment
     and experience replay buffer, tracking the current observation and the total reward
     accumulated so far.
+  id: totrans-189
   prefs: []
   type: TYPE_NORMAL
 - en: 'The main method of the agent is to perform a step in the environment and store
     its result in the buffer. To do this, we need to select the action first:'
+  id: totrans-190
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE22]'
+  id: totrans-191
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE22]'
 - en: With the probability epsilon (passed as an argument), we take the random action;
     otherwise, we use the model to obtain the Q-values for all possible actions and
     choose the best. In this method, we use the PyTorch no_grad() decorator to disable
     gradient tracking during the whole method, as we don’t need them anyway.
+  id: totrans-192
   prefs: []
   type: TYPE_NORMAL
 - en: 'As the action has been chosen, we pass it to the environment to get the next
     observation and reward, store the data in the experience buffer, and then handle
     the end-of-episode situation:'
+  id: totrans-193
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE23]'
+  id: totrans-194
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE23]'
 - en: The result of the function is the total accumulated reward if we have reached
     the end of the episode with this step, or None otherwise.
+  id: totrans-195
   prefs: []
   type: TYPE_NORMAL
 - en: 'The function batch_to_tensors takes the batch of Experience objects and returns
     a tuple with states, actions, rewards, done flags, and new states repacked as
     PyTorch tensors of the corresponding types:'
+  id: totrans-196
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE24]'
+  id: totrans-197
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE24]'
 - en: When we work with states, we try to avoid memory copy (by using np.asarray()
     function), which is important, as Atari observations are large (4 frames with
     84 × 84 bytes each), and we have a batch of 32 such objects. Without this optimization,
     performance drops about 20 times.
+  id: totrans-198
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now, it is time for the last function in the training module, which calculates
@@ -1129,26 +1361,34 @@
     which makes it harder to understand when compared with a naïve loop over the batch.
     Yet this optimization pays off: the parallel version is more than two times faster
     than an explicit loop.'
+  id: totrans-199
   prefs: []
   type: TYPE_NORMAL
 - en: 'As a reminder, here is the loss expression we need to calculate:'
+  id: totrans-200
   prefs: []
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq24.png)'
+  id: totrans-201
   prefs: []
   type: TYPE_IMG
 - en: 'We use the preceding equation for steps that aren’t at the end of the episode
     and the following for the final steps:'
+  id: totrans-202
   prefs: []
   type: TYPE_NORMAL
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq25.png)'
+  id: totrans-203
   prefs: []
   type: TYPE_IMG
 - en: '[PRE25]'
+  id: totrans-204
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE25]'
 - en: In the arguments, we pass our batch, the network that we are training, and the
     target network, which is periodically synced with the trained one.
+  id: totrans-205
   prefs: []
   type: TYPE_NORMAL
 - en: The first model (passed as the parameter net) is used to calculate gradients;
@@ -1156,23 +1396,29 @@
     states, and this calculation shouldn’t affect gradients. To achieve this, we use
     the detach() function of the PyTorch tensor to prevent gradients from flowing
     into the target network’s graph. This function was described in Chapter [3](ch007.xhtml#x1-530003).
+  id: totrans-206
   prefs: []
   type: TYPE_NORMAL
 - en: At the beginning of the function, we call the function batch_to_tensors to repack
     the batch into individual tensor variables.
+  id: totrans-207
   prefs: []
   type: TYPE_NORMAL
 - en: 'The next line is a bit tricky:'
+  id: totrans-208
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE26]'
+  id: totrans-209
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE26]'
 - en: Let’s discuss it in detail. Here, we pass observations to the first model and
     extract the specific Q-values for the taken actions, using the gather() tensor
     operation. The first argument to the gather() call is a dimension index that we
     want to perform gathering on (in our case, it is equal to 1, which corresponds
     to actions).
+  id: totrans-210
   prefs: []
   type: TYPE_NORMAL
 - en: The second argument is a tensor of indices of elements to be chosen. Extra unsqueeze()
@@ -1181,194 +1427,257 @@
     (The index should have the same number of dimensions as the data we are processing.)
     In Figure [6.3](#x1-102122r3), you can see an illustration of what gather() does
     on the example case, with a batch of six entries and four actions.
+  id: totrans-211
   prefs: []
   type: TYPE_NORMAL
 - en: '![PIC](img/file33.png)'
+  id: totrans-212
   prefs: []
   type: TYPE_IMG
 - en: 'Figure 6.3: Transformation of tensors during a DQN loss calculation'
+  id: totrans-213
   prefs: []
   type: TYPE_NORMAL
 - en: Keep in mind that the result of gather() applied to tensors is a differentiable
     operation that will keep all gradients with respect to the final loss value.
+  id: totrans-214
   prefs: []
   type: TYPE_NORMAL
 - en: 'Next, we disable the gradients’ calculations (which ends up in a small speedup),
     apply the target network to our next state observations, and calculate the maximum
     Q-value along the same action dimension, 1:'
+  id: totrans-215
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE27]'
+  id: totrans-216
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE27]'
 - en: The function max() returns both maximum values and indices of those values (so
     it calculates both max and argmax), which is very convenient. However, in this
     case, we are interested only in values, so we take the first entry of the result
     (max values).
+  id: totrans-217
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following is the next line:'
+  id: totrans-218
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE28]'
+  id: totrans-219
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE28]'
 - en: 'Here, we make one simple but very important transformation: if the transition
     in the batch is from the last step in the episode, then our value of the action
     doesn’t have a discounted reward for the next state, as there is no next state
     from which to gather the reward. This may look minor, but it is very important
     in practice; without this, training will not converge (I personally have wasted
     several hours debugging this case).'
+  id: totrans-220
   prefs: []
   type: TYPE_NORMAL
 - en: 'In the next line, we detach the value from its computation graph to prevent
     gradients from flowing into the NN used to calculate the Q approximation for the
     next states:'
+  id: totrans-221
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE29]'
+  id: totrans-222
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE29]'
 - en: This is important, as without this, our backpropagation of the loss will start
     to affect both predictions for the current state and the next state. However,
     we don’t want to touch predictions for the next state, as they are used in the
     Bellman equation to calculate the reference Q-values. To block gradients from
     flowing into this branch of the graph, we use the detach() method of the tensor,
     which returns the tensor without connection to its calculation history.
+  id: totrans-223
   prefs: []
   type: TYPE_NORMAL
 - en: 'Finally, we calculate the Bellman approximation value and the mean squared
     error loss:'
+  id: totrans-224
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE30]'
+  id: totrans-225
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE30]'
 - en: 'To get the full picture of the loss function calculation code, let’s look at
     this function in full:'
+  id: totrans-226
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE31]'
+  id: totrans-227
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE31]'
 - en: This ends our loss function calculation.
+  id: totrans-228
   prefs: []
   type: TYPE_NORMAL
 - en: 'The rest of the code is our training loop. To begin with, we create a parser
     of command-line arguments:'
+  id: totrans-229
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE32]'
+  id: totrans-230
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE32]'
 - en: Our script allows us to specify a device for computation and train on environments
     that are different from the default.
+  id: totrans-231
   prefs: []
   type: TYPE_NORMAL
 - en: 'Here, we create our environment:'
+  id: totrans-232
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE33]'
+  id: totrans-233
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE33]'
 - en: Our environment has all the required wrappers applied, the NN that we are going
     to train, and our target network with the same architecture. At first, they will
     be initialized with different random weights, but it doesn’t matter much, as we
     will sync them every 1k frames, which roughly corresponds to one episode of Pong.
+  id: totrans-234
   prefs: []
   type: TYPE_NORMAL
 - en: 'Then, we create our experience replay buffer of the required size and pass
     it to the agent:'
+  id: totrans-235
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE34]'
+  id: totrans-236
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE34]'
 - en: 'Epsilon is initially initialized to 1.0 but will be decreased every iteration.
     Here are the last things we do before the training loop:'
+  id: totrans-237
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE35]'
+  id: totrans-238
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE35]'
 - en: We create an optimizer, a buffer for full episode rewards, a counter of frames
     and several variables to track our speed, and the best mean reward reached. Every
     time our mean reward beats the record, we will save the model in the file.
+  id: totrans-239
   prefs: []
   type: TYPE_NORMAL
 - en: 'At the beginning of the training loop, we count the number of iterations completed
     and decrease epsilon according to our schedule:'
+  id: totrans-240
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE36]'
+  id: totrans-241
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE36]'
 - en: Epsilon will drop linearly during the given number of frames (EPSILON_DECAY_LAST_FRAME=150k)
     and then be kept on the same level as EPSILON_FINAL=0.01.
+  id: totrans-242
   prefs: []
   type: TYPE_NORMAL
 - en: 'In this block of code, we ask our agent to make a single step in the environment
     (using our current network and value for epsilon):'
+  id: totrans-243
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE37]'
+  id: totrans-244
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE37]'
 - en: 'This function returns a float value only if this step is the final step in
     the episode. In that case, we report our progress. Specifically, we calculate
     and show, both in the console and in TensorBoard, these values:'
+  id: totrans-245
   prefs: []
   type: TYPE_NORMAL
 - en: Speed as a count of frames processed per second
+  id: totrans-246
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Count of episodes played
+  id: totrans-247
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Mean reward for the last 100 episodes
+  id: totrans-248
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Current value for epsilon
+  id: totrans-249
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: 'Every time our mean reward for the last 100 episodes reaches a maximum, we
     report this and save the model parameters:'
+  id: totrans-250
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE38]'
+  id: totrans-251
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE38]'
 - en: If our mean reward exceeds the specified boundary, then we stop training. For
     Pong, the boundary is 19.0, which means winning more than 19 from 21 total games.
+  id: totrans-252
   prefs: []
   type: TYPE_NORMAL
 - en: 'Here, we check whether our buffer is large enough for training:'
+  id: totrans-253
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE39]'
+  id: totrans-254
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE39]'
 - en: First, we should wait for enough data to be accumulated, which in our case is
     10k transitions. The next condition syncs parameters from our main network to
     the target network every SYNC_TARGET_FRAMES, which is 1k by default.
+  id: totrans-255
   prefs: []
   type: TYPE_NORMAL
 - en: 'The last piece of the training loop is very simple but requires the most time
     to execute:'
+  id: totrans-256
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE40]'
+  id: totrans-257
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE40]'
 - en: Here, we zero gradients, sample data batches from the experience replay buffer,
     calculate loss, and perform the optimization step to minimize the loss.
+  id: totrans-258
   prefs: []
   type: TYPE_NORMAL
 - en: Running and performance
+  id: totrans-259
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1382,6 +1691,7 @@
     40 frames per second, which will take about seven hours. Remember that this is
     for Pong, which is relatively easy to solve. Other games might require hundreds
     of millions of frames and a 100 times larger experience replay buffer.
+  id: totrans-260
   prefs: []
   type: TYPE_NORMAL
 - en: 'In Chapter [8](ch012.xhtml#x1-1240008), we will look at various approaches
@@ -1390,21 +1700,27 @@
     tricks to speed up RL methods’ performance. Nevertheless, for Atari, you will
     need resources and patience. The following figure shows a chart with reward dynamics
     during the training:'
+  id: totrans-261
   prefs: []
   type: TYPE_NORMAL
 - en: '![PIC](img/B22150_06_04.png)'
+  id: totrans-262
   prefs: []
   type: TYPE_IMG
 - en: 'Figure 6.4: Dynamics of average reward calculated over the last 100 episodes'
+  id: totrans-263
   prefs: []
   type: TYPE_NORMAL
 - en: 'Now, let’s look at the console output from our training process (only the beginning
     of the output is shown):'
+  id: totrans-264
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE41]'
+  id: totrans-265
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE41]'
 - en: During the first 10k steps, our speed is very high, as we don’t do any training,
     which is the most expensive operation in our code. After 10k, we start sampling
     the training batches and the performance drops to more representative numbers.
@@ -1412,23 +1728,30 @@
     the epsilon decrease. When 𝜖 is high, the actions are chosen randomly. As 𝜖 approaches
     zero, we need to perform inference to get Q-values for action selection, which
     also costs time.
+  id: totrans-266
   prefs: []
   type: TYPE_NORMAL
 - en: 'Several dozens of games later, our DQN should start to figure out how to win
     1 or 2 games out of 21, and an average reward begins to grow (this normally happens
     around 𝜖 = 0.5):'
+  id: totrans-267
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE42]'
+  id: totrans-268
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE42]'
 - en: 'Finally, after many more games, our DQN can finally dominate and beat the (not
     very sophisticated) built-in Pong AI opponent:'
+  id: totrans-269
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE43]'
+  id: totrans-270
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE43]'
 - en: Due to randomness in the training process, your actual dynamics might differ
     from what is displayed here. In some rare cases (1 run from 10 according to my
     experiments), the training does not converge at all, which looks like a constant
@@ -1437,9 +1760,11 @@
     in RL (due to the added randomness of environment communication). If your training
     doesn’t show any positive dynamics for the first 100k–200k iterations, you should
     restart it.
+  id: totrans-271
   prefs: []
   type: TYPE_NORMAL
 - en: Your model in action
+  id: totrans-272
   prefs:
   - PREF_H2
   type: TYPE_NORMAL
@@ -1449,36 +1774,48 @@
     last 100 games, we save the model into the file PongNoFrameskip-v4-best_<score>.dat.
     In the Chapter06/03_dqn_play.py file, we have a program that can load this model
     file and play one episode, displaying the model’s dynamics.
+  id: totrans-273
   prefs: []
   type: TYPE_NORMAL
 - en: The code is very simple, but it can be like magic seeing how several matrices,
     with just a million parameters, can play Pong with superhuman accuracy by observing
     only the pixels.
+  id: totrans-274
   prefs: []
   type: TYPE_NORMAL
 - en: 'First, we import the familiar PyTorch and Gym modules:'
+  id: totrans-275
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE44]'
+  id: totrans-276
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE44]'
 - en: 'The script accepts the filename of the saved model and allows the specification
     of the Gym environment (of course, the model and environment have to match):'
+  id: totrans-277
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE45]'
+  id: totrans-278
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE45]'
 - en: Additionally, you have to pass option -r with the name of a nonexistent directory,
     which will be used to save a video of your game.
+  id: totrans-279
   prefs: []
   type: TYPE_NORMAL
 - en: 'The following code is also not very complicated:'
+  id: totrans-280
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE46]'
+  id: totrans-281
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE46]'
 - en: We create the environment, wrap it in the RecordVideo wrapper, create the model,
     and then we load weights from the file passed in the arguments. The argument map_location,
     passed to the torch.load() function, is needed to map the loaded tensor location
@@ -1486,35 +1823,46 @@
     where they were saved, but if you copy the model from the machine you used for
     training (with a GPU) to a laptop without a GPU, the locations need to be remapped.
     Our example doesn’t use the GPU at all, as inference is fast enough without acceleration.
+  id: totrans-282
   prefs: []
   type: TYPE_NORMAL
 - en: 'This is almost an exact copy of the Agent class’ method play_step() from the
     training code, without the epsilon-greedy action selection:'
+  id: totrans-283
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE47]'
+  id: totrans-284
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE47]'
 - en: We just pass our observation to the agent and select the action with the maximum
     value.
+  id: totrans-285
   prefs: []
   type: TYPE_NORMAL
 - en: 'The rest of the code is also simple:'
+  id: totrans-286
   prefs: []
   type: TYPE_NORMAL
 - en: '[PRE48]'
+  id: totrans-287
   prefs: []
   type: TYPE_PRE
+  zh: '[PRE48]'
 - en: We pass the action to the environment, count the total reward, and stop our
     loop when the episode ends. After the episode, we show the total reward and the
     number of times that the agent executed the action.
+  id: totrans-288
   prefs: []
   type: TYPE_NORMAL
 - en: 'In this YouTube playlist, you can find recordings of the gameplay at different
     stages of the training: [https://www.youtube.com/playlist?list=PLMVwuZENsfJklt4vCltrWq0KV9aEZ3ylu](https://www.youtube.com/playlist?list=PLMVwuZENsfJklt4vCltrWq0KV9aEZ3ylu).'
+  id: totrans-289
   prefs: []
   type: TYPE_NORMAL
 - en: Things to try
+  id: totrans-290
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1523,16 +1871,19 @@
     can take lots of time and may cause you some moments of frustration during your
     experiments. However, these experiments are a very efficient way to really master
     the material from a practical point of view:'
+  id: totrans-291
   prefs: []
   type: TYPE_NORMAL
 - en: Try to take some other games from the Atari set, such as Breakout, Atlantis,
     or River Raid (my childhood favorite). This could require the tuning of hyperparameters.
+  id: totrans-292
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: As an alternative to FrozenLake, there is another tabular environment, Taxi,
     which emulates a taxi driver who needs to pick up passengers and take them to
     a destination.
+  id: totrans-293
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1540,6 +1891,7 @@
     that it can solve Pong in 30 minutes using the asynchronous advantage actor-critic
     method (which is a subject of Part 3 of this book). Maybe it’s possible with a
     DQN.
+  id: totrans-294
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1547,6 +1899,7 @@
     shown 350 FPS using TensorFlow on GTX 1080 Ti. So, it looks like it’s possible
     to optimize the PyTorch code. We will discuss this topic in Chapter [9](ch013.xhtml#x1-1600009),
     but meanwhile, you can do your own experiments.
+  id: totrans-295
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
@@ -1556,15 +1909,18 @@
     to the particular game situations. Could you try to fix this? Maybe it would be
     possible to use a generative adversarial network-style approach to make one model
     play with another?
+  id: totrans-296
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Can you get the Ultimate Pong Dominator model with a mean score of 21? It shouldn’t
     be very hard – the learning rate decay is the obvious method to try.
+  id: totrans-297
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
 - en: Summary
+  id: totrans-298
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
@@ -1574,12 +1930,14 @@
     Q-learning algorithm on the FrozenLake environment and discussed the approximation
     of Q-values with NNs, as well as the extra complications that arise from this
     approximation.
+  id: totrans-299
   prefs: []
   type: TYPE_NORMAL
 - en: We covered several tricks with DQNs to improve their training stability and
     convergence, such as an experience replay buffer, target networks, and frame stacking.
     Finally, we combined those extensions into one single implementation of DQN that
     solves the Pong environment from the Atari games suite.
+  id: totrans-300
   prefs: []
   type: TYPE_NORMAL
 - en: In the next chapter, we will take a quick look at higher-level RL libraries,
@@ -1587,5 +1945,6 @@
     since 2015 to improve DQN convergence and quality, which (combined) can produce
     state-of-the-art results on most of the 54 (newly added) Atari games. This set
     was published in 2017, and we will analyze and reimplement all of the tricks.
+  id: totrans-301
   prefs: []
   type: TYPE_NORMAL

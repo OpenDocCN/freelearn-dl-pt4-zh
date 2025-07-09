@@ -829,6 +829,8 @@
   id: totrans-110
   prefs: []
   type: TYPE_NORMAL
+  zh: 接下来，我们将尝试使用交叉熵方法解决的环境是 FrozenLake。它的世界属于所谓的网格世界类别，在这个世界中，代理生活在一个 4 × 4 的网格中，可以朝四个方向移动：上、下、左、右。代理始终从左上角开始，目标是到达网格的右下角单元格。网格中的固定单元格中有洞，如果代理掉入这些洞中，情节结束，奖励为零。如果代理到达目标单元格，则获得
+    1.0 的奖励，情节也结束。
 - en: To make life more complicated, the world is slippery (it’s a frozen lake after
     all), so the agent’s actions do not always turn out as expected – there is a 33%
     chance that it will slip to the right or to the left. If you want the agent to
@@ -839,18 +841,23 @@
   id: totrans-111
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了让事情变得更复杂，世界是滑溜的（毕竟它是一个冰冻的湖泊），因此代理的动作并不总是按预期进行——有 33% 的机会它会向右或向左滑动。例如，如果你希望代理向左移动，那么有
+    33% 的概率它确实会向左移动，33% 的概率它会移到上方的单元格，另有 33% 的概率它会移到下方的单元格。正如你在本节最后所看到的，这使得进展变得困难。
 - en: '![PIC](img/file17.png)'
   id: totrans-112
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file17.png)'
 - en: 'Figure 4.6: The FrozenLake environment rendered in human mode'
   id: totrans-113
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.6：在人工模式下渲染的 FrozenLake 环境
 - en: 'Let’s look at how this environment is represented in the Gym API:'
   id: totrans-114
   prefs: []
   type: TYPE_NORMAL
+  zh: 让我们来看一下这个环境在 Gym API 中是如何表示的：
 - en: '[PRE19]'
   id: totrans-115
   prefs: []
@@ -867,12 +874,17 @@
   id: totrans-116
   prefs: []
   type: TYPE_NORMAL
+  zh: 我们的观察空间是离散的，这意味着它只是一个从 0 到 15 的数字（包括 0 和 15）。显然，这个数字是我们在网格中的当前位置。动作空间也是离散的，但它的值可以从零到三。虽然动作空间与
+    CartPole 类似，但观察空间的表示方式不同。为了尽量减少我们实现中的所需更改，我们可以应用传统的离散输入的 one-hot 编码，这意味着输入到我们网络的数据将包含
+    16 个浮动数，其他位置为零，只有表示我们在网格中的当前位置的索引处为 1。
 - en: 'As this transformation only affects the observation of the environment, it
     could be implemented as an ObservationWrapper, as we discussed in Chapter [2](ch006.xhtml#x1-380002).
     Let’s call it DiscreteOneHotWrapper:'
   id: totrans-117
   prefs: []
   type: TYPE_NORMAL
+  zh: 由于这种转换仅影响环境的观察，因此可以将其实现为一个 ObservationWrapper，正如我们在第 [2](ch006.xhtml#x1-380002)
+    章中讨论的那样。我们将其称为 DiscreteOneHotWrapper：
 - en: '[PRE20]'
   id: totrans-118
   prefs: []
@@ -885,22 +897,28 @@
   id: totrans-119
   prefs: []
   type: TYPE_NORMAL
+  zh: 在对环境应用了该包装器后，观察空间和动作空间与我们的 CartPole 解决方案（源代码 Chapter04/02_frozenlake_naive.py）100%
+    兼容。然而，通过启动它，我们可以看到我们的训练过程并没有随着时间的推移提高分数：
 - en: '![PIC](img/B22150_04_07.png)'
   id: totrans-120
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/B22150_04_07.png)'
 - en: 'Figure 4.7: Mean reward (left) and loss (right) on the FrozenLake environment'
   id: totrans-121
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.7：FrozenLake 环境中的平均奖励（左）和损失（右）
 - en: '![PIC](img/B22150_04_08.png)'
   id: totrans-122
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/B22150_04_08.png)'
 - en: 'Figure 4.8: The reward boundary during the training (boring 0.0 all the time)'
   id: totrans-123
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.8：训练过程中奖励边界（一直是无聊的 0.0）
 - en: 'To understand what’s going on, we need to look deeper at the reward structure
     of both environments. In CartPole, every step of the environment gives us the
     reward 1.0, until the moment that the pole falls. So, the longer our agent balanced
@@ -912,14 +930,17 @@
   id: totrans-124
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了理解发生了什么，我们需要深入研究两个环境的奖励结构。在CartPole中，环境的每一步都会给我们1.0的奖励，直到杆子倒下为止。因此，我们的代理平衡杆子的时间越长，获得的奖励就越多。由于代理行为的随机性，不同的回合有不同的长度，从而给我们带来了一个比较正常的回合奖励分布。选择奖励边界后，我们会拒绝不太成功的回合，并学习如何重复更好的回合（通过在成功回合的数据上训练）。这一点可以通过下面的图示看到：
 - en: '![PIC](img/file21.png)'
   id: totrans-125
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file21.png)'
 - en: 'Figure 4.9: Distribution of the reward in the CartPole environment'
   id: totrans-126
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.9：CartPole环境中的奖励分布
 - en: In the FrozenLake environment, episodes and their rewards look different. We
     get the reward of 1.0 only when we reach the goal, and this reward says nothing
     about how good each episode was. Was it quick and efficient, or did we make four
@@ -933,36 +954,43 @@
   id: totrans-127
   prefs: []
   type: TYPE_NORMAL
+  zh: 在FrozenLake环境中，回合和奖励的情况有所不同。我们只有在到达目标时才能获得1.0的奖励，而这个奖励并不能说明每个回合的好坏。这个回合是快速有效的，还是我们在湖上绕了四圈后才随机进入最终的格子？我们并不知道；它只是一个1.0的奖励，仅此而已。我们的回合奖励分布也存在问题。只有两种可能的回合，一种是零奖励（失败），另一种是奖励为1.0（成功），而失败的回合显然会在训练开始时占据主导地位，因为这时代理的行为是随机的。因此，我们选择精英回合的百分位数是完全错误的，这会给我们提供不良的训练样本。这就是我们训练失败的原因。
 - en: '![PIC](img/file22.png)'
   id: totrans-128
   prefs: []
   type: TYPE_IMG
+  zh: '![图片](img/file22.png)'
 - en: 'Figure 4.10: Reward distribution of the FrozenLake environment'
   id: totrans-129
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.10：FrozenLake环境的奖励分布
 - en: 'This example shows us the limitations of the cross-entropy method:'
   id: totrans-130
   prefs: []
   type: TYPE_NORMAL
+  zh: 这个例子展示了交叉熵方法的局限性：
 - en: For training, our episodes have to be finite (in general, they could be infinite)
     and, preferably, short
   id: totrans-131
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 对于训练来说，我们的过程必须是有限的（通常它们可以是无限的），并且最好是短暂的。
 - en: The total reward for the episodes should have enough variability to separate
     good episodes from bad ones
   id: totrans-132
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 回合的总奖励应当有足够的变异性，以便将好的回合与不好的回合区分开来。
 - en: It is beneficial to have an intermediate reward during the episode instead of
     having the reward at the end of the episode
   id: totrans-133
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 在整个过程中有中间奖励是有益的，而不是只在过程结束时获得奖励。
 - en: 'Later in the book, you will become familiar with other methods that address
     these limitations. For now, if you are curious about how FrozenLake can be solved
     using the cross-entropy method, here is a list of tweaks of the code that you
@@ -970,6 +998,7 @@
   id: totrans-134
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本书的后续章节中，你将了解其他解决这些局限性的方法。目前，如果你对如何使用交叉熵方法解决FrozenLake问题感兴趣，以下是你需要对代码进行的调整（完整示例见Chapter04/03_frozenlake_tweaked.py）：
 - en: 'Larger batches of played episodes: In CartPole, it was sufficient to have 16
     episodes on every iteration, but FrozenLake requires at least 100 just to get
     some successful episodes.'
@@ -977,6 +1006,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更大的回合批量：在CartPole中，每次迭代有16个回合就足够了，但FrozenLake至少需要100个回合才能得到一些成功的回合。
 - en: 'Discount factor applied to the reward: To make the total reward for an episode
     depend on its length, and to add variety in episodes, we can use a discounted
     total reward with the discount factor γ = 0.9 or 0.95\. In this case, the reward
@@ -987,6 +1017,7 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 奖励的折扣因子：为了让一个回合的总奖励依赖于其长度，并且增加回合的多样性，我们可以使用折扣总奖励，折扣因子γ = 0.9或0.95。在这种情况下，短回合的奖励会高于长回合的奖励。这增加了奖励分布的变异性，有助于避免像图[4.10](#x1-78034r10)中所示的情况。
 - en: 'Keeping elite episodes for a longer time: In the CartPole training, we sampled
     episodes from the environment, trained on the best ones, and threw them away.
     In FrozenLake, a successful episode is a much rarer animal, so we need to keep
@@ -995,12 +1026,14 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 长时间保存精英回合：在 CartPole 训练中，我们从环境中采样回合，训练最好的回合，然后丢弃它们。而在 FrozenLake 中，成功回合是非常稀有的，因此我们需要将其保留多个迭代以进行训练。
 - en: 'Decreasing the learning rate: This will give our NN time to average more training
     samples, as a smaller learning rate decreases the effect of new data on the model.'
   id: totrans-138
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 降低学习率：这将给我们的神经网络更多时间来平均更多的训练样本，因为较小的学习率会减小新数据对模型的影响。
 - en: 'Much longer training time: Due to the sparsity of successful episodes and the
     random outcome of our actions, it’s much harder for our NN to get an idea of the
     best behavior to perform in any particular situation. To reach 50% successful
@@ -1009,12 +1042,15 @@
   prefs:
   - PREF_UL
   type: TYPE_NORMAL
+  zh: 更长的训练时间：由于成功回合的稀疏性以及我们行动的随机性，我们的神经网络（NN）更难理解在任何特定情况下应该执行的最佳行为。为了达到 50% 的成功回合，约需要
+    5,000 次训练迭代。
 - en: 'To incorporate all these into our code, we need to change the filter_batch
     function to calculate the discounted reward and return elite episodes for us to
     keep:'
   id: totrans-140
   prefs: []
   type: TYPE_NORMAL
+  zh: 为了将这些内容融入到我们的代码中，我们需要修改 filter_batch 函数来计算折扣奖励并返回精英回合以供我们保存：
 - en: '[PRE21]'
   id: totrans-141
   prefs: []
@@ -1025,6 +1061,7 @@
   id: totrans-142
   prefs: []
   type: TYPE_NORMAL
+  zh: 然后，在训练循环中，我们将存储先前的精英回合，并在下次训练迭代中将其传递给前面的函数：
 - en: '[PRE22]'
   id: totrans-143
   prefs: []
@@ -1037,27 +1074,34 @@
   id: totrans-144
   prefs: []
   type: TYPE_NORMAL
+  zh: 其余的代码保持不变，除了学习率降低了 10 倍，BATCH_SIZE 设置为 100。经过一段耐心等待（新版本大约需要 50 分钟来完成 10,000
+    次迭代），你可以看到模型的训练在约 55% 已解决的回合后停止了提升：
 - en: '![PIC](img/B22150_04_11.png)'
   id: totrans-145
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_04_11.png)'
 - en: 'Figure 4.11: Mean reward (left) and loss (right) of the tweaked version'
   id: totrans-146
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.11：调整版本的平均奖励（左）和损失（右）
 - en: '![PIC](img/B22150_04_12.png)'
   id: totrans-147
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_04_12.png)'
 - en: 'Figure 4.12: The reward boundary of the tweaked version'
   id: totrans-148
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.12：调整版本的奖励边界
 - en: There are ways to address this (by applying entropy loss regularization, for
     example), but those techniques will be discussed in upcoming chapters.
   id: totrans-149
   prefs: []
   type: TYPE_NORMAL
+  zh: 有方法可以解决这个问题（例如，通过应用熵损失正则化），但这些技术将在接下来的章节中讨论。
 - en: The final point to note here is the effect of slipperiness in the FrozenLake
     environment. Each of our actions, with 33% probability, is replaced with the 90^∘
     rotated action (the up action, for instance, will succeed with a 0.33 probability,
@@ -1066,11 +1110,14 @@
   id: totrans-150
   prefs: []
   type: TYPE_NORMAL
+  zh: 这里最后需要注意的是 FrozenLake 环境中的滑溜效应。我们的每个行动有 33% 的概率被替换为 90^∘ 旋转后的行动（例如，向上行动会以 0.33
+    的概率成功，而有 0.33 的概率它会被替换为向左行动或向右行动）。
 - en: 'The nonslippery version is in Chapter04/04_frozenlake_nonslippery.py, and the
     only difference is in the environment creation:'
   id: totrans-151
   prefs: []
   type: TYPE_NORMAL
+  zh: 无滑溜版本的代码在 Chapter04/04_frozenlake_nonslippery.py 中，唯一的不同是在环境创建时：
 - en: '[PRE23]'
   id: totrans-152
   prefs: []
@@ -1081,6 +1128,7 @@
   id: totrans-153
   prefs: []
   type: TYPE_NORMAL
+  zh: 效果显著！无滑溜版本的环境可以在 120-140 个批次迭代内解决，比噪声环境快了 100 倍：
 - en: '[PRE24]'
   id: totrans-154
   prefs: []
@@ -1090,43 +1138,53 @@
   id: totrans-155
   prefs: []
   type: TYPE_NORMAL
+  zh: 这一点在以下图表中也很明显：
 - en: '![PIC](img/B22150_04_13.png)'
   id: totrans-156
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_04_13.png)'
 - en: 'Figure 4.13: Mean reward (left) and loss (right) of the nonslippery version'
   id: totrans-157
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.13：无滑溜版本的平均奖励（左）和损失（右）
 - en: '![PIC](img/B22150_04_14.png)'
   id: totrans-158
   prefs: []
   type: TYPE_IMG
+  zh: '![PIC](img/B22150_04_14.png)'
 - en: 'Figure 4.14: The reward boundary of the nonslippery version'
   id: totrans-159
   prefs: []
   type: TYPE_NORMAL
+  zh: 图 4.14：无滑溜版本的奖励边界
 - en: The theoretical background of the cross-entropy method
   id: totrans-160
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 交叉熵方法的理论背景
 - en: This section is optional and is included for readers who want to understand
     why the method works. If you wish, you can refer to the original paper by Kroese,
     titled Cross-entropy method, [[Kro+11](#)].
   id: totrans-161
   prefs: []
   type: TYPE_NORMAL
+  zh: 本节为可选内容，供希望了解该方法为何有效的读者。如果你愿意，可以参考 Kroese 原文论文，标题为《交叉熵方法》，[[Kro+11](#)]。
 - en: 'The basis of the cross-entropy method lies in the importance sampling theorem,
     which states this:'
   id: totrans-162
   prefs: []
   type: TYPE_NORMAL
+  zh: 交叉熵方法的基础在于重要性采样定理，定理内容如下：
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq4.png) ![π (a |s) = P[At = a|St = s]
     ](img/eq5.png)'
   id: totrans-163
   prefs: []
   type: TYPE_IMG
+  zh: '![π (a |s) = P[At = a|St = s] ](img/eq4.png) ![π (a |s) = P[At = a|St = s]
+    ](img/eq5.png)'
 - en: 'In our RL case, H(x) is a reward value obtained by some policy x, and p(x)
     is a distribution of all possible policies. We don’t want to maximize our reward
     by searching all possible policies; instead, we want to find a way to approximate
@@ -1136,27 +1194,34 @@
   id: totrans-164
   prefs: []
   type: TYPE_NORMAL
+  zh: 在我们的强化学习（RL）案例中，H(x) 是某个策略 x 所获得的奖励值，p(x) 是所有可能策略的分布。我们并不想通过搜索所有可能的策略来最大化我们的奖励；相反，我们想通过
+    q(x) 来近似 p(x)H(x)，并迭代地最小化它们之间的距离。两个概率分布之间的距离通过 Kullback-Leibler (KL) 散度来计算，公式如下：
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq6.png) ![π (a |s) = P[At = a|St = s]
     ](img/eq7.png)'
   id: totrans-165
   prefs: []
   type: TYPE_IMG
+  zh: '![π (a |s) = P[At = a|St = s] ](img/eq6.png) ![π (a |s) = P[At = a|St = s]
+    ](img/eq7.png)'
 - en: The first term in KL is called entropy and it doesn’t depend on p[2](x), so
     it could be omitted during the minimization. The second term is called cross-entropy,
     which is a very common optimization objective in deep learning.
   id: totrans-166
   prefs: []
   type: TYPE_NORMAL
+  zh: KL 中的第一个项称为熵，它与 p[2](x) 无关，因此在最小化过程中可以省略。第二项称为交叉熵，这是深度学习中非常常见的优化目标。
 - en: 'Combining both formulas, we can get an iterative algorithm, which starts with
     q[0](x) = p(x) and on every step improves. This is an approximation of p(x)H(x)
     with an update:'
   id: totrans-167
   prefs: []
   type: TYPE_NORMAL
+  zh: 结合这两个公式，我们可以得到一个迭代算法，起始时 q[0](x) = p(x)，并在每一步进行改进。这是 p(x)H(x) 的近似，并伴随着更新：
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq78.png)'
   id: totrans-168
   prefs: []
   type: TYPE_IMG
+  zh: '![π (a |s) = P[At = a|St = s] ](img/eq78.png)'
 - en: 'This is a generic cross-entropy method that can be significantly simplified
     in our RL case. We replace our H(x) with an indicator function, which is 1 when
     the reward for the episode is above the threshold and 0 when the reward is below.
@@ -1164,10 +1229,13 @@
   id: totrans-169
   prefs: []
   type: TYPE_NORMAL
+  zh: 这是一种通用的交叉熵方法，在我们的 RL 案例中可以大大简化。我们将 H(x) 替换为一个指示函数，当回合的奖励超过阈值时其值为 1，当奖励低于阈值时其值为
+    0。我们的策略更新将如下所示：
 - en: '![π (a |s) = P[At = a|St = s] ](img/eq79.png)'
   id: totrans-170
   prefs: []
   type: TYPE_IMG
+  zh: '![π (a |s) = P[At = a|St = s] ](img/eq79.png)'
 - en: 'Strictly speaking, the preceding formula misses the normalization term, but
     it still works in practice without it. So, the method is quite clear: we sample
     episodes using our current policy (starting with some random initial policy) and
@@ -1175,17 +1243,21 @@
   id: totrans-171
   prefs: []
   type: TYPE_NORMAL
+  zh: 严格来说，前面的公式缺少归一化项，但在实践中没有它仍然能起作用。所以，方法非常明确：我们使用当前策略（从一些随机初始策略开始）采样回合，并最小化最成功样本和我们的策略的负对数似然。
 - en: If you are interested, refer to the book written by Reuven Rubinstein and Dirk
     P. Kroese [[RK04](#)] that is dedicated to this method. A shorter description
     can be found in the Cross-entropy method paper ([[Kro+11](#)]).
   id: totrans-172
   prefs: []
   type: TYPE_NORMAL
+  zh: 如果你感兴趣，可以参考 Reuven Rubinstein 和 Dirk P. Kroese 编写的书 [[RK04](#)]，专门讨论这种方法。简短的描述可以在《交叉熵方法》论文中找到
+    ([[Kro+11](#)])。
 - en: Summary
   id: totrans-173
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 摘要
 - en: In this chapter, you became familiar with the cross-entropy method, which is
     simple but quite powerful, despite its limitations. We applied it to a CartPole
     environment (with huge success) and to FrozenLake (with much more modest success).
@@ -1195,6 +1267,8 @@
   id: totrans-174
   prefs: []
   type: TYPE_NORMAL
+  zh: 在本章中，你已经了解了交叉熵方法，尽管它有一些局限性，但它简单且非常强大。我们将其应用于一个 CartPole 环境（取得了巨大的成功）和 FrozenLake（取得了相对较小的成功）。此外，我们还讨论了
+    RL 方法的分类，接下来的书中会多次引用这一分类，因为不同的 RL 问题方法具有不同的特性，这会影响它们的适用性。
 - en: This chapter ends the introductory part of the book. In the next part, we will
     switch to a more systematic study of RL methods and discuss the value-based family
     of methods. In upcoming chapters, we will explore more complex, but more powerful,
@@ -1202,11 +1276,13 @@
   id: totrans-175
   prefs: []
   type: TYPE_NORMAL
+  zh: 本章结束了本书的导言部分。在下一部分，我们将转向更加系统地学习 RL 方法，并讨论基于值的算法。在接下来的章节中，我们将探索更复杂但更强大的深度强化学习工具。
 - en: Join our community on Discord
   id: totrans-176
   prefs:
   - PREF_H1
   type: TYPE_NORMAL
+  zh: 加入我们在 Discord 上的社区
 - en: Read this book alongside other users, Deep Learning experts, and the author
     himself. Ask questions, provide solutions to other readers, chat with the author
     via Ask Me Anything sessions, and much more. Scan the QR code or visit the link
@@ -1214,6 +1290,7 @@
   id: totrans-177
   prefs: []
   type: TYPE_NORMAL
+  zh: 与其他用户、深度学习专家以及作者本人一起阅读本书。提出问题，为其他读者提供解决方案，通过问我任何问题环节与作者交流，还有更多内容。扫描二维码或访问链接加入社区。[https://packt.link/rl](https://packt.link/rl)
 - en: '![PIC](img/file1.png)'
   id: totrans-178
   prefs: []
