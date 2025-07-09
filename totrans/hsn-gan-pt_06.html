@@ -1,0 +1,659 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Building Your First GAN with PyTorch</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">In previous chapters, we covered the idea of using adversarial learning to generate simple signals with NumPy and learned about the new features and capabilities of PyTorch 1.3. It's time for us to use PyTorch to train a GAN model for generating interesting samples.</p>
+<p>In this chapter, we will introduce you to a classic and well-performing GAN model, called DCGAN, to generate 2D images. You will learn the following:</p>
+<ul>
+<li>The architecture of DCGANs</li>
+<li>The training and evaluation of DCGANs</li>
+<li>Using a DCGAN to generate handwritten digits, human faces</li>
+<li>Having fun with the generator network by performing image interpolation and arithmetic calculation on the latent vectors to change the image attributes</li>
+</ul>
+<p>By the end of this chapter, you will have grasped the core architecture design of GAN models for generating image data and have a better understanding of the relationship between latent vectors and generated samples.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Introduction to Deep Convolutional GANs</h1>
+                </header>
+            
+            <article>
+                
+<p><strong>DCAGN</strong> <span>(</span><strong><span>Deep Convolutional Generative Adversarial </span></strong><span><strong>Network</strong></span><span>) is one of the early well-performing and stable approaches to generate images with adversarial training. Let's take a look back at the simple example in <a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml"/><a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml">Chapter 1</a></span>, <em>Generative Adversarial Networks Fundamentals</em>.</p>
+<p><span><a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml"/> Here, even when we only train a GAN to manipulate 1D data, we have to use multiple techniques to ensure a stable training. A lot of things could go wrong in the training of GANs. For example, either a generator or a discriminator could overfit if one or the other does not converge. Sometimes, the generator only generates a handful of sample varieties. This is called <strong>mode collapse</strong>. The following is an example of mode collapse, where we want to train a GAN with some popular meme images in China called <strong>Baozou</strong>. We can see that our GAN is only capable of generating one or two memes at a time. Problems that commonly occur in other machine learning algorithms such as gradient vanishing/explosion and underfitting can also look familiar in the training of GANs. Therefore, just replacing 1D data with 2D images won't easily guarantee successful training:</span></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><img src="assets/6e458f91-d634-486e-abc7-1b48a8d0150c.png" style="width:50.67em;height:31.50em;"/><img src="assets/668363a6-4abe-4656-9aff-65bb9c3a0a9c.png" style="width:23.33em;height:23.33em;"/><img src="assets/949bf1ca-dc4d-461d-9c55-1a5134f91129.png" style="width:23.25em;height:23.25em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Mode collapse in GAN training (left: some training samples; middle: results at 492nd iteration; right: results at 500th iteration)</div>
+<p><span>To ensure the stable training of GANs on image data like this, a DCGAN uses three techniques:</span></p>
+<ul>
+<li><span>Getting rid of fully connected layers and only using convolution layers</span></li>
+<li><span>Using strided convolution layers to perform downsampling, instead of using pooling layers</span></li>
+<li><span>Using ReLU/leakyReLU activation functions instead of Tanh between hidden layers</span></li>
+</ul>
+<p>In this section, we will introduce the architectures of the generator and discriminator of the DCGAN and learn how to generate images with it. <span>We'll use MNIST (<a href="http://yann.lecun.com/exdb/mnist">http://yann.lecun.com/exdb/mnist</a>) samples to illustrate the architecture of a DCGAN and use it to train the model in the next two sections.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The architecture of generator</h1>
+                </header>
+            
+            <article>
+                
+<p>The generator network of a DCGAN contains 4 hidden layers (we treat the input layer as the 1<sup>st</sup> hidden layer for simplicity) and 1 output layer. Transposed convolution layers are used in hidden layers, which are followed by batch normalization layers and ReLU activation functions. The output layer is also a <span>transposed convolution layer and Tanh is used as the activation function. The architecture of the generator is shown in the following diagram:</span></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/383259d3-c12d-4c77-91b4-7286a0fbe20d.png" style="width:38.17em;height:12.75em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Generator architecture in DCGAN</div>
+<p>The 2<sup>nd</sup>, 3<sup>rd</sup>,<sup> </sup>and 4<sup>th</sup> hidden layers and the output layer have a stride value of 2. The 1<sup>st</sup> layer has a padding value of 0 and the other layers have a padding value of 1. As the image <span>(feature map) </span>sizes increase by two in deeper layers, the numbers of channels are decreasing by half. This is a common convention in the architecture design of neural networks. All kernel sizes of transposed convolution layers are set to 4 x 4. The output channel can be either 1 or 3, depending on whether you want to generate grayscale images or color images.</p>
+<div class="packt_tip">The transposed convolution layer can be considered as the <strong>reverse process</strong> of a normal convolution. It was once called by some a deconvolution layer, which is misleading because the <span>transposed convolution is not the <strong>inverse</strong> of convolution. Most convolution layers are not invertible, because they are ill-conditioned (have extremely large condition numbers) from the linear algebra perspective, which makes their pseudoinverse matrices unfit for representing the inverse process. If you are interested in finding the inverse of a convolution kernel, you can search for numerical deconvolution methods on the internet.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The architecture of a discriminator</h1>
+                </header>
+            
+            <article>
+                
+<p><span>The discriminator network of a DCGAN consists of 4 hidden layers (again, we treat the input layer as the 1<sup>st</sup> hidden layer) and 1 output layer. Convolution layers are used in all layers, which are followed by batch normalization layers except that the first layer does not have batch normalization. LeakyReLU activation functions are used in the hidden layers and</span><span> Sigmoid is used for the output layer. The architecture of the discriminator is shown in the following:</span></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/0a1cf07f-9051-42ec-ad32-e29f8eae7b55.png" style="width:37.08em;height:12.92em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Discriminator architecture in DCGAN</span></div>
+<p><span>The input channel can be either 1 or 3, depending on whether you are dealing with grayscale images or color images. All hidden layers have a stride value of 2 and a padding value of 1 so that their output image sizes will be half the input images. As</span> <span>image </span><span>sizes increase in deeper layers, the numbers of channels are increasing by twice. All kernels in convolution layers are of a size of </span>4 x 4<span>. The output layer has a stride value of 1 and a padding value of 0. It maps 4 x 4 feature maps to single values so that the Sigmoid function can transform the value into prediction confidence.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating a DCGAN with PyTorch</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's start writing PyTorch code to create a DCGAN model. Here, we assume that you are using the Python 3.7 environment in Ubuntu 18.04. If not, please refer to <a href="4459c703-9610-43e7-9eda-496d63a45924.xhtml">Chapter 2</a>, <em>Getting Started with PyTorch 1.3</em>, to learn how to create an Anaconda environment.</p>
+<p class="mce-root"/>
+<p>First, let's create a Python source file called <kbd>dcgan.py</kbd> and import the packages that we need:</p>
+<pre>import os<br/>import sys<br/><br/>import numpy as np<br/>import torch<br/>import torch.nn as nn<br/>import torch.nn.parallel<br/>import torch.backends.cudnn as cudnn<br/>import torch.optim as optim<br/>import torch.utils.data<br/>import torchvision.datasets as dset<br/>import torchvision.transforms as transforms<br/>import torchvision.utils as vutils<br/><br/>import utils</pre>
+<p>Here, NumPy is only used to initialize a random seed. If you don't have NumPy installed, simple replace <kbd>np.random</kbd> with <kbd>random</kbd> and insert the <kbd>import random</kbd> <span>line </span>after <kbd>import os</kbd>. In the last line of code, we import a module called <kbd>utils</kbd>, which is a custom utility package defined in the <kbd>utils.py</kbd> file. The full source code of <kbd>utils.py</kbd> is available under the code repository for this chapter.</p>
+<div class="packt_infobox"><span>In this book, we will put most of the PyTorch-independent helper functions (including file organization, learning rate adjustment, logging, tensor visualization, and so on) in this</span> <kbd>utils.py</kbd> <span>file. Therefore, we will also come across this module in future chapters. Don't forget to update this file as we move on to later chapters. </span></div>
+<p>Then, we define the output path and hyperparameters. Note that here we set the minimal channel size of hidden layers in both the generator and discriminator to <kbd>64</kbd>, because we find that the value of <kbd>128</kbd> as we previously show could lead to the overfitting of the discriminator:</p>
+<pre>CUDA = True<br/>DATA_PATH = '~/Data/mnist'<br/>OUT_PATH = 'output'<br/>LOG_FILE = os.path.join(OUT_PATH, 'log.txt')<br/>BATCH_SIZE = 128<br/>IMAGE_CHANNEL = 1<br/>Z_DIM = 100<br/>G_HIDDEN = 64<br/>X_DIM = 64<br/>D_HIDDEN = 64<br/>EPOCH_NUM = 25<br/>REAL_LABEL = 1<br/>FAKE_LABEL = 0<br/>lr = 2e-4<br/>seed = 1</pre>
+<p>If you don't have a CUDA-enabled graphics card and want to train the networks on the CPU, you can change <kbd>CUDA</kbd> to <kbd>False</kbd>. <kbd>DATA_PATH</kbd> points to the root directory of the MNIST dataset. If you haven't downloaded and properly preprocessed MNIST yet, simply point it to any directory (such as <kbd>'.'</kbd>) and we can download it later. <kbd>BATCH_SIZE</kbd> has a major impact on how much GPU memory your code will consume. If you are not sure what batch size is appropriate for your system, you can start at a small value, train your model for 1 epoch, and double the <span>batch size</span> until errors pop up.</p>
+<p>For MNIST, setting <span><kbd>BATCH_SIZE</kbd> to 128 should be good enough and it costs less than 1 GB of GPU memory. <kbd>IMAGE_CHANNEL</kbd> describes the number of color channels of image samples. Since all images in MNIST are single-channel, we should set it to 1. <kbd>EPOCH_NUM</kbd> has a great impact on the training time of neural networks. If you want better results, setting a larger epoch number and small learning rates is almost always a good strategy. We set <kbd>seed=1</kbd> so that your results should look exactly the same as what we get in this book.</span></p>
+<p>Next, we need to do some preparation before creating the networks:</p>
+<pre>utils.clear_folder(OUT_PATH)<br/>print("Logging to {}\n".format(LOG_FILE))<br/>sys.stdout = utils.StdOut(LOG_FILE)<br/>CUDA = CUDA and torch.cuda.is_available()<br/>print("PyTorch version: {}".format(torch.__version__))<br/>if CUDA:<br/>    print("CUDA version: {}\n".format(torch.version.cuda))<br/>if seed is None:<br/>    seed = np.random.randint(1, 10000)<br/>print("Random Seed: ", seed)<br/>np.random.seed(seed)<br/>torch.manual_seed(seed)<br/>if CUDA:<br/>    torch.cuda.manual_seed(seed)<br/>cudnn.benchmark = True<br/>device = torch.device("cuda:0" if CUDA else "cpu")</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>Here, <kbd>utils.clear_folder(OUT_PATH)</kbd> will empty the output folder for us and create one if it doesn't exist. <kbd>sys.stdout = utils.StdOut(LOG_FILE)</kbd> will redirect all messages from <kbd>print</kbd> to the log file and show these messages in the console at the same time. Refer to the <kbd>utils.py</kbd> file if you are interested in the implementations. <kbd>cudnn.benchmark = True</kbd> will tell cuDNN to choose the best set of algorithms for your model if the size of input data is fixed; otherwise, cuDNN will have to find the best algorithms at each iteration.</p>
+<div class="packt_tip">If you have <span>previously done some training tasks on CNNs with PyTorch, you might notice that, sometimes, setting </span><kbd>cudnn.benchmark = True</kbd> <span>will dramatically increase the GPU memory consumption, especially when your model architectures are changed during training and you are doing both training and evaluation in your</span> code<span>. Change it to</span> <kbd>False</kbd> <span>if you encounter strange <strong>OOM</strong> (<strong>Out-Of-Memory</strong>) issues.</span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generator network</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's define the generator network with PyTorch:</p>
+<pre>class Generator(nn.Module):<br/>    def __init__(self):<br/>        super(Generator, self).__init__()<br/>        self.main = nn.Sequential(<br/>            # 1st layer<br/>            nn.ConvTranspose2d(Z_DIM, G_HIDDEN * 8, 4, 1, 0, bias=False),<br/>            nn.BatchNorm2d(G_HIDDEN * 8),<br/>            nn.ReLU(True),<br/>            # 2nd layer<br/>            nn.ConvTranspose2d(G_HIDDEN * 8, G_HIDDEN * 4, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(G_HIDDEN * 4),<br/>            nn.ReLU(True),<br/>            # 3rd layer<br/>            nn.ConvTranspose2d(G_HIDDEN * 4, G_HIDDEN * 2, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(G_HIDDEN * 2),<br/>            nn.ReLU(True),<br/>            # 4th layer<br/>            nn.ConvTranspose2d(G_HIDDEN * 2, G_HIDDEN, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(G_HIDDEN),<br/>            nn.ReLU(True),<br/>            # output layer<br/>            nn.ConvTranspose2d(G_HIDDEN, IMAGE_CHANNEL, 4, 2, 1, bias=False),<br/>            nn.Tanh()<br/>        )<br/><br/>    def forward(self, input):<br/>        return self.main(input)</pre>
+<p>Note that the output layer does not have a batch normalization layer connected to it.</p>
+<p>Let's create a <kbd>helper</kbd> function to initialize the network parameters:</p>
+<pre>def weights_init(m):<br/>    classname = m.__class__.__name__<br/>    if classname.find('Conv') != -1:<br/>        m.weight.data.normal_(0.0, 0.02)<br/>    elif classname.find('BatchNorm') != -1:<br/>        m.weight.data.normal_(1.0, 0.02)<br/>        m.bias.data.fill_(0)</pre>
+<p>There are only two types of layers in the generator network that contain trainable parameters: transposed convolution layers and batch normalization layers. Here, we initialize the convolution kernels based on the Gaussian distribution (normal distribution) with a mean of 0 and a standard deviation of 0.02. We also need to initialize the affine parameters (scaling factors) in <span>batch normalization.</span></p>
+<p>Now, we can create a <kbd>Generator</kbd> object, as follows:</p>
+<pre>netG = Generator().to(device)<br/>netG.apply(weights_init)<br/>print(netG)</pre>
+<p>We can check what modules are contained in the generator network by directly printing it. We won't show the output of it considering its length.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Discriminator network</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, let's define the discriminator network:</p>
+<pre>class Discriminator(nn.Module):<br/>    def __init__(self):<br/>        super(Discriminator, self).__init__()<br/>        self.main = nn.Sequential(<br/>            # 1st layer<br/>            nn.Conv2d(IMAGE_CHANNEL, D_HIDDEN, 4, 2, 1, bias=False),<br/>            nn.LeakyReLU(0.2, inplace=True),<br/>            # 2nd layer<br/>            nn.Conv2d(D_HIDDEN, D_HIDDEN * 2, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(D_HIDDEN * 2),<br/>            nn.LeakyReLU(0.2, inplace=True),<br/>            # 3rd layer<br/>            nn.Conv2d(D_HIDDEN * 2, D_HIDDEN * 4, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(D_HIDDEN * 4),<br/>            nn.LeakyReLU(0.2, inplace=True),<br/>            # 4th layer<br/>            nn.Conv2d(D_HIDDEN * 4, D_HIDDEN * 8, 4, 2, 1, bias=False),<br/>            nn.BatchNorm2d(D_HIDDEN * 8),<br/>            nn.LeakyReLU(0.2, inplace=True),<br/>            # output layer<br/>            nn.Conv2d(D_HIDDEN * 8, 1, 4, 1, 0, bias=False),<br/>            nn.Sigmoid()<br/>        )<br/><br/>    def forward(self, input):<br/>        return self.main(input).view(-1, 1).squeeze(1)</pre>
+<p><span>Note that the input layer does not have a batch normalization layer connected to it. This is because, when applying batch normalization to all layers, it could lead to sample oscillation and model instability, as pointed out in the original paper.</span></p>
+<p>Similarly, we can create a <kbd>Discriminator</kbd> object as follows:</p>
+<pre>netD = Discriminator().to(device)<br/>netD.apply(weights_init)<br/>print(netD)</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model training and evaluation</h1>
+                </header>
+            
+            <article>
+                
+<p>We will use Adam as the training method for both the generator and discriminator networks. If you are interested in the details of gradient descent methods, please refer to<a href="8aa2141f-1f14-405f-a5e6-31daf5f4163a.xhtml"/> <a href="8aa2141f-1f14-405f-a5e6-31daf5f4163a.xhtml">Chapter 3</a>, <em>Best Practices for Model Design and Training</em><span class="cdp-organizer-chapter-title"><span class="cdp-organize-title-label"><em>,</em></span></span> to learn more about the common training methods.</p>
+<p>Let's first define the loss function for the discriminator network and <kbd>optimizers</kbd> for both of the networks:</p>
+<pre>criterion = nn.BCELoss()<br/><br/>optimizerD = optim.Adam(netD.parameters(), lr=lr, betas=(0.5, 0.999))<br/>optimizerG = optim.Adam(netG.parameters(), lr=lr, betas=(0.5, 0.999))</pre>
+<p>Here, <kbd>nn.BCELoss()</kbd> represents the Binary Cross-Entropy loss function, which we previously used in <a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml">Chapter 1</a>, <em>Generative Adversarial Networks Fundamentals</em>.</p>
+<p>Next, let's load the MNIST dataset to the GPU memory:</p>
+<div>
+<pre><span>dataset = dset.MNIST(root=DATA_PATH, download=True,<br/>                     transform=transforms.Compose([<br/>                     transforms.Resize(X_DIM),<br/>                     transforms.ToTensor(),<br/>                     transforms.Normalize((0.5,), (0.5,))<br/>                     ]))<br/>assert dataset<br/>dataloader = torch.utils.data.DataLoader(dataset, batch_size=BATCH_SIZE,<br/>                                         shuffle=True, num_workers=4)<br/></span></pre></div>
+<div class="packt_tip">You can also add a <kbd>pin_memory=True</kbd> argument when calling <kbd>torch.utils.data.DataLoader()</kbd> on small datasets, which will make sure data is stored at fixed GPU memory addresses and thus increase the data loading <span>speed</span> during training.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training iteration</h1>
+                </header>
+            
+            <article>
+                
+<p>The training procedure is basically the same as in the simple example in <a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml">Chapter 1</a>, <em>Generative Adversarial Networks Fundamentals</em>:</p>
+<ol>
+<li>Train the discriminator with the real data and recognize it as real.</li>
+<li>Train the discriminator with the fake data and recognize it as fake.</li>
+<li>Train the generator with the fake data and recognize it as real. </li>
+</ol>
+<p>The first two steps let the discriminator learn how to tell the difference between real data and fake data. The third step teaches the generator how to confuse the discriminator with generated samples:</p>
+<pre>viz_noise = torch.randn(BATCH_SIZE, Z_DIM, 1, 1, device=device)<br/>for epoch in range(EPOCH_NUM):<br/>    for i, data in enumerate(dataloader):<br/>        x_real = data[0].to(device)<br/>        real_label = torch.full((x_real.size(0),), REAL_LABEL, device=device)<br/>        fake_label = torch.full((x_real.size(0),), FAKE_LABEL, device=device)<br/><br/>        # Update D with real data<br/>        netD.zero_grad()<br/>        y_real = netD(x_real)<br/>        loss_D_real = criterion(y_real, real_label)<br/>        loss_D_real.backward()<br/><br/>        # Update D with fake data<br/>        z_noise = torch.randn(x_real.size(0), Z_DIM, 1, 1, device=device)<br/>        x_fake = netG(z_noise)<br/>        y_fake = netD(x_fake.detach())<br/>        loss_D_fake = criterion(y_fake, fake_label)<br/>        loss_D_fake.backward()<br/>        optimizerD.step()<br/><br/>        # Update G with fake data<br/>        netG.zero_grad()<br/>        y_fake_r = netD(x_fake)<br/>        loss_G = criterion(y_fake_r, real_label)<br/>        loss_G.backward()<br/>        optimizerG.step()<br/><br/>        if i % 100 == 0:<br/>            print('Epoch {} [{}/{}] loss_D_real: {:.4f} loss_D_fake: <br/>              {:.4f} loss_G: {:.4f}'.format(<br/>                epoch, i, len(dataloader),<br/>                loss_D_real.mean().item(),<br/>                loss_D_fake.mean().item(),<br/>                loss_G.mean().item()<br/>            ))</pre>
+<p>Here, we create the <kbd>real_label</kbd> and <kbd>fake_label</kbd> tensors in real time because there is no guarantee that all sample batches will have the same size (the last batch is often smaller depending on the batch size and the total number of training samples).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Visualizing generated samples</h1>
+                </header>
+            
+            <article>
+                
+<p>It's better if we can check how well the generator is trained. Therefore, we need to export the generated images during training. Add these lines at the end of the <kbd>if</kbd> scope:</p>
+<pre>if i % 100 == 0:<br/>            ...<br/>            vutils.save_image(x_real, os.path.join(OUT_PATH, 'real_samples.png'), normalize=True)<br/>            with torch.no_grad():<br/>                viz_sample = netG(viz_noise)<br/>                vutils.save_image(viz_sample, os.path.join(OUT_PATH, 'fake_samples_{}.png'.format(epoch)), normalize=True)<br/>    torch.save(netG.state_dict(), os.path.join(OUT_PATH, 'netG_{}.pth'.format(epoch)))<br/>    torch.save(netD.state_dict(), os.path.join(OUT_PATH, 'netD_{}.pth'.format(epoch)))</pre>
+<p><span>Now, your DCGAN is ready for training. Open the Terminal</span><span>,</span> <kbd>activate</kbd> the Anaconda environment and start training DCGAN:</p>
+<pre><strong>       $ conda activate torch</strong><br/><strong>(torch)$ python dcgan.py</strong></pre>
+<p>The training takes about 13 minutes on a GTX 1080Ti graphics card. If you don't like the generated samples even before the training is finished, you can always press <q>Ctrl</q> + <q>C</q> to cancel the training. The generated images after the 1<sup>st</sup> and 25<sup>th</sup> epoch are shown in the following. Note that we only show halves of the generated images (that is, 64 samples).</p>
+<p>We can see that the DCGAN does a good job at generating handwritten digits:</p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><img src="assets/301cf81f-ede8-408f-884f-9d4db4c6ac17.png" style="width:15.83em;height:15.92em;"/><img src="assets/9d465db8-37e7-4265-ba85-5008aaa3ce4c.png" style="width:16.00em;height:16.00em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Generated images by the DCGAN from MNIST after the 1st and 25th epoch</div>
+<p>For your reference, here is a list of GPU memory consumption with different <kbd>BATCH_SIZE</kbd> values. Note that no matter how large the batch size is, the total training time is almost unchanged, since the total workload of the computation is basically the same:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p>Batch size</p>
+</td>
+<td>
+<p>128</p>
+</td>
+<td>
+<p>256</p>
+</td>
+<td>
+<p>512</p>
+</td>
+<td>
+<p>1024</p>
+</td>
+<td>
+<p>2048</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>GPU memory</p>
+</td>
+<td>
+<p>939 MB</p>
+</td>
+<td>
+<p>1283 MB</p>
+</td>
+<td>
+<p>1969 MB</p>
+</td>
+<td>
+<p>3305 MB</p>
+</td>
+<td>
+<p>6011 MB</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Checking GPU usage information</h1>
+                </header>
+            
+            <article>
+                
+<p>Here, we will talk about how to check GPU usage along with other hardware usage information in Windows 10 and Ubuntu 18.04.</p>
+<p>In Windows 10, the easiest way to check <span>hardware usage (including GPU usage) is using Task Manager. You can open it by pressing <q>Ctrl</q> + <q>Shift</q> + <q>Esc</q>, and switch to the <span class="packt_screen">Performance</span> panel. All hardware usage information is available to you now.</span></p>
+<p>In Ubuntu 18.04, you can check CPU, RAM, and drive usage with <strong>GNOME System Monitor</strong>, which is shipped with the system. You can search for the system monitor in the <span class="packt_screen">Application</span> menu, or run <kbd>gnome-system-monitor</kbd> in a Terminal to open it.</p>
+<p>Alternatively, you can install a GNOME extension to illustrate the usage graphs in the <span>status bar. We recommend that you use the</span><strong> system-monitor extension</strong> <span>(<a href="https://extensions.gnome.org/extension/120/system-monitor">https://extensions.gnome.org/extension/120/system-monitor</a>) for this purpose. To install it, you first need to install several prerequisites:</span></p>
+<pre><strong>$ sudo apt-get install gir1.2-gtop-2.0 gir1.2-networkmanager-1.0 gir1.2-clutter-1.0 gir1.2-clutter-gst-3.0 gir1.2-gtkclutter-1.0</strong></pre>
+<p>Then, open a Firefox browser and navigate to this site, <a href="https://addons.mozilla.org/en-US/firefox/addon/gnome-shell-integration/">https://addons.mozilla.org/en-US/firefox/addon/gnome-shell-integration</a>, to install the browser extension for easy installation of <span>GNOME extensions provided by</span> <a href="http://gnome.org">http://gnome.org</a><span>. You also need to run <kbd>sudo apt-get install chrome-gnome-shell</kbd> in Terminal.</span></p>
+<p>Next, open the web page, <a href="https://extensions.gnome.org/extension/120/system-monitor">https://extensions.gnome.org/extension/120/system-monitor</a>, with the Firefox browser; you'll see a switch button on the right side of the extension title. Click it to switch it to <kbd>ON</kbd> and you will be prompted to install the <span>system-monitor </span>extension.</p>
+<p>Finally, press <em>Alt</em> + <em>F2</em>, type in <kbd>r</kbd>, and then press <q>Enter</q>. This will restart the GNOME shell so that the <span>system-monitor </span><span>extension will be activated.</span></p>
+<p>To check GPU usage in Ubuntu, you can run this script in the Terminal to show it <span>in real time:</span></p>
+<pre><strong>watch -n 0.5 nvidia-smi</strong></pre>
+<p>You can also create a <kbd>.sh</kbd> file in a convenient directory, for example, <kbd>~/gpu.sh</kbd>: copy the script into this file, then run <kbd>chmod +x ~/.gpu.sh</kbd>. Then, you can simply run <kbd>./gpu.sh</kbd> in the Terminal whenever you need to check GPU usage.</p>
+<p>Alternatively, there are many other tools you can use on Ubuntu, for example, NVTOP (<a href="https://github.com/Syllo/nvtop">https://github.com/Syllo/nvtop</a>).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Moving to larger datasets</h1>
+                </header>
+            
+            <article>
+                
+<p>Generating digits is fun. We can have way more fun generating other stuff, such as human faces and bedroom photos. To generate good complex images like these, we need more training samples than the 60,000 samples that MNIST offers. In this section, we will download two much larger datasets (CelebA and LSUN) and train the DCGAN on them to get more complex generated samples.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating human faces from the CelebA dataset</h1>
+                </header>
+            
+            <article>
+                
+<p>The CelebFaces Attributes (<strong>CelebA</strong>, <a href="http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html">http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html</a>) dataset is a large-scale face attributes dataset with more than 200,000 celebrity images, each with 40 attribute annotations. We need to download the cropped and aligned images. We won't need any attribute annotation here so we only need to download the file named <kbd>img_align_celeba.zip</kbd>, which is no more than 2 GB in size.</p>
+<div class="packt_infobox">If you can't download the <span>CelebA </span>dataset from official links, try these links provided by Kaggle and the official PyTorch tutorial: <a href="https://www.kaggle.com/jessicali9530/celeba-dataset">https://www.kaggle.com/jessicali9530/celeba-dataset</a> and <a href="https://drive.google.com/drive/folders/0B7EVK8r0v71pWEZsZE9oNnFzTm8">https://drive.google.com/drive/folders/0B7EVK8r0v71pWEZsZE9oNnFzTm8</a>. Note that you only need to download <kbd>Img/img_align_celeba.zip</kbd> from the Google Drive link.</div>
+<p>Extract the downloaded images to a directory, for example, <kbd>~/Data/CelebA</kbd>. Make sure all your images are contained in an individual directory inside this root directory so that the images are stored at a location such as <kbd>~/Data/CelebA/img_align_celeba/000001.png</kbd>.</p>
+<div class="packt_tip">If you have a <strong>Solid</strong>-<strong>State Drive</strong> (<strong>SSD</strong>) with enough space plugged in your machine, we highly recommend you move all of your training samples to the SSD, especially when you have a powerful graphics card. Because when you are training neural networks on a very large dataset, which cannot fit in the GPU memory, the reading speed from physical drives could be the bottleneck of your training performance. Sometimes, the speed-up of SSD (reading samples at 50 MB/s) over the traditional hard drive (5 MB/s) can save you a big chunk of training time.</div>
+<p>We only need to alter 3 different parts of code in the previous section to train the DCGAN on the CelebA dataset:</p>
+<ol>
+<li>Change the dataset root directory:</li>
+</ol>
+<div>
+<pre style="padding-left: 60px"><span>DATA_PATH</span><span> </span><span>=</span><span> </span><span>'/media/john/FastData/CelebA'    # Load data from SSD</span></pre></div>
+<p style="padding-left: 60px">If you are not sure what absolute path you're currently at in the file manager on Ubuntu, simply press <em>Ctrl</em> + <em>L</em> and the full path will show up.</p>
+<ol start="2">
+<li>Change the image channel number:</li>
+</ol>
+<div>
+<pre style="padding-left: 60px"><span>IMAGE_CHANNEL</span><span> </span><span>=</span><span> </span><span>3</span></pre></div>
+<ol start="3">
+<li>Redefine the <kbd>dataset</kbd> object:</li>
+</ol>
+<pre class="mce-root" style="padding-left: 60px">dataset = dset.ImageFolder(root=DATA_PATH,<br/>                           transform=transforms.Compose([<br/>                           transforms.Resize(X_DIM),<br/>                           transforms.CenterCrop(X_DIM),<br/>                           transforms.ToTensor(),<br/>                           transforms.Normalize((0.5, 0.5, 0.5),  <br/>                                               (0.5, 0.5, 0.5)),<br/>                           ]))</pre>
+<p>Now, let's run <kbd>python dcgan.py</kbd> in the Terminal and wait for a while. It takes about 88 minutes to finish 25 epochs of training on a GTX 1080Ti graphics card. The generated images after the 1<sup>st</sup> epoch and the 25<sup>th</sup> epoch are shown in the following. Again, we only show 64 generated samples:</p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><img src="assets/ea55d23e-5e10-419c-a8ca-ddae7ed7a0f6.png" style="width:19.17em;height:19.25em;"/><img src="assets/8ecc9a1e-f556-43f7-924d-87d57677506c.png" style="width:19.00em;height:19.00em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Generated images by the DCGAN from CelebA after the 1st and 25th epoch</div>
+<p>Here is a list of GPU memory consumption with different <kbd>BATCH_SIZE</kbd> values:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td>
+<p>Batch size</p>
+</td>
+<td>
+<p>64</p>
+</td>
+<td>
+<p>128</p>
+</td>
+<td>
+<p>256</p>
+</td>
+<td>
+<p>512</p>
+</td>
+<td>
+<p>1024</p>
+</td>
+<td>
+<p>2048</p>
+</td>
+</tr>
+<tr>
+<td>
+<p>GPU memory</p>
+</td>
+<td>
+<p>773 MB</p>
+</td>
+<td>
+<p>963 MB</p>
+</td>
+<td>
+<p>1311 MB</p>
+</td>
+<td>
+<p>2029 MB</p>
+</td>
+<td>
+<p>3441 MB</p>
+</td>
+<td>
+<p>6283 MB</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating bedroom photos from the LSUN dataset</h1>
+                </header>
+            
+            <article>
+                
+<p>LSUN (Large-scale Scene Understanding, <a href="https://www.yf.io/p/lsun">https://www.yf.io/p/lsun</a>) is a large image dataset with 10 scene categories and 20 object categories. You can get the downloading toolkit from <a href="https://github.com/fyu/lsun">https://github.com/fyu/lsun</a>. We will use the <kbd>bedroom</kbd> category to train our DCGAN, which has more than 3 million bedroom photos:</p>
+<pre><strong>$ git clone https://github.com/fyu/lsun.git</strong><br/><strong>$ cd lsun</strong><br/><strong>$ python download.py -c bedroom</strong></pre>
+<div class="packt_tip">You can also export the images as individual files with <kbd>python data.py export bedroom_train_lmdb --out_dir</kbd> <span><kbd>bedroom_train_img</kbd> so that you can easily use these images for other projects. But try not to directly open the image folder with your file manager. It will take a lot of RAM and time.</span></div>
+<p>The dataset is contained in an <strong>LMDB</strong> (<strong>Lightning Memory-Mapped Database Manager</strong>) database file, which is about 54 GB in size. Make sure the database files are located in the <kbd>bedroom_train_lmdb</kbd> directory so that PyTorch's data loader can recognize it when the root directory is <span>specified</span><span>.</span></p>
+<p>Similarly, we only need to change 3 parts of the code to use the LSUN dataset for our model:</p>
+<ol>
+<li>Change the dataset root directory:</li>
+</ol>
+<div>
+<pre style="padding-left: 60px"><span>DATA_PATH</span><span> </span><span>=</span><span> </span><span>'/media/john/FastData/lsun'    # Load data from SSD</span></pre></div>
+<ol start="2">
+<li>Change the image channel number:</li>
+</ol>
+<div>
+<pre style="padding-left: 60px"><span>IMAGE_CHANNEL</span><span> </span><span>=</span><span> </span><span>3</span></pre></div>
+<ol start="3">
+<li>Redefine the <kbd>dataset</kbd><span> </span>object:</li>
+</ol>
+<pre class="mce-root" style="padding-left: 60px">dataset = dset.LSUN(root=DATA_PATH, classes=['bedroom_train'],<br/>                    transform=transforms.Compose([<br/>                    transforms.Resize(X_DIM),<br/>                    transforms.CenterCrop(X_DIM),<br/>                    transforms.ToTensor(),<br/>                    transforms.Normalize((0.5, 0.5, 0.5), <br/>                                        (0.5, 0.5, 0.5)),<br/>                    ]))</pre>
+<p>And don't forget to install the <kbd>lmdb</kbd> library for Python so that we can read the database file:</p>
+<pre><strong>$ pip install lmdb</strong></pre>
+<p>Now, let's save the source file and run<span> </span><kbd>python dcgan.py</kbd><span> </span>in the Terminal. Since there are way more samples in the LSUN dataset, we don't have to train the model for 25 epochs. Some of the generated images are already impressive even after the 1<sup>st</sup> epoch of training. It takes about 5 hours to train for 5 epochs on a GTX 1080Ti graphics card. The generated images after the 1<sup>st</sup> epoch and the 25<sup>th</sup> epoch are shown in the following. Here, we only show 64 generated samples. We will not show the GPU memory consumption for LSUN because it's almost the same as CelebA since the input images are both 3-channel and the network structure is not changed:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/9163ef11-96c4-42ca-8a45-89e602f19f80.png" style="width:33.08em;height:33.08em;"/><img src="assets/71e1ad9d-6e46-4777-81a9-62fabc9f9df1.png" style="width:33.17em;height:33.17em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Generated images by the DCGAN from LSUN after the 1st and 5th epochs</div>
+<p>Again, we'd like to point out that if you plan on training GANs on a large dataset, always consider using powerful GPUs and putting your dataset on an SSD. Here, we give two sets of performance comparisons. In the first configuration, we use an NVIDIA GTX 960 graphics card and put the training set on an <strong>HDD</strong> (<strong>hard disk drive</strong>). In the second configuration, we use an NVIDIA GTX 1080Ti graphics card and put the training set on an SSD. We can see the speedup of the powerful platform is life changing:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td style="width: 28.0716%">
+<p>Dataset</p>
+</td>
+<td style="width: 32.9284%">
+<p>CelebA</p>
+</td>
+<td style="width: 35%">
+<p>LSUN</p>
+</td>
+</tr>
+<tr>
+<td style="width: 28.0716%">
+<p>GTX 960 + HDD</p>
+</td>
+<td style="width: 32.9284%">
+<p>2 hours/epoch</p>
+</td>
+<td style="width: 35%">
+<p>16.6 hours/epoch</p>
+</td>
+</tr>
+<tr>
+<td style="width: 28.0716%">
+<p>GTX 1080Ti + SSD</p>
+</td>
+<td style="width: 32.9284%">
+<p>3.5 minutes/epoch</p>
+</td>
+<td style="width: 35%">
+<p>53 minutes/epoch</p>
+</td>
+</tr>
+<tr>
+<td style="width: 28.0716%">
+<p>Speedup</p>
+</td>
+<td style="width: 32.9284%">
+<p>34X</p>
+</td>
+<td style="width: 35%">
+<p>19X</p>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Having fun with the generator network</h1>
+                </header>
+            
+            <article>
+                
+<p>Now that our first image generator is trained, aren't you curious about what it is capable of and how images are generated from random noise vectors? In this section, we will have some fun with the generator network. First, we will choose two random vectors and calculate the interpolation between them to see what images will be generated. Second, we will <span>choose some exemplary vectors and perform arithmetic calculations on them to find out what changes appear in the generated samples.</span></p>
+<p>First, we need a test version of the DCGAN code.</p>
+<p>Copy your original <kbd>dcgan.py</kbd> file to <kbd>dcgan_test.py</kbd>. Next, we need to make some changes to our new file. First, we need to replace these lines of just the <kbd>Generator</kbd> class:</p>
+<pre><span>netG = Generator().to(device)<br/>netG.apply(weights_init)<br/>print(netG)<br/></span></pre>
+<div>
+<p><span>We replace them with the following lines (you can either delete them or simply comment them out):<br/></span></p>
+</div>
+<pre>netG = Generator()<br/>negG.load_state_dict(torch.load(os.path.join(OUT_PATH, 'netG_24.pth')))<br/>netG.to(device)</pre>
+<p>Next, we need to remove (or comment out) the <kbd>weights_init</kbd>, <kbd>Discriminator</kbd>, <kbd>dataset</kbd>, <kbd>dataloader</kbd>, <kbd>criterion</kbd>, and <kbd>optimizer</kbd> objects.</p>
+<p>Next, we need to replace the entire training iteration section with this:</p>
+<div>
+<div>
+<pre><span>if</span><span> VIZ_MODE </span><span>==</span><span> </span><span>0</span><span>:<br/></span><span>    viz_tensor </span><span>=</span><span> torch.randn(BATCH_SIZE, Z_DIM, </span><span>1</span><span>, </span><span>1</span><span>, </span><span>device</span><span>=</span><span>device)<br/></span><span>elif</span><span> VIZ_MODE </span><span>==</span><span> </span><span>1</span><span>:<br/></span><span>    load_vector </span><span>=</span><span> np.loadtxt(</span><span>'vec_20190317-223131.txt'</span><span>)<br/></span><span>    xp </span><span>=</span><span> [</span><span>0</span><span>, </span><span>1</span><span>]<br/></span><span>    yp </span><span>=</span><span> np.vstack([load_vector[</span><span>2</span><span>], load_vector[</span><span>9</span><span>]]) </span><span># choose two exemplar vectors<br/></span><span>    xvals </span><span>=</span><span> np.linspace(</span><span>0</span><span>, </span><span>1</span><span>, </span><span>num</span><span>=</span><span>BATCH_SIZE)<br/></span><span>    sample </span><span>=</span><span> interp1d(xp, yp, </span><span>axis</span><span>=</span><span>0</span><span>)<br/></span><span>    viz_tensor </span><span>=</span><span> torch.tensor(sample(xvals).reshape(BATCH_SIZE, Z_DIM, </span><span>1</span><span>, </span><span>1</span><span>), </span><span>dtype</span><span>=</span><span>torch.float32, </span><span>device</span><span>=</span><span>device)<br/></span><span>elif</span><span> VIZ_MODE </span><span>==</span><span> </span><span>2</span><span>:<br/></span><span>    load_vector </span><span>=</span><span> np.loadtxt(</span><span>'vec_20190317-223131.txt'</span><span>)<br/></span><span>    z1 </span><span>=</span><span> (load_vector[</span><span>0</span><span>] </span><span>+</span><span> load_vector[</span><span>6</span><span>] </span><span>+</span><span> load_vector[</span><span>8</span><span>]) </span><span>/</span><span> </span><span>3</span><span>.<br/></span><span>    z2 </span><span>=</span><span> (load_vector[</span><span>1</span><span>] </span><span>+</span><span> load_vector[</span><span>2</span><span>] </span><span>+</span><span> load_vector[</span><span>4</span><span>]) </span><span>/</span><span> </span><span>3</span><span>.<br/></span><span>    z3 </span><span>=</span><span> (load_vector[</span><span>3</span><span>] </span><span>+</span><span> load_vector[</span><span>4</span><span>] </span><span>+</span><span> load_vector[</span><span>6</span><span>]) </span><span>/</span><span> </span><span>3</span><span>.<br/></span><span>    z_new </span><span>=</span><span> z1 </span><span>-</span><span> z2 </span><span>+</span><span> z3<br/></span><span>    sample </span><span>=</span><span> np.zeros(</span><span>shape</span><span>=</span><span>(BATCH_SIZE, Z_DIM))<br/></span><span>    for</span><span> i </span><span>in</span><span> </span><span>range</span><span>(BATCH_SIZE):<br/>        </span><span>sample[i] </span><span>=</span><span> z_new </span><span>+</span><span> </span><span>0.1</span><span> </span><span>*</span><span> np.random.normal(</span><span>-</span><span>1.0</span><span>, </span><span>1.0</span><span>, </span><span>100</span><span>)<br/></span><span>    viz_tensor </span><span>=</span><span> torch.tensor(sample.reshape(BATCH_SIZE, Z_DIM, </span><span>1</span><span>, </span><span>1</span><span>), </span><span>dtype</span><span>=</span><span>torch.float32,  </span><span>device</span><span>=</span><span>device)</span></pre></div>
+</div>
+<div>We're almost done. We need to add the following code at the end:</div>
+<div>
+<pre><span>with</span><span> torch.no_grad():<br/>    viz_sample = netG(viz_tensor)<br/>    viz_vector = utils.to_np(viz_temsor).reshape(BATCH_SIZE, Z_DIM)<br/>    cur_time = datetime.now().strftime("%Y%m%d-%H%M%S")<br/>    np.savetxt('vec_{}.txt'.format(cur_time), viz_vector)<br/>    vutils.save_image(viz_sample, 'img_{}.png'.format(cur_time), nrow=10, normalize=True</span></pre></div>
+<p>Now, go back to the top of the code file and add a line in the <kbd>import</kbd> section:</p>
+<pre>from datetime import datetime</pre>
+<p>And finally, we need to add a line to the variable definitions. Just after the line that says <kbd>CUDA = True</kbd>, add this:</p>
+<pre>VIZ_MODE = 0</pre>
+<p>The values for <kbd>VIZ_MODE</kbd> are 0 for random, 1 for interpolation, and 2 for semantic calculation. This will be used as we move forward through the three sets of code.</p>
+<p>We need to export the input vector and the generated images to file. The full code for the DCGAN testing is available under the code repository for this chapter, which is called <kbd>dcgan_test.py</kbd>. And don't forget to delete or comment out the <kbd>utils.clear_folder(OUT_PATH)</kbd><span> </span><span>line;</span><span> otherwise, all your training results will be deleted, which would be a bad thing.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Image interpolation</h1>
+                </header>
+            
+            <article>
+                
+<p>The generator network maps the input random vector (the latent vector) to a generated image. If we perform linear interpolation on the <span>latent</span> vectors, the corresponding output images also obey the interpolation relation. Let's take the trained model on CelebA, for example.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>First, let's randomly choose two vectors that generate clean images. Here, we set <kbd>BATCH_SIZE=10</kbd> for simplicity. We'll also add the beginnings of an <kbd>if</kbd> conditional to allow easy selection of what parts of the code to run:</p>
+<pre>if VIZ_MODE == 0:<br/>    viz_tensor = torch.randn(BATCH_SIZE, Z_DIM, 1, 1, device=device)</pre>
+<p>The generated images may look like the following. And the <span>latent</span> vectors for these images are exported to a file (for example, <kbd>vec_20190317-223131.txt</kbd>):</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/dd07d801-4807-49ee-868b-e5d3b3d01a51.png"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Randomly generated images</div>
+<p>Assume that we choose the 3<sup>rd</sup> and the last images for interpolation. Now, let's perform linear interpolation on their <span>latent</span> vectors with SciPy (replace the previous line starting with <kbd>viz_tensor = ...</kbd> with the following lines). Be sure to change the filename to the one that was just generated on your system:</p>
+<div>
+<pre><span>elif VIZ_MODE == 1:    <br/>    load_vector = np.loadtxt('vec_20190317-223131.txt')<br/>    xp = [0, 1]<br/>    yp = np.vstack([load_vector[2], load_vector[9]])<br/>    xvals = np.linspace(0, 1, num=BATCH_SIZE)<br/>    sample = interp1d(xp, yp, axis=0)<br/>    viz_tensor = torch.tensor(sample(xvals).reshape(BATCH_SIZE, Z_DIM, 1, 1), dtype=torch.float32, device=device)</span></pre></div>
+<p>You will also need to change the <kbd>VIZ_MODE</kbd> flag from <kbd>0</kbd> to <kbd>1</kbd> for interpolation:</p>
+<pre>VIZ_MODE = 1</pre>
+<p>Now, run your changed source code. The corresponding generated images are as follows:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/bdb7d87f-3f8b-4aef-99a8-d4d3e5ef1b6a.png"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Image interpolation</div>
+<p>We can see that the image on the left is smoothly transformed into the one on the right. Therefore, we know that the interpolation of the <span>latent</span> vectors leads to the interpolation of generated images.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Semantic vector arithmetic</h1>
+                </header>
+            
+            <article>
+                
+<p>Linear interpolation is one of the basic methods in linear algebra. We can do a lot more with arithmetic calculations on the latent vectors.</p>
+<p>Take the randomly generated images from previous steps. We notice that some images are of smiling women (the 1<sup>st</sup>, 7<sup>th</sup>, and 9<sup>th</sup> images), some women's images are not smiling <span>(the 2<sup>nd</sup>, 3<sup>rd</sup>, and 5<sup>th</sup> images)</span>, and none of the men in the images are smiling. Man, aren't they serious! How do we put a smile on a man's face without regenerating a new set of random vectors?</p>
+<p>Well, imagine we can solve it with <span>arithmetic calculations:</span></p>
+<p class="CDPAlignCenter CDPAlign"><q>[smiling woman] - [woman] = [smile]</q></p>
+<p class="CDPAlignCenter CDPAlign"><q><span>[smile] + </span>[man] = [smiling man]</q></p>
+<p>Can we do that? Let's try it!</p>
+<p>First, set the <kbd>VIS_MODE</kbd> flag again, this time to <kbd>2</kbd> for <span>semantic calculations:</span></p>
+<pre>VIZ_MODE = 2 </pre>
+<p>Next, continue the <kbd>if</kbd> conditional with the following code. Once again, use the filename that was created earlier:</p>
+<div>
+<pre><span>elif VIZ_MODE == 2:    <br/>    load_vector = np.loadtxt('vec_20190317-223131.txt')<br/>    z1 = (load_vector[0] + load_vector[6] + load_vector[8]) / 3.<br/>    z2 = (load_vector[1] + load_vector[2] + load_vector[4]) / 3.<br/>    z3 = (load_vector[3] + load_vector[4] + load_vector[6]) / 3.<br/>    z_new = z1 - z2 + z3<br/>    sample = np.zeros(shape=(BATCH_SIZE, Z_DIM))<br/>    for i in range(BATCH_SIZE):<br/>        sample[i] = z_new + 0.1 * np.random.normal(-1.0, 1.0, 100)<br/>    viz_tensor = torch.tensor(sample.reshape(BATCH_SIZE, Z_DIM, 1, 1), dtype=torch.float32, device=device)</span></pre></div>
+<p>Here, by performing <kbd>z1-z2</kbd>, we get a smiling vector. And <kbd>z3</kbd> gives us a man vector. Adding them together will give us the following results. We use the mean vector of 3 different latent vectors for more stable results and we add small random values to the arithmetic results to introduce a slight randomness:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/1f894278-6379-4d9b-b801-301b8781e45d.png"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Vector arithmetic on latent vectors</div>
+<p>The vector arithmetic calculation process can be described as follows:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/94aa789f-d6b6-4411-a4b2-4452eb8e0740.png" style="width:25.50em;height:22.75em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Vector arithmetic</span></div>
+<p>Out of curiosity, we directly generate images based on <em>z1-z2</em>, which gives us the sample at the bottom right in the previous screenshot. We can tell it's a smiling face, but the rest of the face is rather unnatural. It looks like the face of a strange dude.</p>
+<p>Now, we have unlocked the potential of GANs on manipulating the attributes of the generated images. However, the results are not natural and authentic enough. In the next chapter, we will learn how to generate samples with the exact attributes we desire.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>We spent a tremendous amount of time learning about Deep Convolutional GANs in this chapter. We dealt with the MNIST dataset as well as two huge datasets in the form of the CelebA and LSUN datasets. We also consumed a large number of computing cycles. Hopefully, you have a good grasp of DCGANs at this point.</p>
+<p>Next, we'll look at a <strong>Conditional GAN</strong> (<strong>CGAN</strong>) and how to add label information during the training process. Let's get going!</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">References and useful reading list</h1>
+                </header>
+            
+            <article>
+                
+<p>Hui J. (2018, Jun 21). GAN — <em>Why it is so hard to train Generative Adversarial Networks!</em>. Retrieved from <a href="https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b">https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

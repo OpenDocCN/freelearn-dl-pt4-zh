@@ -1,0 +1,903 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model Evaluation and Optimization</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">This chapter focuses on how to evaluate a neural network model. Different than working with other kinds of models, when working with neural networks, we modify the network's hyper parameters to improve its performance. However, before altering any parameters, we need to measure how the model performs.</p>
+<p><span>By the end of this chapter, you will be able to:</span></p>
+<ul>
+<li><span>Evaluate a model</span>
+<ul>
+<li><span>Explore the types of problems addressed by neural networks</span></li>
+<li><span>Explore loss functions, accuracy, and error rates</span></li>
+<li><span>Use TensorBoard</span></li>
+<li><span>Evaluate metrics and techniques</span></li>
+</ul>
+</li>
+<li><span>Hyperparameter optimization</span>
+<ul>
+<li><span>Add layers and nodes</span></li>
+<li><span>Explore and add epochs</span></li>
+<li><span>Implement activation functions</span></li>
+<li><span>Use regularization strategies<br/></span></li>
+</ul>
+</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model Evaluation</h1>
+                </header>
+            
+            <article>
+                
+<p>In machine learning, it is common to define two distinct terms: parameter and hyper <strong>parameter</strong>. Parameters are properties that affect how a model makes predictions from data. Hyper parameters refer to how a model learns from data. Parameters can be learned from the data and modified dynamically. Hyper parameters are higher-level properties and are not typically learned from data. For a more detailed overview, refer to the book Python Machine Learning, by Sebastian Raschka and Vahid Mirjalili (Packt, 2017).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Problem Categories</h1>
+                </header>
+            
+            <article>
+                
+<p>Generally, there are two categories of problems solved by neural networks: classification and regression. Classification problems regard the prediction of the right categories from data; for instance, if the temperature is hot or cold. Regression problems are about the prediction of values in a continuous scalar; for instance, what the actual temperature value is?</p>
+<p><span>Problems in these two categories are characterized by the following properties:<br/></span></p>
+<ul>
+<li><strong>Classification</strong>: Problems that are characterized by categories. The categories can be different, or not; they can also be about a binary problem. However, they must be clearly assigned to each data element. An example of a classification problem would be to assign the label <em>car</em> or <em>not car</em> to an image using a Convolutional Neural Network. The MNIST example explored in C<em>hapter 4</em>, <em>Introduction to Neural Networks and Deep Learning</em>, is another example of a classification problem.</li>
+<li><strong>Regression</strong>: Problems that are characterized by a continuous variable (that is, a scalar). These problems are measured in terms of ranges, and their evaluations regard how close to the real values the network is. An example is a time-series classification problem in which a Recurrent Neural Network is used to predict the future temperature values. The Bitcoin price-prediction problem is another example of a regression problem.</li>
+</ul>
+<p>While the overall structure of how to evaluate these models is the same for both of these problem categories, we employ different techniques for evaluating how models perform. In the following section, we explore these techniques for either classification or regression problems.</p>
+<div class="packt_infobox">All of the code snippets in this chapter are implemented in <em>Activities 6 and 7</em>. Feel free to follow along, but don't feel that it is mandatory, given that they will be repeated in more detail during the activities.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Loss Functions, Accuracy, and Error Rates</h1>
+                </header>
+            
+            <article>
+                
+<p>Neural networks utilize functions that measure how the networks perform when compared to a validation set—that is, a part of the data separated to be used as part of the training process. These functions are called <strong>loss functions</strong>.</p>
+<p class="mce-root"/>
+<p>Loss functions evaluate how <em>wrong</em> a neural network's predictions are; then they will propagate those errors back and make adjustments to the network, modifying how individual neurons are activated. Loss functions are key components of neural networks, and choosing the right loss function can have a significant impact on how the network performs.</p>
+<p>How are errors propagated to each neuron in a network?</p>
+<p>Errors are propagated via a process called back propagation. Back propagation is a technique for propagating the errors returned by the loss function back to each neuron in a neural network. Propagated errors affect how neurons activate, and ultimately, how they influence the output of that network.</p>
+<p><span>Many neural network packages, including Keras, use this technique by default.<br/></span></p>
+<div class="packt_infobox">For more information about the mathematics of backpropagation, please refer to <em>Deep Learning</em> by Ian Goodfellow et. al., MIT Press, 2016.</div>
+<p>We use different loss functions for regression and classification problems. For classification problems, we use accuracy functions (that is, the proportion of times the predictions were correct). While for regression problems, we use error rates (that is, how close the predicted values were to the observed ones).</p>
+<p><span>The following table provides a summary of common loss functions to utilize, alongside their common applications:<br/></span></p>
+<table style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr style="height: 32px">
+<td style="width: 19%;height: 32px"><strong><span>Problem Type<br/></span></strong></td>
+<td style="width: 21%;height: 32px"><strong><span>Loss Function<br/></span></strong></td>
+<td style="width: 26.5489%;height: 32px"><strong><span>Problem<br/></span></strong></td>
+<td style="width: 28.4511%;height: 32px"><strong><span>Example<br/></span></strong></td>
+</tr>
+<tr style="height: 128px">
+<td style="width: 19%;height: 128px"><span>Regression<br/></span></td>
+<td style="width: 21%;height: 128px"><span>Mean Squared<br/>
+Error (MSE)<br/></span></td>
+<td style="width: 26.5489%;height: 128px">Predicting a continuous<br/>
+function. That is, predicting value within a range of values.<span><br/></span></td>
+<td style="width: 28.4511%;height: 128px"><span>Predicting the temperature in the future using temperature<br/>
+measurements from the past.<br/></span></td>
+</tr>
+<tr style="height: 128px">
+<td style="width: 19%;height: 128px"><span>Regression<br/></span></td>
+<td style="width: 21%;height: 128px"><span>Root Mean Squared Error(RMSE)<br/></span></td>
+<td style="width: 26.5489%;height: 128px"><span>Same as preceding, but deals with negative values. RMSE typically provides more interpretable results.<br/></span></td>
+<td style="width: 28.4511%;height: 128px"><span>Same as preceding.<br/></span></td>
+</tr>
+<tr style="height: 153.234px">
+<td style="width: 19%;height: 153.234px"><span>Regression<br/></span></td>
+<td style="width: 21%;height: 153.234px"><span>Mean Absolute<br/>
+Percentage Error<br/>
+(MAPE)<br/></span></td>
+<td style="width: 26.5489%;height: 153.234px"><span>Prediction continuous  functions. Has better in performance when working with de-normalized ranges.<br/></span></td>
+<td style="width: 28.4511%;height: 153.234px"><span>Predicting the sales for a product using the product properties (for example, price, type, target audience,<br/>
+market conditions).<br/></span></td>
+</tr>
+<tr style="height: 130px">
+<td style="width: 19%;height: 130px"><span>Classification<br/></span></td>
+<td style="width: 21%;height: 130px"><span>Binary Cross entropy<br/></span></td>
+<td style="width: 26.5489%;height: 130px"><span> Classification between two<br/>
+ categories or between two<br/>
+ values (that is, <kbd>true</kbd>   or <kbd>false</kbd>).<br/></span></td>
+<td style="width: 28.4511%;height: 130px"><span>Predicting if the visitor of a website is male or female based on their browser<br/>
+activity.<br/></span></td>
+</tr>
+<tr style="height: 128px">
+<td style="width: 19%;height: 128px"><span>Classification<br/></span></td>
+<td style="width: 21%;height: 128px"><span>Categorical<br/>
+Cross-entropy<br/></span></td>
+<td style="width: 26.5489%;height: 128px"><span>Classification between many<br/>
+categories from a known set<br/>
+of categories.<br/></span></td>
+<td style="width: 28.4511%;height: 128px"><span>Predicting the nationality of a speaker based on their accent when speaking a sentence in English.<br/></span></td>
+</tr>
+</tbody>
+</table>
+<p class="mce-root"/>
+<p class="mce-root">For regression problems, the MSE function is the most common choice. While for classification problems, Binary Cross-entropy (for binary category problems) and Categorical Cross-entropy (for multi-category problems) are common choices. It is advised to start with these loss functions, then experiment with other functions as you evolve your neural network, aiming to gain performance.</p>
+<p>For regression problems, the MSE function is the most common choice. While for classification problems, Binary Cross-entropy (for binary category problems) and Categorical Cross-entropy (for multi-category problems) are common choices. It is advised to start with these loss functions, then experiment with other functions as you evolve your neural network, aiming to gain performance.</p>
+<p><span>The network we develop in C<em>hapter 5,</em> <em>Model Architecture</em>, uses the MSE as its loss function. In the following section, we explore how that function performs as the network trains.<br/></span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Different Loss Functions, Same Architecture</h1>
+                </header>
+            
+            <article>
+                
+<p>Before moving ahead to the next section, let's explore, in practical terms, how these problems are different in the context of neural networks.</p>
+<p class="CDPAlignLeft CDPAlign">The TensorFlow Playground application is made available by the TensorFlow team to help us understand how neural networks work. Here, we see a neural network represented with its layers: input (on the left), hidden layers (in the middle), and output (on the right).</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="CDPAlignLeft CDPAlign">We can also choose different sample datasets to experiment with on the far-left side. And, finally, on the far-right side, we see the output of the network.</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f7d64db8-e329-4ca4-9b37-4101dc07416b.png" style="width:68.33em;height:41.00em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 1: TensorFlow Playground web application. Take the parameters for a neural network in this visualization to gain some</div>
+<div class="packt_figref CDPAlignCenter CDPAlign">intuition on how each parameter affects the model results.</div>
+<p class="mce-root">This application helps us explore the different problem categories we discussed in our previous section. When we choose <strong>Classification</strong> as the <strong>Problem type</strong> (upper right-hand corner), the dots in the dataset are colored with only two color values: either blue or orange.</p>
+<p class="mce-root">When we choose <strong>Regression</strong>, the colors of the dots are colored in a range of color values between orange and blue. When working on classification problems, the network evaluates its loss function based on how many blues and oranges the network has gotten wrong; and when working on classification problems, it checks how far away to the right color values for each dot the network was, as shown in the following image:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/2eaeef80-5b83-4c9b-b41d-5ac426e2dddb.png" style="width:60.50em;height:43.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Figure 2: Detail of the TensorFlow Playground application. Different color values are assigned to the dots, </span></div>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>depending on the problem type.<br/></span></div>
+<p>After clicking on the play button, we notice that the numbers in the Training loss area keep going down as the network continuously trains. The numbers are very similar in each problem category because the loss functions play the same role in both neural networks. However, the actual loss function used for each category is different, and is chosen depending on the problem type.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Using TensorBoard</h1>
+                </header>
+            
+            <article>
+                
+<p>Evaluating neural networks is where TensorBoard excels. As explained in C<em>hapter 4</em>, <em>Introduction to Neural Networks and Deep Learning</em>, TensorBoard is a suite of visualization tools shipped with TensorFlow. Among other things, one can explore the results of loss function evaluations after each epoch. A great feature of TensorBoard is that one can organize the results of each run separately and compare the resulting loss function metrics for each run. One can then make a decision on which hyper parameters to tune and have a general sense of how the network is performing. The best part is that it is all done in real time.</p>
+<p>In order to use TensorBoard with our model, we will use a Keras callback function. We do that by importing the <kbd>TensorBoard</kbd> callback and passing it to our model when calling its<kbd>fit()</kbd> function. The following code shows an example of how it would be implemented in the Bitcoin model created in our preceding chapters:</p>
+<pre><span>    from keras.callbacks import TensorBoard<br/>    model_name = 'bitcoin_lstm_v0_run_0'<br/>    tensorboard = TensorBoard(log_dir='./logs/{}'.format(model_name))<br/>    model.fit(x=X_train, y=Y_validate,<br/>    batch_size=1, epochs=100,<br/>    verbose=0, callbacks=[tensorboard])</span></pre>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span><em>Snippet 1</em>: Snippet that implements a TensorBoard callback in our LSTM model<br/></span></div>
+<p>Keras callback functions are called at the end of each epoch run. In this case, Keras calls the TensorBoard callback to store the results from each run on the disk. There are many other useful callback functions available, and one can create custom ones using the Keras API.</p>
+<div class="packt_infobox">Please refer to the Keras callback documentation (<a href="https://keras.io/callbacks/">https://keras.io/ callbacks/</a>) for more information.</div>
+<p>After implementing the TensorBoard callback, the <kbd>loss</kbd> function metrics are now available in the TensorBoard interface. You can now run a TensorBoard process (<kbd>with tensorboard --logdir=./logs</kbd>) and leave it running while you train your network with <kbd>fit()</kbd> . The main graphic to evaluate is typically called <em>loss</em>. One can add more metrics by passing known metrics to the metrics parameter in the <kbd>fit()</kbd> function; these will then be available for visualization in TensorBoard, but will not be used to adjust the network weights.</p>
+<p>The interactive graphics will continue to update in real time, which allows you to understand what is happening on every epoch.</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/0edbd6fa-b1b7-4401-a6ab-1be71880004c.png" style="width:48.42em;height:28.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 3: Screenshot of a TensorBoard instance showing the loss function results alongside other metrics added to the metrics parameter</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Implementing Model Evaluation Metrics</h1>
+                </header>
+            
+            <article>
+                
+<p>In both regression and classification problems, we split the input dataset into three other datasets: train, validation, and test. Both the train and the validation sets are used to train the network. The train set is used by the network as an input, and the validation set is used by the loss function to compare the output of the neural network to the real data, computing how wrong the predictions are. Finally, the test set is used after the network has been trained to measure how the network can perform on data it has never seen before.</p>
+<div class="packt_infobox">There isn't a clear rule for determining how the train, validation, and test datasets must be divided. It is a common approach to divide the original dataset as 80 percent train and 20 percent test, then to further divide the train dataset into 80 percent train and 20 percent validation. For more information about this problem, please refer to the book <em>Python Machine Learning</em>, by Sebastian Raschka and Vahid Mirjalili (Packt, 2017).</div>
+<p>In classification problems, you pass both the data and the labels to the neural network as related but distinct data. The network then learns how data is related to each label. In regression problems, instead of passing data and labels, one passes the variable of interest as one parameter and the variables used for learning patterns as another. Keras provides an interface for both of those use cases with the <kbd>fit()</kbd> method. See <em>Snippet 2</em> for an example:</p>
+<pre><span>    model.fit(x=X_train, y=Y_train,<br/>    batch_size=1, epochs=100,<br/>    verbose=0, callbacks=[tensorboard],<br/>    validation_split=0.1,<br/>    validation_data=(X_validation, Y_validation))</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span><em>Snippet 2</em>: Snippet that illustrates how to use the <kbd>validation_split and validation_data</kbd> parameters<br/></span></div>
+<div class="packt_infobox">The <kbd>fit()</kbd> method can use either the <kbd>validation_split</kbd> or the <kbd>validation_data</kbd> parameter, but not both at the same time.</div>
+<p>Loss functions evaluate the progress of models and adjust their weights on every run. However, loss functions only describe the relationship between training data and validation data. In order to evaluate if a model is performing correctly, we typically use a third set of data—which is not used to train the network—and compare the predictions made by our model to the values available in that set of data.</p>
+<p class="mce-root"/>
+<p>That is the role of the test set. Keras provides the method <kbd>model.evaluate()</kbd>, which makes the process of evaluating a trained neural network against a test set easy. See the following code for an example:</p>
+<pre>     model.evaluate(x=X_test, y=Y_test)</pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 3</em>: Snippet that illustrates how to use the <kbd>evaluate()</kbd> method<span><br/></span></div>
+<p>The <kbd>evaluate()</kbd> method returns both the results of the loss function and the results of the functions passed to the <kbd>metrics</kbd> parameter. We will be using that function frequently in the Bitcoin problem to test how the model performs on the test set.</p>
+<p>You will notice that the Bitcoin model looks a bit different than the example above. That is because we are using an LSTM architecture. LSTMs are designed to predict sequences. Because of that, we do not use a set of variables to predict a different single variable—even if it is a regression problem. Instead, we use previous observations from a single variable (or set of variables) to predict future observations of that same variable (or set). The <kbd>y</kbd> parameter on <kbd>Keras.fit()</kbd> contains the same variable as the <kbd>x</kbd> parameter, but only the predicted sequences.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Evaluating the Bitcoin Model</h1>
+                </header>
+            
+            <article>
+                
+<p>We created a test set during our activities in C<em>hapter 4</em>, <em>Introduction to Neural Networks and Deep Learning</em>. That test set has 19 weeks of Bitcoin daily price observations, which is equivalent to about 20 percent of the original dataset.</p>
+<p>We have also trained our neural network using the other 80 percent of data (that is, the train set with 56 weeks of data, minus one for the validation set) in C<em>hapter 5</em>, <em>Model Architecture</em>, and stored the trained network on disk (<kbd>bitcoin_lstm_v0</kbd>). We can now use the <kbd>evaluate()</kbd> method in each one of the 19 weeks of data from the test set and inspect how that fist neural network performs.</p>
+<p>In order to do that, though, we have to provide 76 preceding weeks. We have to do this because our network has been trained to predict one week of data using exactly 76 weeks of continuous data (we will deal with this behavior by re-training our network periodically with larger periods in C<em>hapter 7</em>, <em>Productization</em>, when we deploy a neural network as a web application):</p>
+<pre><span>    combined_set = np.concatenate((train_data, test_data), axis=1)<br/>        evaluated_weeks = []<br/>        for i in range(0, validation_data.shape[1]):<br/>        input_series = combined_set[0:,i:i+77]<br/><br/>       X_test = input_series[0:,:-1].reshape(1, input_series.shape[1] - 1,)<br/>       Y_test = input_series[0:,-1:][0]<br/><br/>       result = B.model.evaluate(x=X_test, y=Y_test, verbose=0)<br/>       evaluated_weeks.append(result)</span></pre>
+<div class="packt_figref CDPAlignCenter CDPAlign"><em>Snippet 4</em>: Snippet that implements the <kbd>evaluate()</kbd> method to evaluate the performance of our model in a test dataset</div>
+<p>In the preceding code, we evaluate each week using Keras' <kbd>model.evaluate()</kbd> , then store its output in the variable evaluated_weeks. We then plot the resulting MSE for each week in the following figure:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8466d5dd-ea61-4ad9-8b40-71ce88f7b87e.png" style="width:70.75em;height:23.08em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 4: MSE for each week in the test set; notice that in week 5, the model predictions are worse than in any other week</div>
+<p>The resulting MSE from our model suggests that our model performs well during most weeks, except for week 5, when its value increases to about <kbd>0.08</kbd>. Our model seems to be performing well for almost all of the other test weeks</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Overfitting</h1>
+                </header>
+            
+            <article>
+                
+<p>Our first trained network (<kbd>bitcoin_lstm_v0</kbd>) may be suffering from a phenomenon known as overfitting. Overfitting is when a model is trained to optimize a validation set, but it does so at the expense of more generalizable patterns from the phenomenon we are interested in predicting. The main issue with overfitting is that a model learns how to predict the validation set, but fails to predict new data.</p>
+<p>The loss function used in our model reaches very low levels (about 2.9 * 10-6) at the end of our training process. Not only that, but this happens early: the MSE loss function used to predict the last week in our data decreases to a stable plateau in about epoch 30. This means that our model is predicting the data from week 77 almost perfectly, using the preceding 76 weeks. Could this be the result of overfiting?</p>
+<p>Let's look at <em>Figure 4</em> again. We know that our LSTM model reaches extremely low values in our validation set (about 2.9 * 10-6), yet it also reaches low values in our test set. The key difference, however, is in the scale. The MSE for each week in our test set is about 4,000 times bigger (on average) than in the test set. This means that the model is performing much worse in our test data than in the validation set. This is worth considering.</p>
+<p>The scale, though, hides the power of our LSTM model: even performing much worse in our test set, the predictions' MSE errors are still very, very low. That suggests that our model may be learning patterns from the data.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model Predictions</h1>
+                </header>
+            
+            <article>
+                
+<p>One thing is to measure our model comparing MSE errors, and another is to be able to interpret its results intuitively.</p>
+<p>Using the same model, let's now create a series of predictions for the following weeks, using 76 weeks as input. We do that by sliding a window of 76 weeks over the complete series (that is, train plus test sets), and making predictions for each of those windows. Predictions are done using the Keras <kbd>model.predict()</kbd> method:</p>
+<pre><span>    combined_set = np.concatenate((train_data, test_data), axis=1)<br/><br/>        predicted_weeks = []<br/>        for i in range(0, validation_data.shape[1] + 1):<br/>        input_series = combined_set[0:,i:i+76]<br/>        predicted_weeks.append(B.predict(input_series))</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 5</em>: Snippet that uses the <kbd>model.predict()</kbd> method for making predictions for all the weeks of the test dataset<span><br/></span></div>
+<p>In the preceding code, we make predictions using <kbd>model.predict()</kbd>, then store these predictions in the <kbd>predicted_weeks</kbd> variable. We then plot the resulting predictions, making the following figure:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/7155c427-aa64-4b61-b128-876340bf24dc.png" style="width:71.25em;height:24.08em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Figure 5</em>: MSE for each week in the test set. Notice that in week 5, the model predictions are worse than in any other week.</div>
+<p>The results of our model (as shown in <em>Figure 5</em>) suggest that its performance isn't all that bad. By observing the pattern from the Predicted line, one can notice that the network has identifiled a fluctuating pattern happening on a weekly basis, in which the normalized prices go up in the middle of the week, then down by the end of it. With the exception of a few weeks—most notably week 5, the same from our previous MSE analysis—most weeks fall close to the correct values.</p>
+<p>Let's now denormalize the predictions so that we can investigate the prediction values using the same scale as the original data (that is, US Dollars). We can do this by implementing a denormalization function that uses the day index from the predicted data to identify the equivalent week on the test data. After that week is identified, the function then takes the fist value of that week and uses that value to denormalize the predicted values by using the same point-relative normalization technique, but inverted:</p>
+<pre><span>    def denormalize(reference, series,<br/><br/>    normalized_variable='close_point_relative_normalization',<br/>    denormalized_variable='close'):<br/>    week_values = observed[reference['iso_week']==series['iso_week'].<br/>    values[0]]<br/>    last_value = week_values[denormalized_variable].values[0]<br/>    series[denormalized_variable] = <br/>    last_value*(series[normalized_variable]+1)<br/><br/>    return series<br/><br/>    predicted_close = predicted.groupby('iso_week').apply<br/>    (lambda x: denormalize(observed, x))</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 6</em>: De-normalization of data using an inverted point-relative normalization technique. The <kbd>denormalize()</kbd> function takes the first closing price from the test's first day of an equivalent week.</div>
+<p>Our results now compare the predicted values with the test set, using US Dollars. As seen in Figure 5, the <kbd>bitcoin_lstm_v0</kbd> model seems to perform quite well in predicting the Bitcoin prices for the following seven days. But, how can we measure that performance in interpretable terms?</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/cd53113f-988e-4517-8fbf-de72c73fcf2f.png"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 6: MSE for each week in the test set; notice that in week 5, the model predictions are worse than in any other week</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Interpreting Predictions</h1>
+                </header>
+            
+            <article>
+                
+<p>Our last step is to add interpretability to our predictions. Figure 6 seems to show that our model prediction matches the test data somewhat closely, but how closely?</p>
+<p>Keras' <kbd>model.evaluate()</kbd> function is useful for understanding how a model is performing at each evaluation step. However, given that we are typically using normalized datasets to train neural networks, the metrics generated by the <kbd>model.evaluate()</kbd> method are also hard to interpret.</p>
+<p>In order to solve that problem, we can collect the complete set of predictions from our model and compare it with the test set using two other functions from <em>Table 1</em> that are easier to interpret: MAPE and RMSE, implemented as <kbd>mape()</kbd> and <kbd>rmse()</kbd> , respectively:</p>
+<pre><span>    def mape(A, B):<br/>    return np.mean(np.abs((A - B) / A)) * 100<br/><br/>    def rmse(A, B):<br/>    return np.sqrt(np.square(np.subtract(A, B)).mean())<br/></span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 7</em>: Implementation of the <em>mape()</em> and <em>rmse()</em> functions <span><br/></span></div>
+<div class="packt_infobox">These functions are implemented using <kbd>NumPy</kbd>. Original implementations come from <a href="https://stats.stackexchange.com/questions/58391/mean-absolute-percentage-error-mape-in-scikit-learn">https://stats.stackexchange.com/ questions/58391/mean-absolute-percentage-error-mapein-scikit-learn</a> (MAPE) and <a href="https://stackoverflow.com/questions/16774849/mean-squared-error-in-numpy">https://stackoverflow.com/ questions/16774849/mean-squared-error-in-numpy</a> (RMSE).</div>
+<p>After comparing our test set with our predictions using both of those functions, we have the following results:</p>
+<ul>
+<li><span>Denormalized RMSE: $399.6</span></li>
+<li><span>Denormalized MAPE: 8.4 percent<br/></span></li>
+</ul>
+<p>This indicates that our predictions differ, on average, about $399 from real data. That represents a difference of about 8.4 percent from real Bitcoin prices.</p>
+<p>These results facilitate the understanding of our predictions. We will continue to use the model.evaluate() method to keep track of how our LSTM model is improving, but will also compute both <kbd>rmse()</kbd> and <kbd>mape()</kbd> on the complete series on every version of our model to interpret how close we are to predicting Bitcoin prices.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activity:Creating an Active Training Environment</h1>
+                </header>
+            
+            <article>
+                
+<p>In this activity, we create a training environment for our neural network that facilitates both its training and evaluation. This environment is particularly important to our next chapter, in which we search for an optimal combination of hyperparameters. F</p>
+<p>First, we will start both a Jupyter Notebook instance and a TensorBoard instance. Both of these instances can remain open for the remainder of this activity.</p>
+<ol>
+<li><span>Using your terminal, navigate to the directory chapter_6/activity_6 and execute the following code to start a Jupyter Notebook instance:<br/></span></li>
+</ol>
+<pre>      <span>$ jupyter notebook</span></pre>
+<ol start="2">
+<li>Open the URL provided by the application in your browser and open the Jupyter Notebook named  <kbd>Activity_6_Creating_an_active_training_environment. ipynb</kbd>:</li>
+</ol>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/f9ad3585-3a3c-440d-b284-4d7acf35007b.png" style="width:59.67em;height:39.67em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 7: Jupyter Notebook highlighting the section Evaluate LSTM Model<br/></span></div>
+<ol start="3">
+<li><span>Also using your terminal, start a TensorBoard instance by executing the following command:</span></li>
+</ol>
+<pre><span>      $ cd ./chapter_3/activity_6/<br/>      $ tensorboard --logdir=logs/</span></pre>
+<ol start="4">
+<li>Open the URL that appears on the screen and leave that browser tab open, as well.<span><br/></span></li>
+<li>Now, load both the training (<kbd>train_dataset.csv</kbd>) and the test set (<kbd>test_dataset. csv</kbd>), and also our previously compiled model (<kbd>bitcoin_lstm_v0.h5</kbd>), into the Notebook.</li>
+</ol>
+<ol start="6">
+<li>Load the train and test datasets in the Jupyter Notebook instance using:<span><br/></span></li>
+</ol>
+<pre><span>      $ train = pd.read_csv('data/train_dataset.csv')<br/>      $ test = pd.read_csv('data/test_dataset.csv') </span></pre>
+<ol start="7">
+<li><span>Also, load our previously compiled model using the following command:<br/></span></li>
+</ol>
+<pre>      $ model = load_model('bitcoin_lstm_v0.h5')</pre>
+<p style="padding-left: 60px">Let us now evaluate how our model performed against test data. Our model is trained using 76 weeks to predict a week into the future—that is, the following sequence of seven days. When we built our first model, we divided our original dataset between a training and a test set. We will now take a combined version of both datasets (let's call it combined set) and move a sliding window of 76 weeks. At each window, we execute Keras' <kbd>model.evaluate()</kbd> method to evaluate how the network performed on that specific week.</p>
+<ol start="8">
+<li><span>Execute the cells under the header Evaluate LSTM Model. The key concept of these cells it to call the model.evaluate() method for each of the weeks in the test set. This line is the most important:<br/></span></li>
+</ol>
+<pre>       <span>$ result = model.evaluate(x=X_test, y=Y_test, verbose=0) </span></pre>
+<ol start="9">
+<li>Each evaluation result is now stored in the variable <kbd>evaluated_weeks</kbd>. That variable is a simple array containing the sequence of MSE predictions for every week in the test set. Go ahead and also plot these results:</li>
+</ol>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/20414581-6c03-4a10-8498-f1fda7532ca2.png" style="width:67.17em;height:21.92em;"/></p>
+<p style="padding-left: 60px">As discussed during our chapter, the MSE loss function is difficult to interpret. To facilitate our understanding of how our model is performing, we also call the method <kbd>model.predict()</kbd> on each week from the test set and compare its predicted results with the set's values.</p>
+<ol start="10">
+<li>Navigate to the section <strong>Interpreting Model</strong> Results and execute the code cells under the sub-header <strong>Make Predictions</strong>. Notice that we are calling the method <kbd>model.predict()</kbd> , but with a slightly different combination of parameters. Instead of using both <kbd>X</kbd> and <kbd>Y</kbd> values, we only use <kbd>X</kbd>:</li>
+</ol>
+<pre><span>      predicted_weeks = []<br/>      for i in range(0, test_data.shape[1]):<br/>      input_series = combined_set[0:,i:i+76]<br/>      predicted_weeks.append(model.predict(input_series)) </span></pre>
+<p style="padding-left: 60px"><span>At each window, we will issue predictions for the following week and store the results. We can now plot the normalized results alongside the normalized values from the test set, as shown in the following figure:<br/></span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/778403d5-d6b1-4c38-8d19-f54824595bcd.png" style="width:68.75em;height:23.25em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 9: Plotting the normalized values returned from <em>model.predict()</em> for each week of the test set<br/></span></div>
+<p style="padding-left: 60px">We will also make the same comparisons but using de-normalized values. In order to de-normalize our data, we must first identify the equivalent week between the test set and the predictions. Then, we take the first price value for that week and use it to reverse the point-relative normalization equation from C<em>hapter 5</em>, <em>Model Architecture</em>.</p>
+<ol start="11">
+<li><span><span>Navigate to the header Denormalizing Predictions and execute all cells under that header.</span></span></li>
+<li>In this section, we defiled the function <kbd>denormalize()</kbd>, which performs the complete de-normalization process. Different than other functions, this function takes in a Pandas DataFrame instead of a NumPy array. We do so for using dates as an index. This is the most relevant cell block from that header:</li>
+</ol>
+<pre><span>      predicted_close = predicted.groupby('iso_week').apply(<br/>         lambda x: denormalize(observed, x))</span></pre>
+<p style="padding-left: 60px">Our de-normalized results (as seen in the following figure) show that our model makes predictions that are close to the real Bitcoin prices. But how close?</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/1ac188a1-60c6-4533-ab9f-48d4675e0268.png" style="width:73.67em;height:24.83em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 10: Plotting the de-normalized values returned from <kbd>model.predict()</kbd> for each week of the test set</div>
+<p style="padding-left: 60px">The LSTM network uses MSE values as its loss function. However, as discussed during the chapter, MSE values are difficult to interpret. To solve that, we implement two functions (loaded from the <kbd>script utilities.py</kbd>) that implement the functions RMSE and MAPE. Those functions add interpretability to our model by returning a measurement in the same scale that our original data used, and by comparing the difference in scale as a percentage.</p>
+<ol start="13">
+<li>Navigate to the header De-normalizing Predictions and load two functions from the <kbd>utilities.py</kbd> script:</li>
+</ol>
+<pre><span>      from scripts.utilities import rmse, mape </span></pre>
+<p style="padding-left: 60px"><span>The functions from the script are actually really simple:<br/></span></p>
+<pre><span>      def mape(A, B):<br/>      return np.mean(np.abs((A - B) / A)) * 100<br/><br/>      def rmse(A, B):<br/>      return np.sqrt(np.square(np.subtract(A, B)).mean())</span></pre>
+<p style="padding-left: 60px">Each function is implemented using NumPy's vector-wise operations. They work well in vectors of the same length. They are designed to be applied on a complete set of results.</p>
+<p style="padding-left: 60px">Using the <kbd>mape()</kbd> function, we can now understand that our model predictions are about 8.4 percent away from the prices from the test set. This is equivalent to a root mean squared error (calculated using the <kbd>rmse()</kbd> function) of about $399.6.</p>
+<p style="padding-left: 60px">Before moving on to the next section, go back into the Notebook and find the header <strong>Re-train Model with TensorBoard</strong>. You may have noticed that we created a helper function called <kbd>train_model()</kbd> . This function is a wrapper around our model that trains (<kbd>using model.fit()</kbd> ) our model, storing its respective results under a new directory. Those results are then used by TensorBoard as a discriminator, in order to display statistics for different models.</p>
+<ol start="14">
+<li>Go ahead and modify some of the values for the parameters passed to the <kbd>model. fit()</kbd> function (try epochs, for instance). Now, run the cells that load the model into memory from disk (this will replace your trained model):</li>
+</ol>
+<pre><span>      model = load_model('bitcoin_lstm_v0.h5') </span></pre>
+<ol start="15">
+<li>Now, run the <kbd>train_model()</kbd> function again, but with different parameters, indicating a new run version:</li>
+</ol>
+<pre><span>      train_model(X=X_train, Y=Y_validate, version=0, run_number=0)</span></pre>
+<p>In this section, we learned how to evaluate a network using loss functions. We learned that loss functions are key elements of neural networks, as they evaluate the performance of a network at each epoch and are the starting point for the propagation of adjustments back into layers and nodes. We also explored why some loss functions can be difficult to interpret (for instance, the MSE) and developed a strategy using two other functions— RMSE and MAPE—to interpret the predicted results from our LSTM model.</p>
+<p>Most importantly, this chapter concludes with an active training environment. We now have a system that can train a deep learning model and evaluate its results continuously. This will be key when we move to optimizing our network in the next session.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Hyperparameter Optimization</h1>
+                </header>
+            
+            <article>
+                
+<p>We have trained a neural network to predict the next seven days of Bitcoin prices using the preceding 76 weeks of prices. On average, that model issues predictions that are about 8.4 percent distant from real Bitcoin prices.</p>
+<p>This section describes common strategies for improving the performance of neural network models:</p>
+<ul>
+<li><span>Adding or removing layers and changing the number of nodes</span></li>
+<li><span>Increasing or decreasing the number of training epochs</span></li>
+<li><span>Experimenting with different activation functions</span></li>
+<li><span>Using different regularization strategies<br/></span></li>
+</ul>
+<p>We will evaluate each modification using the same active learning environment developed by the end of the <em>Model Evaluation</em> section, measuring how each one of these strategies may help us develop a more precise model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Layers and Nodes - Adding More Layers</h1>
+                </header>
+            
+            <article>
+                
+<p>Neural networks with single hidden layers can perform fairly well on many problems. Our fist Bitcoin model (<kbd>bitcoin_lstm_v0</kbd>) is a good example: it can predict the next seven days of Bitcoin prices (from the test set) with error rates of about 8.4 percent using a single LSTM layer. However, not all problems can be modeled with single layers.</p>
+<p>The more complex the function that you are working to predict is, the higher the likelihood that you will need to add more layers. A good intuition to determine whether adding new layers is a good idea is to understand what their role in a neural network is.</p>
+<p>Each layer creates a model representation of its input data. Earlier layers in the chain create lower-level representations, and later layers, higher-level.</p>
+<p>While that description may be difficult to translate into real-world problems, its practical intuition is simple: when working with complex functions that have different levels of representation, you may want to experiment with the addition of layers.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Adding More Nodes</h1>
+                </header>
+            
+            <article>
+                
+<p>The number of neurons that your layer requires is related to how both the input and output data are structured.</p>
+<p>For instance, if you are working to classify a 4 x 4 pixel image into one of two categories, one can start with a hidden layer that has 12 neurons (one for each available pixel) and an output layer that has only two (one for each predicted class).</p>
+<p>It is common to add new neurons alongside the addition of new layers. Then, one can add a layer that has either the same number of neurons as the previous one, or a multiple of the number of neurons from the previous layer. For instance, if your fist hidden layer has 12 neurons, you can experiment with adding a second layer that has either 12, 6, or 24.</p>
+<p>Adding layers and neurons can have significant performance limitations. Feel free to experiment with adding layers and nodes. It is common to start with a smaller network (that is, a network with a small number of layers and neurons), then grow according to its performance gains.</p>
+<p>If the above comes across as imprecise, your intuition is right. To quote Aurélien Géron, YouTube's former lead for video classification, <em>Finding the perfect amount of neurons is still somewhat of a black art</em>.</p>
+<div class="packt_infobox">Hands-on Machine Learning with Scikit-Learn and TensorFlow, by Aurelién Géron, published by O'Reilly, March 2017.</div>
+<p>Finally, a word of caution: the more layers you add, the more hyper parameters you have to tune—and the longer your network will take to train. If your model is performing fairly well and not overfitting your data, experiment with the other strategies outlined in this chapter before adding new layers to your network.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Layers and Nodes - Implementation</h1>
+                </header>
+            
+            <article>
+                
+<p>We will now modify our original LSTM model by adding more layers. In LSTM models, one typically adds LSTM layers in a sequence, making a chain between LSTM layers. In our case, the new LSTM layer has the same number of neurons as the original layer, so we don't have to configure that parameter.</p>
+<p>We will name the modifiled version of our model <kbd>bitcoin_lstm_v1</kbd>. It is good practice to name each one of the models in which one is attempting different hyperparameter configurations differently. This helps you to keep track of how each different architecture performs, and also to easily compare model differences in TensorBoard. We will compare all the different modifiled architectures at the end of this chapter.</p>
+<div class="packt_infobox">Before adding a new LSTM layer, we need to modify the parameter <kbd>return_sequences</kbd> to True on the fist LSTM layer. We do this because the fist layer expects a sequence of data with the same input as that of the fist layer. When this parameter is set to <kbd>False</kbd>, the LSTM layer outputs the predicted parameters in a different, incompatible output.</div>
+<p><span>Consider the following code example:<br/></span></p>
+<pre><span>    period_length = 7<br/>    number_of_periods = 76<br/>    batch_size = 1<br/><br/>    model = Sequential()<br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=True, stateful=False))<br/><br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=False, stateful=False))<br/><br/>    model.add(Dense(units=period_length))<br/>    model.add(Activation("linear"))<br/><br/>    model.compile(loss="mse", optimizer="rmsprop") </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 8</em>: Adding a second LSTM layer to the original <kbd>bitcoin_lstm_v0 model</kbd>, making it <kbd>bitcoin_lstm_v1</kbd></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Epochs</h1>
+                </header>
+            
+            <article>
+                
+<p>Epochs are the number of times the network adjust its weights in response to data passing through and its loss function. Running a model for more epochs can allow it to learn more from data, but you also run the risk of overfitting.</p>
+<p>When training a model, prefer to increase the epochs exponentially until the loss function starts to plateau. In the case of the <kbd>bitcoin_lstm_v0</kbd> model, its loss function plateaus at about 100 epochs.</p>
+<p>Our LSTM model uses a small amount of data to train, so increasing the number of epochs does not affect its performance in significant ways. For instance, if one attempts to train it at 103 epochs, the model barely gains any improvements. This will not be the case if the model being trained uses enormous amounts of data. In those cases, a large number of epochs is crucial to achieve good performance.</p>
+<p>I suggest you use the following association: the larger the date used to train your model, the more epochs it will need to achieve good performance.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Epochs - Implementation</h1>
+                </header>
+            
+            <article>
+                
+<p>Our Bitcoin dataset is rather small, so increasing the epochs that our model trains may have only a marginal effect on its performance. In order to have the model train for more epochs, one only has to change the epochs parameter in <kbd>model.fit()</kbd> :</p>
+<pre><span>    number_of_epochs = 10**3<br/>    model.fit(x=X, y=Y, batch_size=1,<br/>        epochs=number_of_epochs,<br/>        verbose=0,<br/>    callbacks=[tensorboard]) </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 9</em>: Changing the number of epochs that our model trains for, making it <kbd>bitcoin_lstm_v2</kbd><span><br/></span></div>
+<div><span>That change bumps our model to v2, effectively making it <kbd>bitcoin_lstm_v2</kbd>.<br/></span></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activation Functions</h1>
+                </header>
+            
+            <article>
+                
+<p>Activation functions evaluate how much you need to activate individual neurons. They determine the value that each neuron will pass to the next element of the network, using both the input from the previous layer and the results from the loss function—or if a neuron should pass any values at all.</p>
+<div class="packt_infobox">Activation functions are a topic of great interest in the scientific community researching neural networks. For an overview of research currently being done on the topic and a more detailed review on how activation functions work, please refer to <em>Deep Learning</em> by Ian Goodfellow et. al., MIT Press, 2017.</div>
+<p><span>TensorFlow and Keras provide many activation functions—and new ones are occasionally added. As an introduction, three are important to consider; let's explore each of them.</span></p>
+<div class="packt_infobox">This section has been greatly inspired by the article <em>Understanding Activation Functions in Neural Networks</em> by Avinash Sharma V, available at: <a href="https://medium.com/the-theory-of-everything/understanding-activation-functions-in-neural-networks-9491262884e0">https://medium.com/the-theory-of-everything/ understanding-activation-functions-in-neural-networks- 9491262884e0</a>.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Linear (Identity)</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Linear functions only activate a neuron based on a constant value. They are defined by:<br/></span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/7261435b-074a-4e48-a878-ddf7399d9454.png" style="width:16.58em;height:3.08em;"/></p>
+<p>When c = 1, neurons will pass the values as-is, without modification by the activation function. The issue with using linear functions is that, due to the fact that neurons are activated linearly, chained layers now function as a single large layer. In other words, one loses the ability to construct networks with many layers, in which the output of one influences the other:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/9929f033-6fa9-461f-8f45-21db82d42fb8.png" style="width:38.67em;height:26.83em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 11: Illustration of a linear function<br/></span></div>
+<p><span>The use of linear functions is generally considered obsolete for most networks.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Hyperbolic Tangent (Tanh)</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Tanh is a non-linear function, and is represented by the following formula:<br/></span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/6e1f0388-c59a-4d99-9d23-5722290e7cbe.png" style="width:14.58em;height:4.67em;"/></p>
+<p>This means that the effect they have on nodes is evaluated continuously. Also, because of its non-linearity, one can use this function to change how one layer influences the next layer in the chain. When using non-linear functions, layers activate neurons in different ways, making it easier to learn different representations from data. However, they have a sigmoid-like pattern which penalizes extreme node values repeatedly, causing a problem called vanishing gradients. Vanishing gradients have negative effects on the ability of a network to learn:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/8d1b34ee-905d-4c13-affc-466e98ed9533.png" style="width:35.83em;height:24.67em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 12: Illustration of a <kbd>tanh</kbd> function<br/></span></div>
+<p><span>Tanhs are popular choices, but due to fact that they are computationally expensive, ReLUs are often used instead.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Rectifid Linear Unit</h1>
+                </header>
+            
+            <article>
+                
+<p><span>ReLUs have non-linear properties. They are defined by:<br/></span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/e34ccbc9-8077-452b-8ea7-7fa1695be15c.png" style="width:17.00em;height:2.92em;"/></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/69e63f3a-a36c-4cf8-8480-e36c00578657.png" style="width:31.00em;height:22.00em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 13: Illustration of a ReLU function<br/></span></div>
+<p>ReLU functions are often recommended as great starting points before trying other functions. ReLUs tend to penalize negative values. So, if the input data (for instance, normalized between -1 and 1) contains negative values, those will now be penalized by ReLUs. That may not be the intended behavior.</p>
+<p>We will not be using ReLU functions in our network because our normalization process creates many negative values, yielding a much slower learning model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activation Functions - Implementation</h1>
+                </header>
+            
+            <article>
+                
+<p>The easiest way to implement activation functions in Keras is by instantiating the Activation() class and adding it to the <kbd>Sequential()</kbd> model. <kbd>Activation()</kbd> can be instantiated with any activation function available in Keras (for a complete list, see <a href="https://keras.io/activations/">https://keras.io/activations/</a>). In our case, we will use the <kbd>tanh</kbd> function.</p>
+<p>After implementing an activation function, we bump the version of our model to <kbd>v2</kbd>, making it <kbd>bitcoin_lstm_v3</kbd>:</p>
+<pre><span>    model = Sequential()<br/><br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=True, stateful=False))<br/><br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=False, stateful=False))<br/><br/>    model.add(Dense(units=period_length))<br/>    model.add(Activation("tanh"))<br/><br/>    model.compile(loss="mse", optimizer="rmsprop") </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 10</em>: Adding the activation function <kbd>tanh</kbd> to the <kbd>bitcoin_lstm_v2</kbd> model, making it <kbd>bitcoin_lstm_v3</kbd></div>
+<p>There are a number of other activation functions worth experimenting with. Both TensorFlow and Keras provide a list of implemented functions in their respective official documentations. Before implementing your own, start with the ones already implemented in both TensorFlow and Keras.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Regularization Strategies</h1>
+                </header>
+            
+            <article>
+                
+<p>Neural networks are particularly prone to overfitting. Overfitting happens when a network learns the patterns of the Neural networks are particularly prone to overfitting. Overfitting happens when a network learns the patterns of the training data but is unable to find generalizable patterns that can also be applied to the test data.he training data but is unable to find generalizable patterns that can also be applied to the test data.</p>
+<p>Regularization strategies refer to techniques that deal with the problem of overfitting by adjusting how the network learns. In this book, we discuss two common strategies: L2 and Dropout.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">L2 Regularization</h1>
+                </header>
+            
+            <article>
+                
+<p>L2 regularization (or weight decay) is a common technique for dealing with overfiting models. In some models, certain parameters vary in great magnitudes. The L2 regularization penalizes such parameters, reducing the effect of these parameters on the network.</p>
+<p>L2 regularizations use the<img src="assets/01dfbb24-b718-40fc-840f-8e8529604999.png" style="width:1.58em;height:2.25em;"/> parameter to determine how much to penalize a model neuron. One typically sets that to a very low value (that is, <kbd>0.0001</kbd>); otherwise, one risks eliminating the input from a given neuron completely.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Dropout</h1>
+                </header>
+            
+            <article>
+                
+<p>Dropout is a regularization technique based on a simple question: if one randomly takes away a proportion of nodes from layers, how will the other node adapt? It turns out that the remaining neurons adapt, learning to represent patterns that were previously handled by those neurons that are missing.</p>
+<p>The dropout strategy is simple to implement and is typically very effective to avoid overfitting. This will be our preferred regularization.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Regularization Strategies – Implementation</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to implement the dropout strategy using Keras, we import the <kbd>Dropout()</kbd> class and add it to our network immediately after each LSTM layer.</p>
+<p>This addition effectively makes our network <kbd>bitcoin_lstm_v4</kbd>:</p>
+<pre><span>    model = Sequential()<br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=True, stateful=False))<br/><br/>    model.add(Dropout(0.2))<br/>    model.add(LSTM(<br/>        units=period_length,<br/>        batch_input_shape=(batch_size, number_of_periods, period_length),<br/>        input_shape=(number_of_periods, period_length),<br/>        return_sequences=False, stateful=False))<br/><br/>    model.add(Dropout(0.2))<br/><br/>    model.add(Dense(units=period_length))<br/>    model.add(Activation("tanh"))<br/><br/>    model.compile(loss="mse", optimizer="rmsprop") </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 11</em>: In this snippet, we add the <kbd>Dropout()</kbd> step to our model (<kbd>bitcoin_lstm_v3</kbd>), making it <kbd>bitcoin_lstm_v4</kbd><span><br/></span></div>
+<p>One could have used the L2 regularization instead of Dropout. In order to do that, simply instantiate the <kbd>ActivityRegularization()</kbd> class with the L2 parameter set to a low value (<kbd>0.0001</kbd>, for instance). Then, place it in the place where the Dropout() class is added to the network. Feel free to experiment by adding that to the network while keeping both <kbd>Dropout()</kbd> steps, or simply replace all the <kbd>Dropout()</kbd> instances with <kbd>ActivityRegularization()</kbd> instead.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Optimization Results</h1>
+                </header>
+            
+            <article>
+                
+<p>All in all, we have created four versions of our model. Three of these versions were created by the application of different optimization techniques outlined in this chapter.</p>
+<p>After creating all these versions, we now have to evaluate which model performs best. In order to do that, we use the same metrics used in our fist model: MSE, RMSE, and MAPE. MSE is used to compare the error rates of the model on each predicted week. RMSE and MAPE are computed to make the model results easier to interpret.</p>
+<p class="mce-root"/>
+<table style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td style="width: 21%"><strong><span>Model<br/></span></strong></td>
+<td style="width: 17%"><strong><span>MSE (last epoch)<br/></span></strong></td>
+<td style="width: 19.2894%"><strong><span>RMSE  (whole series)<br/></span></strong></td>
+<td style="width: 17.7106%"><strong><span>MAPE  (whole series)<br/></span></strong></td>
+<td style="width: 19%"><strong><span>Training Time<br/></span></strong></td>
+</tr>
+<tr>
+<td style="width: 21%"><span>bitcoin_lstm_v0<br/></span></td>
+<td style="width: 17%"><strong>-</strong></td>
+<td style="width: 19.2894%"><span> 399.6<br/></span></td>
+<td style="width: 17.7106%"><span> 8.4 percent<br/></span></td>
+<td style="width: 19%"><strong> -</strong></td>
+</tr>
+<tr>
+<td style="width: 21%"><span>bitcoin_lstm_v1<br/></span></td>
+<td style="width: 17%"><span> 7.15*10<sup>-6</sup><br/></span></td>
+<td style="width: 19.2894%"><span> 419.3<br/></span></td>
+<td style="width: 17.7106%"><span> 8.8 percent<br/></span></td>
+<td style="width: 19%"><span>49.3 s<br/></span></td>
+</tr>
+<tr>
+<td style="width: 21%"><span>bitcoin_lstm_v2<br/></span></td>
+<td style="width: 17%"><span> 3.55*10<sup>-6</sup><br/></span></td>
+<td style="width: 19.2894%"><span> 425.4<br/></span></td>
+<td style="width: 17.7106%"><span> 9.0 percent<br/></span></td>
+<td style="width: 19%"><span>1 min 13s<br/></span></td>
+</tr>
+<tr>
+<td style="width: 21%"><span>bitcoin_lstm_v3<br/></span></td>
+<td style="width: 17%"><span> 2.8*10<sup>-4</sup><br/></span></td>
+<td style="width: 19.2894%"><span> 423.9<br/></span></td>
+<td style="width: 17.7106%"><span> 8.8 percent<br/></span></td>
+<td style="width: 19%"><span>1 min 19s<br/></span></td>
+</tr>
+<tr>
+<td style="width: 21%"><span>bitcoin_lstm_v4<br/></span></td>
+<td style="width: 17%"><span> 4.8*10<sup>-7</sup><br/></span></td>
+<td style="width: 19.2894%"><span> 442.4<br/></span></td>
+<td style="width: 17.7106%"><span> 8.8 percent<br/></span></td>
+<td style="width: 19%"><span>1 min 20s<br/></span></td>
+</tr>
+</tbody>
+</table>
+<div class="mce-root CDPAlignCenter CDPAlign packt_figref">Table 2: Model results for all models</div>
+<p>Interestingly, our fist model (<kbd>bitcoin_lstm_v0</kbd>) performed the best in nearly all defiled metrics. We will be using that model to build our web application and continuously predict Bitcoin prices.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activity:Optimizing a Deep Learning Model</h1>
+                </header>
+            
+            <article>
+                
+<p>In this activity, we implement different optimization strategies to the model created in C<em>hapter 5</em>, <em>Model Architecture</em> (<kbd>bitcoin_lstm_v0</kbd>). That model achieves a MAPE performance on the complete de-normalization test set of about 8.4 percent. We will try to reduce that gap.</p>
+<ol>
+<li><span>Using your terminal, start a TensorBoard instance by executing the following command:<br/></span></li>
+</ol>
+<pre><span>      $ cd ./chapter_3/activity_7/<br/>      $ tensorboard --logdir=logs/ </span></pre>
+<ol start="2">
+<li>Open the URL that appears on the screen and leave that browser tab open, as well. Also, start a Jupyter Notebook instance with:</li>
+</ol>
+<pre>       <span>$ jupyter notebook</span></pre>
+<p style="padding-left: 60px"><span>Open the URL that appears in a different browser window.<br/></span></p>
+<ol start="3">
+<li>Now, open the Jupyter Notebook called <kbd>Activity_7_Optimizing_a_deep_ learning_model.ipynb</kbd> and navigate to the title of the Notebook and import all required libraries. We will load the train and test data like in previous activities. We will also split it into train and test groups using the utility   function <kbd>split_lstm_input()</kbd> <span>.</span></li>
+</ol>
+<p class="mce-root"/>
+<p style="padding-left: 60px"> In each section of this Notebook, we will implement new optimization techniques in our model. Each time we do so, we   train a fresh model and store its trained instance in a variable that describes the model version. For instance, our first  model, <kbd>bitcoin_lstm_v0</kbd>, is called<kbd>model_v0</kbd> in this Notebook. At the very end of the Notebook, we evaluate all  models using MSE, RMSE, and MAPE.</p>
+<ol start="4">
+<li>Now, in the open Jupyter Notebook, navigate to the header <strong>Adding Layers</strong> and <strong>Nodes</strong>.<span>You will recognize our fist model in the next cell. This is the basic LSTM network that we built in C<em>hapter 5</em>, <em>Model Architecture</em>. Now, we have to add a new LSTM layer to this network.</span></li>
+</ol>
+<p style="padding-left: 60px"><span>Using knowledge from this chapter, go ahead and add a new LSTM layer, compile, and train the model. </span>While training your models, remember to frequently visit the running TensorBoard instance.</p>
+<p style="padding-left: 60px">You will be able to see each model run and compare the results of their loss functions there:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/c919b2a6-3e37-4d14-90ce-3748169adc08.png" style="width:68.83em;height:42.92em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 14: Running the TensorBoard instance, which is displaying many different model runs. TensorBoard is really</div>
+<div class="CDPAlignCenter CDPAlign packt_figref">useful for tracking model training in real time.</div>
+<ol start="5">
+<li class="mce-root">Now, navigate to the header Epochs. In this section, we are interested in exploring different magnitudes of <strong>epochs</strong>. Use the utility function<kbd>train_model()</kbd> to name different model versions and runs:</li>
+</ol>
+<pre><span>      train_model(model=model_v0, X=X_train, Y=Y_validate, epochs=100,<br/>      version=0, run_number=0) </span></pre>
+<p style="padding-left: 60px">Train the model with a few different epoch parameters.</p>
+<p style="padding-left: 60px">At this point, you are interested in making sure the model doesn't overfit the training data. You want to avoid this, because if it does, it will not be able to predict patterns that are represented in the training data but have different representations in the test data.</p>
+<p style="padding-left: 60px">After you are done experimenting with epochs, move to the next optimization technique: activation functions.</p>
+<ol start="6">
+<li>Now, navigate to the header <strong>Activation Functions</strong> in the Notebook. In this section, you only need to change the following variable:</li>
+</ol>
+<pre>      a<span>ctivation_function = "tanh" </span></pre>
+<p style="padding-left: 60px">We have used the <kbd>tanh</kbd> function in this section, but feel free to try other activation functions. Review the list available at <a href="https://keras.io/activations/">https://keras.io/activations/</a> and try other possibilities.</p>
+<p style="padding-left: 60px">Our final option is to try different regularization strategies. This is notably more complex and may take a few iterations to notice any gains—especially with so little data. Also, adding regularization strategies typically increases the training time of your network.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<ol start="7">
+<li>Now, navigate to the header <strong>Regularization Strategies</strong> in the Notebook. In this section, you need to implement the <kbd>Dropout()</kbd> regularization strategy. Find the right place to place that step and implement it in our model.</li>
+<li>You can also try the L2 regularization here, as well (or combine both). Do the same as with <kbd>Dropout()</kbd> , but now using <kbd>ActivityRegularization</kbd>(<kbd>l2=0.0001</kbd>) .</li>
+<li>Now, navigate to the header <strong>Evaluate Models</strong> in the Notebook. In this section, we will evaluate the model predictions for the next 19 weeks of data in the test set. Then, we will compute the RMSE and MAPE of the predicted series versus the test series.</li>
+</ol>
+<p style="padding-left: 60px"><span> We have implemented the same evaluation techniques from Activity 6, all wrapped in utility functions. Simply run all the   cells from this section until the end of the notebook to see the results.</span></p>
+<p>Take this opportunity to tweak the values for the preceding optimization techniques and attempt to beat the performance of that model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we learned how to evaluate our model using the metrics mean squared error (MSE), squared mean squared error (RMSE), and mean averaged percentage error (MAPE). We computed the latter two metrics in a series of 19 week predictions made by our fist neural network model. We then learned that it was performing well.</p>
+<p>We also learned how to optimize a model. We looked at optimization techniques typically used to increase the performance of neural networks. Also, we implemented a number of these techniques and created a few more models to predict Bitcoin prices with different error rates.</p>
+<p>In the next chapter, we will be turning our model into a web application that does two things: re-trains our model periodically with new data, and is able to make predictions using an HTTP API interface.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

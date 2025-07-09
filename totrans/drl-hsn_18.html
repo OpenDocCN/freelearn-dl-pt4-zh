@@ -1,0 +1,472 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-18-advanced-exploration">
+<h1 class="chapterNumber">18</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_421">
+<span id="x1-32800018"/>Advanced Exploration
+    </h1>
+<p>In this chapter, we will talk about the topic of exploration in <span class="cmbx-10x-x-109">reinforcement</span> <span class="cmbx-10x-x-109">learning </span>(<span class="cmbx-10x-x-109">RL</span>). It has been mentioned several<span id="dx1-328001"/> times in the book that the exploration/exploitation dilemma is a fundamental thing in RL and very important for efficient learning. However, in the previous examples, we used quite a trivial approach to exploring the environment, which was, in most cases, <span class="cmmi-10x-x-109">𝜖</span>-greedy action selection. Now it’s time to go deeper into the exploration subfield of RL, as more complicated environments might require much better exploration strategies than <span class="cmmi-10x-x-109">𝜖</span>-greedy approach.</p>
+<p>More specifically, we will cover the following key topics:</p>
+<ul>
+<li>
+<p>Why exploration is such a fundamental topic in RL</p>
+</li>
+<li>
+<p>The effectiveness of the epsilon-greedy (<span class="cmmi-10x-x-109">𝜖</span>-greedy) approach</p>
+</li>
+<li>
+<p>Alternatives and how they work in different environments</p>
+</li>
+</ul>
+<p>We will implement the methods described to solve a toy, but still challenging, problem called MountainCar. This will allow us to better understand the methods, the way they could be implemented, and their behavior. After that, we will try to tackle a harder problem from the Atari suite.</p>
+<section class="level3 sectionHead" id="why-exploration-is-important">
+<h1 class="heading-1" id="sigil_toc_id_294"> <span id="x1-32900018.1"/>Why exploration is important</h1>
+<p>In this book, lots <span id="dx1-329001"/>of environments and methods have been discussed, and in almost every chapter, exploration was mentioned. Very likely, you’ve already got ideas about why it’s important to explore the environment effectively, so I’m just going to discuss the main reasons.</p>
+<p>Before that, it might be useful to agree on the term “effective exploration.” In theoretical RL, a strict definition of this exists, but the high-level idea is simple and intuitive. Exploration is effective when we don’t waste time in states of the environment that have already been seen by and are familiar to the agent. Rather than taking the same actions again and again, the agent needs to look for a new experience. As we’ve already discussed, <span class="cmti-10x-x-109">exploration </span>has to be balanced by <span class="cmti-10x-x-109">exploitation</span>, which is the opposite and means using our knowledge to get the best reward in the most efficient way. Let’s now quickly discuss why we might be interested in effective exploration in the first place.</p>
+<p>First, good exploration of the environment might have a fundamental influence on our ability to learn a good policy. If the reward is sparse and the agent obtains a good reward on some rare conditions, it might experience a positive reward only once in many episodes, so the ability of the learning process to explore the environment effectively and fully might bring more samples with a good reward that the method could learn from.</p>
+<p>In some cases, which are very frequent in practical applications of RL, a lack of good exploration might mean that the agent will never experience a positive reward at all, which makes everything else useless. If you have no good samples to learn from, you can have the most efficient RL method, but the only thing it will learn is that there is no way to get a good reward. This is the case for lots of practically interesting problems around us. For instance, we will take a closer look at the MountainCar environment later in the chapter, which has trivial dynamics, but due to a sparsity of rewards, is quite tricky to solve.</p>
+<p>On the other hand, even if the reward is not sparse, effective exploration increases the training speed due to better convergence and training stability. This happens because our sample from the environment becomes more diverse and requires less communication with the environment. As a result, our RL method has the chance to learn a better policy in a shorter time.</p>
+</section>
+<section class="level3 sectionHead" id="whats-wrong-with-𝜖-greedy">
+<h1 class="heading-1" id="sigil_toc_id_295"> <span id="x1-33000018.2"/>What’s wrong with <span class="cmmi-10x-x-109">𝜖</span>-greedy?</h1>
+<p>Throughout the book, we<span id="dx1-330001"/> have used the <span class="cmmi-10x-x-109">𝜖</span>-greedy exploration strategy as a simple, but still acceptable, approach to exploring the environment. The underlying idea behind <span class="cmmi-10x-x-109">𝜖</span>-greedy is to take a random action with the probability of <span class="cmmi-10x-x-109">𝜖</span>; otherwise, (with 1 <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">𝜖 </span>probability) we act according to the policy (greedily). By varying the hyperparameter 0 <span class="cmsy-10x-x-109">≤</span><span class="cmmi-10x-x-109">𝜖 </span><span class="cmsy-10x-x-109">≤ </span>1, we can change the exploration ratio. This approach was used in most of the value-based methods described in the book. Quite a similar <span id="dx1-330002"/>idea was used in policy-based methods, when our network returns the probability distribution over actions to take. To prevent the network from becoming too certain about actions (by returning a probability of 1 for a specific action and 0 for others), we added the entropy loss, which is just the entropy of the probability distribution multiplied by some hyperparameter. In the early stages of the training, this entropy loss pushes our network toward taking random actions (by regularizing the probability distribution). But in later stages, when we have explored the environment enough and our reward is relatively high, the policy gradient dominates over this entropy regularization. But this hyperparameter requires tuning to work properly.</p>
+<p>At a high level, both approaches are doing the same thing: to explore the environment, we introduce randomness into our actions. However, recent research shows that this approach is very far from being ideal:</p>
+<ul>
+<li>
+<p>In the case of value iteration methods, random actions taken in some pieces of our trajectory introduce bias into our Q-value estimation. The Bellman equation assumes that the Q-value for the next state is obtained from the action with the largest <span class="cmmi-10x-x-109">Q</span>. In other words, the rest of the trajectory is supposed to be from our optimal behavior. But with <span class="cmmi-10x-x-109">𝜖</span>-greedy, we might take not the optimal action, but just a random action, and this piece of the trajectory will be stored in the replay buffer for a long time, until our <span class="cmmi-10x-x-109">𝜖 </span>is decayed and old samples are pushed from the buffer. Before that happens, we will learn wrong Q-values.</p>
+</li>
+<li>
+<p>With random actions injected into our trajectory, our policy changes with every step. With the frequency defined by the value of <span class="cmmi-10x-x-109">𝜖 </span>or the entropy loss coefficient, our trajectory constantly switches from a random policy to our current policy. This might lead to poor state space coverage in situations when multiple steps are needed to reach some isolated areas in the environment’s state space.</p>
+</li>
+</ul>
+<p>To illustrate the last issue, let’s consider a simple example taken from the paper by Strehl and Littman called <span class="cmti-10x-x-109">An analysis of model-based interval estimation for</span> <span class="cmti-10x-x-109">Markov decision processes</span>, which was published in 2008 [<span id="x1-330003"/><a href="">SL08</a>]. The example is called “River Swim” and it models a river that the agent needs to cross. The environment contains six states and two actions: <span class="cmti-10x-x-109">left </span>and <span class="cmti-10x-x-109">right</span>. States 1 and 6 are on the river’s opposite sides and states 2 to 5 are in the water.</p>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-330004r1"><span class="cmti-10x-x-109">18.1</span></a> shows the transition diagram for the first two states, 1 and 2:</p>
+<div class="minipage">
+<p><img alt="123pppppp ====== 001000.6.4.0.6.355 " height="300" src="../Images/B22150_18_01.png" width="600"/> <span id="x1-330004r1"/></p>
+<span class="id">Figure 18.1: Transitions for the first two states of the River Swim environment </span>
+</div>
+<p>In the first state (the circle with the label “1”), the agent stands on the ground of the riverbank. The only action is <span class="cmti-10x-x-109">right </span>(shown in solid lines), which means entering the river and swimming against the current to state 2. But the current is strong, and our <span class="cmti-10x-x-109">right </span>action from state 1 succeeds only with a probability of 60% (the solid line from state 1 to state 2). With a probability of 40%, the current keeps us in state 1 (the solid line connecting state 1 to itself).</p>
+<p>In the <span id="dx1-330005"/>second state (the circle with the label “2”), we have two actions: <span class="cmti-10x-x-109">left</span>, which is shown by the dotted line connecting states 2 and 1 (this action always succeeds, as the current flushes us back to the riverbank), and <span class="cmti-10x-x-109">right </span>(dashed lines), which means swimming against the current to state 3. As before, swimming against the current is hard, so the probability of getting from state 2 to state 3 is just 35% (the dashed line connecting states 2 and 3). With a probability of 60%, our <span class="cmti-10x-x-109">left </span>action ends up in the same state (the curved dashed line connecting state 2 to itself). But sometimes, despite our efforts, our left action ends up in state 1, which happens with a 5% probability (the curved dashed line connecting states 2 and 1).</p>
+<p>As I’ve said, there are six states in River Swim, but the transitions for states 3, 4, and 5 are identical to those for state 2. The last state, 6, is similar to state 1, so there is only one action available there: <span class="cmti-10x-x-109">left</span>, meaning to swim back. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-330006r2"><span class="cmti-10x-x-109">18.2</span></a>, you can see the full transition diagram (which is just clones of the diagram we’ve already seen, where <span class="cmti-10x-x-109">right </span>action transitions are shown as solid lines, and <span class="cmti-10x-x-109">left </span>action transitions are dotted lines):</p>
+<div class="minipage">
+<p><img alt="123456ppppppppppppppppppp = = = = = = = = = = = = = = = = = = = 0010001000100010001.6.4.0.6.3.0.6.3.0.6.3.0.6.355555555 " height="300" src="../Images/B22150_18_02.png" width="600"/> <span id="x1-330006r2"/></p>
+<span class="id">Figure 18.2: The full transition diagram for the River Swim environment </span>
+</div>
+<p>In terms of the reward, the agent gets a small reward of 1 for the transition between states 1 to 5, but it gets a very high reward of 1,000 for getting into state 6, which acts as compensation for all the efforts of swimming against the current.</p>
+<p>Despite the simplicity of the environment, its structure creates a problem for the <span class="cmmi-10x-x-109">𝜖</span>-greedy strategy being able to fully explore the state space. To check this, I implemented a very simple simulation of this environment, which you will find in <span class="cmtt-10x-x-109">Chapter18/riverswim.py</span>. The simulated agent always acts randomly (<span class="cmmi-10x-x-109">𝜖 </span>= 1) and the result of the simulation is the frequency of various state visits. The number of steps the agent can take in one episode is limited to 10, but this can be changed using the command line. We won’t go over the entire code here; you can refer to it in the GitHub repository. Here, let’s look at the results of the experiments:</p>
+<pre class="lstlisting" id="listing-481"><code>Chapter18$ ./riverswim.py 
+1:     40 
+2:     39 
+3:     17 
+4:     3 
+5:     1 
+6:     0</code></pre>
+<p>In the <span id="dx1-330014"/>preceding output, each line shows the state number and the number of times it was visited during the simulation. With default command-line options, the simulation of 100 steps (10 episodes) was performed. As you can see, the agent never reached state 6 and was only in state 5 once. By increasing the number of episodes, the situation became a bit better, but not much:</p>
+<pre class="lstlisting" id="listing-482"><code>Chapter18$ ./riverswim.py -n 1000 
+1:     441 
+2:     452 
+3:     93 
+4:     12 
+5:     2 
+6:     0</code></pre>
+<p>With 10 times more episodes simulated, we still didn’t visit state 6, so the agent had no idea about the large reward there.</p>
+<p>Only with 10,000 episodes simulated were we able to get to state 6, but only five times, which is 0.05% of all the steps:</p>
+<pre class="lstlisting" id="listing-483"><code>Chapter18$ ./riverswim.py -n 10000 
+1:     4056 
+2:     4506 
+3:     1095 
+4:     281 
+5:     57 
+6:     5</code></pre>
+<p>Therefore, it’s not very likely that the training will be efficient, even with the best RL method. Also, we had only six states in this example. Imagine how inefficient it will be with 20 or 50 states, which is not that unlikely; for example, in Atari games, there might be hundreds of decisions to be made before something interesting happens. If you want to, you can experiment with the <span class="cmtt-10x-x-109">riverswim.py </span>tool, which allows you to change the random seed, the number of steps in the episode, the total number of steps, and even the number of states in the environment.</p>
+<p>This simple<span id="dx1-330029"/> example illustrates the issue with random actions in exploration. By acting randomly, our agent does not try to actively explore the environment; it just hopes that random actions will bring something new to its experience, which is not always the best thing to do.</p>
+<p>Let’s now discuss more efficient approaches to the exploration problem.</p>
+</section>
+<section class="level3 sectionHead" id="alternative-ways-of-exploration">
+<h1 class="heading-1" id="sigil_toc_id_296"> <span id="x1-33100018.3"/>Alternative ways of exploration</h1>
+<p>In this section, we will <span id="dx1-331001"/>provide you with an overview of a set of alternative approaches to the exploration problem. This won’t be an exhaustive list of approaches that exist, but rather will provide an outline of the landscape.</p>
+<p>We’re going to explore the following three approaches to exploration:</p>
+<ul>
+<li>
+<p>Randomness in the policy, when stochasticity is added to the policy that we use to get samples. The method in this family is <span class="cmbx-10x-x-109">noisy</span> <span class="cmbx-10x-x-109">networks</span>, which we have already covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Count-based methods</span>, which keep track of the number of times the agent has seen the particular state. We will check two methods: the direct counting of states and the pseudo-count method.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Prediction-based methods</span>, which try to predict something from the state and from the quality of the prediction. We can make judgements about the familiarity of the agent with this state. To illustrate this approach, we will take a look at the policy distillation method, which has shown state-of-the-art results on hard-exploration Atari games like Montezuma’s Revenge.</p>
+</li>
+</ul>
+<p>Before implementing these methods, let’s try and understand them in greater detail.</p>
+<section class="level4 subsectionHead" id="noisy-networks-1">
+<h2 class="heading-2" id="sigil_toc_id_297"> <span id="x1-33200018.3.1"/>Noisy networks</h2>
+<p>Let’s start <span id="dx1-332001"/>with an approach that is already familiar to us. We covered the <span id="dx1-332002"/>method called noisy networks in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, when we referred to Hessel et al. [<span id="x1-332003"/><a href="#">Hes+18</a>] and discussed <span class="cmbx-10x-x-109">deep Q-network </span>(<span class="cmbx-10x-x-109">DQN</span>) extensions. The idea is to add Gaussian noise to the network’s weights and learn the noise parameters (mean and variance) using backpropagation, in the same way that we learn the model’s weights. In that chapter, this simple approach gave a significant boost in Pong training.</p>
+<p>At a high level, this might look very similar to the <span class="cmmi-10x-x-109">𝜖</span>-greedy approach, but Fortunato et al. [<span id="x1-332004"/><a href="#">For+17</a>] claimed a difference. The difference lies in the way we apply stochasticity to the network. In <span class="cmmi-10x-x-109">𝜖</span>-greedy, randomness is added to the actions. In noisy networks, randomness is injected into part of the network itself (several fully connected layers close to the output), which means adding stochasticity to our current policy. In addition, parameters of the noise might be learned during the training, so the training process might increase or decrease this policy randomness if needed.</p>
+<p>According to the <span id="dx1-332005"/>paper, the noise in noisy layers needs to be sampled from time to time, which means that our training samples are not produced by our current policy, but by the ensemble of policies. With this, our exploration becomes directed, as random values added to the weights produce a different policy.</p>
+</section>
+<section class="level4 subsectionHead" id="count-based-methods">
+<h2 class="heading-2" id="sigil_toc_id_298"> <span id="x1-33300018.3.2"/>Count-based methods</h2>
+<p>This family of <span id="dx1-333001"/>methods is based on the intuition to visit states that have not been explored before. In simple cases, when the state space is not very large and different states are easily distinguishable from each other, we just count the number of times we have seen the state or state + action and prefer to get to the states for which this count is low.</p>
+<p>This could be implemented <span id="dx1-333002"/>as an extra reward, not obtained from the environment but from the visit count of the state. In the literature, such a reward is called an <span class="cmti-10x-x-109">intrinsic reward</span>. In this context, the reward from the environment is called an <span class="cmti-10x-x-109">extrinsic reward</span>. One of the options to formulate such a reward is to use the <span class="cmbx-10x-x-109">bandits exploration </span>approach: <img alt="√-1--- N˜(s)" class="frac" data-align="middle" height="30" src="../Images/eq70.png"/>. Here, <span class="cmmi-10x-x-109">Ñ</span>(<span class="cmmi-10x-x-109">s</span>) is a count or pseudo-count of times we have seen the state, <span class="cmmi-10x-x-109">s</span>, and value <span class="cmmi-10x-x-109">c </span>defines the weight of the intrinsic reward.</p>
+<p>If the number of states is small, like in the tabular learning case (we discussed it in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch009.xhtml#x1-820005"><span class="cmti-10x-x-109">5</span></a>), we can just count them. In more difficult cases, when there are too many states, some transformation of the states needs to be introduced, like the hashing function or some embeddings of the states (we’ll discuss this later in the chapter in more detail).</p>
+<p>For pseudo-count methods, <span class="cmmi-10x-x-109">Ñ</span>(<span class="cmmi-10x-x-109">s</span>) is factorized into the density function and the total number of states visited, given by <span class="cmmi-10x-x-109">Ñ</span>(<span class="cmmi-10x-x-109">s</span>) = <span class="cmmi-10x-x-109">ρ</span>(<span class="cmmi-10x-x-109">x</span>)<span class="cmmi-10x-x-109">n</span>(<span class="cmmi-10x-x-109">x</span>), where <span class="cmmi-10x-x-109">ρ</span>(<span class="cmmi-10x-x-109">x</span>) is a “density function,” representing the likelihood of the state <span class="cmmi-10x-x-109">x </span>and approximated by a neural network. There are several different methods for how to do this, but they might be tricky to implement, so we won’t deal with complex cases in this chapter. If you’re curious, you can refer to the paper by Georg Ostrovski et al. called <span class="cmti-10x-x-109">Count-based exploration with neural density models</span> [<span id="x1-333003"/><a href="#">Ost+17</a>].</p>
+<p>A special case of introducing the intrinsic reward is called <span class="cmti-10x-x-109">curiosity-driven</span> <span class="cmti-10x-x-109">exploration</span>, when we don’t take the reward from the environment into account at all. In that case, the training and exploration is driven 100% by the novelty of the agent’s experience. Surprisingly, this approach might be very efficient not only in discovering new states in the environment but also in learning quite good policies.</p>
+</section>
+<section class="level4 subsectionHead" id="prediction-based-methods">
+<h2 class="heading-2" id="sigil_toc_id_299"> <span id="x1-33400018.3.3"/>Prediction-based methods</h2>
+<p>The third family <span id="dx1-334001"/>of exploration methods is based on another idea of predicting something <span id="dx1-334002"/>from the environment data. If the agent can make accurate predictions, it means the agent has been in this situation enough and it isn’t worth exploring it.</p>
+<p>But if something unusual happens and our prediction is significantly off, it might mean that we need to pay attention to the state that we’re currently in. There are many different approaches to doing this, but in this chapter, we will discuss how to implement this approach, as proposed by Burda et al. in 2018 in the paper called <span class="cmti-10x-x-109">Exploration by random network distillation </span>[<span id="x1-334003"/><a href="#">Bur+18</a>]. The authors were able to reach state-of-the-art results in so-called hard-exploration games in Atari.</p>
+<p>The approach used in the paper is quite simple: we add the intrinsic reward, which is calculated from the ability of one <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) (which is being trained) to predict the output from another randomly initialized (untrained) NN. The input to both NNs is the current observation, and the intrinsic reward is proportional to the <span class="cmbx-10x-x-109">mean squared error </span>(<span class="cmbx-10x-x-109">MSE</span>) of the prediction.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="mountaincar-experiments">
+<h1 class="heading-1" id="sigil_toc_id_300"> <span id="x1-33500018.4"/>MountainCar experiments</h1>
+<p>In this section, we<span id="dx1-335001"/> will try to implement and compare the effectiveness of different exploration approaches on a simple, but still challenging, environment, which could be classified as a “classical RL” problem that is very similar to the familiar CartPole problem. But in contrast to CartPole, the MountainCar problem is quite challenging from an exploration point of view.</p>
+<p>The problem’s illustration is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-335002r3"><span class="cmti-10x-x-109">18.3</span></a> and it consists of a small car starting from the bottom of the valley. The car can move left and right, and the goal is to reach the top of the mountain on the right.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/file265.png" width="500"/> <span id="x1-335002r3"/></p>
+<span class="id">Figure 18.3: The MountainCar environment </span>
+</div>
+<p>The trick <span id="dx1-335003"/>here is in the environment’s dynamics and the action space. To reach the top, the actions need to be applied in a particular way to swing the car back and forth to speed it up. In other words, the agent needs to apply the actions for several time steps to make the car go faster and eventually reach the top.</p>
+<p>Obviously, this coordination of actions is not something that is easy to achieve with just random actions, so the problem is hard from the exploration point of view and very similar to our River Swim example.</p>
+<p>In Gym, this environment has the name <span class="cmtt-10x-x-109">MountainCar-v0 </span>and it has a very simple observation and action space. The observations are just two numbers: the first one gives the horizontal position of the car and the second value is the car’s velocity. The action could be 0, 1, or 2, where 0 means pushing the car to the left, 1 applies no force, and 2 pushes the car to the right. The following is a very simple illustration of this in Python REPL:</p>
+<pre class="lstlisting" id="listing-484"><code>&gt;&gt;&gt; import gymnasium as gym 
+&gt;&gt;&gt; e = gym.make("MountainCar-v0") 
+&gt;&gt;&gt; e.reset() 
+(array([-0.56971574,  0.       ], dtype=float32), {}) 
+&gt;&gt;&gt; e.observation_space 
+Box([-1.2  -0.07], [0.6  0.07], (2,), float32) 
+&gt;&gt;&gt; e.action_space 
+Discrete(3) 
+&gt;&gt;&gt; e.step(0) 
+(array([-0.570371  , -0.00065523], dtype=float32), -1.0, False, False, {}) 
+&gt;&gt;&gt; e.step(0) 
+(array([-0.57167655, -0.00130558], dtype=float32), -1.0, False, False, {}) 
+&gt;&gt;&gt; e.step(0) 
+(array([-0.57362276, -0.00194625], dtype=float32), -1.0, False, False, {})</code></pre>
+<p>As you can see, in every step, we get the reward of -1, so the agent needs to learn how to get to the goal as soon as possible to get as little total negative reward as possible. By default, the number of steps is limited to 200, so if we haven’t reached the goal (which happens most of the time), our total reward is <span class="cmsy-10x-x-109">−</span>200.</p>
+<section class="level4 subsectionHead" id="dqn-𝜖-greedy">
+<h2 class="heading-2" id="sigil_toc_id_301"> <span id="x1-33600018.4.1"/>DQN + <span class="cmmi-10x-x-109">𝜖</span>-greedy</h2>
+<p>The first method <span id="dx1-336001"/>that we will use is our traditional <span class="cmmi-10x-x-109">𝜖</span>-greedy approach to exploration. It is implemented in the source file <span class="cmtt-10x-x-109">Chapter18/mcar</span><span class="cmtt-10x-x-109">_dqn.py</span>. I won’t include the source code here, as it is already familiar to you. This program implements various exploration strategies on top of the DQN method, allowing us to select between them using the <span class="cmtt-10x-x-109">-p </span>command-line option. To launch the normal <span class="cmmi-10x-x-109">𝜖</span>-greedy method, the option <span class="cmtt-10x-x-109">-p egreedy </span>needs to be passed. During the training, we are decreasing <span class="cmmi-10x-x-109">𝜖 </span>from 1.0 to 0.02 for the first 10<sup><span class="cmr-8">5</span></sup> training steps.</p>
+<p>The training is quite fast; it takes just two to three minutes to do 10<sup><span class="cmr-8">5</span></sup> training steps. But from the charts shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-336002r4"><span class="cmti-10x-x-109">18.4</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-336003r5"><span class="cmti-10x-x-109">18.5</span></a>, it is obvious that during those 10<sup><span class="cmr-8">5</span></sup> steps, which was 500 episodes, we didn’t reach the goal state even once. That’s really bad news, as our <span class="cmmi-10x-x-109">𝜖 </span>has decayed, so we will do no more exploration in the future.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_04.png" width="600"/> <span id="x1-336002r4"/></p>
+<span class="id">Figure 18.4: The reward (left) and steps (right) during the DQN training with the <span class="cmmi-10x-x-109">𝜖</span>-greedy strategy </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_05.png" width="600"/> <span id="x1-336003r5"/></p>
+<span class="id">Figure 18.5: Epsilon (left) and loss (right) during the training </span>
+</div>
+<p>The 2% of random actions that we still perform are just not enough because it requires dozens of coordinated steps to reach the top of the mountain (the best policy on MountainCar has a total reward of around <span class="cmsy-10x-x-109">−</span>80). We can now continue our training for millions of steps, but the only data we will get from the environment will be episodes, which will take 200 steps with <span class="cmsy-10x-x-109">−</span>200 total reward. This illustrates once more how important exploration is. Regardless of the training method we have, without proper exploration, we might just fail to train. So, what should we do? If <span id="dx1-336004"/>we want to stay with <span class="cmmi-10x-x-109">𝜖</span>-greedy, the only option for us is to explore for longer (by changing the speed of <span class="cmmi-10x-x-109">𝜖 </span>decrease). You can experiment with the hyperparameters of the <span class="cmtt-10x-x-109">-p egreedy </span>mode, but I went to the extreme and implemented the <span class="cmtt-10x-x-109">-p egreedy-long </span>hyperparameter set. In this regime, we keep <span class="cmmi-10x-x-109">𝜖 </span>= 1<span class="cmmi-10x-x-109">.</span>0 until we reach at least one episode with a total reward better than <span class="cmsy-10x-x-109">−</span>200. Once this has happened, we start training the normal way, decreasing <span class="cmmi-10x-x-109">𝜖</span> from 1.0 to 0.02 for subsequent 10<sup><span class="cmr-8">6</span></sup> frames. As we don’t do training, during the initial exploration phase, it normally runs 5 to 10 times faster. To start the training in this mode, we use the following command line: <span class="cmtt-10x-x-109">./mcar</span><span class="cmtt-10x-x-109">_dqn.py -n t1</span> <span class="cmtt-10x-x-109">-p egreedy-long</span>.</p>
+<p>Unfortunately, even with this improvement of <span class="cmmi-10x-x-109">𝜖</span>-greedy, it still failed to solve the environment due to its complexity. I left this version to run for five hours, but after 500k episodes, it still hadn’t faced even a single example of the goal, so I gave up. Of course, you could try it for a longer period.</p>
+</section>
+<section class="level4 subsectionHead" id="dqn-noisy-networks">
+<h2 class="heading-2" id="sigil_toc_id_302"> <span id="x1-33700018.4.2"/>DQN + noisy networks</h2>
+<p>To apply the <span id="dx1-337001"/>noisy networks approach to our MountainCar problem, we just need to replace one of two layers in our network with the <span class="cmtt-10x-x-109">NoisyLinear </span>class, so our architecture will become as follows:</p>
+<pre class="lstlisting" id="listing-485"><code>MountainCarNoisyNetDQN( 
+  (net): Sequential( 
+   (0): Linear(in_features=2, out_features=128, bias=True) 
+   (1): ReLU() 
+   (2): NoisyLinear(in_features=128, out_features=3, bias=True) 
+  ) 
+)</code></pre>
+<p>The only <span id="dx1-337009"/>difference between the <span class="cmtt-10x-x-109">NoisyLinear </span>class and the version from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a> is that this version has an explicit method, <span class="cmtt-10x-x-109">sample</span><span class="cmtt-10x-x-109">_noise()</span>, to update the noise tensors, so we need to call this method on every training iteration; otherwise, the noise will be constant during the training. This modification is needed for future experiments with policy-based methods, which require the noise to be constant during the relatively long period of trajectories. In any case, the modification is simple, and we just need to call this method from time to time. In the case of the DQN method, it is called on every training iteration. As in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, the implementation of <span class="cmtt-10x-x-109">NoisyLinear </span>is taken from the TorchRL library. The code is the same as before, so to activate the noisy networks, you need to run the training with the <span class="cmtt-10x-x-109">-p noisynet </span>command line.</p>
+<p>In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-337010r6"><span class="cmti-10x-x-109">18.6</span></a>, you can see the plots for the three hours of training:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_06.png" width="600"/> <span id="x1-337010r6"/></p>
+<span class="id">Figure 18.6: The training reward (left) and test steps (right) on DQN with noisy networks exploration </span>
+</div>
+<p>As you can see, the training process wasn’t able to reach the mean test reward of <span class="cmsy-10x-x-109">−</span>130 (as required in the code), but after just 7k training steps (20 minutes of training), we discovered the goal state, which is great progress in comparison to <span class="cmmi-10x-x-109">𝜖</span>-greedy, which didn’t find a single instance of the goal state after 5 hours of trial and error.</p>
+<p>From the test steps chart (on the right of <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-337010r6"><span class="cmti-10x-x-109">18.6</span></a>) we can see that there are some tests with less than 100 steps, which is very close to the optimal policy. But they were not often enough to push mean test reward below the <span class="cmsy-10x-x-109">−</span>130 level.</p>
+</section>
+<section class="level4 subsectionHead" id="dqn-state-counts">
+<h2 class="heading-2" id="sigil_toc_id_303"> <span id="x1-33800018.4.3"/>DQN + state counts</h2>
+<p>The last <span id="dx1-338001"/>exploration technique that we will apply to the DQN method is count-based. As our state space is just two floating-point values, we will discretize the observation by rounding values to three digits after the decimal point, which should provide enough precision to distinguish different states from each other but still group similar states together. For every individual state, we will keep the count of times we have seen this state before and use that to give an extra reward to the agent. For an off-policy method, it might not be the best idea to modify rewards during the training, but we will examine the effect.</p>
+<p>As before, I’m not going to provide the full source code; I will just emphasize the differences from the base version. First, we apply the wrapper to the environment to keep track of the counters and calculate the intrinsic reward value. You will find the code for the wrapper is in the <span class="cmtt-10x-x-109">lib/common.py </span>module and it is shown here.</p>
+<p>Let us look at the constructor first:</p>
+<div class="tcolorbox" id="tcolobox-408">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-486"><code>class PseudoCountRewardWrapper(gym.Wrapper): 
+    def __init__(self, env: gym.Env, hash_function = lambda o: o, 
+                 reward_scale: float = 1.0): 
+        super(PseudoCountRewardWrapper, self).__init__(env) 
+        self.hash_function = hash_function 
+        self.reward_scale = reward_scale 
+        self.counts = collections.Counter()</code></pre>
+</div>
+</div>
+<p>In the constructor, we take the environment we want to wrap, the optional hash function to be applied to the observations, and the scale of the intrinsic reward. We also create the container for our counters, which will map the hashed state into the number of times we have seen it.</p>
+<p>Then, we define the helper function:</p>
+<div class="tcolorbox" id="tcolobox-409">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-487"><code>    def _count_observation(self, obs) -&gt; float: 
+        h = self.hash_function(obs) 
+        self.counts[h] += 1 
+        return np.sqrt(1/self.counts[h])</code></pre>
+</div>
+</div>
+<p>This function will calculate the intrinsic reward value of the state. It applies the hash to the observation, updates the counter, and calculates the reward using the formula we have already seen.</p>
+<p>The last method of the wrapper is responsible for the environment step:</p>
+<div class="tcolorbox" id="tcolobox-410">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-488"><code>    def step(self, action): 
+        obs, reward, done, is_tr, info = self.env.step(action) 
+        extra_reward = self._count_observation(obs) 
+        return obs, reward + self.reward_scale * extra_reward, done, is_tr, info</code></pre>
+</div>
+</div>
+<p>Here we call the <span id="dx1-338017"/>helper function to get the reward and return the sum of the extrinsic and intrinsic reward components.</p>
+<p>To apply the wrapper, we need to pass to it the hashing function:</p>
+<div class="tcolorbox" id="tcolobox-411">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-489"><code>def counts_hash(obs: np.ndarray): 
+    r = obs.tolist() 
+    return tuple(map(lambda v: round(v, 3), r))</code></pre>
+</div>
+</div>
+<p>Three digits are probably too many, so you can experiment with a different way of hashing states.</p>
+<p>To start the training, pass <span class="cmtt-10x-x-109">-p counts </span>to the training program. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-338021r7"><span class="cmti-10x-x-109">18.7</span></a>, you can see the charts with training and testing rewards. As the training environment is wrapped in our <span class="cmtt-10x-x-109">PseudoCountReward </span>wrapper, values during training are higher than testing.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_07.png" width="600"/> <span id="x1-338021r7"/></p>
+<span class="id">Figure 18.7: The training reward (left) and test rewards (right) on DQN with pseudo-count reward bonus </span>
+</div>
+<p>As you can see, we weren’t able to get -130 average test reward using this method, but were very close to it. It took it just 10 minutes to discover the goal state, which is also quite impressive.</p>
+</section>
+<section class="level4 subsectionHead" id="ppo-method">
+<h2 class="heading-2" id="sigil_toc_id_304"> <span id="x1-33900018.4.4"/>PPO method</h2>
+<p>Another <span id="dx1-339001"/>set of experiments that we will conduct with our MountainCar problem is related to the on-policy method <span class="cmbx-10x-x-109">Proximal Policy Optimization </span>(<span class="cmbx-10x-x-109">PPO</span>), which we covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch020.xhtml#x1-29000016"><span class="cmti-10x-x-109">16</span></a>. There are several motivations for this choice:</p>
+<ul>
+<li>
+<p>First, as you saw in the DQN method + noisy networks case, when good examples are rare, DQNs have trouble adapting to them quickly. This might be solved by increasing the replay buffer size and switching to the prioritized buffer, or we could try on-policy methods, which adjust the policy immediately according to the obtained experience.</p>
+</li>
+<li>
+<p>Another reason for choosing this method is the modification of the reward during the training. Count-based exploration and policy distillation introduce the intrinsic reward component, which might change over time. The value-based methods might be sensitive to the modification of the underlying reward as, basically, they will need to relearn values during the training. On-policy methods shouldn’t have any problems with that, as an increase of the reward just puts more emphasis on a sample with higher reward in terms of the policy gradient.</p>
+</li>
+<li>
+<p>Finally, it’s just interesting to check our exploration strategies on both families of RL methods.</p>
+</li>
+</ul>
+<p>To implement this approach, in the file <span class="cmtt-10x-x-109">Chapter18/mcar</span><span class="cmtt-10x-x-109">_ppo.py</span>, we have a PPO implementation combined with various exploration strategies applied to MountainCar. The code is not very different from the PPO from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch020.xhtml#x1-29000016"><span class="cmti-10x-x-109">16</span></a>, so I’m not going to repeat it here. To start the normal PPO without extra exploration tweaks, you should run the command <span class="cmtt-10x-x-109">./mcar</span><span class="cmtt-10x-x-109">_ppo.py -n t1 -p</span> <span class="cmtt-10x-x-109">ppo</span>. In this version, nothing specifically is done to perform exploration – we purely rely on random weights initialization in the beginning of the training.</p>
+<p>As a reminder, PPO is in the policy gradient methods family, which limits Kullback-Leibler divergence between the old and new policy during the training, avoiding dramatic policy updates. Our network has two heads: the actor and the critic. The actor network returns the probability distribution over our actions (our policy) and the critic estimates the value of the state. The critic is trained using MSE loss, while the actor is driven by the PPO surrogate objective we discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch020.xhtml#x1-29000016"><span class="cmti-10x-x-109">16</span></a>. In addition to those two losses, we regularize the policy by applying entropy loss scaled by the hyperparameter <span class="cmmi-10x-x-109">β</span>. There is nothing new here so far. The following is the PPO network structure:</p>
+<pre class="lstlisting" id="listing-490"><code>MountainCarBasePPO( 
+  (actor): Sequential( 
+   (0): Linear(in_features=2, out_features=64, bias=True) 
+   (1): ReLU() 
+   (2): Linear(in_features=64, out_features=3, bias=True) 
+  ) 
+  (critic): Sequential( 
+   (0): Linear(in_features=2, out_features=64, bias=True) 
+   (1): ReLU() 
+   (2): Linear(in_features=64, out_features=1, bias=True) 
+  ) 
+)</code></pre>
+<p>I stopped the <span id="dx1-339014"/>training after three hours, as it showed no improvements. The goal state was found after an hour and 30k episodes. The charts in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-339015r8"><span class="cmti-10x-x-109">18.8</span></a> show the reward dynamics during the training:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_08.png" width="600"/> <span id="x1-339015r8"/></p>
+<span class="id">Figure 18.8: The training reward (left) and test rewards (right) on plain PPO </span>
+</div>
+<p>As the PPO result wasn’t very impressive, let’s try to extend it with extra exploration tricks.</p>
+</section>
+<section class="level4 subsectionHead" id="ppo-noisy-networks">
+<h2 class="heading-2" id="sigil_toc_id_305"> <span id="x1-34000018.4.5"/>PPO + Noisy Networks</h2>
+<p>As with the <span id="dx1-340001"/>DQN method, we can apply the noisy networks exploration approach to our PPO method. To do that, we need to replace the output layer of the actor with the <span class="cmtt-10x-x-109">NoisyLinear </span>layer. Only the actor network needs to be affected because we would like to inject the noisiness only into the policy and not into the value estimation.</p>
+<p>There is one subtle nuance related to the application of noisy networks: where the random noise needs to be sampled. In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, when you first met noisy networks, the noise was sampled on every <span class="cmtt-10x-x-109">forward() </span>pass of the NoisyLinear layer. According to the original research paper, this is fine for off-policy methods, but for on-policy methods, it needs to be done differently. Indeed, when we train on-policy, we obtain the training samples produced by our current policy and calculate the policy gradient, which should push the policy toward improvement. The goal of noisy networks is to inject randomness, but as we have discussed, we prefer directed exploration over just a random change of policy after every step. With that in mind, our random component in the <span class="cmtt-10x-x-109">NoisyLinear </span>layer needs to be updated not after every <span class="cmtt-10x-x-109">forward() </span>pass, but much less frequently. In my code, I resampled the noise on every PPO batch, which was 2,048 transitions.</p>
+<p>As before, I <span id="dx1-340002"/>trained PPO+NoisyNets for 3 hours. But in this case, the goal state was found after 30 minutes and 18k episodes, which is a better result. In addition, according to the train steps count, the training process was able to drive the car in the optimal way a couple of times (with a step count less than 100). But these successes did not lead to the optimal policy at the end. The charts in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-340003r9"><span class="cmti-10x-x-109">18.9</span></a> show the reward dynamics during the training:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_09.png" width="600"/> <span id="x1-340003r9"/></p>
+<span class="id">Figure 18.9: The training reward (left) and test rewards (right) on PPO with Noisy Networks </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="ppo-state-counts">
+<h2 class="heading-2" id="sigil_toc_id_306"> <span id="x1-34100018.4.6"/>PPO + state counts</h2>
+<p>In this case, exactly <span id="dx1-341001"/>the same count-based approach with three-digit hashing is implemented for the PPO method and can be triggered by passing <span class="cmtt-10x-x-109">-p counts </span>to the training process.</p>
+<p>In my experiments, the method was able to solve the environment (get an average reward higher than -130) in 1.5 hours, and it required 61k episodes. The following is the final part of the console output:</p>
+<pre class="lstlisting" id="listing-491"><code>Episode 61454: reward=-159.17, steps=168, speed=4581.6 f/s, elapsed=1:37:18 
+Episode 61455: reward=-158.46, steps=164, speed=4609.0 f/s, elapsed=1:37:18 
+Episode 61456: reward=-158.41, steps=164, speed=4582.3 f/s, elapsed=1:37:18 
+Episode 61457: reward=-152.73, steps=158, speed=4556.4 f/s, elapsed=1:37:18 
+Episode 61458: reward=-154.08, steps=159, speed=4548.1 f/s, elapsed=1:37:18 
+Episode 61459: reward=-154.85, steps=162, speed=4513.0 f/s, elapsed=1:37:18 
+Test done: got -91.000 reward after 91 steps, avg reward -129.999 
+Reward boundary has crossed, stopping training. Congrats!</code></pre>
+<p>As you can see from the plots in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-341011r10"><span class="cmti-10x-x-109">18.10</span></a>, the training <span id="dx1-341010"/>discovered the goal state after 23k episodes. It took another 40k episodes to polish the policy to the optimal count of steps:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_10.png" width="600"/> <span id="x1-341011r10"/></p>
+<span class="id">Figure 18.10: The training reward (left) and test rewards (right) on PPO with pseudo-count reward bonus </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="ppo-network-distillation">
+<h2 class="heading-2" id="sigil_toc_id_307"> <span id="x1-34200018.4.7"/>PPO + network distillation</h2>
+<p>As the final <span id="dx1-342001"/>exploration method in our MountainCar experiment, I implemented the network distillation method proposed by Burda et al. [<span id="x1-342002"/><a href="#">Bur+18</a>]. In this method, two extra NNs are introduced. Both need to map the observation into one number, in the same way that our value head does. The difference is in the way they are used. The first NN is randomly initialized and kept untrained. This will be our reference NN. The second one is trained to minimize the MSE loss between the second and the first NN. In addition, the absolute difference between the outputs of the NNs is used as the intrinsic reward component.</p>
+<p>The idea behind this is that the better the agent has explored some state, the better our second (trained) NN will predict the output of the first (untrained) one. This will lead to a smaller intrinsic reward being added to the total reward, which will decrease the policy gradient assigned to the sample.</p>
+<p>In the paper, the authors suggested training separate value heads to predict separate intrinsic and extrinsic reward components, but for this example, I decided to keep it simple and just added both rewards in the wrapper, the same way that we did in the counter-based exploration method. This minimizes the number of modifications in the code.</p>
+<p>In terms of those extra NN architectures, I did a small experiment and tried several architectures for both NNs. The best results were obtained with the reference NN having three layers and the trained NN having just one layer. This helps to prevent the overfitting of the trained NN, as our observation space is not very large. Both NNs are implemented in the <span class="cmtt-10x-x-109">MountainCarNetDistillery </span>class in the <span class="cmtt-10x-x-109">lib/ppo.py </span>module:</p>
+<div class="tcolorbox" id="tcolobox-412">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-492"><code>class MountainCarNetDistillery(nn.Module): 
+    def __init__(self, obs_size: int, hid_size: int = 128): 
+        super(MountainCarNetDistillery, self).__init__() 
+ 
+        self.ref_net = nn.Sequential( 
+            nn.Linear(obs_size, hid_size), 
+            nn.ReLU(), 
+            nn.Linear(hid_size, hid_size), 
+            nn.ReLU(), 
+            nn.Linear(hid_size, 1), 
+        ) 
+        self.ref_net.train(False) 
+ 
+        self.trn_net = nn.Sequential( 
+            nn.Linear(obs_size, 1), 
+        ) 
+ 
+    def forward(self, x): 
+        return self.ref_net(x), self.trn_net(x) 
+ 
+    def extra_reward(self, obs): 
+        r1, r2 = self.forward(torch.FloatTensor([obs])) 
+        return (r1 - r2).abs().detach().numpy()[0][0] 
+ 
+    def loss(self, obs_t): 
+        r1_t, r2_t = self.forward(obs_t) 
+        return F.mse_loss(r2_t, r1_t).mean()</code></pre>
+</div>
+</div>
+<p>Besides the <span class="cmtt-10x-x-109">forward() </span>method, which returns the output <span id="dx1-342030"/>from both NNs, the class includes two helper methods for intrinsic reward calculation and for getting the loss between two NNs.</p>
+<p>To start the training, the argument <span class="cmtt-10x-x-109">-p distill </span>needs to be passed to the <span class="cmtt-10x-x-109">mcar</span><span class="cmtt-10x-x-109">_ppo.py </span>program. In my experiment, 33k episodes were required to solve the problem, which is almost two times less than Noisy Networks. As discussed in earlier chapters, there might be some bugs and inefficiencies in my implementation, so you’re welcome to modify it to make it faster and more efficient:</p>
+<pre class="lstlisting" id="listing-493"><code>Episode 33566: reward=-93.27, steps=149, speed=2962.8 f/s, elapsed=1:23:48 
+Episode 33567: reward=-82.13, steps=144, speed=2968.6 f/s, elapsed=1:23:48 
+Episode 33568: reward=-83.77, steps=143, speed=2973.7 f/s, elapsed=1:23:48 
+Episode 33569: reward=-93.59, steps=160, speed=2974.0 f/s, elapsed=1:23:48 
+Episode 33570: reward=-83.04, steps=143, speed=2979.7 f/s, elapsed=1:23:48 
+Episode 33571: reward=-97.96, steps=158, speed=2984.5 f/s, elapsed=1:23:48 
+Episode 33572: reward=-92.60, steps=150, speed=2989.8 f/s, elapsed=1:23:48 
+Test done: got -87.000 reward after 87 steps, avg reward -129.549 
+Reward boundary has crossed, stopping training. Congrats!</code></pre>
+<p>The plots with the training and testing rewards are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-342040r11"><span class="cmti-10x-x-109">18.11</span></a>. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-342041r12"><span class="cmti-10x-x-109">18.12</span></a>, the total loss and distillation loss are shown.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_11.png" width="600"/> <span id="x1-342040r11"/></p>
+<span class="id">Figure 18.11: The training reward (left) and test rewards (right) on PPO with network distillation </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_12.png" width="600"/> <span id="x1-342041r12"/></p>
+<span class="id">Figure 18.12: The total loss (left) and distillation loss (right) </span>
+</div>
+<p>As before, due <span id="dx1-342042"/>to the intrinsic reward component, the training episodes have a higher reward on the plots. From the distillation loss plot, it is clear that before the agent discovered the goal state, everything was boring and predictable, but once it had figured out how to end the episode earlier than 200 steps, the loss grew significantly.</p>
+</section>
+<section class="level4 subsectionHead" id="comparison-of-methods">
+<h2 class="heading-2" id="sigil_toc_id_308"> <span id="x1-34300018.4.8"/>Comparison of methods</h2>
+<p>To simplify the comparison of the experiments we’ve done on MountainCar, I put all the numbers into the following table:</p>
+<div class="table">
+<figure class="float">
+<div class="center">
+<div class="tabular">
+<table class="table-container" id="TBL-6">
+<tbody>
+<tr id="TBL-6-1-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-1-1">
+<div class="multirow"> Method </div>
+</td>
+<td class="table-cell" colspan="2" id="TBL-6-1-2">
+<div class="multicolumn" style="white-space:nowrap; text-align:center;"> Goal state found </div>
+</td>
+<td class="table-cell" colspan="2" id="TBL-6-1-4">
+<div class="multicolumn" style="white-space:nowrap; text-align:center;"> Solved </div>
+</td>
+</tr>
+<tr id="TBL-6-3-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-3-1"/>
+<td class="table-cell" id="TBL-6-3-2">Episodes</td>
+<td class="table-cell" id="TBL-6-3-3">Time</td>
+<td class="table-cell" id="TBL-6-3-4">Episodes</td>
+<td class="table-cell" id="TBL-6-3-5">Time</td>
+</tr>
+<tr id="TBL-6-4-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-4-1">DQN + <span class="cmmi-10x-x-109">𝜖</span>-greedy</td>
+<td class="table-cell" id="TBL-6-4-2">x</td>
+<td class="table-cell" id="TBL-6-4-3">x</td>
+<td class="table-cell" id="TBL-6-4-4">x</td>
+<td class="table-cell" id="TBL-6-4-5">x</td>
+</tr>
+<tr id="TBL-6-5-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-5-1">DQN + noisy nets</td>
+<td class="table-cell" id="TBL-6-5-2">8k</td>
+<td class="table-cell" id="TBL-6-5-3">15 min</td>
+<td class="table-cell" id="TBL-6-5-4">x</td>
+<td class="table-cell" id="TBL-6-5-5">x</td>
+</tr>
+<tr id="TBL-6-6-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-6-1">PPO</td>
+<td class="table-cell" id="TBL-6-6-2">40k</td>
+<td class="table-cell" id="TBL-6-6-3">60 min</td>
+<td class="table-cell" id="TBL-6-6-4">x</td>
+<td class="table-cell" id="TBL-6-6-5">x</td>
+</tr>
+<tr id="TBL-6-7-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-7-1">PPO + noisy nets</td>
+<td class="table-cell" id="TBL-6-7-2">20k</td>
+<td class="table-cell" id="TBL-6-7-3">30 min</td>
+<td class="table-cell" id="TBL-6-7-4">x</td>
+<td class="table-cell" id="TBL-6-7-5">x</td>
+</tr>
+<tr id="TBL-6-8-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-8-1">PPO + counts</td>
+<td class="table-cell" id="TBL-6-8-2">25k</td>
+<td class="table-cell" id="TBL-6-8-3">36 min</td>
+<td class="table-cell" id="TBL-6-8-4">61k</td>
+<td class="table-cell" id="TBL-6-8-5">90 min</td>
+</tr>
+<tr id="TBL-6-9-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-6-9-1">PPO + distillation</td>
+<td class="table-cell" id="TBL-6-9-2">16k</td>
+<td class="table-cell" id="TBL-6-9-3">36 min</td>
+<td class="table-cell" id="TBL-6-9-4">33k</td>
+<td class="table-cell" id="TBL-6-9-5">84 min</td>
+</tr>
+</tbody>
+</table>
+</div>
+<span id="x1-343001r1"/>
+<span class="id">Table 18.1: Summary of experiments </span>
+</div>
+</figure>
+</div>
+<p>As you can see, both DQN and PPO with exploration extensions are able to solve the MountainCar environment. Concrete method selection is up to you and your concrete situation, but it is important to be aware of the different approaches to the exploration you might use.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="atari-experiments">
+<h1 class="heading-1" id="sigil_toc_id_309"> <span id="x1-34400018.5"/>Atari experiments</h1>
+<p>The MountainCar environment is a nice and fast way to experiment with exploration methods, but to <span id="dx1-344001"/>conclude the chapter, I’ve included Atari versions of the DQN and PPO methods with the exploration tweaks we described to check a more complicated environment.</p>
+<p>As the primary environment, I’ve used Seaquest, which is a game where the submarine needs to shoot fish and enemy submarines, and save aquanauts. This game is not as famous as Montezuma’s Revenge, but it still might be considered as medium-hard exploration because, to continue the game, you need to control the level of oxygen. When it becomes low, the submarine needs to rise to the surface for some time. Without this, the episode will end after 560 steps and with a maximum reward of 20. But once the agent learns how to replenish the oxygen, the game might continue almost infinitely and bring to the agent a 10k-100k score. Surprisingly, traditional exploration methods struggle with discovering this; normally, training gets stuck at 560 steps, after which the oxygen runs out and the submarine dies.</p>
+<div class="tcolorbox tipbox" id="tcolobox-413">
+<div class="tcolorbox-content"> The negative aspect of Atari is that every experiment requires at least half a day of training to check the effect, so my code and hyperparameters are very far from being the best, but they might be useful as a starting point for your own experiments. Of course, if you discover a way to improve the code, please share your findings on GitHub. </div>
+</div>
+<p>As before, there are two program files: <span class="cmtt-10x-x-109">atari</span><span class="cmtt-10x-x-109">_dqn.py</span>, which implements the DQN method with <span class="cmmi-10x-x-109">𝜖</span>-greedy and noisy networks exploration, and <span class="cmtt-10x-x-109">atari</span><span class="cmtt-10x-x-109">_ppo.py</span>, which is the PPO method with optional noisy networks and the network distillation method. To switch between hyperparameters, the command-line option <span class="cmtt-10x-x-109">-p </span>needs to be used.</p>
+<p>In the following sections, let us look at the results that I got from a few runs of the code.</p>
+<section class="level4 subsectionHead" id="dqn-𝜖-greedy-1">
+<h2 class="heading-2" id="sigil_toc_id_310"> <span id="x1-34500018.5.1"/>DQN + <span class="cmmi-10x-x-109">𝜖</span>-greedy</h2>
+<p>In comparison to other methods tried on Atari, <span class="cmmi-10x-x-109">𝜖</span>-greedy was the best, which might be surprising, as it gave s the worst results in the MountainCar experiment earlier in this chapter. But this happens quite often in reality and can lead to new directions of research and even breakthroughs. After 13 hours <span id="dx1-345001"/>of training, it was able to reach an average reward of 18 with a maximum reward of 25. According to the chart showing the number of steps, just a few episodes were able to discover how to get the oxygen so, maybe with more training, this method can break the 560-step boundary. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-345002r13"><span class="cmti-10x-x-109">18.13</span></a>, the plots with the average reward and number of steps are shown:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_13.png" width="600"/> <span id="x1-345002r13"/></p>
+<span class="id">Figure 18.13: The average training reward (left) and count of steps (right) on DQN with <span class="cmmi-10x-x-109">𝜖</span>-greedy </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="dqn-noisy-networks-1">
+<h2 class="heading-2" id="sigil_toc_id_311"> <span id="x1-34600018.5.2"/>DQN + noisy networks</h2>
+<p>Noisy networks <span id="dx1-346001"/>combined with DQN showed worse results — after 6 hours of training, it was able to reach a reward of 6. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-346002r14"><span class="cmti-10x-x-109">18.14</span></a>, the plots are shown:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_18_14.png" width="600"/> <span id="x1-346002r14"/></p>
+<span class="id">Figure 18.14: The average training reward (left) and count of steps (right) on DQN with noisy networks </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="ppo-1">
+<h2 class="heading-2" id="sigil_toc_id_312"> <span id="x1-34700018.5.3"/>PPO</h2>
+<p>PPO experiments were <span id="dx1-347001"/>much worse — all the combinations (vanilla PPO, noisy networks, and network distillation) showed no reward progress and were able to reach an average reward of 4. This is a bit surprising, as experiments with the same code in the previous edition of the book were able to get better results. This might be an indication of some subtle bugs in the code or in the training environment I used. Feel free to experiment with these methods by yourself!</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="summary-17">
+<h1 class="heading-1" id="sigil_toc_id_313"> <span id="x1-34800018.6"/>Summary</h1>
+<p>In this chapter, we discussed why <span class="cmmi-10x-x-109">𝜖</span>-greedy exploration is not the best in some cases and checked alternative modern approaches for exploration. The topic of exploration is much wider and lots of interesting methods are left uncovered, but I hope you were able to get an overall impression of the new methods and the way they should be implemented and used in your own problems.</p>
+<p>In the next chapter, we’ll take a look at another approach to the exploration in complex enviroments: <span class="cmbx-10x-x-109">RL with human feedback </span>(<span class="cmbx-10x-x-109">RLHF</span>).</p>
+</section>
+</section>
+</div></body></html>

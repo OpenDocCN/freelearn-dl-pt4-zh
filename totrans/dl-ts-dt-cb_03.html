@@ -1,0 +1,906 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer018">
+			<h1 id="_idParaDest-111" class="chapter-number"><a id="_idTextAnchor178"/>3</h1>
+			<h1 id="_idParaDest-112"><a id="_idTextAnchor179"/>Univariate Time Series Forecasting</h1>
+			<p>In this chapter, we’ll develop deep learning models to tackle univariate time series forecasting problems. We’ll touch on several aspects of time series preprocessing, such as preparing a time series for supervised learning and dealing with conditions such as trend <span class="No-Break">or seasonality<a id="_idTextAnchor180"/><a id="_idTextAnchor181"/>.</span></p>
+			<p>We’ll cover different types of models, including simple baselines such as the naïve or historical mean method. We’ll provide a brief background on a popular forecasting technique, <strong class="bold">autoregressive integrated moving average</strong> (<strong class="bold">ARIMA</strong>). Then, we’ll explain how to create a forecasting model using different types of deep learning methods. These include feedforward neural networks, <strong class="bold">long short-term memory</strong> (<strong class="bold">LSTM</strong>), <strong class="bold">gated recurrent units</strong> (<strong class="bold">GRU</strong>), Stacked <strong class="bold">LSTM</strong>, and <strong class="bold">convolutional neural networks</strong> (<strong class="bold">CNNs</strong>). You will also learn how to deal with common problems that arise in time series modeling; for example, how to deal with trend using first differences, and how to stabilize the variance using a logarithm transformation. By the end of this chapter, you will be able to solve a univariate time series <span class="No-Break">forecasting problem.</span></p>
+			<p>This chapter will guide you through the <span class="No-Break">following recipes:</span></p>
+			<ul>
+				<li>Building simple <span class="No-Break">forecasting models</span></li>
+				<li>Univariate forecasting <span class="No-Break">with ARIMA</span></li>
+				<li>Preparing a time series for <span class="No-Break">supervised learning</span></li>
+				<li>Univariate forecasting with a feedforward <span class="No-Break">neural network</span></li>
+				<li>Univariate forecasting with <span class="No-Break">an LSTM</span></li>
+				<li>Univariate forecasting with <span class="No-Break">a GRU</span></li>
+				<li>Univariate forecasting with a <span class="No-Break">Stacked LSTM</span></li>
+				<li>Combining an LSTM with multiple fully <span class="No-Break">connected layers</span></li>
+				<li>Univariate forecasting with <span class="No-Break">a CNN</span></li>
+				<li>Handling trend – taking <span class="No-Break">first differences</span></li>
+				<li>Handling seasonality – seasonal dummies and a <span class="No-Break">Fourier series</span></li>
+				<li>Handling seasonality – <span class="No-Break">seasonal differencing</span></li>
+				<li>Handling seasonality – <span class="No-Break">seasonal decomposition</span></li>
+				<li>Handling non-constant variance – <span class="No-Break">log transformation</span></li>
+			</ul>
+			<h1 id="_idParaDest-113"><a id="_idTextAnchor182"/>Technical requirements</h1>
+			<p>Before diving into univariate time series forecasting problems, we need to ensure that we have the appropriate software and libraries installed on our system. Here, we’ll go over the main technical requirements for implementing the procedures described in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li>We will primarily need Python 3.9 or a later version, <strong class="source-inline">pip</strong> or Anaconda, PyTorch, and CUDA (optional). You can check the <em class="italic">Installing PyTorch</em> recipe from the previous chapter for more information <span class="No-Break">on these.</span></li>
+				<li>NumPy (1.26.3) and pandas (2.1.4): Both these <strong class="source-inline">Python</strong> libraries provide several methods for data manipulation <span class="No-Break">and analysis.</span></li>
+				<li><strong class="source-inline">statsmodels</strong> (0.14.1): This library implements several statistical methods, including a few useful time series <span class="No-Break">analysis techniques.</span></li>
+				<li><strong class="source-inline">scikit-learn</strong> (1.4.0): <strong class="source-inline">scikit-learn</strong> is a popular <strong class="source-inline">Python</strong> library for statistical learning. It contains several methods to solve different tasks, such as classification, regression, <span class="No-Break">and clustering.</span></li>
+				<li><strong class="source-inline">sktime</strong> (0.26.0): A Python library that provides a framework for tackling several problems involving <span class="No-Break">time series.</span></li>
+			</ul>
+			<p>You can install these libraries using <strong class="source-inline">pip</strong>, Python’s package manager. For example, to install <strong class="source-inline">scikit-learn</strong>, you would run the <span class="No-Break">following code:</span></p>
+			<pre class="console">
+pip install -U scikit-learn</pre>			<p>The code for this chapter can be found at the following GitHub <span class="No-Break">URL: </span><a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook"><span class="No-Break">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-114"><a id="_idTextAnchor183"/><a id="_idTextAnchor184"/>Building simple forecasting models</h1>
+			<p>Before diving <a id="_idIndexMarker081"/>into more complex methods, let’s get started with some simple forecasting models: the naive, seasonal naive, and <span class="No-Break">mean models.</span><a id="_idTextAnchor185"/></p>
+			<h2 id="_idParaDest-115"><a id="_idTextAnchor186"/>Getting ready</h2>
+			<p>In this chapter, we focus on forecasting problems involving univariate time series. Let’s start by loading one of the datasets we explored in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a><span class="No-Break">:</span></p>
+			<pre class="source-code">
+import pandas as pd
+serie = pd.read_csv(
+    "assets/datasets/time_series_solar.csv",
+    parse_dates=["Datetime"],
+    index_col="Datetime",
+)['Incoming Solar']</pre>			<p>In the preceding code, <strong class="source-inline">series</strong> is a <strong class="source-inline">pandas Series</strong> object that contains the univariate <span class="No-Break">time series.</span><a id="_idTextAnchor187"/></p>
+			<h2 id="_idParaDest-116"><a id="_idTextAnchor188"/>How to do it…</h2>
+			<p>We can now forecast our time series using the three <span class="No-Break">following methods:</span></p>
+			<ul>
+				<li><strong class="bold">Naive</strong>: The <a id="_idIndexMarker082"/>simplest forecasting method is the naive approach. This method assumes that the next observation is the same as the last one. In <strong class="source-inline">Python</strong>, it could be implemented as simply as <span class="No-Break">the following:</span><pre class="source-code">
+series.shift(1)</pre></li>				<li><strong class="bold">Seasonal naive</strong>: This approach assumes that the future observation will be similar<a id="_idIndexMarker083"/> to the one observed in the previous observation from the same season. For example, the forecast for the next summer uses the data from the previous summer. If your season is of length <strong class="source-inline">m</strong>, in <strong class="source-inline">Python</strong>, this can be done <span class="No-Break">as follows:</span><pre class="source-code">
+m = 12
+series.shift(<a id="_idTextAnchor189"/>m)</pre></li>				<li><strong class="bold">Mean</strong>: The historical <a id="_idIndexMarker084"/>mean model, on the other hand, takes the average of all past observations as the forecast. This can be simply done in <strong class="source-inline">Python</strong> <span class="No-Break">as follows:</span><pre class="source-code">
+series.expanding().mean()</pre></li>			</ul>
+			<p>These three<a id="_idIndexMarker085"/> methods are useful baselines to benchmark the performance of other, more complex, <span class="No-Break">forecasting solutions.</span></p>
+			<h2 id="_idParaDest-117"><a id="_idTextAnchor190"/>How it works…</h2>
+			<p>Each of these simple models makes an assumption about the time <span class="No-Break">series data:</span></p>
+			<ul>
+				<li>The naive model assumes that the series is random and that each observation is independent of the <span class="No-Break">previous ones</span></li>
+				<li>The seasonal naive model adds a little complexity by recognizing patterns at fixed intervals <span class="No-Break">or “seasons”</span></li>
+				<li>The mean model assumes that the series oscillates around a constant mean, and future values will regress to <span class="No-Break">this mean</span></li>
+			</ul>
+			<h2 id="_idParaDest-118"><a id="_idTextAnchor191"/>There’s more…</h2>
+			<p>While these simple models might seem overly basic, they serve two <span class="No-Break">critical purposes:</span></p>
+			<ul>
+				<li><strong class="bold">Baselines</strong>: Simple models <a id="_idIndexMarker086"/>such as these are often used as baselines for more sophisticated models. If a complex model cannot outperform these simple methods, it suggests that the complex model might be flawed or that the time series data does not contain <span class="No-Break">predictable patterns.</span></li>
+				<li><strong class="bold">Understanding data</strong>: These <a id="_idIndexMarker087"/>models can also help us understand our data. If time series data can be well forecasted by a naive or mean model, it suggests that the data may be random or fluctuate around a <span class="No-Break">constant mean.</span></li>
+			</ul>
+			<p>Implementing<a id="_idIndexMarker088"/> simple forecasting models such as naive, seasonal naive, and historical mean models can be quite straightforward, but it may be beneficial to leverage existing libraries that provide off-the-shelf implementations of these models. These libraries not only simplify the implementation but also often come with additional features such as built-in model validation, optimization, and <span class="No-Break">other utilities.</span></p>
+			<p>Here are two examples of libraries that provide <span class="No-Break">these models:</span></p>
+			<ul>
+				<li>GluonTS: GluonTS is a <strong class="source-inline">Python</strong> library<a id="_idIndexMarker089"/> focused on probabilistic models for time series. Among other models, there is an implementation of the seasonal naive model, which can be found at the following <span class="No-Break">link: </span><a href="https://ts.gluon.ai/dev/api/gluonts/gluonts.model.seasonal_naive.html"><span class="No-Break">https://ts.gluon.ai/dev/api/gluonts/gluonts.model.seasonal_naive.html</span></a><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">sktime</strong>: This<a id="_idIndexMarker090"/> library provides a framework to develop different types of models with time series data. This includes a <strong class="source-inline">NaiveForecaster</strong><strong class="source-inline">()</strong> method, which implements several baselines. You can read more about this method at the following <span class="No-Break">URL: </span><a href="https://www.sktime.net/en/stable/api_reference/auto_generated/sktime.forecasting.naive.NaiveForecaster.html"><span class="No-Break">https://www.sktime.net/en/stable/api_reference/auto_generated/sktime.forecasting.naive.NaiveForecaster.html</span></a><span class="No-Break">.</span></li>
+				<li>PyTorch Forecasting: This library focuses on developing state-of-the-art time<a id="_idIndexMarker091"/> series forecasting models with neural networks for both real-world cases and research. PyTorch Forecasting provides a baseline model class, which uses the last known target value as the prediction. This class can be found at the following <span class="No-Break">link: </span><a href="https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.baseline.Baseline.html"><span class="No-Break">https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.baseline.Baseline.html</span></a><span class="No-Break">.</span></li>
+			</ul>
+			<p>The preceding libraries can be a great starting point when you are working on a forecasting task. They not only provide implementations of simple forecasting models but also contain many other sophisticated models and utilities that can help streamline the process of developing and validating time series <span class="No-Break">forecasting models.</span></p>
+			<p>In the next recipes, we will see how these assumptions can be relaxed or extended to build more <span class="No-Break">compl<a id="_idTextAnchor192"/><a id="_idTextAnchor193"/>ex models.</span></p>
+			<h1 id="_idParaDest-119"><a id="_idTextAnchor194"/>Univariate forecasting with ARIMA</h1>
+			<p>ARIMA is<a id="_idIndexMarker092"/> a univariate <a id="_idIndexMarker093"/>time series forecasting method based on two components: an autoregression part and a moving average part. In autoregression, a <strong class="bold">lag</strong> refers to a previous point or points in the time series data that are used<a id="_idIndexMarker094"/> to predict future values. For instance, if we’re using a lag of one, we’d use the value observed in the previous time step to model a given observation. The moving average part uses past errors to model the future observations of the<a id="_idTextAnchor195"/> <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-120"><a id="_idTextAnchor196"/>Getting ready</h2>
+			<p>To work with <a id="_idIndexMarker095"/>the ARIMA model, you’ll need to install the <strong class="source-inline">statsmodels</strong> Python package if it’s not already installed. You can install it <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pip</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+pip install -U statsmodels</pre>			<p>For this recipe, we’ll use the same dataset as in the <span class="No-Break">pr<a id="_idTextAnchor197"/>evious recipe.</span></p>
+			<h2 id="_idParaDest-121"><a id="_idTextAnchor198"/>How to do it…</h2>
+			<p>In Python, you can use the ARIMA model from the <strong class="source-inline">statsmodels</strong> library. Here’s a basic example of how to fit an <span class="No-Break">ARIMA model:</span></p>
+			<pre class="source-code">
+import pandas as pd
+from statsmodels.tsa.arima.model import ARIMA
+series = pd.read_csv(
+    "assets/datasets/time_series_solar.csv",
+    parse_dates=["Datetime"],
+    index_col="Datetime",
+)['Incoming Solar']
+model = ARIMA(series, order=(1, 1, 1), freq='H')
+model_fit = model.fit()
+forecasts = model_fit.predict(start=0, end=5,<a id="_idTextAnchor199"/> typ='levels')</pre>			<h2 id="_idParaDest-122"><a id="_idTextAnchor200"/>How it works…</h2>
+			<p>ARIMA <a id="_idIndexMarker096"/>models explain a time series based on its past values. They <a id="_idIndexMarker097"/>combine aspects of <strong class="bold">autoregressive</strong> (<strong class="bold">AR</strong>) models, <strong class="bold">integrated</strong> (<strong class="bold">I</strong>) models, and <strong class="bold">moving average </strong>(<span class="No-Break"><strong class="bold">MA</strong></span><span class="No-Break">) models:</span></p>
+			<ul>
+				<li>The AR <a id="_idIndexMarker098"/>part involves a regression where the next value of the time series is modeled based on the previous <span class="No-Break"><strong class="source-inline">p</strong></span><span class="No-Break"> lags.</span></li>
+				<li>ARIMA is defined for stationary data, so it may be necessary to preprocess the data before modeling. This is done by the I part, which represents the number of differencing operations (<strong class="source-inline">d</strong>) required to make the <span class="No-Break">series stationary.</span></li>
+				<li>The MA component is another regression where the next value of the series is modeled based on the past <span class="No-Break"><strong class="source-inline">q</strong></span><span class="No-Break"> errors.</span></li>
+			</ul>
+			<p>The order of these operations is represented as a tuple (<strong class="source-inline">p, d, q</strong>). The best combination depends on the input data. In this example, we used a (<strong class="source-inline">1, 1, 1</strong>) order as <span class="No-Break">an example.</span></p>
+			<p>A prediction is made for the next six observations into the future using the <strong class="source-inline">model_fit.predict()</strong> function. The start and end indices for the prediction are set to <strong class="source-inline">0</strong> and <strong class="source-inline">5</strong>, respectively. The <strong class="source-inline">typ='levels'</strong> parameter is used to return the predicted values directly rather than <span class="No-Break">di<a id="_idTextAnchor201"/>fferenced values.</span></p>
+			<h2 id="_idParaDest-123"><a id="_idTextAnchor202"/>There’s more…</h2>
+			<p>Determining the ARIMA model’s correct order (<strong class="source-inline">p, d, q</strong>) can be challenging. This often involves checking<a id="_idIndexMarker099"/> the <strong class="bold">autocorrelation function</strong> (<strong class="bold">ACF</strong>) and the <strong class="bold">partial autocorrelation function</strong> (<strong class="bold">PACF</strong>) plots. As we saw in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, the ACF <a id="_idIndexMarker100"/>measures the correlation of a time series and its lagged version. For example, an ACF of lag <strong class="source-inline">2</strong> measures the correlation between a time series and its values in two time periods in the past. On the other hand, the PACF measures autocorrelation while controlling for previous lags. This means a PACF at lag <strong class="source-inline">2</strong> measures the correlation between a series and its values two time periods ago but with the linear dependence of the one time period lag removed. You can learn more about this at the following URL: <a href="https://otexts.com/fpp3/acf.html">https://otexts.com/fpp3/acf.html</a>. By examining the ACF and PACF plots, we can better understand the underlying patterns of a time series and thus make more <span class="No-Break">accurate </span><span class="No-Break"><a id="_idIndexMarker101"/></span><span class="No-Break">predictions.</span></p>
+			<p>Also, the <a id="_idIndexMarker102"/>ARIMA model assumes that the time series is stationary, which might not always be true. Thus, it may be necessary to use transformations such as differencing or the log to make the time series stationary before fitting the <span class="No-Break">ARIMA model.</span></p>
+			<p>The <strong class="bold">seasonal ARIMA</strong> model is <a id="_idIndexMarker103"/>commonly used for non-stationary time series with a seasonal component. This model adds a set of parameters to model the seasonal components of the time <span class="No-Break">series specifically.</span></p>
+			<p>Note that there are automated ways to tune the parameters of ARIMA. One popular approach is to use the <strong class="source-inline">pmdarima</strong> library’s <strong class="source-inline">auto_arima()</strong> function. Another useful implementation is the one available in the <strong class="source-inline">statsforecast</strong> package. You can check it out at the following <span class="No-Break">URL: </span><a href="https://nixtlaverse.nixtla.io/statsforecast/index.html"><span class="No-Break">https://nixtlaverse.nixtla.io/statsforecast/index.html</span></a><span class="No-Break">.</span></p>
+			<p>Besides ARIMA, you can also explore exponential smoothing methods, which is another popular classical approach to forecasting. The implementation of exponential smoothing approaches is also available in <strong class="source-inline">statsmodels</strong> or <strong class="source-inline">statsforecast</strong>, <span class="No-Break">for example.</span></p>
+			<h1 id="_idParaDest-124"><a id="_idTextAnchor203"/>Preparing a time series for supervised learning</h1>
+			<p>In this recipe, we <a id="_idIndexMarker104"/>turn our attention to <a id="_idIndexMarker105"/>machine learning approaches to forecasting. We start by describing the process of transforming a time series from a sequence of values into a format suitable for <span class="No-Break">supervised learning.</span></p>
+			<h2 id="_idParaDest-125"><a id="_idTextAnchor204"/>Getting ready</h2>
+			<p>Supervised learning<a id="_idIndexMarker106"/> involves a dataset with <a id="_idIndexMarker107"/>explanatory variables (input) and a target variable (output). A time series comprises a sequence of values with an associated timestamp. Therefore, we need to restructure the time series for supervised learning. A common approach to do this is using a sliding window. Each value of the series is based on the recent past values before it (also <span class="No-Break">called lags).</span></p>
+			<p>To prepare for this section, you need to have your time series data available in a <strong class="source-inline">pandas </strong>DataFrame and have the <strong class="source-inline">pandas</strong> and NumPy libraries installed. If not, you can install them <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pip</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+pip install -U pandas numpy</pre>			<p>We also load the univariate time series into the <span class="No-Break">Python session:</span></p>
+			<pre class="source-code">
+series = pd.read_csv(
+    "assets/datasets/time_series_solar.csv",
+    parse_dates=["Datetime"],
+    index_col="Datetime",
+)['Incoming Solar']</pre>			<h2 id="_idParaDest-126"><a id="_idTextAnchor205"/>How to do it…</h2>
+			<p>The following Python function takes a univariate time series and the window size as input and returns the input (<strong class="source-inline">X</strong>) and output (<strong class="source-inline">y</strong>) for a supervised <span class="No-Break">learning problem:</span></p>
+			<pre class="source-code">
+import pandas as pd
+def series_to_supervised(data, n_in=1, n_out=1, dropnan=True):
+    n_vars = 1 if len(data.shape) == 1 else data.shape[1]
+    df = pd.DataFrame(data)
+    cols, names = list(), list()
+    for i in range(n_in, 0, -1):
+        cols.append(df.shift(i))
+        names += [('var%d(t-%d)' % (j + 1, i)) for j in range(n_vars)]
+     for i in range(0, n_out):
+        cols.append(df.shift(-i))
+        if i == 0:
+            names += [('var%d(t)' % (j + 1)) for j in range(n_vars)]
+        else:
+            names += [('var%d(t+%d)' % (j + 1, i)) for j in range(n_vars)]
+    agg = pd.concat(cols, axis=1)
+    agg.columns = names
+    if dropnan:
+        agg.dropna(inplace=True)
+     return agg
+data = series_to_supervised(series, 3)
+print(data)</pre>			<p>The <strong class="source-inline">series_to_supervised</strong><strong class="source-inline">()</strong> function <a id="_idIndexMarker108"/>is the <a id="_idIndexMarker109"/>heart of this script, which takes in four arguments: the time series data, the number of lag observations (<strong class="source-inline">n_in</strong>), the number of observations as output (<strong class="source-inline">n_out</strong>), and whether to drop rows with <strong class="source-inline">NaN</strong> <span class="No-Break">values (</span><span class="No-Break"><strong class="source-inline">dropnan</strong></span><span class="No-Break">):</span></p>
+			<ol>
+				<li>The function begins by checking the data type and preparing an empty list for columns (<strong class="source-inline">cols</strong>) and their names (<strong class="source-inline">names</strong>). It then creates the input sequence (<strong class="source-inline">t-n, ..., t-1</strong>) by shifting the DataFrame and appending these columns to <strong class="source-inline">cols</strong>, and the corresponding column names <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">names</strong></span><span class="No-Break">.</span></li>
+				<li>The <a id="_idIndexMarker110"/>function continues to create<a id="_idIndexMarker111"/> the forecast sequence <strong class="source-inline">t, t+1 ..., t+n</strong> similarly, again appending these to <strong class="source-inline">cols</strong> and <strong class="source-inline">names</strong>. Then, it aggregates all columns into a new DataFrame (<strong class="source-inline">agg</strong>), assigns the column <strong class="source-inline">names</strong>, and optionally drops rows with <span class="No-Break"><strong class="source-inline">NaN</strong></span><span class="No-Break"> values.</span></li>
+				<li>The script then loads a time series dataset about solar radiation (<strong class="source-inline">time_series_solar.csv</strong>) into a DataFrame (<strong class="source-inline">df</strong>), extracts the <strong class="source-inline">Incoming Solar</strong> column into a NumPy array (<strong class="source-inline">values</strong>), and transforms this array into a supervised learning dataset with three lag observations using the <span class="No-Break"><strong class="source-inline">series_to_supervised</strong></span><span class="No-Break"><strong class="source-inline">()</strong></span><span class="No-Break"> function.</span></li>
+				<li>Finally, it prints the transformed data, which consists of sequences of lagged observations as input and the corresponding future observations as output. This format is ready for any supervised <span class="No-Break">learning algorithm.</span></li>
+			</ol>
+			<h2 id="_idParaDest-127"><a id="_idTextAnchor206"/>How it works…</h2>
+			<p>In supervised learning, the goal is to train a model to learn the relationship between input variables and a target variable. Nevertheless, this type of structure is not immediately available when dealing with time series data. The data is typically a sequence of observations (for example, temperature and stock prices) made over time. Thus, we must transform this time series data into a suitable format for supervised learning. This is what the <strong class="source-inline">series_to_supervised</strong><strong class="source-inline">()</strong> <span class="No-Break">function does.</span></p>
+			<p>The transformation process involves creating lagged versions of the original time series data using a sliding window approach. This is done by shifting the time series data by a certain number of steps (denoted by <strong class="source-inline">n_in</strong> in the code) to create the input features. These lagged observations serve as the explanatory variables (input), with the idea that past values influence future ones in many real-world <span class="No-Break">time series.</span></p>
+			<p>The target <a id="_idIndexMarker112"/>variable (output) is created by shifting the time series in the opposite direction by a number of steps (forecasting horizon) denoted by <strong class="source-inline">n_out</strong>. This means that for each input sequence, we have the corresponding future values that the model <span class="No-Break">should predict.</span></p>
+			<p>For example, suppose <a id="_idIndexMarker113"/>we were to prepare a univariate time series for a simple forecasting task using a sliding window of size <strong class="source-inline">3</strong>. In that case, we might transform the series <strong class="source-inline">[1, 2, 3, 4, 5, 6]</strong> into the following supervised <span class="No-Break">learning dataset:</span></p>
+			<table id="table001-2" class="No-Table-Style _idGenTablePara-1">
+				<colgroup>
+					<col/>
+					<col/>
+				</colgroup>
+				<thead>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p><strong class="bold">input (t-3, </strong><span class="No-Break"><strong class="bold">t-2, t-1)</strong></span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p><span class="No-Break"><strong class="bold">output (t)</strong></span></p>
+						</td>
+					</tr>
+				</thead>
+				<tbody>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>1, <span class="No-Break">2, 3</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>4</p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>2, <span class="No-Break">3, 4</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>5</p>
+						</td>
+					</tr>
+					<tr class="No-Table-Style">
+						<td class="No-Table-Style">
+							<p>3, <span class="No-Break">4, 5</span></p>
+						</td>
+						<td class="No-Table-Style">
+							<p>6</p>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 3.1: Example of transforming a time series into a supervised learning dataset</p>
+			<p>The <strong class="source-inline">series_to_supervised</strong><strong class="source-inline">()</strong> function takes as input a sequence of observations, <strong class="source-inline">n_in</strong>, which specifies the number of lag observations as input, <strong class="source-inline">n_out</strong>, which specifies the number of observations as output, and a boolean argument <strong class="source-inline">dropnan</strong> to remove rows with <strong class="source-inline">NaN</strong> values. It returns a DataFrame suitable for <span class="No-Break">supervised learning.</span></p>
+			<p>The function works by iterating over the input data a specified number of times, each time shifting the data and appending it to a list (<strong class="source-inline">cols</strong>). The list is then concatenated into a DataFrame and the columns are renamed appropriately. If <strong class="source-inline">dropnan=True</strong>, any rows with missing values <span class="No-Break">are dropped.</span></p>
+			<h2 id="_idParaDest-128"><a id="_idTextAnchor207"/>There’s more…</h2>
+			<p>The window size, which represents how many past time steps we should use to predict future ones, depends on the specific problem and the nature of the time series. A too-small window might not capture important patterns, while a too-large one might include irrelevant information. Testing different window sizes and comparing model performance is a common way to select an appropriate <span class="No-Break">window size.</span></p>
+			<h1 id="_idParaDest-129"><a id="_idTextAnchor208"/>Univariate forecasting with a feedforward neural network</h1>
+			<p>This recipe walks<a id="_idIndexMarker114"/> you through the process of building a feedforward neural network for forecasting with univariate <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-130"><a id="_idTextAnchor209"/>Getting ready</h2>
+			<p>Having <a id="_idIndexMarker115"/>transformed the time series data into an appropriate format for supervised learning, we are now ready to employ it for training a feedforward neural network. We strategically decided to resample the dataset, transitioning from hourly to daily data. This optimization significantly accelerates our <span class="No-Break">training processes:</span></p>
+			<pre class="source-code">
+series = series.resample('D').sum()</pre>			<h2 id="_idParaDest-131"><a id="_idTextAnchor210"/>How to do it…</h2>
+			<p>Here are the steps for building and evaluting a feedforward neural network <span class="No-Break">using PyTorch:</span></p>
+			<ol>
+				<li>We begin by splitting the data into training and testing and normalizing them. It’s important to note that the scaler should be fitted on the training set and used to transform both the training and <span class="No-Break">test sets:</span><pre class="source-code">
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train, test = train_test_split(data, test_size=0.2, 
+    shuffle=False)
+train = scaler.fit_transform(train)
+test = scaler.transform(test)
+X_train, y_train = train[:, :-1], train[:, -1]
+X_test, y_test = test[:, :-1], test[:, -1]
+X_train = torch.from_numpy(X_train).type(torch.Tensor)
+X_test = torch.from_numpy(X_test).type(torch.Tensor)
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1)
+y_test = torch.from_numpy(y_test).type(torch.Tensor).view(-1)</pre></li>				<li>Then, we<a id="_idIndexMarker116"/> create a simple feedforward neural network with one hidden layer using PyTorch. <strong class="source-inline">input_dim</strong> represents the number of lags, which is often referred to as the lookback window. <strong class="source-inline">hidden_dim</strong> is the number of hidden units in<a id="_idIndexMarker117"/> the hidden layer of the neural network. Finally, <strong class="source-inline">output_dim</strong> is the forecasting horizon, which is set to <strong class="source-inline">1</strong> in the following example. We use a <strong class="source-inline">ReLU</strong><strong class="source-inline">()</strong> activation function, which we described in the <em class="italic">Training a feedforward neural network</em> recipe from the <span class="No-Break">previous chapter:</span><pre class="source-code">
+class FeedForwardNN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(FeedForwardNN, self).__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.activation = nn.ReLU()
+    def forward(self, x):
+        out = self.activation(self.fc1(x))
+        out = self.fc2(out)
+        return out
+model = FeedForwardNN(input_dim=X_train.shape[1],
+                      hidden_dim=32,
+                      output_dim=1)</pre></li>				<li>Next, we <a id="_idIndexMarker118"/>define the <a id="_idIndexMarker119"/><strong class="source-inline">loss</strong> function and the <strong class="source-inline">optimizer</strong> and train <span class="No-Break">the model:</span><pre class="source-code">
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1,)
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre></li>				<li>Finally, we evaluate the model on the <span class="No-Break">test set:</span><pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1,)
+test_loss = loss_fn(y_pred, y_test)
+print(f"Test Loss: {test_loss.item()}")</pre></li>			</ol>
+			<h2 id="_idParaDest-132"><a id="_idTextAnchor211"/>How it works…</h2>
+			<p>This script starts by <a id="_idIndexMarker120"/>dividing the data into training and testing sets. <strong class="source-inline">MinMaxScaler</strong> is used to scale the features to between <strong class="source-inline">-1</strong> and <strong class="source-inline">1</strong>. It’s important to note that we fit the scaler only on the training set to avoid <span class="No-Break">data leakage.</span></p>
+			<p>Next, we <a id="_idIndexMarker121"/>define a simple feedforward neural network model with one hidden layer. The <strong class="source-inline">FeedForwardNN</strong> class extends <strong class="source-inline">nn.Module</strong>, which is the base class for all neural network modules in PyTorch. The class constructor defines the layers of the network, and the <strong class="source-inline">forward</strong> method specifies how forward propagation <span class="No-Break">is done.</span></p>
+			<p>The model is then trained using the mean squared error loss function and the <strong class="source-inline">Adam</strong> optimizer. The model parameters are updated over <span class="No-Break">multiple epochs.</span></p>
+			<p>Finally, the model is evaluated on the testing set, and the loss of this unseen data measures how well the model generalizes beyond the <span class="No-Break">training data.</span></p>
+			<h2 id="_idParaDest-133"><a id="_idTextAnchor212"/>There’s more…</h2>
+			<p>This is a simple example <a id="_idIndexMarker122"/>of how a feedforward neural network can be used for time series forecasting. There are several ways you can improve <span class="No-Break">this model:</span></p>
+			<ul>
+				<li>You can experiment with different network architectures, for example, by adding more layers or changing the number of neurons in the hidden layer. You can also try different activation functions, optimizers, and <span class="No-Break">learning rates.</span></li>
+				<li>It might be beneficial to use a more sophisticated method for preparing the training and testing sets; for example, using a rolling-window <span class="No-Break">validation strategy.</span></li>
+				<li>Another improvement can be using early stopping to prevent overfitting. We’ll learn about this technique in the <span class="No-Break">next chapter.</span></li>
+				<li>Last but not least, advanced models such as <strong class="bold">recurrent neural networks</strong> (<strong class="bold">RNNs</strong>) and LSTM networks are specifically designed for sequence data and can give better results for time <span class="No-Break">series forecasting.</span></li>
+			</ul>
+			<h1 id="_idParaDest-134"><a id="_idTextAnchor213"/>Univariate forecasting with an LSTM</h1>
+			<p>This recipe walks <a id="_idIndexMarker123"/>you through the process of building an LSTM neural network for forecasting with univariate <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-135"><a id="_idTextAnchor214"/>Getting ready</h2>
+			<p>As we <a id="_idIndexMarker124"/>saw in <a href="B21145_02.xhtml#_idTextAnchor140"><span class="No-Break"><em class="italic">Chapter 2</em></span></a>, LSTM networks, a variant of RNNs, have gained substantial attention for their performance on time series and sequence data. LSTM networks are particularly suited for this task because they can effectively capture long-term temporal dependencies in the input data due to their inherent <span class="No-Break">memory cells.</span></p>
+			<p>This section will extend our univariate time series forecasting to LSTM networks using PyTorch. So, we continue with the objects created in the previous recipe (<em class="italic">Univariate forecasting with a feedforward </em><span class="No-Break"><em class="italic">neural network</em></span><span class="No-Break">).</span></p>
+			<h2 id="_idParaDest-136"><a id="_idTextAnchor215"/>How to do it…</h2>
+			<p>We will use the same train and test sets from the previous section. For an LSTM, we must reshape the input data to 3D. As we explored in the previous chapter, the three dimensions of the input tensor to LSTMs represent the <span class="No-Break">following aspects:</span></p>
+			<ul>
+				<li><strong class="bold">Samples</strong>: One sub-sequence (for example, the past five lags) is one sample. A batch is a set <span class="No-Break">of samples.</span></li>
+				<li><strong class="bold">Time steps</strong>: The window size; how many observations we use from the past at <span class="No-Break">each point.</span></li>
+				<li><strong class="bold">Features</strong>: The number of variables used in the model. Univariate time series always contain a <span class="No-Break">single feature.</span></li>
+			</ul>
+			<p>The following code transforms the input explanatory variables into a <span class="No-Break">3D format:</span></p>
+			<pre class="source-code">
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])</pre>			<p>In the <a id="_idIndexMarker125"/>preceding lines of code, <strong class="source-inline">X_train.shape[0]</strong> and <strong class="source-inline">X_test.shape[0]</strong> represent the number of samples (that is, the number of sequences), and <strong class="source-inline">X_train.shape[1]</strong> and <strong class="source-inline">X_test.shape[1]</strong> represent the number of time steps (the window size). The last dimension<a id="_idIndexMarker126"/> in the reshape operation, which is set to <strong class="source-inline">1</strong>, represents the number of features. We only have one feature in our univariate time series, so we set it to <strong class="source-inline">1</strong>. If we had a multivariate time series, this value would correspond to the number of variables in <span class="No-Break">the data.</span></p>
+			<p>The <strong class="source-inline">view()</strong> function in PyTorch is used to reshape a <strong class="source-inline">tensor</strong> object. It’s equivalent to the <strong class="source-inline">reshape()</strong> function in NumPy and allows us to restructure our data to match the input shape that our LSTM model requires. Reshaping the data this way ensures that the LSTM model receives the data in the expected format. This is crucial for its ability to model the temporal dependencies in our time series <span class="No-Break">data effectively.</span></p>
+			<p>Then, we define the <span class="No-Break">LSTM model:</span></p>
+			<pre class="source-code">
+class LSTM(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
+        super(LSTM, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers,
+            batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+    def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0),
+            self.hidden_dim).requires_grad_()
+        c0 = torch.zeros(self.num_layers, x.size(0),
+            self.hidden_dim).requires_grad_()
+        out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
+        out = self.fc(out[:, -1, :])
+        return out
+model = LSTM(input_dim=1,
+             hidden_dim=32,
+             output_dim=1,
+             num_layers=1)</pre>			<p>Note that, for<a id="_idIndexMarker127"/> the LSTM, the <strong class="source-inline">input_dim</strong> input dimension is <strong class="source-inline">1</strong>, which is the number of variables in the time series. This aspect is<a id="_idIndexMarker128"/> different from the <strong class="source-inline">input_dim</strong> argument we passed to the feedforward neural network in the previous recipe. In that case, this parameter was set to <strong class="source-inline">3</strong>, which denoted the number of lags <span class="No-Break">or features.</span></p>
+			<p>We now proceed to train <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1,)
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre>			<p>Finally, we evaluate <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+model.eval()
+y_pred = model(X_test)
+test_loss = loss_fn(y_pred, y_test)
+print(f"Test Loss: {test_loss.item()}")</pre>			<h2 id="_idParaDest-137"><a id="_idTextAnchor216"/>How it works…</h2>
+			<p>In the<a id="_idIndexMarker129"/> first step, we reshape our training and testing sets to match the input shape that LSTM expects, i.e., <strong class="source-inline">batch_size</strong>, <strong class="source-inline">sequence_length</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">number_of_features</strong></span><span class="No-Break">.</span></p>
+			<p>The <strong class="source-inline">LSTM</strong> class<a id="_idIndexMarker130"/> inherits from <strong class="source-inline">nn.Module</strong>, which means it is a custom neural network in PyTorch. The <strong class="source-inline">LSTM</strong> model has an <strong class="source-inline">LSTM</strong> layer with a specified number of hidden dimensions and layers, followed by a fully connected (linear) layer that outputs the <span class="No-Break">final prediction.</span></p>
+			<p>The <strong class="source-inline">forward</strong><strong class="source-inline">()</strong> function defines the forward pass of the <strong class="source-inline">LSTM</strong> model. We first initialize the hidden states (<strong class="source-inline">h0</strong>) and cell states (<strong class="source-inline">c0</strong>) of <strong class="source-inline">LSTM</strong> with zeros. Then, we pass the input data and initial states into the <strong class="source-inline">LSTM</strong> layer, which returns the <strong class="source-inline">LSTM</strong> outputs and the final hidden and cell states. Note that we only use the final time-step output of the <strong class="source-inline">LSTM</strong> to pass into the fully connected layer to produce <span class="No-Break">the output.</span></p>
+			<p>We then instantiate the model, define the <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> function as the <strong class="bold">mean squared error </strong>(<strong class="bold">MSE</strong>), and<a id="_idIndexMarker131"/> use the <strong class="source-inline">Adam</strong> optimizer for training <span class="No-Break">the network.</span></p>
+			<p>During training, we first set the model into training mode, reset the gradients, perform the forward pass, calculate the loss, perform back-propagation via <strong class="source-inline">loss.backward</strong>, and then perform a single <span class="No-Break">optimization step.</span></p>
+			<p>Finally, we evaluate the model on the test data and print the test loss. Note that we did not do any hyperparameter tuning, which is a very important step when training neural networks. We’ll learn about this process in the <span class="No-Break">next chapter.</span></p>
+			<h2 id="_idParaDest-138"><a id="_idTextAnchor217"/>There’s more…</h2>
+			<p>LSTM models are especially effective for time series forecasting due to their ability to capture long-term dependencies. However, their performance can significantly depend on the choice of hyperparameters. Hence, it may be useful to perform hyperparameter tuning to find the optimal configuration. Some important hyperparameters <a id="_idIndexMarker132"/>to consider are the number of hidden dimensions, the number of LSTM layers, and the <span class="No-Break">learning rate.</span></p>
+			<p>It’s also<a id="_idIndexMarker133"/> important to remember that LSTMs, like all deep learning models, may be prone to overfitting if the model complexity is too high. Techniques such as dropout, early stopping, or regularization (<strong class="source-inline">L1</strong>, <strong class="source-inline">L2</strong>) can be used to <span class="No-Break">prevent overfitting.</span></p>
+			<p>Furthermore, advanced variants of LSTMs such as bidirectional LSTMs, or other types of RNNs such as GRUs can also be used to improve <span class="No-Break">performance possibly.</span></p>
+			<p>Lastly, while LSTMs are powerful, they may not always be the best choice due to their computational and memory requirements, especially for very large datasets or complex models. In these cases, simpler models or other types of neural networks may be <span class="No-Break">more suitable.</span></p>
+			<h1 id="_idParaDest-139"><a id="_idTextAnchor218"/>Univariate forecasting with a GRU</h1>
+			<p>This recipe walks you<a id="_idIndexMarker134"/> through the process of building a GRU neural network for forecasting with univariate <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-140"><a id="_idTextAnchor219"/>Getting ready</h2>
+			<p>Now that we <a id="_idIndexMarker135"/>have seen how <a id="_idIndexMarker136"/>LSTMs can be used for univariate time series forecasting, let’s now shift our attention to another type of RNN architecture known as GRU. GRUs, like LSTMs, are designed to capture long-term dependencies in sequence data effectively but do so with a slightly different and less complex internal structure. This often makes them faster <span class="No-Break">to train.</span></p>
+			<p>For this <a id="_idIndexMarker137"/>section, we will use the same training and testing sets as in the previous sections. Again, the input data <a id="_idIndexMarker138"/>should be reshaped into a <strong class="source-inline">3D</strong> tensor with dimensions representing observations, time steps, and <span class="No-Break">features respectively:</span></p>
+			<pre class="source-code">
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])</pre>			<h2 id="_idParaDest-141"><a id="_idTextAnchor220"/>How to do it…</h2>
+			<p>Let’s start constructing a GRU network with the help of the <span class="No-Break">following steps:</span></p>
+			<ol>
+				<li>We start by constructing a GRU network <span class="No-Break">in PyTorch:</span><pre class="source-code">
+class GRUNet(nn.Module):
+    def init(self, input_dim, hidden_dim, output_dim=1, 
+        num_layers=2):
+        super(GRUNet, self).init()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, 
+            batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+        def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0), 
+            self.hidden_dim).to(x.device)
+        out, _ = self.gru(x, h0)
+        out = self.fc(out[:, -1, :])
+        return out
+model = GRUNet(input_dim=1,
+               hidden_dim=32,
+               output_dim=1,
+               num_layers=1)</pre></li>				<li>Like<a id="_idIndexMarker139"/> before, we define our <strong class="source-inline">loss</strong> function <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">optimizer</strong></span><span class="No-Break">:</span><pre class="source-code">
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)</pre></li>				<li>We <a id="_idIndexMarker140"/>train <span class="No-Break">our model:</span><pre class="source-code">
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1,)
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre></li>				<li>Finally, we evaluate <span class="No-Break">our model:</span><pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1,)
+test_loss = loss_fn(y_pred, y_test)
+print(f"Test Loss: {test_loss.item()}")</pre></li>			</ol>
+			<h2 id="_idParaDest-142"><a id="_idTextAnchor221"/>How it works…</h2>
+			<p>Similar to <a id="_idIndexMarker141"/>the LSTM, the GRU also requires 3D input data. We begin by reshaping our input data accordingly. Next, we define our GRU model. This model contains a GRU layer and a linear layer. The initial hidden state for the GRU is defined and initialized <span class="No-Break">with zeros.</span></p>
+			<p>We then<a id="_idIndexMarker142"/> define our <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> function and optimizer and train our model. The model’s output from the last time step is used for predictions. Finally, we evaluate our model on the test set and print the <span class="No-Break">test loss.</span></p>
+			<h2 id="_idParaDest-143"><a id="_idTextAnchor222"/>There’s more…</h2>
+			<p>There are many ways to improve <span class="No-Break">this model:</span></p>
+			<ul>
+				<li>Experimenting with different GRU architectures or varying the number of GRU layers may yield <span class="No-Break">better results</span></li>
+				<li>Using a different loss function or optimizer could also potentially improve <span class="No-Break">model performance</span></li>
+				<li>Implementing early stopping or other regularization techniques can help <span class="No-Break">prevent overfitting</span></li>
+				<li>Applying more sophisticated data preparation techniques, such as sequence padding or truncation, can better equip the model to handle sequences of <span class="No-Break">varying lengths</span></li>
+				<li>More advanced models, such as the sequence-to-sequence model or the transformer, may provide better results for more complex time series <span class="No-Break">forecasting tasks</span></li>
+			</ul>
+			<h1 id="_idParaDest-144"><a id="_idTextAnchor223"/>Univariate forecasting with a Stacked LSTM</h1>
+			<p>This recipe walks <a id="_idIndexMarker143"/>you through the process of building an LSTM neural network with multiple layers for forecasting with univariate <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-145"><a id="_idTextAnchor224"/>Getting ready</h2>
+			<p>For complex time<a id="_idIndexMarker144"/> series prediction problems, one LSTM layer may not be sufficient. In this case, we can use a stacked LSTM, which is essentially multiple layers of LSTM stacked one on top of the other. This can provide a higher level of input abstraction and may lead to improved <span class="No-Break">prediction performance.</span></p>
+			<p>We will continue to use the same reshaped train and test sets from the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])</pre>			<p>We also use the LSTM neural network defined in the <em class="italic">Univariate forecasting with an </em><span class="No-Break"><em class="italic">LSTM </em></span><span class="No-Break">recipe:</span></p>
+			<pre class="source-code">
+class LSTM(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
+        super(LSTM, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers,
+            batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+    def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0),
+            self.hidden_dim).requires_grad_()
+        c0 = torch.zeros(self.num_layers, x.size(0),
+            self.hidden_dim).requires_grad_()
+        out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
+        out = self.fc(out[:, -1, :])
+        return out</pre>			<p>We’ll use <a id="_idIndexMarker145"/>these elements to train a stacked <span class="No-Break">LSTM model.</span></p>
+			<h2 id="_idParaDest-146"><a id="_idTextAnchor225"/>How to do it…</h2>
+			<p>To construct a <a id="_idIndexMarker146"/>stacked LSTM in PyTorch, we need to call the <strong class="source-inline">LSTM</strong> class with the input <strong class="source-inline">num_layers=2</strong>, <span class="No-Break">like so:</span></p>
+			<pre class="source-code">
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, num_layers=2)</pre>			<p>The rest of the training process is quite similar to what we did in the preceding recipes. We define our loss function <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">optimizer</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)</pre>			<p>We train <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1,)
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre>			<p>Finally, we evaluate <span class="No-Break">our model:</span></p>
+			<pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1,)
+test_loss = loss_fn(y_pred, y_test)
+print(f"Test Loss: {test_loss.item()}")</pre>			<h2 id="_idParaDest-147"><a id="_idTextAnchor226"/>How it works…</h2>
+			<p>The setup <a id="_idIndexMarker147"/>for the stacked LSTM model is similar to the single-layer LSTM model. The major difference lies in the LSTM layer, where we specify that we want more than one LSTM layer. This is accomplished by setting <strong class="source-inline">num_layers</strong> to <strong class="source-inline">2</strong> <span class="No-Break">or more.</span></p>
+			<p>The forward <a id="_idIndexMarker148"/>pass for the stacked LSTM is identical to that of the single-layer LSTM. We initialize the hidden state <strong class="source-inline">h0</strong> and cell state <strong class="source-inline">c0</strong> with zeros, pass the input and the initial states into the LSTM layers, and then use the output from the final time step for <span class="No-Break">our predictions.</span></p>
+			<p>The test set loss is again closely aligned with previous results. Several factors could contribute to this observation. It could be a result of limited data or the fact that the expressiveness of the data may not benefit from the complexity of our model. Additionally, we have not conducted any hyperparameter optimization, which could potentially enhance the model’s performance. In subsequent sections, we will delve deeper into these aspects, exploring potential solutions and strategies for <span class="No-Break">further improvement.</span></p>
+			<h1 id="_idParaDest-148"><a id="_idTextAnchor227"/>Combining an LSTM with multiple fully connected layers</h1>
+			<p>Sometimes, it may<a id="_idIndexMarker149"/> be valuable to combine different types of neural networks in a single model. In this recipe, you’ll learn how to combine an LSTM module with a fully connected layer that is the basis of feedforward <span class="No-Break">neural networks.</span></p>
+			<h2 id="_idParaDest-149"><a id="_idTextAnchor228"/>Getting ready</h2>
+			<p>In this section, we’ll use a hybrid model that combines an LSTM layer with multiple fully connected (also known as dense) layers. This allows us to further abstract features from the sequence, and then learn complex mappings to the <span class="No-Break">output space.</span></p>
+			<p>We continue using the reshaped train and test sets from the <span class="No-Break">previous sections.</span></p>
+			<h2 id="_idParaDest-150"><a id="_idTextAnchor229"/>How to do it…</h2>
+			<p>To construct <a id="_idIndexMarker150"/>this hybrid model in PyTorch, we add two fully connected layers after the <span class="No-Break">LSTM layer:</span></p>
+			<pre class="source-code">
+class HybridLSTM(nn.Module):
+    def __init__(self, input_dim, hidden_dim, 
+        output_dim=1, num_layers=1):
+        super(HybridLSTM, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_dim, hidden_dim,
+            num_layers, batch_first=True)
+        self.fc1 = nn.Linear(hidden_dim, 50)
+        self.fc2 = nn.Linear(50, output_dim)
+    def forward(self, x):
+        h0 = torch.zeros(self.num_layers, x.size(0),
+            self.hidden_dim).to(x.device)
+        c0 = torch.zeros(self.num_layers,x.size(0),
+            self.hidden_dim).to(x.device)
+        out, _ = self.lstm(x, (h0, c0))
+        out = F.relu(self.fc1(out[:, -1, :]))
+        out = self.fc2(out)
+        return out
+model = HybridLSTM(input_dim=1, hidden_dim=32, output_dim=1, 
+    num_layers=1)</pre>			<p>We define our loss function <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">optimizer</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)</pre>			<p>We train and evaluate our model similarly to the <span class="No-Break">previous recipes.</span></p>
+			<h2 id="_idParaDest-151"><a id="_idTextAnchor230"/>How it works…</h2>
+			<p>The setup<a id="_idIndexMarker151"/> for the hybrid LSTM model involves an <strong class="source-inline">LSTM</strong> layer followed by two fully connected layers. After passing through the <strong class="source-inline">LSTM</strong> layer, the output of the final time step is processed by the fully connected layers. Using the <strong class="source-inline">ReLU</strong><strong class="source-inline">()</strong> activation function between these layers introduces non-linearities, allowing our model to capture more complex relationships in <span class="No-Break">the data.</span></p>
+			<p>Note that the output from an <strong class="source-inline">LSTM</strong> layer is a tensor of shape (<strong class="source-inline">batch_size, seq_length, hidden_dim)</strong>. This is because <strong class="source-inline">LSTM</strong>, by default, outputs the hidden states for each time step in the sequence for each item in <span class="No-Break">the batch.</span></p>
+			<p>In this specific model, we’re interested only in the last time step’s hidden state to feed into the fully connected layers. We achieve this with <strong class="source-inline">out[:, -1, :]</strong>, effectively selecting the last time step’s hidden state for each sequence in the batch. The result is a tensor of shape <strong class="source-inline">(</strong><span class="No-Break"><strong class="source-inline">batch_size, hidden_dim)</strong></span><span class="No-Break">.</span></p>
+			<p>The reshaped output is then passed through the first fully connected (linear) layer with the <strong class="source-inline">self.fc1(out[:, -1, :])</strong> function call. This layer has 50 neurons, so the output shape changes to <strong class="source-inline">(</strong><span class="No-Break"><strong class="source-inline">batch_size, 50)</strong></span><span class="No-Break">.</span></p>
+			<p>After applying the <strong class="source-inline">ReLU</strong><strong class="source-inline">()</strong> activation function, this output is then passed to the second fully connected layer <strong class="source-inline">self.fc2(out)</strong>, which has a size equal to <strong class="source-inline">output_dim</strong>, reducing the tensor to the shape <strong class="source-inline">(batch_size, output_dim)</strong>. This is the final output of <span class="No-Break">the model.</span></p>
+			<p>Remember that the hidden dimension (<strong class="source-inline">hidden_dim</strong>) is a hyperparameter of the LSTM and can be chosen freely. The<a id="_idIndexMarker152"/> number of neurons in the first fully connected layer (<strong class="source-inline">50</strong>, in this case) is also a hyperparameter and can be modified to suit the specific <span class="No-Break">task better.</span></p>
+			<h2 id="_idParaDest-152"><a id="_idTextAnchor231"/>There’s more…</h2>
+			<p>When working with hybrid models, consider the <span class="No-Break">following tips:</span></p>
+			<ul>
+				<li>Vary the number of fully connected layers and their sizes to explore different <span class="No-Break">model complexities.</span></li>
+				<li>Different activation functions in the fully connected layers may lead to <span class="No-Break">varied performance.</span></li>
+				<li>As the complexity of the model increases, so does the computational cost. Be sure to balance complexity and <span class="No-Break">computational efficiency.</span></li>
+			</ul>
+			<h1 id="_idParaDest-153"><a id="_idTextAnchor232"/>Univariate forecasting with a CNN</h1>
+			<p>Now, we turn our attention <a id="_idIndexMarker153"/>to convolutional neural networks that have also shown promising results with time series data. Let’s learn <a id="_idIndexMarker154"/>how these methods can be used for univariate time <span class="No-Break">series forecasting.</span></p>
+			<h2 id="_idParaDest-154"><a id="_idTextAnchor233"/>Getting ready</h2>
+			<p>CNNs are <a id="_idIndexMarker155"/>commonly used in problems involving images, but they can also be applied to time series forecasting tasks. By treating time series data as a “sequence image,” CNNs can extract local features and dependencies from the data. To implement this, we’ll need to prepare our time series data similarly to how we did for <span class="No-Break">LSTM models.</span></p>
+			<h2 id="_idParaDest-155"><a id="_idTextAnchor234"/>How to do it…</h2>
+			<p>Let’s define a simple CNN model in PyTorch. For this example, we will use a single convolutional layer followed by a fully <span class="No-Break">connected layer:</span></p>
+			<pre class="source-code">
+class CNNTimeseries(nn.Module):
+    def __init__(self, input_dim, output_dim=1):
+        super(CNNTimeseries, self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=input_dim,
+                               out_channels=64,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1)
+        self.fc = nn.Linear(in_features=64,
+                            out_features=output_dim)
+     def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return x
+model = CNNTimeseries(input_dim=3, output_dim=1)</pre>			<p>We train and evaluate our model similarly to the <span class="No-Break">previous sections.</span></p>
+			<h2 id="_idParaDest-156"><a id="_idTextAnchor235"/>How it works…</h2>
+			<p>The <a id="_idIndexMarker156"/>CNN model is based on convolutional layers. These are designed to extract local features directly <a id="_idIndexMarker157"/>from the input data. These features are then passed to one or more fully connected layers that model the future values of the time series. The training stage of this type of neural network is similar to others, such as <span class="No-Break">the LSTM.</span></p>
+			<p>Let’s go through our neural network architecture. It has the <span class="No-Break">following features:</span></p>
+			<ul>
+				<li>An input layer, which accepts time series data of shape <strong class="source-inline">(batch_size, sequence_length, number_of_features)</strong>. For univariate time series forecasting, <strong class="source-inline">number_of_features</strong> <span class="No-Break">is </span><span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">.</span></li>
+				<li>A convolutional layer with <strong class="source-inline">64</strong> filters and a kernel size of <strong class="source-inline">3</strong>, defined in PyTorch as <strong class="source-inline">self.conv1 = nn.Conv1d(in_channels=1, </strong><span class="No-Break"><strong class="source-inline">out_channels=64, kernel_size=3)</strong></span><span class="No-Break">.</span></li>
+				<li>A fully<a id="_idIndexMarker158"/> connected (or linear) layer that maps the output of the convolutional layer to <span class="No-Break">our prediction</span></li>
+			</ul>
+			<p>Let’s see<a id="_idIndexMarker159"/> how these layers transform <span class="No-Break">the data:</span></p>
+			<ul>
+				<li><strong class="bold">Input layer</strong>: The initial shape of our input data would be <strong class="source-inline">(batch_size, </strong><span class="No-Break"><strong class="source-inline">sequence_length, 1)</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="source-inline">Conv1d</strong>: A <strong class="source-inline">1D</strong> convolution is performed over the time series data. The kernel slides over the sequence, computing the dot product of the weights and the input. After this convolution operation, the shape of our data is <strong class="source-inline">(batch_size, out_channels, sequence_length-kernel_size+1)</strong>, or in this case, <strong class="source-inline">(batch_size, </strong><span class="No-Break"><strong class="source-inline">64, sequence_length-3+1)</strong></span><span class="No-Break">.</span></li>
+				<li><strong class="bold">Fully connected layer</strong>: To pass our data into the fully connected layer, we need to flatten our data into two dimensions: <strong class="source-inline">(batch_size, remaining_dims)</strong>. <strong class="source-inline">remaining_dims</strong> is calculated by multiplying the remaining dimensions of the tensor (<strong class="source-inline">64</strong> and <strong class="source-inline">sequence_length-2</strong> in our case). The resulting shape would be <strong class="source-inline">(batch_size, 64 * (sequence_length-2))</strong>. We can achieve this by using the <strong class="source-inline">view</strong><strong class="source-inline">()</strong> function in PyTorch as follows: <strong class="source-inline">x = </strong><span class="No-Break"><strong class="source-inline">x.view(x.size(0), -1)</strong></span><span class="No-Break">.</span></li>
+			</ul>
+			<p>Now, <strong class="source-inline">x</strong> is ready to be fed into the fully connected layer, <strong class="source-inline">self.fc = nn.Linear(64 * (sequence_length-2), output_dim)</strong>, where <strong class="source-inline">output_dim</strong> is the dimensionality of the output space, <strong class="source-inline">1</strong> for univariate time series prediction. The output of this layer is of shape <strong class="source-inline">(batch_size, output_dim)</strong>, or <strong class="source-inline">(batch_size, 1)</strong>, and these are our <span class="No-Break">final predictions.</span></p>
+			<p>This way, we <a id="_idIndexMarker160"/>can see <a id="_idIndexMarker161"/>how the tensor shapes are handled and transformed as they pass through each network layer. Understanding this process is crucial for troubleshooting and designing your <span class="No-Break">own architectures.</span></p>
+			<h2 id="_idParaDest-157"><a id="_idTextAnchor236"/>There’s more…</h2>
+			<p>CNNs can be extended in <span class="No-Break">several ways:</span></p>
+			<ul>
+				<li>Multiple convolutional layers can be stacked to form a <span class="No-Break">deeper network</span></li>
+				<li>Pooling layers can be added after convolutional layers to reduce dimensionality and <span class="No-Break">computational cost</span></li>
+				<li>Dropout or other regularization techniques can be applied to <span class="No-Break">prevent overfitting</span></li>
+				<li>The model could be extended to a ConvLSTM, which combines the strengths of CNNs and LSTMs for handling spatial and <span class="No-Break">temporal dependencies</span></li>
+			</ul>
+			<h1 id="_idParaDest-158"><a id="_idTextAnchor237"/>Handling trend – taking first differences</h1>
+			<p>In <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, we learned <a id="_idIndexMarker162"/>about different time series patterns such as trend or seasonality. This recipe describes the process of dealing with trend in time series before training a deep <span class="No-Break">neural network.</span></p>
+			<h2 id="_idParaDest-159"><a id="_idTextAnchor238"/>Getting ready</h2>
+			<p>As we learned in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, trend is the long-term change in the time series. When the average value of the time series changes, this means that the data is not stationary. Non-stationary time series are more difficult to model, so it’s important to transform the data into a <span class="No-Break">stationary series.</span></p>
+			<p>Trend is usually removed from the time series by taking the first differences until the data <span class="No-Break">becomes stationary.</span></p>
+			<p>First, let’s start by splitting the time series into training and <span class="No-Break">testing sets:</span></p>
+			<pre class="source-code">
+from sklearn.model_selection import train_test_split
+train, test = train_test_split(series, test_size=0.2, shuffle=False)</pre>			<p>We leave the last 20% of observations <span class="No-Break">for testing.</span></p>
+			<h2 id="_idParaDest-160"><a id="_idTextAnchor239"/>How to do it…</h2>
+			<p>There<a id="_idIndexMarker163"/> are two ways we can compute the difference between consecutive observations <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pandas</strong></span><span class="No-Break">:</span></p>
+			<ol>
+				<li>Let’s begin with the standard approach using the <span class="No-Break"><strong class="source-inline">diff()</strong></span><span class="No-Break"> method:</span><pre class="source-code">
+train.diff(periods=1)
+test.diff(periods=1)</pre><p class="list-inset">The <strong class="source-inline">periods</strong> argument details the number of steps used to compute the differences. In this case, <strong class="source-inline">periods=1</strong> means that we compute the difference between consecutive observations, also known as first differences. As an example, setting the number of periods to <strong class="source-inline">7</strong> would compute the difference between each observation and the observation captured 7 time steps before it. In the case of a daily time series, this can be an effective way of removing seasonality. But more on <span class="No-Break">that later.</span></p><p class="list-inset">Another way to difference a time series is using the <span class="No-Break"><strong class="source-inline">shift()</strong></span><span class="No-Break"> method:</span></p><pre class="source-code">train_shifted = train.shift(periods=1)
+train_diff = train - train_shifted
+test_shifted = test.shift(periods=1)
+test_diff = test - test_shifted</pre></li>				<li>We created a second time series that is shifted by the desired number of periods (in this case, <strong class="source-inline">1</strong>). Then, we subtract this series from the original one to get a <span class="No-Break">differenced series.</span><p class="list-inset">Differencing stabilizes the level of the series. Still, we can normalize the data into a common <span class="No-Break">value range:</span></p><pre class="source-code">
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train_diffnorm = scaler.fit_transform(
+    train_diff.values.reshape(-1, 1))
+test_diffnorm = scaler.transform(test_diff.values.reshape(-1,1))</pre></li>				<li>Finally, we <a id="_idIndexMarker164"/>transform the time series for supervised learning using the <strong class="source-inline">series_to_supervised</strong><strong class="source-inline">()</strong> function as in the <span class="No-Break">previous recipes:</span><pre class="source-code">
+train_df = series_to_supervised(train_diffnorm, n_in=3).values
+test_df = series_to_supervised(test_diffnorm, n_in=3).values</pre></li>				<li>The model training phase will remain the same as in the <span class="No-Break">previous recipes:</span><pre class="source-code">
+X_train, y_train = train_df[:, :-1], train_df[:, -1] 
+X_test, y_test = test_df[:, :-1], test_df[:, -1]
+X_train = torch.from_numpy(X_train).type(torch.Tensor)
+X_test = torch.from_numpy(X_test).type(torch.Tensor) 
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1) 
+y_test = torch.from_numpy(y_test).type(torch.Tensor).view(-1) 
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, 
+    num_layers=2)
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1, )
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre></li>				<li>But our<a id="_idIndexMarker165"/> job is not done yet. The preceding neural network is trained on differenced data. So, the predictions are <span class="No-Break">also differenced:</span><pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1, )</pre></li>				<li>We next need to revert the data transformation processes to get the forecasts in the time series' <span class="No-Break">original scal</span><span class="No-Break">e</span></li>
+				<li>First, we denormalize the <span class="No-Break">time series:</span><pre class="source-code">
+y_pred_np = y_pred.detach().numpy().reshape(-1, 1)
+y_diff = scaler.inverse_transform(y_pred_np).flatten()</pre></li>				<li>Then, we revert the differencing operation by adding back the shifted <span class="No-Break">time series:</span><pre class="source-code">
+y_orig_scale = y_diff + test_shifted.values[4:]</pre></li>			</ol>
+			<p>In the preceding code, we skip the first three values as they were used during the transformation process by the <span class="No-Break"><strong class="source-inline">series_to_supervised()</strong></span><span class="No-Break"> function.</span></p>
+			<h2 id="_idParaDest-161"><a id="_idTextAnchor240"/>How it works…</h2>
+			<p>Differencing works<a id="_idIndexMarker166"/> by stabilizing the level of the time series, thus making it stationary. Instead of modeling the actual values of the series, the neural network models the series of changes; how the time series changes from one time step to another. The raw forecasts that come out of the neural network represent the predicted changes. We need to revert the differencing process to get the forecasts at their <span class="No-Break">original scale.</span></p>
+			<h2 id="_idParaDest-162"><a id="_idTextAnchor241"/>There’s more…</h2>
+			<p>You can also deal with trend by including the time information in the input data. An explanatory variable that denotes the step at which each observation is collected. For example, the first observation has a value of <strong class="source-inline">1</strong>, and the second one has a value of <strong class="source-inline">2</strong>. This approach is effective if the trend is deterministic and we do not expect it to change. Differencing provides a more general way of dealing <span class="No-Break">with trends.</span></p>
+			<h1 id="_idParaDest-163"><a id="_idTextAnchor242"/>Handling seasonality – seasonal dummies and Fourier series</h1>
+			<p>In this <a id="_idIndexMarker167"/>recipe, we’ll describe how to deal with seasonality in time series using seasonal dummy variables and a <span class="No-Break">Fourier</span><span class="No-Break"> series.</span></p>
+			<h2 id="_idParaDest-164"><a id="_idTextAnchor243"/>Getting ready</h2>
+			<p>Seasonality represents repeatable patterns that recur over a given period, such as every year. Seasonality is an important piece of time series, and it is important to capture it. The consensus in the literature is that neural networks cannot capture seasonal effects optimally. The best way to model seasonality is by feature engineering or data transformation. One way to handle seasonality is to add extra information that captures the periodicity of patterns. This can be done with seasonal dummies or a <span class="No-Break">Fourier series.</span></p>
+			<p>We start by preparing the data using the <span class="No-Break"><strong class="source-inline">series_to_supervised</strong></span><span class="No-Break"><strong class="source-inline">()</strong></span><span class="No-Break"> function:</span></p>
+			<pre class="source-code">
+train, test = train_test_split(series, test_size=0.2, shuffle=False)
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train_norm = scaler.fit_transform(
+    train.values.reshape(-1, 1)).flatten()
+train_norm = pd.Series(train_norm, index=train.index)
+test_norm = scaler.transform(test.values.reshape(-1, 1)).flatten()
+test_norm = pd.Series(test_norm, index=test.index)
+train_df = series_to_supervised(train_norm, 3)
+test_df = series_to_supervised(test_norm, 3)</pre>			<p>In this <a id="_idIndexMarker168"/>recipe, we’ll skip the trend removal part for simplicity and focus on modeling seasonality. So, the <strong class="source-inline">train_df</strong> and <strong class="source-inline">test_df</strong> objects contain the lagged values of the training and <span class="No-Break">testing sets.</span></p>
+			<h2 id="_idParaDest-165"><a id="_idTextAnchor244"/>How to do it…</h2>
+			<p>Both seasonal dummy variables and a Fourier series can be added to the input data as additional explanatory variables. Let’s start by exploring <span class="No-Break">seasonal dummies.</span></p>
+			<h3>Seasonal dummies</h3>
+			<p>Seasonal dummies <a id="_idIndexMarker169"/>are binary variables that describe the period of each observation. For example, whether a given value is collected on <span class="No-Break">a Monday.</span></p>
+			<p>To build<a id="_idIndexMarker170"/> seasonal dummies, we first get the period information of each point. This can be done with the <strong class="source-inline">DateTimeFeatures</strong> class from <strong class="source-inline">sktime</strong> <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+from sktime.transformations.series.date import DateTimeFeatures
+date_features = DateTimeFeatures(ts_freq='D', 
+    keep_original_columns=False, feature_scope='efficient')
+train_dates = date_features.fit_transform(train_df.iloc[:, -1])</pre>			<p>The main argument for <strong class="source-inline">DateTimeFeatures</strong> is <strong class="source-inline">ts_freq</strong>, which we set to <strong class="source-inline">D</strong>. This means that we’re telling this method that our data is in a daily granularity. Then, we use the training set to fit a <strong class="source-inline">DateTimeFeatures</strong> object by passing it the observations of the first lags of this data (<strong class="source-inline">train_df.iloc[:, -1]</strong>). This results in a <strong class="source-inline">pandas</strong> DataFrame that contains the information detailed in the <span class="No-Break">following table:</span></p>
+			<div>
+				<div id="_idContainer014" class="IMG---Figure">
+					<img src="image/B21145_03_001.jpg" alt="Table 3.2: Information about the period of each observation" width="1650" height="474"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 3.2: Information about the period of each observation</p>
+			<p>For simplicity, we’ll continue this recipe by using the information about the day of the week and<a id="_idIndexMarker171"/> month of the year. We get these columns with the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+train_dates = train_dates[['month_of_year', 'day_of_week']]</pre>			<p>Then, we convert this data into binary variables using a one-hot encoding approach from <span class="No-Break"><strong class="source-inline">sklearn</strong></span><span class="No-Break"> (</span><span class="No-Break"><strong class="source-inline">OneHotEncoder</strong></span><span class="No-Break">):</span></p>
+			<pre class="source-code">
+from sklearn.preprocessing import OneHotEncoder
+encoder = OneHotEncoder(drop='first', sparse=False) 
+encoded_train = encoder.fit_transform(train_dates) 
+train_dummies = pd.DataFrame(encoded_train, 
+    columns=encoder.get_feature_names_out(),dtype=int)</pre>			<p>This leads to a set of seasonal dummy variables that are shown in the <span class="No-Break">following table:</span></p>
+			<div>
+				<div id="_idContainer015" class="IMG---Figure">
+					<img src="image/B21145_03_002.jpg" alt="Table 3.3: Information about the period of each observation as binary variables" width="1266" height="1224"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Table 3.3: Information about the period of each observation as binary variables</p>
+			<p>We repeat<a id="_idIndexMarker172"/> this process using the <span class="No-Break">test set:</span></p>
+			<pre class="source-code">
+test_dates = date_features.transform(test_df.iloc[:, -1]) 
+test_dates = test_dates[['month_of_year', 'day_of_week']]
+test_encoded_feats = encoder.transform(test_dates)
+test_dummies = pd.DataFrame(test_encoded_feats,
+                            columns=encoder.get_feature_names_out(),
+                            dtype=int)</pre>			<p>Note that we fit <strong class="source-inline">DateTimeFeatures</strong> and <strong class="source-inline">OneHotEncoder</strong> on the training data (using the <strong class="source-inline">fit_transform()</strong> method). With the test set, we can use the <strong class="source-inline">transform()</strong> method from the <span class="No-Break">respective object.</span></p>
+			<h3>A Fourier series</h3>
+			<p>A Fourier series is made up of <a id="_idIndexMarker173"/>deterministic sine<a id="_idIndexMarker174"/> and cosine waves. The oscillations of these waves enable seasonality to be modeled as a <span class="No-Break">repeating pattern.</span></p>
+			<p>We can compute Fourier-based features using <strong class="source-inline">sktime</strong> <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+from sktime.transformations.series.fourier import FourierFeatures
+fourier = FourierFeatures(sp_list=[365.25],
+                          fourier_terms_list=[2],
+                          keep_original_columns=False)
+train_fourier = fourier.fit_transform(train_df.iloc[:, -1]) 
+test_fourier = fourier.transform(test_df.iloc[:, -1])</pre>			<p>We use the <strong class="source-inline">FourierFeatures</strong> transformer to extract Fourier features. There are two main parameters to <span class="No-Break">this operator:</span></p>
+			<ul>
+				<li><strong class="source-inline">sp_list</strong>: The periodicity of the data. In this example, we set this parameter to <strong class="source-inline">365.25</strong>, which captures <span class="No-Break">yearly variations.</span></li>
+				<li><strong class="source-inline">fourier_terms_list</strong>: The number of Fourier waves for each sine and cosine function. We set this parameter to <strong class="source-inline">2</strong>, which means we compute <strong class="source-inline">2</strong> sine series plus <strong class="source-inline">2</strong> <span class="No-Break">cosine series.</span></li>
+			</ul>
+			<h3>Modeling</h3>
+			<p>After extracting <a id="_idIndexMarker175"/>seasonal dummies and the Fourier series, we add the extra variables to <span class="No-Break">the datasets:</span></p>
+			<pre class="source-code">
+X_train = np.hstack([X_train, train_dummies, train_fourier])
+X_test = np.hstack([X_test, test_dummies, test_fourier])</pre>			<p>The <strong class="source-inline">np.hstack</strong><strong class="source-inline">()</strong> function is used to merge multiple arrays horizontally (column-wise). In this case, we merge the seasonal dummies and the Fourier series with the lagged features computed using the <span class="No-Break"><strong class="source-inline">series_to_supervised</strong></span><span class="No-Break"><strong class="source-inline">()</strong></span><span class="No-Break"> function.</span></p>
+			<p>Finally, we<a id="_idIndexMarker176"/> feed this data to a neural network as we did in <span class="No-Break">previous recipes:</span></p>
+			<pre class="source-code">
+X_train = torch.from_numpy(X_train).type(torch.Tensor) 
+X_test = torch.from_numpy(X_test).type(torch.Tensor) 
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1) 
+y_test = torch.from_numpy(y_test).type(torch.Tensor).view(-1)
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, num_layers=2)
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001) 
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1, )
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")
+model.eval()
+y_pred = model(X_test).reshape(-1, )
+test_loss = loss_fn(y_pred, y_test)
+y_pred_np = y_pred.detach().numpy().reshape(-1, 1)
+y_pred_orig = scaler.inverse_transform(y_pred_np).flatten()</pre>			<p>When utilizing <a id="_idIndexMarker177"/>seasonal dummies or a Fourier series, there is no need to perform any additional transformations after the inference step. In the previous code, we reversed the normalization process to obtain the forecasts in their <span class="No-Break">original scale.</span></p>
+			<h2 id="_idParaDest-166"><a id="_idTextAnchor245"/>How it works…</h2>
+			<p>Seasonal dummies and the Fourier series are variables that capture the recurrence of seasonal patterns. These work as explanatory variables that are added to the input data. The cyclical nature of the Fourier series is shown in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer016" class="IMG---Figure">
+					<img src="image/B21145_03_004.jpg" alt="Figure 3.1: Fourier deterministic series that capture seasonality" width="1118" height="524"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.1: Fourier deterministic series that capture seasonality</p>
+			<p>Note that this process is independent of the neural network used for training. In this recipe, we resorted to a TCN but we could have picked any learning algorithm for <span class="No-Break">multiple regression.</span></p>
+			<h2 id="_idParaDest-167"><a id="_idTextAnchor246"/>There’s more…</h2>
+			<p>An alternative to the Fourier series or seasonal dummies is repeating basis functions. Instead of using trigonometric series, seasonality is modeled using radial basis functions. These are implemented in the <strong class="source-inline">sklego</strong> <strong class="source-inline">Python</strong> package. You can check out the documentation at the following <span class="No-Break">link: </span><a href="https://scikit-lego.netlify.app/api/preprocessing.html#sklego.preprocessing.RepeatingBasisFunction"><span class="No-Break">https://scikit-lego.netlify.app/api/preprocessing.html#sklego.preprocessing.RepeatingBasisFunction</span></a><span class="No-Break">.</span></p>
+			<p>Sometimes, a time series can exhibit seasonality at multiple periods. For example, the example daily time series can show repeating patterns not only every month but also every year. In this recipe, we computed seasonal dummies that provide information about different periods, namely the month and day of the week. But you can also do this with a Fourier series by passing multiple periods. Here’s how you could capture weekly and yearly seasonality with a <span class="No-Break">Fourier series:</span></p>
+			<pre class="source-code">
+fourier = FourierFeatures(sp_list=[7, 365.25],
+                          fourier_terms_list=[2, 2],
+                          keep_original_columns=False)</pre>			<p>The preceding code would compute <strong class="source-inline">four</strong> Fourier series for each period (<strong class="source-inline">two</strong> sine and <strong class="source-inline">two</strong> cosine waves <span class="No-Break">for each).</span></p>
+			<p>Another important recurrent phenomenon in time series is holidays, some of which move year after year (for example, Easter). A common way to model these events is by using binary <span class="No-Break">dummy variables.</span></p>
+			<h1 id="_idParaDest-168"><a id="_idTextAnchor247"/>Handling seasonality – seasonal differencing</h1>
+			<p>In this recipe, we show how differencing can be used to model seasonal patterns in <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-169"><a id="_idTextAnchor248"/>Getting ready</h2>
+			<p>We’ve<a id="_idIndexMarker178"/> learned to use first differences to remove the trend from time series. Differencing can also work for seasonality. But, instead of taking the difference between consecutive observations, for each point, you subtract the value of the previous observation from the same season. For example, suppose you’re modeling monthly data. You perform seasonal differencing by subtracting the value of February of the previous year from the value of February of the <span class="No-Break">current year.</span></p>
+			<p>The process is similar to what we did with first differences to remove the trend. Let’s start by loading <span class="No-Break">the data:</span></p>
+			<pre class="source-code">
+time_series = df["Incoming Solar"]
+train, test = train_test_split(time_series, test_size=0.2, shuffle=False)</pre>			<p>In this recipe, we’ll use<a id="_idIndexMarker179"/> seasonal differencing to remove <span class="No-Break">yearly seasonality.</span></p>
+			<h2 id="_idParaDest-170"><a id="_idTextAnchor249"/>How to do it…</h2>
+			<p>We resort to the <strong class="source-inline">shift</strong><strong class="source-inline">()</strong> method to apply the <span class="No-Break">differencing operation:</span></p>
+			<pre class="source-code">
+periods = 365
+train_shifted = train.shift(periods=periods)
+train_diff = train - train_shifted
+test_shifted = test.shift(periods=periods)
+test_diff = test - test_shifted
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train_diffnorm = scaler.fit_transform(train_diff.values.reshape(-1,1))
+test_diffnorm = scaler.transform(test_diff.values.reshape(-1, 1))
+train_df = series_to_supervised(train_diffnorm, 3).values
+test_df = series_to_supervised(test_diffnorm, 3).values</pre>			<p>After differencing the series, we transformed it for supervised learning using <strong class="source-inline">series_to_supervised</strong>. Then, we can train a neural network with the <span class="No-Break">differenced data:</span></p>
+			<pre class="source-code">
+X_train, y_train = train_df[:, :-1], train_df[:, -1] 
+X_test, y_test = test_df[:, :-1], test_df[:, -1]
+X_train = torch.from_numpy(X_train).type(torch.Tensor) 
+X_test = torch.from_numpy(X_test).type(torch.Tensor) 
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1) 
+y_test = torch.from_numpy(y_test).type(torch.Tensor).view(-1)
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, num_layers=2)
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1, )
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()
+    if epoch % 10 == 0:
+        print(f"Epoch: {epoch}, Loss: {loss.item()}")</pre>			<p>In this case, we<a id="_idIndexMarker180"/> need to revert the differencing operation to get the forecasts in the original scale of the time series. We do that <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1, )
+y_diff = scaler.inverse_transform(
+    y_pred.detach().numpy().reshape(-1, 1)).flatten()
+y_original = y_diff + test_shifted.values[(periods+3):]</pre>			<p>Essentially, we add back the shifted test series to the <span class="No-Break">denormalized predictions.</span></p>
+			<h2 id="_idParaDest-171"><a id="_idTextAnchor250"/>How it works…</h2>
+			<p>Seasonal differencing<a id="_idIndexMarker181"/> removes periodic variations, thus stabilizing the level of the series and making <span class="No-Break">it stationary.</span></p>
+			<p>Seasonal differencing is particularly effective when the seasonal patterns change in magnitude and periodicity. In such cases, it’s usually a better approach than seasonal dummies or a <span class="No-Break">Fourier series.</span></p>
+			<h1 id="_idParaDest-172"><a id="_idTextAnchor251"/>Handling seasonality – seasonal decomposition</h1>
+			<p>This recipe describes yet another approach to modeling seasonality, this time using a time series <span class="No-Break">decomposition approach.</span></p>
+			<h2 id="_idParaDest-173"><a id="_idTextAnchor252"/>Getting ready</h2>
+			<p>We learned <a id="_idIndexMarker182"/>about time series decomposition methods in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>. Decomposition methods aim at extracting the individual parts that make up a <span class="No-Break">time series.</span></p>
+			<p>We can use this approach to deal with seasonality. The idea is to separate the seasonal component from the rest (trend plus residuals). We can use a deep neural network to model the seasonally adjusted series. Then, we use a simple model to forecast the <span class="No-Break">seasonal component.</span></p>
+			<p>Again, we’ll start with the daily solar radiation time series. This time, we won’t split training and testing to show how the forecasts are obtained <span class="No-Break">in practice.</span></p>
+			<h2 id="_idParaDest-174"><a id="_idTextAnchor253"/>How to do it…</h2>
+			<p>We start by decomposing the time series using STL. We learned about this method in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a><span class="No-Break">:</span></p>
+			<pre class="source-code">
+from statsmodels.tsa.api import STL
+series_decomp = STL(series, period=365).fit()
+seas_adj = series – series_decomp.seasonal</pre>			<p>The seasonally adjusted series and the seasonal component are shown in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer017" class="IMG---Figure">
+					<img src="image/B21145_03_005.jpg" alt="Figure 3.2: Seasonal part and the remaining seasonally adjusted series" width="1650" height="912"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.2: Seasonal part and the remaining seasonally adjusted series</p>
+			<p>Then, we<a id="_idIndexMarker183"/> use an LSTM to model the seasonally adjusted series. We’ll use a process similar to what we did before in <span class="No-Break">previous recipes:</span></p>
+			<pre class="source-code">
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train_norm = scaler.fit_transform(
+    seas_adj.values.reshape(-1, 1)).flatten()
+train_norm = pd.Series(train_norm, index=time_series.index)
+train_df = series_to_supervised(train_norm, 3)
+X_train, y_train = train_df.values[:, :-1], train_df.values[:, -1]
+X_train = torch.from_numpy(X_train).type(torch.Tensor)
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1)
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, num_layers=2)
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1, )
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()</pre>			<p>The preceding<a id="_idIndexMarker184"/> code trains the LSTM on the seasonally adjusted series. Now, we use it to forecast the next 14 days <span class="No-Break">of data:</span></p>
+			<pre class="source-code">
+latest_obs = train_norm.tail(3)
+latest_obs = latest_obs.values.reshape(1, 3, -1)
+latest_obs_t = torch.from_numpy(latest_obs).type(torch.Tensor)
+model.eval()
+y_pred = model(latest_obs_t).reshape(-1, ).detach().numpy()
+y_denorm = scaler.inverse_transform(y_pred.reshape(-1,1)).flatten()</pre>			<p>This is what <a id="_idIndexMarker185"/>we see in the <span class="No-Break">preceding code:</span></p>
+			<ol>
+				<li>We get the latest <strong class="source-inline">three</strong> lags from the time series and structure it as the <span class="No-Break">input data</span></li>
+				<li>We use the model to predict the next value of <span class="No-Break">the series</span></li>
+				<li>Then we denormalize the forecast using the <span class="No-Break"><strong class="source-inline">scaler</strong></span><span class="No-Break"> object</span></li>
+			</ol>
+			<p>Now, we need to forecast the seasonal component. This is usually done with a seasonal naive method. In this recipe, we’ll use the implementation available in the <span class="No-Break"><strong class="source-inline">sktime</strong></span><span class="No-Break"> package:</span></p>
+			<pre class="source-code">
+from sktime.forecasting.naive import NaiveForecaster
+seas_forecaster = NaiveForecaster(stra'egy='last', sp=365)
+seas_forecaster.fit(series_decomp.seasonal)
+seas_preds = seas_forecaster.predict(fh=[1])</pre>			<p>The <strong class="source-inline">NaiveForecaster</strong> object fits with the seasonal component. The idea of this method is to predict future observations using the previous known value from the <span class="No-Break">same season.</span></p>
+			<p>Finally, we get the final forecast by adding the <span class="No-Break">two predictions:</span></p>
+			<pre class="source-code">
+preds = y_denorm + seas_preds</pre>			<p>This addition reverts the decomposition process carried out before, and we get the forecast in the original <span class="No-Break">series scale.</span></p>
+			<h2 id="_idParaDest-175"><a id="_idTextAnchor254"/>How it works…</h2>
+			<p>Modeling seasonality <a id="_idIndexMarker186"/>with a decomposition approach involves removing the seasonal part and modeling the seasonally adjusted time series with a neural network. Another simpler model is used to forecast the future of the <span class="No-Break">seasonal part.</span></p>
+			<p>This process is different than when using seasonal dummies, a Fourier series, or seasonal differencing. Seasonal dummies or a Fourier series work as extra input variables for the neural network to model. In the case of decomposition or differencing, the time series is transformed before modeling. This means that we need to revert these transformations after making the predictions with the neural network. With decomposition, this means adding the forecasts of the seasonal part. Differencing is also reverted by adding back the previous values from the <span class="No-Break">same season.</span></p>
+			<h1 id="_idParaDest-176"><a id="_idTextAnchor255"/>Handling non-constant variance – log transformation</h1>
+			<p>We’ve learned <a id="_idIndexMarker187"/>how to deal with changes in the level of the time series that occur due to either trend or seasonal patterns. In this recipe, we’ll deal with changes in the variance of <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-177"><a id="_idTextAnchor256"/>Getting ready</h2>
+			<p>We’ve<a id="_idIndexMarker188"/> learned in <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a> that some time series are heteroscedastic, which means that the variance changes over time. Non-constant variance is problematic as it makes the learning process <span class="No-Break">more difficult.</span></p>
+			<p>Let’s start by splitting the solar radiation time series into training and <span class="No-Break">testing sets:</span></p>
+			<pre class="source-code">
+train, test = train_test_split(time_series, test_size=0.2, 
+    shuffle=False)</pre>			<p>Again, we leave the last 20% of observations <span class="No-Break">for testing.</span></p>
+			<h2 id="_idParaDest-178"><a id="_idTextAnchor257"/>How to do it…</h2>
+			<p>We’ll show <a id="_idIndexMarker189"/>how to stabilize the variance of a time series using the<a id="_idIndexMarker190"/> logarithm transformation and a Box-Cox <span class="No-Break">power transformation.</span></p>
+			<h3>Log transformation</h3>
+			<p>In <a href="B21145_01.xhtml#_idTextAnchor019"><span class="No-Break"><em class="italic">Chapter 1</em></span></a>, we defined the <strong class="source-inline">LogTransformation</strong> class that applies the logarithm to a <span class="No-Break">time series:</span></p>
+			<pre class="source-code">
+import numpy as np
+class LogTransformation:
+    @staticmethod
+    def transform(x):
+        xt = np.sign(x) * np.log(np.abs(x) + 1)
+        return xt
+    @staticmethod
+    def inverse_transform(xt):
+        x = np.sign(xt) * (np.exp(np.abs(xt)) - 1)
+        return x</pre>			<p>You can apply the transformation <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+train_log = LogTransformation.transform(train)
+test_log = LogTransformation.transform(test)</pre>			<p>The <strong class="source-inline">train_log</strong> and <strong class="source-inline">test_log</strong> objects are the transformed datasets with a <span class="No-Break">stabilized variance.</span></p>
+			<h3>Box-Cox transformation</h3>
+			<p>The logarithm is <a id="_idIndexMarker191"/>often an effective approach to stabilize the variance, and is a particular instance of the Box-Cox method. You can apply this method using the <strong class="source-inline">boxcox</strong><strong class="source-inline">()</strong> function <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">scipy</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+from scipy import stats
+train_bc, bc_lambda = stats.boxcox(train)
+train_bc = pd.Series(train_bc, index=train.index)</pre>			<p>The Box-Cox method relies on a <strong class="source-inline">lambda</strong> parameter (<strong class="source-inline">bc_lambda</strong>), which we estimate using the training set. Then, we use it to transform the test set <span class="No-Break">as well:</span></p>
+			<pre class="source-code">
+test_bc = stats.boxcox(test, lmbda=bc_lambda)
+test_bc = pd.Series(test_bc, index=test.index)</pre>			<p>After transforming the data using either the logarithm or the Box-Cox transformation, we train a <span class="No-Break">neural network.</span></p>
+			<h3>Modeling</h3>
+			<p>The training <a id="_idIndexMarker192"/>process is identical to what we did in the previous recipes. We’ll continue the recipe using the transformed series with the logarithm (but the process would be the same for the <span class="No-Break">Box-Cox case):</span></p>
+			<pre class="source-code">
+scaler = MinMaxScaler(feature_range=(-1, 1))
+train_norm = scaler.fit_transform(train_log.values.reshape(-1, 1))
+test_norm = scaler.transform(test_log.values.reshape(-1, 1))
+train_df = series_to_supervised(train_norm, 3).values
+test_df = series_to_supervised(test_norm, 3).values
+X_train, y_train = train_df[:, :-1], train_df[:, -1]
+X_test, y_test = test_df[:, :-1], test_df[:, -1]
+X_train = torch.from_numpy(X_train).type(torch.Tensor)
+X_test = torch.from_numpy(X_test).type(torch.Tensor)
+y_train = torch.from_numpy(y_train).type(torch.Tensor).view(-1)
+y_test = torch.from_numpy(y_test).type(torch.Tensor).view(-1)
+X_train = X_train.view([X_train.shape[0], X_train.shape[1], 1])
+X_test = X_test.view([X_test.shape[0], X_test.shape[1], 1])
+model = LSTM(input_dim=1, hidden_dim=32, output_dim=1, num_layers=2)
+loss_fn = nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+epochs = 200
+for epoch in range(epochs):
+    model.train()
+    optimizer.zero_grad()
+    out = model(X_train).reshape(-1, )
+    loss = loss_fn(out, y_train)
+    loss.backward()
+    optimizer.step()</pre>			<p>After<a id="_idIndexMarker193"/> training, we run the model on the test set. The predictions need to be reverted to the original scale of the time series. This is done with the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+model.eval()
+y_pred = model(X_test).reshape(-1, )
+y_pred_np = y_pred.detach().numpy().reshape(-1, 1)
+y_pred_denorm = scaler.inverse_transform(y_pred_np).flatten()
+y_pred_orig = LogTransformation.inverse_transform(y_pred_denorm)</pre>			<p>After denormalizing the predictions, we also use the <strong class="source-inline">inverse_transform</strong><strong class="source-inline">()</strong> method to revert the log transformation. With the Box-Cox transformation, this process could be done <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+from scipy.special import inv_boxcox
+y_pred_orig = inv_boxcox(y_pred_denorm, bc_lambda)</pre>			<p>In the preceding code, we pass the transformed predictions and the <strong class="source-inline">bc_lambda</strong> transformation parameter to get the forecasts in the <span class="No-Break">original scale.</span></p>
+			<h2 id="_idParaDest-179"><a id="_idTextAnchor258"/>How it works…</h2>
+			<p>The process carried out in this recipe attempts to mitigate the problem of non-constant variance. Both the logarithm transformation and the Box-Cox method can be used to stabilize the variance. These methods also bring the data closer to a <strong class="source-inline">Normal</strong> distribution. This type of transformation benefits the training of neural networks as it helps avoid saturation areas in the <span class="No-Break">optimization process.</span></p>
+			<p>The transformation methods work directly on the input data, so they are agnostic to the learning algorithm. The models work with transformed data, which means that the forecasts need to be transformed back to the original scale of the <span class="No-Break">time series.</span></p>
+		</div>
+	</div>
+</div>
+</body></html>

@@ -1,0 +1,687 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Implementing an Intelligent - Autonomous Car Driving Agent using Deep Actor-Critic Algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In <a target="_blank" href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, Implementing an Intelligent Agent for Optimal Control using Deep Q-Learning, we implemented agents using deep Q-learning to solve discrete control tasks that involve discrete actions or decisions to be made. We saw how they can be trained to play video games such as Atari, just like we do: by looking at the game screen and pressing the buttons on the game pad/joystick. We can use such agents to pick the best choice given a finite set of choices, make decisions, or perform actions where the number of possible decisions or actions is finite and typically small. There are numerous real-world problems that can be solved with an agent that can learn to take optimal through to discrete actions. We saw some examples in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for</em> <em class="calibre13">Optimal Discrete Control using Deep Q-Learning</em>. </p>
+<p class="calibre2">In the real world, there are other classes of problems and tasks that require lower-level actions to be performed that are continuous values and not discrete. For example, an intelligent temperature control system or a thermostat needs to be capable of making fine adjustments to the internal control circuits to maintain a room at the specified temperature. The control action signal may include a continuous valued real number (such as <em class="calibre13">1.456</em>) to control <strong class="calibre4">heating, ventilation, and air conditioning</strong> (<strong class="calibre4">HVAC</strong>) systems. Consider another example in which we want to develop an intelligent agent to drive a car autonomously. Humans drive a car by shifting gears, pressing the accelerator or brake pedal, and steering the car. While the current gear is going to be one of a possible set of five to six values, depending on the transmission system of the car, if an intelligent software agent has to perform all of those actions, it has to be able to produce continuous valued real numbers for the throttle (accelerator), braking (brake), and steering. </p>
+<p class="calibre2">In cases like these examples, where we need the agent to take continuous valued actions, we can use policy gradient-based actor-critic methods to directly learn and update the agent's policy in the policy space, rather than through a state and/or action value function like in the deep Q-learning agent we saw in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for Optimal Discrete Control using Deep Q-Learning</em>. In this chapter, we will start from the basics of an actor-critic algorithm and build our agent gradually, while training it to solve various classic control problems using OpenAI Gym environments along the way. We will build our agent all the way up to being able to drive a car in the CARLA driving simulation environment using the custom Gym interface that we implemented in the previous chapter. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">The deep n-step advantage actor-critic algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In our deep Q-learner-based intelligent agent implementation, we used a deep neural network as the function approximator to represent the action-value function. The agent then used the action-value function to come up with a policy based on the value function. In particular, we used the <img class="fm-editor-equation59" src="../images/00158.jpeg"/>-greedy algorithm in our implementation. So, we understand that ultimately the agent has to know what actions are good to take given an observation/state. Instead of parametrizing or approximating a state/action action function and then deriving a policy based on that function, can we not parametrize the policy directly? <span class="calibre5">Yes we can! That is the exact idea behind policy gradient methods. </span></p>
+<p class="calibre2">In the following subsections, we will briefly look at policy gradient-based learning methods and then transition to actor-critic methods that combine and make use of both value-based and policy-based learning. We will then look at some of the extensions to the actor-critic method that have been shown to improve learning performance.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Policy gradients</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><span class="calibre5">In policy gradientbased methods, the policy is represented, for example, by using a neural network with parameters </span><img class="fm-editor-equation78" src="../images/00159.jpeg"/><span class="calibre5">, and the goal is to find the best set of parameters </span><img class="fm-editor-equation78" src="../images/00160.jpeg"/><span class="calibre5">. This can be intuitively seen as an optimization problem where we are trying to optimize the objective of the policy to find the best-performing policy. What is the objective of the agent's policy ? We know that the agent should achieve maximum rewards in the long term, in order to complete the task or achieve the goal. If we can formulate that objective mathematically, we can use optimization techniques to find the best policy for the agent to follow for the given task.</span></p>
+<p class="calibre2"><span class="calibre5">We know that the state value function </span><img class="fm-editor-equation79" src="../images/00161.jpeg"/><span class="calibre5"> tells us the expected return starting from state </span><img class="fm-editor-equation25" src="../images/00162.jpeg"/><span class="calibre5">  and following policy </span><img class="fm-editor-equation80" src="../images/00163.jpeg"/><span class="calibre5"> until the end of the episode. It tells us how good it is to be in state </span><img class="fm-editor-equation25" src="../images/00164.jpeg"/><span class="calibre5">. So ideally, a good policy will have a higher value for the starting state in the environment as it represents the expected/mean/average value of being in that state and taking actions according to policy <img class="fm-editor-equation81" src="../images/00165.jpeg"/> until the end of the episode. The higher the value in the starting state, the higher the total long-term reward an agent following the policy can achieve. </span><span class="calibre5">Therefore, i</span><span class="calibre5">n an episodic environment—where the environment is an episode; that is, it has a terminal state—we can measure how good a policy is based on the value of the start state. Mathematically, such an objective function can be written as follows:</span></p>
+<div class="cdpaligncenter"><img class="fm-editor-equation82" src="../images/00166.jpeg"/></div>
+<p class="calibre2"><span class="calibre5">But what if the environment is not episodic? This means it doesn't have a terminal state and keeps </span><span class="calibre5">on</span><span class="calibre5"> </span><span class="calibre5">going. In such as environment, we can use the average value of the states that are visited while following the current policy, </span><img class="fm-editor-equation83" src="../images/00167.jpeg"/><span class="calibre5">. Mathematically, the average value objective function can be written as follows:</span></p>
+<div class="cdpaligncenter"><img class="fm-editor-equation84" src="../images/00168.jpeg"/></div>
+<p class="calibre2">Here, <img class="fm-editor-equation85" src="../images/00169.jpeg"/> is the stationary distribution of the Markov chain for <img class="fm-editor-equation80" src="../images/00170.jpeg"/>, which gives the probability of visiting state <img class="fm-editor-equation67" src="../images/00171.jpeg"/> while following policy <img class="fm-editor-equation80" src="../images/00172.jpeg"/>. </p>
+<p class="calibre2"><span class="calibre5">We can also use the average reward obtained per time step in such environments, which can be expressed mathematically using the following equation:</span></p>
+<div class="cdpaligncenter"><img class="fm-editor-equation86" src="../images/00173.jpeg"/></div>
+<p class="calibre2">This is essentially the expected value of rewards that can be obtained when the agent takes actions based on policy <img class="fm-editor-equation81" src="../images/00174.jpeg"/>, which can be written in short form like this:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation87" src="../images/00175.jpeg"/></div>
+<p class="calibre2">To optimize this policy objective function using gradient descent, we would take the derivative of the equation with respect to <img class="fm-editor-equation88" src="../images/00176.jpeg"/>, find the gradients, back-propagate, and perform the gradient descent step. From the previous equations, we can write the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation89" src="../images/00177.jpeg"/></div>
+<p class="mce-root1">Let's differentiate the previous equation with respect to  <img class="fm-editor-equation90" src="../images/00178.jpeg"/>  by expanding the terms and then simplifying it further. Follow the following equations from left to right to understand the series of steps involved in arriving at the result:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation91" src="../images/00179.jpeg"/></div>
+<p class="calibre2">To understand these equations and how the policy gradient, <img class="fm-editor-equation92" src="../images/00180.jpeg"/>, is equal to the likelihood ratio, <img class="fm-editor-equation93" src="../images/00181.jpeg"/>, let's take a step back and revisit what our goal is. Our goals is to find the optimal set of parameters <img class="fm-editor-equation94" src="../images/00182.jpeg"/> for the policy so that the agent following the policy will reap the maximum rewards in expectation (i.e on an average average). To achieve that goal, we start with a set of parameters and then keep updating the parameters until we reach the optimal set of parameters. To figure out which direction in the parameter space the policy parameters have to be updated, we make use of the direction indicated by the gradient of policy <img class="fm-editor-equation95" src="../images/00183.jpeg"/> with respect to parameters <img class="fm-editor-equation88" src="../images/00184.jpeg"/>. Let's start with the second term<span class="calibre5"> in the previous equation,</span><span class="calibre5"> </span><img class="fm-editor-equation96" src="../images/00185.jpeg"/><span class="calibre5">, (which was a result of the first term, </span><img class="fm-editor-equation97" src="../images/00186.jpeg"/><span class="calibre5">, by definition):</span></p>
+<p class="calibre2"><img class="fm-editor-equation98" src="../images/00187.jpeg"/> is the gradient of the expected value, under policy <img class="fm-editor-equation81" src="../images/00188.jpeg"/>, of the step reward that resulted from taking action <img class="fm-editor-equation39" src="../images/00189.jpeg"/> in state <img class="fm-editor-equation25" src="../images/00190.jpeg"/>. This, by the definition of expectation, can be written as the following sum:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation99" src="../images/00191.jpeg"/></div>
+<p class="calibre2">We'll look at the likelihood ratio trick, which is used in this context to transform this equation into a form that makes the computation feasible.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">The likelihood ratio trick</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The policy represented by <img class="fm-editor-equation81" src="../images/00192.jpeg"/> is assumed to be a differentiable function whenever it is non-zero, but computing the gradient of the policy with respect to theta, <img class="fm-editor-equation100" src="../images/00193.jpeg"/>, may not be straightforward. We can multiply and divide by policy <img class="fm-editor-equation101" src="../images/00194.jpeg"/> on both sides to get the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation102" src="../images/00195.jpeg"/></div>
+<p class="calibre2">From calculus, we know that the gradient of the log of a function is the gradient of the function over the function itself, which is mathematically given by the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation103" src="../images/00196.jpeg"/></div>
+<p class="calibre2">Therefore, we can write the gradient of the policy with respect to its parameters in the following form:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation104" src="../images/00197.jpeg"/></div>
+<p class="calibre2">This is called the likelihood ratio trick, or the log derivative trick, in machine learning.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">The policy gradient theorem</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Because policy <img class="fm-editor-equation105" src="../images/00198.jpeg"/> is a probability distribution function that describes the probability distribution over actions given the state and parameters <img class="fm-editor-equation88" src="../images/00199.jpeg"/> by definition, the double summation terms over the states and the actions can be expressed as the expectation of the score function scaled by reward <img class="fm-editor-equation106" src="../images/00200.jpeg"/> over distribution <img class="fm-editor-equation80" src="../images/00201.jpeg"/>. This is mathematically equivalent to the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation107" src="../images/00202.jpeg"/></div>
+<p class="calibre2">Note that in the preceding equation, <img class="fm-editor-equation106" src="../images/00203.jpeg"/> is the step reward for taking action <img class="fm-editor-equation28" src="../images/00204.jpeg"/> from state <img class="fm-editor-equation25" src="../images/00205.jpeg"/>.</p>
+<p class="calibre2">The policy gradient theorem generalizes this approach by replacing the instantaneous step reward <img class="fm-editor-equation108" src="../images/00206.jpeg"/> with the long-term action value <img class="fm-editor-equation109" src="../images/00207.jpeg"/> and can be written as follows:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation110" src="../images/00208.jpeg"/></div>
+<p class="calibre2"><span class="calibre5">This result is a very useful one and forms the basis of several variations of the policy gradient method. </span></p>
+<p class="calibre2">With this understanding of policy gradients, we will dive into actor-critic algorithms and their variations in the following few sections.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Actor-critic algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Let's start with a diagrammatic representation of the actor-critic architecture, as shown in the following diagram: </p>
+<p class="cdpaligncenter4"><img src="../images/00209.jpeg" class="calibre85"/></p>
+<p class="calibre2"><span class="calibre5">There are two components in the actor-critic algorithm, as evident from the name and the preceding diagram. The actor is responsible for acting in the environment, which involves taking actions, given observations about the environment and based on the agent's </span><span class="calibre5">policy</span><span class="calibre5">. The actor can be thought of as the </span><span class="calibre5">policy</span><span class="calibre5"> holder/maker. The critic, on the other hand, takes care of estimating the state-value, or state-action-value, or advantage-value function (depending on the variant of the actor-critic algorithm used). Let's consider a case where the</span><span class="calibre5"> critic is trying to estimate the </span>action value function <img class="fm-editor-equation111" src="../images/00210.jpeg"/>. If we use a set of parameters <em class="calibre13">w</em> to denote the critic's parameters, the critic's estimates can be essentially written as:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation112" src="../images/00211.jpeg"/></div>
+<p class="calibre2">Replacing the true action-value function with the critic's approximation of the action-value function (the last equation in the policy gradient theorem section) in the results of the policy gradient theorem from the previous section leads us to the approximate policy gradient given by the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation113" src="../images/00212.jpeg"/></div>
+<p class="calibre2">In practice, we further approximate the expectation using stochastic gradient ascent (or descent with a -ve sign).</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Advantage actor-critic algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The action-value actor-critic algorithm still has high variance. We can reduce the variance by subtracting a baseline function, <em class="calibre13">B(s)</em>, from the policy gradient. A good baseline is the state value function, <img class="fm-editor-equation114" src="../images/00213.jpeg"/>. <span class="calibre5">With the state value function as the baseline, we can rewrite the result of the policy gradient theorem as the following:</span></p>
+<div class="cdpaligncenter"><img class="fm-editor-equation115" src="../images/00214.jpeg"/></div>
+<p class="calibre2">We can define the advantage <span class="calibre5">function </span><img class="fm-editor-equation116" src="../images/00215.jpeg"/> to be<span class="calibre5"> the following</span>:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation117" src="../images/00216.jpeg"/></div>
+<p class="calibre2">When used in the previous policy gradient equation with the baseline, this gives us the advantage of the actor-critic policy gradient:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation118" src="../images/00217.jpeg"/></div>
+<p class="calibre2">Recall from the previous chapters that the 1-step Temporal Difference (TD) error for value function <img class="fm-editor-equation119" src="../images/00218.jpeg"/> is given by<span class="calibre5"> the following</span>:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation120" src="../images/00219.jpeg"/></div>
+<p class="calibre2">If we compute the expected value of this TD error, we will end up with an equation that resembles the definition of the action-value function we saw in <a href="part0033.html#VF2I0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 2</a>, <em class="calibre13">Reinforcement Learning and Deep Reinforcement Learning</em>. From that result, we can observe that the TD error is in fact an unbiased estimate of the advantage function, as derived in this equation from left to right:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation121" src="../images/00220.jpeg"/></div>
+<p class="calibre2">With this result and the previous set of equations in this chapter so far, we have enough theoretical background to get started with our implementation of our agent! Before we get into the code, let's understand the flow of the algorithm to get a good picture of it in our minds. </p>
+<p class="calibre2">The simplest (general/vanilla) form of the advantage actor-critic algorithm involves the following steps:</p>
+<ol class="calibre14">
+<li value="1" class="calibre11">Initialize the (stochastic) policy and the value function estimate.</li>
+<li value="2" class="calibre11">For a given observation/state <img class="fm-editor-equation122" src="../images/00221.jpeg"/>, perform the action,<span> </span><img class="fm-editor-equation123" src="../images/00222.jpeg"/>, prescribed by the current policy, <img class="fm-editor-equation124" src="../images/00223.jpeg"/>.</li>
+<li value="3" class="calibre11">Calculate the TD error based on the resulting state, <img class="fm-editor-equation125" src="../images/00224.jpeg"/> and the reward  <img class="fm-editor-equation123" src="../images/00225.jpeg"/> obtained using the 1-step TD learning equation:
+<div class="cdpaligncenter"><img class="fm-editor-equation126" src="../images/00226.jpeg"/></div>
+</li>
+<li value="4" class="calibre11">Update the actor by adjusting the action probabilities for state <img class="fm-editor-equation123" src="../images/00227.jpeg"/> based on the TD error:
+<ul class="calibre68">
+<li class="calibre11">If <img class="fm-editor-equation127" src="../images/00228.jpeg"/> &gt; 0, increase the probability of taking action <img class="fm-editor-equation128" src="../images/00229.jpeg"/> because <img class="fm-editor-equation129" src="../images/00230.jpeg"/> was a good decision and worked out really well</li>
+<li class="calibre11">If <img class="fm-editor-equation127" src="../images/00231.jpeg"/> &lt; 0 , decrease the probability of taking action <img class="fm-editor-equation123" src="../images/00232.jpeg"/> because <img class="fm-editor-equation123" src="../images/00233.jpeg"/> resulted in a poor performance by the agent</li>
+</ul>
+</li>
+<li value="5" class="calibre11">Update the critic by adjusting its estimated value of <img class="fm-editor-equation130" src="../images/00234.jpeg"/> using the TD error:
+<ul class="calibre68">
+<li class="calibre11"><img class="fm-editor-equation131" src="../images/00235.jpeg"/>, where <img class="fm-editor-equation132" src="../images/00236.jpeg"/> is the critic's learning rate</li>
+</ul>
+</li>
+<li value="6" class="calibre11">Set the next state <img class="fm-editor-equation133" src="../images/00237.jpeg"/> to be the current state <img class="fm-editor-equation123" src="../images/00238.jpeg"/> and repeat step 2.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">n-step advantage actor-critic algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In the advantage actor-critic algorithm section, we looked at the steps involved in implementing the algorithm. In step 3, we noticed that we have to calculate the TD error based on the 1-step return (TD target). It is like letting the agent take a step in the environment and then based on the outcome, calculating the error in the critic's estimates and updating the policy of the agent. This sounds straightforward and simple, right? But, is there any better way to learn and update the policy? As you might have guessed from the title of this section, the idea is to use the n-step return, which uses more information to learn and update the policy compared to 1-step return-based TD learning. n-step TD learning can be seen as a generalized version and the 1-step TD learning used in the actor-critic algorithm, as discussed in the previous section, is a special case of the n-step TD learning algorithm with n=1. Let's look at a quick illustration to understand the n-step return calculation and then implement a Python method to calculate the n-step return, which we will use in our agent implementation.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">n-step returns</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">n-step returns are a simple but very useful concept known to yield better performance for several reinforcement learning algorithms, not just with the advantage actor-critic-based algorithm. For example, the best performing algorithm to date on the Atari suite of <em class="calibre13">57</em> games, which significantly outperforms the second best algorithm, uses n-step returns. We will actually discuss that agent algorithm, called Rainbow, in <a href="part0173.html#54VHA0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 10</a>, <em class="calibre13">Exploring the learning environment landscape: Roboschool, Gym-Retro, StarCraft-II, DMLab</em>.</p>
+<p class="calibre2">Let's first get an intuitive understanding of the n-step return process. Let's use the following diagram to illustrate one step in the environment. Assume that the agent is in state <img class="fm-editor-equation134" src="../images/00239.jpeg"/> at time t=1 and decides to take action <img class="fm-editor-equation135" src="../images/00240.jpeg"/>, which results in the environment being transitioned to state <img class="fm-editor-equation134" src="../images/00241.jpeg"/> at time t=t+1= 1+1 = 2 with the agent receiving a reward of <img class="fm-editor-equation134" src="../images/00242.jpeg"/>:</p>
+<p class="cdpaligncenter4"> <img src="../images/00243.jpeg" class="calibre86"/></p>
+<p class="calibre2">We can calculate the 1-step TD return using the following formula:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation136" src="../images/00244.jpeg"/></div>
+<p class="calibre2">Here, <img class="fm-editor-equation137" src="../images/00245.jpeg"/> is the value estimate of state <img class="fm-editor-equation138" src="../images/00246.jpeg"/> according to the value function (critic). In essence, the agent takes a step and uses the received return and the discounted value of the agent's estimate of the value of the next/resulting state to calculate the return.</p>
+<p class="calibre2">If we let the agent continue interacting with the environment for a few more steps, the trajectory of the agent can be simplistically represented using the following diagram:</p>
+<div class="cdpaligncenter"><img src="../images/00247.jpeg" class="calibre87"/></div>
+<p class="calibre2">This diagram shows a 5-step interaction between the agent and the environment. Following a similar approach to the 1-step return calculation in the previous paragraph, we can calculate the 5-step return using the following formula:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation139" src="../images/00248.jpeg"/></div>
+<p class="calibre2">We can then use this as the TD target in step 3 of the advantage actor-critic algorithm to improve the performance of the agent.</p>
+<div class="packt_tip">You can see how the performance of the advantage actor-critic agent with the 1-step return compares to the performance with the n-step return by running the <kbd class="calibre28">ch8/a2c_agent.py</kbd> script with the <kbd class="calibre28">learning_step_thresh</kbd> parameter in the <kbd class="calibre28">parameters.json</kbd> file set to 1 (for the 1-step return) and 5 or 10 (for the n-step return) in any of the Gym environments.<br class="calibre42"/>
+For example, you can run<br class="calibre42"/>
+<kbd class="calibre28">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$python a2c_agent.py --env Pendulum-v0</kbd> with <kbd class="calibre28">learning_step_thresh=1</kbd>, monitor its performance using Tensorboard using the command<br class="calibre42"/>
+<kbd class="calibre28">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8/logs$tensorboard --logdir=.</kbd>, and then after a million or so steps you can compare the performance of the agent trained with <kbd class="calibre28">learning_step_thresh=10</kbd>. Note that <span class="packt_screen">the trained agent model will be saved at </span><kbd class="calibre28">~/HOIAWOG/ch8/trained_models/A2_Pendulum-v0.ptm</kbd><span class="packt_screen"> . You can rename it or move it to a different directory before you start the second run to start the training from scratch!</span></div>
+<p class="calibre2">To make the concept more explicit, let's discuss how we will use this in step 3 and in the advantage actor-critic algorithm. We will first use the n-step return as the TD target and calculate the TD error using the following formula (step 3 of the algorithm):</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation140" src="../images/00249.jpeg"/></div>
+<p class="calibre2">We will then follow step 4 in the algorithm discussed in the previous subsection and update the critic. Then, in step 5, we will update the critic using the following update rule:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation141" src="../images/00250.jpeg"/></div>
+<p class="calibre2">We will then move on to step 6 of the algorithm to continue with the next state, <img class="fm-editor-equation138" src="../images/00251.jpeg"/>, using 5-step transitions from <img class="fm-editor-equation81" src="../images/00252.jpeg"/> until <img class="fm-editor-equation142" src="../images/00253.jpeg"/> and calculating the 5-step return, then repeat the procedure for updating <img class="fm-editor-equation143" src="../images/00254.jpeg"/>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Implementing the n-step return calculation</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">If we pause for a moment and analyze what is happening, you might see that we are probably not making full use of the 5-step long trajectory. With access to the information from the agent's 5-step long trajectory starting from state <img class="fm-editor-equation138" src="../images/00255.jpeg"/>, we only ended up learning one new piece of information, which is all about <img class="fm-editor-equation138" src="../images/00256.jpeg"/>to update the actor and the critic (<img class="fm-editor-equation144" src="../images/00257.jpeg"/>). We can actually make the learning process more efficient by using the same 5-step trajectory to calculate updates for each of the state values present in the trajectory, with their respective <em class="calibre13">n</em> values based on the end of the trajectory. For example, in a simplified trajectory representation, if we considered state <img class="fm-editor-equation19" src="../images/00258.jpeg"/>, with the forward-view of the trajectory enclosed inside the bubble, as shown in this diagram:</p>
+<div class="cdpaligncenter"><img src="../images/00259.jpeg" class="calibre88"/></div>
+<p class="calibre2">We can use the information inside the bubble to extract the TD learning target for state <img class="fm-editor-equation19" src="../images/00260.jpeg"/>. In this case, since there is only one step of information available from <img class="fm-editor-equation138" src="../images/00261.jpeg"/>, we will be calculating the 1-step return, as shown in this equation:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation145" src="../images/00262.jpeg"/></div>
+<p class="calibre2">As we discussed before, we can use this value as the TD target in equation to get another TD error value, and use the second value to update the actor and <img class="fm-editor-equation146" src="../images/00263.jpeg"/>, in addition to previous updates (<img class="fm-editor-equation137" src="../images/00264.jpeg"/>). <span class="calibre5">Now, we have got one more piece of information for the agent to learn from!</span></p>
+<p class="calibre2"><span class="calibre5">If we apply the same intuition and consider state <img class="fm-editor-equation81" src="../images/00265.jpeg"/>, with the forward-view of the trajectory enclosed in the bubble, as shown in the following diagram:</span></p>
+<div class="cdpaligncenter"><img src="../images/00266.jpeg" class="calibre89"/></div>
+<p class="calibre2">We can use the information inside the bubble to extract the TD learning target for <img class="fm-editor-equation138" src="../images/00267.jpeg"/>. In this case, there are two types of information available from <img class="fm-editor-equation81" src="../images/00268.jpeg"/>; therefore, we will calculate the 2-step return using the following equation:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation147" src="../images/00269.jpeg"/></div>
+<p class="calibre2">If we look at this equation and the previous equation, we can observe that there is a relationship between <img class="fm-editor-equation148" src="../images/00270.jpeg"/> and <img class="fm-editor-equation149" src="../images/00271.jpeg"/>, which is given by the following equation:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation150" src="../images/00272.jpeg"/></div>
+<p class="calibre2">This gives us another piece of information for the agent to learn from. Likewise, we can extract more information from this one trajectory of the agent. Extending the same concept for <img class="fm-editor-equation151" src="../images/00273.jpeg"/> and <img class="fm-editor-equation152" src="../images/00274.jpeg"/>, we can arrive at the following relationship:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation153" src="../images/00275.jpeg"/></div>
+<p class="calibre2">Likewise, in short, we can observe the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation154" src="../images/00276.jpeg"/> </div>
+<p class="calibre2">And finally, we can also observe the following:</p>
+<div class="cdpaligncenter"><img class="fm-editor-equation154" src="../images/00277.jpeg"/></div>
+<p class="calibre2">Simply put, we can start from the last step in the trajectory, calculate the n-step return until the end of the trajectory, and then move back to the previous step to calculate the return using the previously calculated value.</p>
+<p class="calibre2">The implementation is straightforward and simple, and it is advisable to try to implement this on your own. It is provided as follows for your reference:</p>
+<pre class="calibre17">def calculate_n_step_return(self, n_step_rewards, final_state, done, gamma):<br class="title-page-name"/>        """<br class="title-page-name"/>        Calculates the n-step return for each state in the input-trajectory/n_step_transitions<br class="title-page-name"/>        :param n_step_rewards: List of rewards for each step<br class="title-page-name"/>        :param final_state: Final state in this n_step_transition/trajectory<br class="title-page-name"/>        :param done: True rf the final state is a terminal state if not, False<br class="title-page-name"/>        :return: The n-step return for each state in the n_step_transitions<br class="title-page-name"/>        """<br class="title-page-name"/>        g_t_n_s = list()<br class="title-page-name"/>        with torch.no_grad():<br class="title-page-name"/>            g_t_n = torch.tensor([[0]]).float() if done else self.critic(self.preproc_obs(final_state)).cpu()<br class="title-page-name"/>            for r_t in n_step_rewards[::-1]: # Reverse order; From r_tpn to r_t<br class="title-page-name"/>                g_t_n = torch.tensor(r_t).float() + self.gamma * g_t_n<br class="title-page-name"/>                g_t_n_s.insert(0, g_t_n) # n-step returns inserted to the left to maintain correct index order<br class="title-page-name"/>            return g_t_n_s</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Deep n-step advantage actor-critic algorithm</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We observed that the actor-critic algorithm combines value-based methods and policy-based methods. The critic estimates the value function and the actor follows the policy, and we looked at how we can update the actor and the critic. From our previous experience in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for optimal discrete control using Deep Q Learning</em>, we naturally got the idea of using a neural network to approximate the value function and therefore the critic. We can also use a neural network to represent policy <img class="fm-editor-equation155" src="../images/00278.jpeg"/>, in which case parameters <img class="fm-editor-equation156" src="../images/00279.jpeg"/> are the weights of the neural network. Using deep neural networks to approximate the actor and the critic is exactly the idea behind deep actor-critic algorithms. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Implementing a deep n-step advantage actor critic agent</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We have prepared ourselves with all the background information required to implement the deep n-step advantage actor-critic (A2C) agent. Let's look at an overview of the agent implementation process and then jump right into the hands-on implementation.</p>
+<p class="calibre2">The following is the high-level flow of our A2C agent:</p>
+<ol class="calibre14">
+<li value="1" class="calibre11">Initialize the actor's and critic's networks.</li>
+<li value="2" class="calibre11">Use the current policy of the actor to gather n-step experiences from the environment and calculate the n-step return.</li>
+</ol>
+<ol start="3" class="calibre14">
+<li value="3" class="calibre11">Calculate the actor's and critic's losses.</li>
+<li value="4" class="calibre11">Perform the stochastic gradent descent optimization step to update the actor and critic parameters.</li>
+<li value="5" class="calibre11">Repeat from step 2.</li>
+</ol>
+<p class="calibre2">We will implement the agent in a Python class named <kbd class="calibre12">DeepActorCriticAgent</kbd>. You will find the full implementation in this book's code repository under 8th chapter: <kbd class="calibre12">ch8/a2c_agent.py</kbd>. We will make this implementation flexible so that we can easily extend it further for the batched version, as well make an asynchronous version of the n-step advantage actor-critic agent.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Initializing the actor and critic networks</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The <kbd class="calibre12">DeepActorCriticAgent</kbd> class's initialization is straightforward. We will quickly have a look into it and then see how we actually define and initialize the actor and critic networks.</p>
+<p class="calibre2">The agent's initialization function is shown here:</p>
+<pre class="calibre17">class DeepActorCriticAgent(mp.Process):<br class="title-page-name"/>    def __init__(self, id, env_name, agent_params):<br class="title-page-name"/>        """<br class="title-page-name"/>        An Advantage Actor-Critic Agent that uses a Deep Neural Network to represent it's Policy and the Value function<br class="title-page-name"/>        :param id: An integer ID to identify the agent in case there are multiple agent instances<br class="title-page-name"/>        :param env_name: Name/ID of the environment<br class="title-page-name"/>        :param agent_params: Parameters to be used by the agent<br class="title-page-name"/>        """<br class="title-page-name"/>        super(DeepActorCriticAgent, self).__init__()<br class="title-page-name"/>        self.id = id<br class="title-page-name"/>        self.actor_name = "actor" + str(self.id)<br class="title-page-name"/>        self.env_name = env_name<br class="title-page-name"/>        self.params = agent_params<br class="title-page-name"/>        self.policy = self.multi_variate_gaussian_policy<br class="title-page-name"/>        self.gamma = self.params['gamma']<br class="title-page-name"/>        self.trajectory = [] # Contains the trajectory of the agent as a sequence of Transitions<br class="title-page-name"/>        self.rewards = [] # Contains the rewards obtained from the env at every step<br class="title-page-name"/>        self.global_step_num = 0<br class="title-page-name"/>        self.best_mean_reward = - float("inf") # Agent's personal best mean episode reward<br class="title-page-name"/>        self.best_reward = - float("inf")<br class="title-page-name"/>        self.saved_params = False # Whether or not the params have been saved along with the model to model_dir<br class="title-page-name"/>        self.continuous_action_space = True #Assumption by default unless env.action_space is Discrete</pre>
+<p class="calibre2">You may wonder why the <kbd class="calibre12">agent</kbd> class is inheriting from the <kbd class="calibre12">multiprocessing.Process</kbd> class. Although for our first agent implementation we will be running one agent in one process, we can use this flexible interface to enable running several agents in parallel to speed up the learning process.</p>
+<p class="calibre2">Let's move on to actor and critic implementations using neural networks defined with PyTorch operations. Following a similar code structure to what we used in our deep Q-learning agent in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for optimal discrete control using Deep Q Learning</em>, in the code base you will see that we are using a module named <kbd class="calibre12">function_approximator</kbd> to contain our neural network-based function approximator implementations. You can find the full implementations under the <kbd class="calibre12">ch8/function_approximator</kbd> folder in this book's code repository.</p>
+<p class="calibre2">Since some environments have small and discrete state spaces, such as the <kbd class="calibre12">Pendulum-v0</kbd>, <kbd class="calibre12">MountainCar-v0</kbd>, or <kbd class="calibre12">CartPole-v0</kbd> environments, we will also implement shallow versions of neural networks along with the deep versions, so that we can dynamically choose a suitable neural network depending on the environment the agent is trained/tested on. When you look through the sample implementation of the neural networks for the actor, you will notice that in both the <kbd class="calibre12">shallow</kbd> and the <kbd class="calibre12">deep</kbd> function approximator modules, there is a class called <kbd class="calibre12">Actor</kbd> and a different class called <kbd class="calibre12">DiscreteActor</kbd>. This is again for generality purposes so that we can let the agent dynamically pick and use the neural network<span class="calibre5"> </span><span class="calibre5">most suitable</span><span class="calibre5"> for representing the actor, depending on whether the environment's action space is continuous or discrete. There is one more variation for the completeness and generality of our agent implementation that you need to be aware of: both the </span><kbd class="calibre12">shallow</kbd> <span class="calibre5">and the </span><kbd class="calibre12">deep</kbd> <span class="calibre5">function approximator modules in our implementations have an </span><kbd class="calibre12">ActorCritic</kbd> <span class="calibre5">class, which is a single neural network architecture that represents both the actor and the critic. In this way, the feature extraction layers are shared between the actor and the critic, and different heads (final layers) in the same neural network are used to represent the actor and the critic. </span></p>
+<p class="calibre2">Sometimes, the different parts of the implementation might be confusing. To help avoid confusion, here is a summary of the various options in our neural network-based actor-critic implementations:</p>
+<table border="1" class="calibre41">
+<tbody class="calibre36">
+<tr class="calibre37">
+<td class="calibre90">
+<p class="cdpaligncenter4"><strong class="calibre4">Module/class</strong></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4"><strong class="calibre4">Description</strong></p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4"><strong class="calibre4">Purpose/use case</strong></p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">1. <kbd class="calibre12">function_approximator.shallow</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4"> Shallow neural network implementations for actor-critic representations.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Environments that have low-dimensional state/observation spaces.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2"> 1.1 <kbd class="calibre12">function_approximator.shallow.Actor</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4"> Feed-forward neural network implementation that produces two continuous values: mu (mean) and sigma for a Gaussian distribution-based policy representation.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Low-dimensional state/observation space and continuous action space.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">1.2 <kbd class="calibre12">function_approximator.shallow.DiscreteActor</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Feed-forward neural network that produces a logit for each action in the action space.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Low-dimensional state/observation space and discrete action space.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">1.3 <kbd class="calibre12">function_approximator.shallow.Critic</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Feed-forward neural network that produces a continuous value.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Used to represent the critic/value function for environments with low-dimensional state/observation space</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">1.4 <kbd class="calibre12">function_approximator.shallow.ActorCritic</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Feed-forward neural network that produces mu (mean), sigma for a Gaussian distribution, and a continuous value.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Used to represent the actor and the critic in the same network for environments with low-dimensional state/observation space. It is possible to modify this to a discrete actor-critic network.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">2. <kbd class="calibre12">function_approximator.deep</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Deep neural network implementations for actor, critic representation.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Environments that have high-dimensional state/observation spaces.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2">2.1 <kbd class="calibre12">function_approximator.deep.Actor</kbd></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Deep convolutional neural network that produces the mu (mean) and sigma for a Gaussian distribution-based policy representation.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">High-dimensional state/observation space and continuous action space.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2"><span class="calibre5">2.2 <kbd class="calibre12">function_approximator.deep.DiscreteActor</kbd></span></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Deep convolutional neural network that produces a logit for each action in the action space.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">High-dimensional state/observation space and discrete action-space.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2"><span class="calibre5">2.3 <kbd class="calibre12">function_approximator.deep.Critic</kbd></span></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Deep convolutional neural network that produces a continuous value.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Used to represent the critic/value-function for environments with high-dimensional state/observation space.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+<tr class="calibre37">
+<td class="calibre90">
+<p class="calibre2"><span class="calibre5">2.4 <kbd class="calibre12">function_approximator.deep.ActorCritic</kbd></span></p>
+</td>
+<td class="calibre91">
+<p class="cdpaligncenter4">Deep convolutional neural network that produces mu (mean), sigma for a Gaussian distribution as well as a continuous value.</p>
+</td>
+<td class="calibre92">
+<p class="cdpaligncenter4">Used to represent the actor and the critic in a same network for environments with high-dimensional state/observation space. It is possible to modify this to a discrete actor-critic network.</p>
+</td>
+<td class="calibre93"/>
+</tr>
+</tbody>
+</table>
+<p class="calibre2"> </p>
+<p class="calibre2">Let's now look at the first part of the <kbd class="calibre12">run()</kbd> method, where we initialize the actor and the critic network based on the type of the environment's state and action spaces, as well as based on whether the state space is low-dimensional or high-dimensional based on the previous table:</p>
+<pre class="calibre17">from function_approximator.shallow import Actor as ShallowActor<br class="title-page-name"/>from function_approximator.shallow import DiscreteActor as ShallowDiscreteActor<br class="title-page-name"/>from function_approximator.shallow import Critic as ShallowCritic<br class="title-page-name"/>from function_approximator.deep import Actor as DeepActor<br class="title-page-name"/>from function_approximator.deep import DiscreteActor as DeepDiscreteActor<br class="title-page-name"/>from function_approximator.deep import Critic as DeepCritic<br class="title-page-name"/><br class="title-page-name"/>def run(self):<br class="title-page-name"/>        self.env = gym.make(self.env_name)<br class="title-page-name"/>        self.state_shape = self.env.observation_space.shape<br class="title-page-name"/>        if isinstance(self.env.action_space.sample(), int): # Discrete action space<br class="title-page-name"/>            self.action_shape = self.env.action_space.n<br class="title-page-name"/>            self.policy = self.discrete_policy<br class="title-page-name"/>            self.continuous_action_space = False<br class="title-page-name"/><br class="title-page-name"/>        else: # Continuous action space<br class="title-page-name"/>            self.action_shape = self.env.action_space.shape[0]<br class="title-page-name"/>            self.policy = self.multi_variate_gaussian_policy<br class="title-page-name"/>        self.critic_shape = 1<br class="title-page-name"/>        if len(self.state_shape) == 3: # Screen image is the input to the agent<br class="title-page-name"/>            if self.continuous_action_space:<br class="title-page-name"/>                self.actor= DeepActor(self.state_shape, self.action_shape, device).to(device)<br class="title-page-name"/>            else: # Discrete action space<br class="title-page-name"/>                self.actor = DeepDiscreteActor(self.state_shape, self.action_shape, device).to(device)<br class="title-page-name"/>            self.critic = DeepCritic(self.state_shape, self.critic_shape, device).to(device)<br class="title-page-name"/>        else: # Input is a (single dimensional) vector<br class="title-page-name"/>            if self.continuous_action_space:<br class="title-page-name"/>                #self.actor_critic = ShallowActorCritic(self.state_shape, self.action_shape, 1, self.params).to(device)<br class="title-page-name"/>                self.actor = ShallowActor(self.state_shape, self.action_shape, device).to(device)<br class="title-page-name"/>            else: # Discrete action space<br class="title-page-name"/>                self.actor = ShallowDiscreteActor(self.state_shape, self.action_shape, device).to(device)<br class="title-page-name"/>            self.critic = ShallowCritic(self.state_shape, self.critic_shape, device).to(device)<br class="title-page-name"/>        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.params["learning_rate"])<br class="title-page-name"/>        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.params["learning_rate"])</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Gathering n-step experiences using the current policy</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The next step is to perform what are called <em class="calibre13">rollouts</em> using the current policy of the agent to collect <kbd class="calibre12">n</kbd> number of transitions. This process is basically letting the agent interact with the environment and generating new experiences in terms of state transitions, usually represented as a tuple containing the state, action, reward obtained, and next state, or in short <kbd class="calibre12">(<img class="fm-editor-equation123" src="../images/00280.jpeg"/>, <img class="fm-editor-equation122" src="../images/00281.jpeg"/>, <img class="fm-editor-equation123" src="../images/00282.jpeg"/>, <img class="fm-editor-equation157" src="../images/00283.jpeg"/>)</kbd>, as illustrated in the following diagram:</p>
+<p class="cdpaligncenter4"><img src="../images/00284.jpeg" class="calibre94"/></p>
+<p class="calibre2">In the example shown in the preceding diagram, the agent would fill its <kbd class="calibre12">self.trajectory</kbd> with a list of the five transitions like this: <kbd class="calibre12"><span>[T1, T2, T3, T4, T5]</span></kbd>.</p>
+<p class="calibre2">In our implementation, we will use a slightly modified transition representation to reduce redundant calculations. We will use the following definition to represent a transition:</p>
+<p class="calibre2"><kbd class="calibre12">Transition = namedtuple("Transition", ["s", "value_s", "a", "log_prob_a"])</kbd><br class="calibre6"/>
+Here, <kbd class="calibre12">s</kbd> is the state, <kbd class="calibre12">value_s</kbd> is the critic's prediction of the value of state <kbd class="calibre12">s</kbd>, <kbd class="calibre12">a</kbd> is the action taken, and <kbd class="calibre12">log_prob_a</kbd> is the logarithm of the probability of taking action <kbd class="calibre12">a</kbd> according to the actor/agent's current policy.</p>
+<p class="calibre2">We will use the <kbd class="calibre12">calculate_n_step_return(self, n_step_rewards, final_state, done, gamma)</kbd> method we implemented previously to calculate the n-step return based on the <kbd class="calibre12">n_step_rewards</kbd> <span class="calibre5">list </span><span class="calibre5">containing the scalar reward values obtained at each step in the trajectory and the </span><kbd class="calibre12">final_state</kbd> <span class="calibre5">used to calculate the critic's estimate value of the final/last state in the trajectory, as we discussed earlier in the n-step return calculation section.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Calculating the actor's and critic's losses</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">From the description of the n-step deep actor-critic algorithm we went over previously, you may remember that the critic, represented using a neural network, is trying to solve a problem that is similar to what we saw in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for Optimal Discrete Control using Deep Q-Learning</em>, which is to represent the value function (similar to the action-value function we used in this chapter, but a bit simpler). We can use the standard <strong class="calibre4">Mean Squared Error</strong> (<strong class="calibre4">MSE</strong>) loss or the smoother L1 loss/Huber loss, calculated based on the critic's predicted values and the n-step returns (TD targets) computed in the previous step. </p>
+<p class="calibre2">For the actor, we will use the results obtained with the policy gradient theorem, and specifically the advantage actor-critic version, where the advantage value function is used to guide the gradient updates of the actor policy. We will use the TD_error, which is an unbiased estimate of the advantage value function.</p>
+<p class="calibre2">In summary, the critic's and actor's losses are as follows:</p>
+<ul class="calibre10">
+<li class="calibre11"><em class="calibre25">critic_loss = MSE(<img src="../images/00285.jpeg" class="calibre95"/>, critic_prediction)</em></li>
+<li class="calibre11"><em class="calibre25">actor_loss = log(<img src="../images/00286.jpeg" class="calibre96"/>) * TD_error</em></li>
+</ul>
+<p class="calibre2">With the main loss calculation equations captured, we can implement them in code using the <kbd class="calibre12">calculate_loss(self, trajectory, td_targets)</kbd> method, as illustrated by the following code snippet:</p>
+<pre class="calibre17">def calculate_loss(self, trajectory, td_targets):<br class="title-page-name"/>        """<br class="title-page-name"/>        Calculates the critic and actor losses using the td_targets and self.trajectory<br class="title-page-name"/>        :param td_targets:<br class="title-page-name"/>        :return:<br class="title-page-name"/>        """<br class="title-page-name"/>        n_step_trajectory = Transition(*zip(*trajectory))<br class="title-page-name"/>        v_s_batch = n_step_trajectory.value_s<br class="title-page-name"/>        log_prob_a_batch = n_step_trajectory.log_prob_a<br class="title-page-name"/>        actor_losses, critic_losses = [], []<br class="title-page-name"/>        for td_target, critic_prediction, log_p_a in zip(td_targets, v_s_batch, log_prob_a_batch):<br class="title-page-name"/>            td_err = td_target - critic_prediction<br class="title-page-name"/>            actor_losses.append(- log_p_a * td_err) # td_err is an unbiased estimated of Advantage<br class="title-page-name"/>            critic_losses.append(F.smooth_l1_loss(critic_prediction, td_target))<br class="title-page-name"/>            #critic_loss.append(F.mse_loss(critic_pred, td_target))<br class="title-page-name"/>        if self.params["use_entropy_bonus"]:<br class="title-page-name"/>            actor_loss = torch.stack(actor_losses).mean() - self.action_distribution.entropy().mean()<br class="title-page-name"/>        else:<br class="title-page-name"/>            actor_loss = torch.stack(actor_losses).mean()<br class="title-page-name"/>        critic_loss = torch.stack(critic_losses).mean()<br class="title-page-name"/><br class="title-page-name"/>        writer.add_scalar(self.actor_name + "/critic_loss", critic_loss, self.global_step_num)<br class="title-page-name"/>        writer.add_scalar(self.actor_name + "/actor_loss", actor_loss, self.global_step_num)<br class="title-page-name"/><br class="title-page-name"/>        return actor_loss, critic_loss</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Updating the actor-critic model</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">After we have calculated the losses for the actor and critic, the next and final step in the learning process is to update the actor and critic parameters based on their losses. Since we use the awesome PyTorch library, which takes care of the partial differentiation, back-propagation of errors, and gradient calculations automatically, the implementation is simple and straightforward using the results from the previous steps, as shown in the following code sample:</p>
+<pre class="calibre17">def learn(self, n_th_observation, done):<br class="title-page-name"/>        td_targets = self.calculate_n_step_return(self.rewards, n_th_observation, done, self.gamma)<br class="title-page-name"/>        actor_loss, critic_loss = self.calculate_loss(self.trajectory, td_targets)<br class="title-page-name"/><br class="title-page-name"/>        self.actor_optimizer.zero_grad()<br class="title-page-name"/>        actor_loss.backward(retain_graph=True)<br class="title-page-name"/>        self.actor_optimizer.step()<br class="title-page-name"/><br class="title-page-name"/>        self.critic_optimizer.zero_grad()<br class="title-page-name"/>        critic_loss.backward()<br class="title-page-name"/>        self.critic_optimizer.step()<br class="title-page-name"/><br class="title-page-name"/>        self.trajectory.clear()<br class="title-page-name"/>        self.rewards.clear()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Tools to save/load, log, visualize, and monitor</h1>
+                
+            
+            <article>
+                
+<p class="calibre2"><span class="calibre5">In the previous sections, we walked through the core part of the agent's learning algorithm implementation. Apart from those core parts, there are a few utility functions that we will use to train and test the agent in different learning environments. We will reuse the components that we already developed in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for optimal discrete control using Deep Q Learning</em>,such as the </span><kbd class="calibre12">utils.params_manager</kbd><span class="calibre5">, and also the </span><kbd class="calibre12">save()</kbd><span class="calibre5"> and </span><kbd class="calibre12">load()</kbd><span class="calibre5"> methods, which respectively save and load the agent's trained brain or model. We also will make use of the logging utilities to log the agent's progress in a format that is usable with Tensorboard for a </span><span class="calibre5">nice</span><span class="calibre5"> </span><span class="calibre5">and </span><span class="calibre5">quick visualization, as well as for debugging and monitoring to see whether there is something wrong with our agent's training process.</span></p>
+<p class="calibre2">With that, we can complete our implementation of the n-step advantage actor-critic agent! You can find the full implementation in the <kbd class="calibre12">ch8/a2c_agent.py</kbd> file. Before we see how we can train the agent, in the next section we will quickly look at one of the extensions we can apply to the deep n-step advantage agent to make it <span class="calibre5">perform</span><span class="calibre5"> </span><span class="calibre5">even better on multi-core machines. </span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">An extension - asynchronous deep n-step advantage actor-critic </h1>
+                
+            
+            <article>
+                
+<p class="calibre2">One easy extension that we can make to our agent implementation is to launch several instances of our agent, each with their own instance of the learning environment, and send back updates from what they have learned in an asychronous manner, that is, whenever they are available, without any need for time syncing. This algorithm <span class="calibre5">is popularly known as the A3C algorithm, which is short for asynchronous advantage actor-critic.</span></p>
+<p class="calibre2">One of the motivations behind this extension stems from what we learned in <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6, </a><em class="calibre13">Implementing an Intelligent Agent for optimal discrete control using Deep Q Learning</em>, with the use of the experience replay memory. Our deep Q-learning agent was able to learn considerably better with the addition of experience replay memory, which in essence helped in decorrelating the dependencies in the sequential decision making problem, and letting the agent extract more juice/information from its past experience. Similarly, the idea behind using multiple actor-learner instances running in parallel is found to be helpful in breaking the correlation between the transitions, and also helps in the exploration of different parts of the state space in the environment, as each actor-learner process has its own set of policy parameters and environment instance to explore. Once the agent instances running in parallel have some updates to send back, they send them over to a shared, global agent instance, which then acts as the new parameter source for the other agent instances to sync from.</p>
+<p class="calibre2">We can use Python's PyTorch multiprocessing library <span class="calibre5">to implement this extension</span>. Yes! You guessed it right. This was the reason our <kbd class="calibre12">DeepActorCritic</kbd> agent in our implementation subclassed <kbd class="calibre12">torch.multiprocessing.Process</kbd> right from the start, so that we can add this extension to it without any significant code refactoring. You can look at the <kbd class="calibre12">ch8/README.md</kbd> file in the book's code repository for more resources on exploring this architecture if you are interested.</p>
+<p class="calibre2">We can easily extend our n-step advantage actor-critic agent implementation in <kbd class="calibre12">a2c_agent.py</kbd><span class="calibre5"> </span>to implement the synchronous deep n-step advantage actor-critic agent. You can find the asynchronous implementation in <kbd class="calibre12">ch8/async_a2c_agent.py</kbd>. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Training an intelligent and autonomous driving agent</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We now have all the pieces we need to accomplish our goal for this chapter, which is to put together an intelligent, autonomous driving agent, and then train it to drive a car autonomously in the photo-realistic CARLA driving environment that we developed as a learning environment using the Gym interface in the previous chapter. The agent training process can take a while. Depending on the hardware of the <span class="calibre5">machine</span><span class="calibre5"> </span><span class="calibre5">that you are going to train the agent on, it may take anywhere from a few hours for simpler environments (such as</span><kbd class="calibre12">Pendulum-v0</kbd><span class="calibre5">,</span> <kbd class="calibre12">CartPole-v0</kbd><span class="calibre5">, and some of the Atari games) to a few days for complex environments (such as the CARLA driving environment). In order to first get a good understanding of the training process and how to monitor progress while the agent is training, we will start with a few simple examples to walk through the whole process of training and testing the agent. We will then look at how easily we can move it to the CARLA driving environment to train it further.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Training and testing the deep n-step advantage actor-critic agent</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Because our agent's implementation is generic (as discussed using the table in step 1 in the previous section), we can use any learning environment that has Gym-compatible interfaces to train/test the agent. You can experiment and train the agent in a variety of environments that we discussed in the initial chapters of this book, and we will also be discussing some more interesting learning environments in the next chapter. Don't forget about our custom CARLA car driving environment! </p>
+<p class="calibre2">We will pick a few environments as examples and walk through how you can launch the training and testing process to get you started experimenting on your own. First, update your fork of the book's code repository and <kbd class="calibre12">cd</kbd> to the <kbd class="calibre12">ch8</kbd> folder, where the code for this chapter resides. As always, make sure to activate the conda environment we created for this book. After this, you can launch the training process for the n-step advantage actor critic agent using the <kbd class="calibre12">a2c_agent.py</kbd> script, as illustrated here:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$ python a2c_agent --env Pendulum-v0</strong></pre>
+<div class="packt_infobox">You can replace <kbd class="calibre28">Pendulum-v0</kbd> with any Gym-compatible learning environment name that is set up on your machine. </div>
+<p class="calibre2">This should launch the agent's training script, which will use the default parameters specified in the <kbd class="calibre12">~/HOIAWOG/ch8/parameters.json</kbd> file (which you can change to experiment). It will also load the trained agent's brain/model for the specified environment from the <kbd class="calibre12">~/HOIAWOG/ch8/trained_models</kbd> directory, if available, and continue training. For high-dimensional state space environments, such as the Atari games, or other environments where the state/observation is an image of the scene or the screen pixels, the deep convolutional neural network we discussed in one of the previous sections will be used, which will make use of the GPU on your machine,<span class="calibre5"> </span><span class="calibre5">if available,</span><span class="calibre5"> to speed up computations (you can disable this by setting </span><kbd class="calibre12">use_cuda = False</kbd> <span class="calibre5">in the </span><kbd class="calibre12">parameters.json</kbd> <span class="calibre5">file if you want). If you have multiple GPUs on your machine and would like to train different agents on different GPUs, you can specify the GPU device ID as a command line argument to the </span><kbd class="calibre12">a2c_agent.py</kbd> <span class="calibre5">script using the </span><kbd class="calibre12">--gpu-id</kbd> <span class="calibre5">flag to ask the script to use a particular GPU for training/testing.</span></p>
+<p class="calibre2">Once the training process starts, you can monitor the agent's process by launching <kbd class="calibre12">tensorboard</kbd> using the following command from the <kbd class="calibre12">logs</kbd> directory:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8/logs$ tensorboard --logdir .</strong></pre>
+<p class="calibre2">After launching <kbd class="calibre12">tensorboard</kbd> using the preceding command, you can visit the web page at <kbd class="calibre12">http://localhost:6006</kbd> to monitor the progress of the agent. Sample screenshots are provided here for your reference; these were from two training runs of the n-step advantage actor-critic agent, with different values for <em class="calibre13">n</em> steps, using the <kbd class="calibre12">learning_step_threshold</kbd> parameter in the <kbd class="calibre12">parameters.json</kbd> file:</p>
+<p class="calibre2">Actor-critic (using separate actor and critic network):</p>
+<ol class="calibre14">
+<li value="1" class="calibre11"> - <kbd class="calibre12">Pendulum-v0</kbd> ; n-step (learning_step_threshold = 100)</li>
+</ol>
+<p class="cdpaligncenter4"><img src="../images/00287.jpeg" class="calibre97"/></p>
+<p class="cdpaligncenter4">              2.  - <kbd class="calibre12">Pendulum-v0</kbd>; n-step (learning_step_threshold = 5)</p>
+<p class="cdpaligncenter4"><img src="../images/00288.jpeg" class="calibre98"/></p>
+<ul class="calibre10">
+<li class="calibre11">Comparing 1 (100-step AC in green) and 2 (5-step AC in grey) on <kbd class="calibre12">Pendulum-v0</kbd> for 10 million steps:</li>
+</ul>
+<p class="cdpaligncenter4"><img src="../images/00289.jpeg" class="calibre99"/></p>
+<p class="calibre2">The training script will also output a summary of the training process to the console. If you want to visualize the environment to see what the agent is doing or how it is learning, you can add the <kbd class="calibre12">--render</kbd><span class="calibre5"> </span>flag to the command while launching the training script, as illustrated in the following line:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$ python a2c_agent --env CartPole-v0 --render</strong></pre>
+<p class="calibre2"><span class="calibre5">As you can see, we have reached a point where you are just one command away from training, logging, and visualizing the agent's performance! We have made very good progress so far.</span></p>
+<p class="calibre2"><span class="calibre5">You can run several experiments with different sets of parameters for the agent, on the same environment or on different environments. The previous example was chosen to demonstrate its performance in a simpler environment so that you can easily run full-length experiments and reproduce and compare the results, irrespective of the hardware resources you may have. </span>As part of the book's code repository, trained agent brains/models are provided for some environments so that you can quickly start and run the script in test mode to see how a trained agent performs at the tasks. They are available in the <kbd class="calibre12">ch8/trianed_models</kbd> folder in your fork of the book's repository, or at the upstream origin here: <a href="https://github.com/PacktPublishing/Hands-On-Intelligent-Agents-with-OpenAI-Gym/tree/master/ch8/trained_models" class="calibre9">https://github.com/PacktPublishing/Hands-On-Intelligent-Agents-with-OpenAI-Gym/tree/master/ch8/trained_models</a>. You will also find other resources, such as illustrations of learning curves in other environments and video clips of agents performing in a variety of environments, in the book's code repository for your reference.</p>
+<p class="calibre2"> Once you are ready to test the agent, either using your own trained agent's brain model or using one of the pre-trained agent brains, you can use the <kbd class="calibre12">--test</kbd> flag to signify that you would like to disable learning and run the agent in testing mode. For example, to test the agent in the <kbd class="calibre12">LunarLander-v2</kbd> environment with rendering of the learning environment turned on, you can use the following command:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$ python a2c_agent --env LunarLander-v2 --test --render</strong></pre>
+<p class="calibre2">We can interchangeably use the asynchronous agent that we discussed as an extension to our base agent. Since both the agent implementations follow the same structure and configuration, we can easily switch to the asynchronous agent training script by just using the <kbd class="calibre12">async_a2c_agent.py</kbd> script in place of <kbd class="calibre12">a2c_agent.py</kbd>. They even support the same command line arguments to make our work simpler. When using the <kbd class="calibre12">asyn_a2c_agent.py</kbd> script, you should make sure to set the <kbd class="calibre12">num_agents</kbd> parameter in the <kbd class="calibre12">parameters.json</kbd> file, based on the number of processes or parallel instances you would like the agent to use for training. As an example, we can train the asynchronous version of our agent in the <kbd class="calibre12">BipedalWalker-v2</kbd> environment using the following command:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$ python async_a2c_agent --env BipedalWalker-v2 </strong></pre>
+<p class="calibre2"><span class="calibre5">As you may have realized, our agent implementation is capable of learning to act in a variety of different environments, each with its own set of tasks to be completed, as well as their own state, observation and action spaces. It is this versatility that has made deep reinforcement learning-based agents popular and suitable for solving a variety of problems. Now that we are familiar with the training process, we can finally move on to training the agent to drive a car and follow the lanes in the CARLA driving simulator.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Training the agent to drive a car in the CARLA driving simulator</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Let's start training an agent in the CARLA driving environment! First, make sure your GitHub fork is up to date with the upstream master so that you have the latest code from the book's repository. Since the CARLA environment we created in the previous chapter is compatible with the OpenAI Gym interface, it is actually easy to use the CARLA environment for training, just like any other Gym environment. You can train the n-step advantage actor-critic agent using the following command:</p>
+<pre class="calibre17"><strong class="calibre1">(rl_gym_book) praveen@ubuntu:~/HOIAWOG/ch8$ python a2c_agent --env Carla-v0</strong></pre>
+<p class="calibre2">This will launch the agent's training process, and like we saw before, a summary of the progress will be printed to the console window, along with the logs written to the <kbd class="calibre12">logs</kbd> folder, which can be viewed using <kbd class="calibre12">tensorboard</kbd>.</p>
+<p class="calibre2">During the initial stages of the training process, you will notice that the agent is driving the car like crazy!</p>
+<p class="calibre2">After several hours of training, you will see that the agent learns to control the car and successfully drives down the road while staying in the lane and avoiding crashing into other vehicles. A trained model for the autonomous driver agent is available in the <kbd class="calibre12">ch8/trained_models</kbd> folder for you to quickly take the agent on a test drive! You will also find more resources and experimental results in the book's code repository to help with your learning and experimentation. Happy experimenting!</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Summary</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this chapter, we got hands-on with an actor-critic architecture-based deep reinforcement learning agent, starting from the basics. We started with the introduction to policy gradient-based methods and walked through the step-by-step process of representing the objective function for the policy gradient optimization, understanding the likelihood ratio trick, and finally deriving the policy gradient theorem. We then looked at how the actor-critic architecture makes use of the policy gradient theorem and uses an actor component to represent the policy of the agent, and a critic component to represent the state/action/advantage value function, depending on the implementation of the architecture. With an intuitive understanding of the actor-critic architecture, we moved on to the A2C algorithm and discussed the six steps involved in it. We then discussed the n-step return calculation using a diagram, and saw how easy it is to implement the n-step return calculation method in Python. We then moved on to the step-by-step implementation of the deep n-step advantage actor-critic agent.</p>
+<p class="calibre2">We also discussed how we could make the implementation flexible and generic to accommodate a variety of environments, which may have different state, observation and action space dimensions, and also may be continuous or discrete. We then looked at how we can run multiple instances of the agent in parallel on separate processes to improve the learning performance. In the last section, we walked through the steps involved in the process of training the agents, and once they are trained, how we can use the <kbd class="calibre12">--test</kbd> and <kbd class="calibre12">--render</kbd> flags to test the agent's performance. We started with simpler environments to get accustomed to the training and monitoring process, and then finally moved on to accomplishing the goal of this chapter, which was to train an intelligent agent to drive a car autonomously in the CARLA driving simulator! I hope you learned a lot going through this relatively long chapter. At this point, you have experience understanding and implementing two broad classes of high-performance learning agent algorithms from this chapter and <a href="part0094.html#2PKKS0-22c7fc7f93b64d07be225c00ead6ce12" class="calibre9">Chapter 6</a>, <em class="calibre13">Implementing an Intelligent Agent for</em> <em class="calibre13">Optimal Discrete Control using Deep Q-Learning</em>. In the next chapter, we will explore the landscape of new and promising learning environments, where you can train your custom agents and start making progress towards the next level.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

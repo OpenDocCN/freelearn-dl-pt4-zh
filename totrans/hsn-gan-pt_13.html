@@ -1,0 +1,247 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Reconstructing 3D models with GANs</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">So far, we've learned how to synthesize images, text, and audio with GANs. Now, it's time to explore the 3D world and learn how to use GANs to create convincing 3D models.</p>
+<p>In this chapter, you will learn how 3D objects are represented in <strong>computer graphics</strong> (<strong>CG</strong>). We will also look into the fundamental concepts of CG, including camera and projection matrices. By the end of this chapter, you will have learned how to create and train 3D_GAN to generate a point cloud of 3D objects, such as chairs. </p>
+<p>You will know the fundamental knowledge of the representation of 3D objects and the basic concept of 3D convolution. Then, you will learn to construct a 3D-GAN model by 3D convolutions and train it to generate 3D objects. You will also get familiar with PrGAN, a model that generates 3D objects based on their black-and-white 2D views.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Fundamental concepts in computer graphics</li>
+<li>Designing GANs for 3D data synthesis</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Fundamental concepts in computer graphics</h1>
+                </header>
+            
+            <article>
+                
+<p>In the previous chapters, we learned about various GAN models for image, text, and audio. Generally, we have been solely dealing with 1D and 2D data. In this chapter, we will expand on our knowledge of the GAN world by looking at the 3D domain. By the end of this chapter, you will have learned how to create your own 3D objects with GANs.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Representation of 3D objects</h1>
+                </header>
+            
+            <article>
+                
+<p>It is essential to understand how 3D objects are represented in a computer before we dive into the details of the GAN model for 3D data synthesis. The creation and rendering of 3D objects, environments, and animations is called <strong>computer graphics</strong> (<strong>CG</strong>), which two of the major entertainment industries, that is video games and movies, heavily rely on. The most important task in CG is figuring out how to efficiently render the most convincing images on the screen. Thanks to the hard work of people in the CG field, we are now getting better visual effects in video games and movies.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Attributes of a 3D object</h1>
+                </header>
+            
+            <article>
+                
+<p>The most basic attributes a 3D object has are its shape and color. The color of each pixel we can see on a screen is affected by many factors, such as the color of its own texture, the light source, and even the other objects in the scene. This is also affected by the relative directions of the light source and our viewpoint to the pixel's own surface, which are determined by the shape, position, and orientation of the object and the position of the camera. When it comes to shape, a 3D model basically consists of points, lines, and surfaces. An example of the creation of the shape and color of a 3D sports car can be seen in the following image:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/a2aa33c9-fac3-4267-b444-ab0eca87a4c4.png" style="width:51.50em;height:24.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The creation of a sports car in Autodesk Maya shows how lines form surfaces and how textures provide colors in 3D models</div>
+<p>A surface, either flat or curved, is mostly formed with triangles and quadrangles (which are generally called <strong>polygons</strong>). A polygon mesh (also called a <strong>wireframe</strong>) is defined by a set of 3D points and a set of segments connecting those points. Normally, having more polygons means that there will be more details in the 3D models. This can be seen in the following image:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/224ddaca-470d-440c-ae18-be82840e4450.png" style="width:50.08em;height:48.25em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">More polygons means more details in 3D models. Images captured in Autodesk Maya.</div>
+<p>Sometimes, a set of points (also known as a <strong>point cloud</strong> in some applications) is all we need to create 3D objects since there are several widely used methods for automatically creating segments in order to generate a polygon mesh (for example, the Delaunay triangulation method). Point clouds are often used to represent the results that are collected by 3D scanners. A point cloud is a set of three-dimensional vectors representing the spatial coordinates of each point. In this chapter, we are only interested in the generation of the point clouds of certain objects with GANs. A few examples of the point clouds of chairs can be seen in the following image:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-817 image-border" src="assets/c9de716c-bf8f-4b09-a65b-d85fc7894e2b.png" style="width:55.67em;height:28.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Point clouds of chairs</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Camera and projection</h1>
+                </header>
+            
+            <article>
+                
+<p>Once the shape and color of the 3D objects have been defined, there's still a major factor that will affect the way they look on the screen: the <strong>camera</strong>. The camera is responsible for mapping the 3D points, lines, and surfaces to the 2D image plane, which is usually our screen. <span>If the camera isn't configured correctly, we may not see our objects at all. The process of mapping from the 3D world to the 2D image plane is called <strong>projection</strong>.</span></p>
+<p>There are two <span>different </span>commonly used projection methods in the field of CG: orthographic projection and perspective projection. Let's go over them now:</p>
+<ul>
+<li><strong>Orthographic projection</strong> is a process that maps everything in a cuboid (that is, a rectangular volume) to a standard cube. For more information about orthographic and perspective projection, please refer to <a href="http://www.songho.ca/opengl/gl_projectionmatrix.html">http://www.songho.ca/opengl/gl_projectionmatrix.html</a>.</li>
+</ul>
+<p style="padding-left: 60px">In orthographic projection, all the parallel lines in the 3D space are still parallel in the 2D plane, except they have different lengths and orientations. More importantly, the size of the projected image of the same object is always the same, no matter how far away it is from the camera. However, this is not the way our eyes and most cameras capture images of the 3D world. Therefore, orthographic projection is mainly used in <strong>Computer-Aided Design</strong> (<strong>CAD</strong>) and other engineering applications, where the actual size of the components needs to be rendered correctly.</p>
+<ul>
+<li><strong>Perspective projection</strong> is a process that maps everything in a frustum (that is, a pyramid without its tip) to a standard cube, as shown in the preceding image. In perspective projection, objects that are closer to the camera look bigger than those far away from the camera. Therefore, parallel lines in the 3D space are not necessarily parallel in the 2D space. This is also how our eyes perceive the surrounding environment. Therefore, this type of projection gives us more realistic images and is often used for rendering visual effects in video games and movies.</li>
+</ul>
+<p>Orthographic and perspective projections are used together in some forms of CG software, such as Autodesk Maya, as shown in the following screenshots:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/a36d37b6-e3d4-49ab-8ce4-5bad2a50d2e3.png" style="width:57.08em;height:40.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">In the user interface of Autodesk Maya, orthographic projection is used to show the top, side, and front views (top left, bottom left, and bottom right), while perspective projection is used to preview the 3D models (top right). Image retrieved from https://knowledge.autodesk.com/support/maya/learn-explore/caas/simplecontent/content/maya-tutorials.html</div>
+<p>In this chapter, we will only take a closer look at perspective projection. In computer graphics, <strong>homogeneous coordinates</strong> are often used, which can conveniently represent infinite distance and turn translation, scaling, and rotation using simple matrix multiplication. For a set of homogeneous coordinates <img class="fm-editor-equation" src="assets/9e97bf11-0927-4500-9838-1860b8b9342a.png" style="width:4.50em;height:1.25em;"/>, the corresponding Cartesian counterpart would be <img class="fm-editor-equation" src="assets/2e2861a5-90fc-49d2-9116-a945f3f63e79.png" style="width:7.17em;height:1.25em;"/>. The mapping from the frustum in the 3D space to the <img class="fm-editor-equation" src="assets/c78ba0be-6e60-4e82-abc2-07a553beff6e.png" style="width:11.33em;height:1.25em;"/> cube is defined by the <strong>projection matrix</strong>:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f7bf133f-63c5-464a-9c04-6da213df7c16.png" style="width:16.75em;height:9.00em;"/></p>
+<p>In the projection matrix, <img class="fm-editor-equation" src="assets/45548185-0989-4de4-8e79-e7a5520f9a91.png" style="width:0.83em;height:0.83em;"/> is the near clipping plane and <img class="fm-editor-equation" src="assets/709f4f14-d677-4e86-9199-5c129d46016f.png" style="width:0.58em;height:1.17em;"/> is the far clipping plane. Also, <img class="fm-editor-equation" src="assets/80102840-6f09-4b4f-baa4-3a4bf67d5474.png" style="width:0.42em;height:0.92em;"/>, <img class="fm-editor-equation" src="assets/c4629faf-3a38-45e5-b2d2-62f0a0ae3d05.png" style="width:0.50em;height:1.08em;"/>, <img class="fm-editor-equation" src="assets/d2b7a153-039a-495d-bff3-2544fabf45c4.png" style="width:0.33em;height:1.08em;"/>, and <img class="fm-editor-equation" src="assets/7b1108b0-ae34-4483-9fba-292c452d7828.png" style="width:0.58em;height:0.83em;"/> denote the top, bottom, left, and right boundaries of the near clipping plane, respectively. The multiplication between the projection matrix and the homogeneous coordinates gives us the corresponding coordinates where the projected points should be. If you are interested in the derivation of the projection matrix, feel free to check out the following article: <a href="http://www.songho.ca/opengl/gl_projectionmatrix.html">http://www.songho.ca/opengl/gl_projectionmatrix.html</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Designing GANs for 3D data synthesis</h1>
+                </header>
+            
+            <article>
+                
+<p>3D-GAN, which was proposed by Jiajun Wu, Chengkai Zhang, and Tianfan Xue, et. al. in their paper, <em>Learning a Probabilistic Latent Space of Object Shapes via 3D Generative-Adversarial Modeling</em>, was designed to generate a 3D point cloud of certain types of objects. The design and training process of 3D-GAN is very similar to the vanilla GAN, except that the input and output tensors of the 3D-GAN are five-dimensional, rather than four-dimensional.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generators and discriminators in 3D-GAN</h1>
+                </header>
+            
+            <article>
+                
+<p>The architecture of the generator network of 3D-GAN is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/003fb212-8b6a-4876-9672-d89b03434961.png" style="width:33.92em;height:10.50em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Architecture of the generator network in 3D-GAN</div>
+<p>The generator network consists of five transposed convolution layers (<kbd>nn.ConvTranspose3d</kbd>), in which the first four layers are followed by the Batch Normalization layer (<kbd>nn.BatchNorm3d</kbd>) and ReLU activation function, and the last layer is followed by a Sigmoid activation function. The kernel size, stride size, and padding size are set to 4, 2 and 1 in all the transposed convolution layers, respectively. Here, the input latent vector can be gradually expanded to a <img class="fm-editor-equation" src="assets/4d4d6b88-58ab-4d09-b2aa-5c0e597be316.png" style="width:7.67em;height:0.92em;"/> cube, which can be considered as a 1-channel 3D "image". In this 3D image, the "pixel" value is actually the possibility of whether a point exists at these <img class="fm-editor-equation" src="assets/b444fc1b-f235-492c-930e-2e383c030969.png" style="width:5.75em;height:0.92em;"/> grid locations. Normally, we reserve all the points with values higher than 0.5 to form the final point cloud.</p>
+<div class="packt_infobox">In our case, the "pixels" in the 3D image are actually called <strong>voxels</strong> <br/>
+since the points in our point cloud are located at grid points in the <img class="fm-editor-equation" src="assets/b444fc1b-f235-492c-930e-2e383c030969.png" style="width:5.83em;height:0.92em;"/> cube. There are four attributes in a voxel: the x, y, and z coordinates and whether the voxel exists at (x, y, z). Unlike in 2D image synthesizing tasks, such as MNIST, where pixels with values between 0 and 1 (or between 0 and 255, if you prefer) are allowed (for example, at the edge of the digits), the existence of the voxel is a binary decision. Therefore, the tensor of our point cloud is, in fact, a sparse with many zeros and a few ones. </div>
+<p>In this section, we will provide the full source code for 3D-GAN. The code files have been organized in the same way as they were in the previous chapters. The networks have been defined in a <kbd>model_3dgan.py</kbd> file (be sure to avoid starting your module name with numbers).</p>
+<p>The following code is the definition of <kbd>Generator</kbd>:</p>
+<pre>import torch<br/>import torch.nn as nn<br/>import torch.nn.functional as F<br/>import numpy as np<br/><br/>class Generator(nn.Module):<br/>    def __init__(self, latent_dim, cube_len, bias=False):<br/>        super(Generator, self).__init__()<br/>        self.latent_dim = latent_dim<br/>        self.cube_len = cube_len<br/><br/>        self.model = nn.Sequential(<br/>            *self._create_layer(self.latent_dim, self.cube_len*8, 4, stride=2, padding=1, bias=bias, transposed=True),<br/>            *self._create_layer(self.cube_len*8, self.cube_len*4, 4, stride=2, padding=1, bias=bias, transposed=True),<br/>            *self._create_layer(self.cube_len*4, self.cube_len*2, 4, stride=2, padding=1, bias=bias, transposed=True),<br/>            *self._create_layer(self.cube_len*2, self.cube_len, 4, stride=2, padding=1, bias=bias, transposed=True),<br/>            *self._create_layer(self.cube_len, 1, 4, stride=2, padding=1, bias=bias, transposed=True, last_layer=True)<br/>        )<br/><br/>    def _create_layer(self, size_in, size_out, kernel_size=4, stride=2, padding=1, bias=False, transposed=True, last_layer=False):<br/>        layers = []<br/>        if transposed:<br/>            layers.append(nn.ConvTranspose3d(size_in, size_out, kernel_size, stride=stride, padding=padding, bias=bias))<br/>        else:<br/>            layers.append(nn.Conv3d(size_in, size_out, kernel_size, stride=stride, padding=padding, bias=bias))<br/>        if last_layer:<br/>            layers.append(nn.Sigmoid())<br/>        else:<br/>            layers.append(nn.BatchNorm3d(size_out))<br/>            layers.append(nn.ReLU(inplace=True))<br/>        return layers<br/><br/>    def forward(self, x):<br/>        x = x.view(-1, self.latent_dim, 1, 1, 1)<br/>        return self.model(x)</pre>
+<p>The architecture of the discriminator network of 3D-GAN is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/645b8202-29c0-4f0d-b943-48d94a641af1.png" style="width:35.75em;height:9.33em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Architecture of the discriminator network in 3D-GAN</div>
+<p>The discriminator network consists of five convolution layers (<kbd>nn.Conv3d</kbd>), in which the first four layers are followed by a Batch Normalization layer and a Leaky-ReLU (<kbd>nn.LeakyReLU</kbd>) activation function, and the last layer is followed by a Sigmoid activation function. The kernel size, stride size, and padding size are set to 4, 2 and 1 in all the convolution layers, respectively. The <img class="fm-editor-equation" src="assets/4d4d6b88-58ab-4d09-b2aa-5c0e597be316.png" style="width:7.67em;height:0.92em;"/> cube of the 3D point cloud is mapped by the discriminator network to a single value, which specifies whether the confidence of the input object is authentic.</p>
+<div class="packt_tip">Imagine what would happen if the dimension of the point cloud was set to <img class="fm-editor-equation" src="assets/3b032dab-8b8e-4f7c-a7b6-25c798b10c2f.png" style="width:7.58em;height:0.92em;"/>. Can you create colorized 3D point clouds, such as fire, smoke, or clouds? Feel free to find or even create your own dataset and try this out!</div>
+<p>The following code is the definition of <kbd>Discriminator</kbd> (this can also be found in the <kbd>model_3dgan.py</kbd> file):</p>
+<pre>class Discriminator(nn.Module):<br/>    def __init__(self, cube_len, bias=False):<br/>        super(Discriminator, self).__init__()<br/>        self.cube_len = cube_len<br/><br/>        self.model = nn.Sequential(<br/>            *self._create_layer(1, self.cube_len, 4, stride=2, padding=1, bias=bias, transposed=False),<br/>            *self._create_layer(self.cube_len, self.cube_len*2, 4, stride=2, padding=1, bias=bias, transposed=False),<br/>            *self._create_layer(self.cube_len*2, self.cube_len*4, 4, stride=2, padding=1, bias=bias, transposed=False),<br/>            *self._create_layer(self.cube_len*4, self.cube_len*8, 4, stride=2, padding=1, bias=bias, transposed=False),<br/>            *self._create_layer(self.cube_len*8, 1, 4, stride=2, padding=1, bias=bias, transposed=False, last_layer=True)<br/>        )<br/><br/>    def _create_layer(self, size_in, size_out, kernel_size=4, stride=2, padding=1, bias=False, transposed=False, last_layer=False):<br/>        layers = []<br/>        if transposed:<br/>            layers.append(nn.ConvTranspose3d(size_in, size_out, kernel_size, stride=stride, padding=padding, bias=bias))<br/>        else:<br/>            layers.append(nn.Conv3d(size_in, size_out, kernel_size, stride=stride, padding=padding, bias=bias))<br/>        if last_layer:<br/>            layers.append(nn.Sigmoid())<br/>        else:<br/>            layers.append(nn.BatchNorm3d(size_out))<br/>            layers.append(nn.LeakyReLU(0.2, inplace=True))<br/>        return layers<br/><br/>    def forward(self, x):<br/>        x = x.view(-1, 1, self.cube_len, self.cube_len, self.cube_len)<br/>        return self.model(x)</pre>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training 3D-GAN</h1>
+                </header>
+            
+            <article>
+                
+<p>The training process for 3D-GAN is similar to the process for the vanilla GAN. This can be seen in the following diagram:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-818 image-border" src="assets/ac7d1541-e561-4162-9665-ff7d2d8e8cbb.png" style="width:28.17em;height:16.58em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">The training process of 3D-GAN. Here, x* denotes real data, x denotes fake data, and z denotes the latent vector. The networks whose parameters are updated are marked with red boundaries.</div>
+<p>First, the discriminator network is trained to recognize the real 3D point cloud as true data and the synthesized point cloud that's generated by the generator network as fake data. BCE loss (<kbd>nn.BCELoss</kbd>) is used as the loss function for the discriminator network. Then, the generator network is trained by forcing the discriminator to recognize the synthesized 3D point cloud as true data so that it can learn to get better at fooling the discriminator in the future. BCE loss is used for training the generator network.</p>
+<p>The following is part of the source code for 3D-GAN training. Create a <kbd>build_gan.py</kbd> file and paste the following code into this file. Some of the training tricks have been borrowed from <a href="https://github.com/rimchang/3DGAN-Pytorch">https://github.com/rimchang/3DGAN-Pytorch</a>, which we will discuss later:</p>
+<pre>import os<br/>import time<br/>from datetime import datetime<br/>import torch<br/>from torch.optim.lr_scheduler import MultiStepLR<br/>import utils<br/>from model_3dgan import Generator as G<br/>from model_3dgan import Discriminator as D<br/>import matplotlib<br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import pickle<br/><br/>class Model(object):<br/>    def __init__(self, name, device, data_loader, latent_dim, cube_len):<br/>        self.name = name<br/>        self.device = device<br/>        self.data_loader = data_loader<br/>        self.latent_dim = latent_dim<br/>        self.cube_len = cube_len<br/>        assert self.name == '3dgan'<br/>        self.netG = G(self.latent_dim, self.cube_len)<br/>        self.netG.to(self.device)<br/>        self.netD = D(self.cube_len)<br/>        self.netD.to(self.device)<br/>        self.optim_G = None<br/>        self.optim_D = None<br/>        self.scheduler_D = None<br/>        self.criterion = torch.nn.BCELoss()<br/><br/>    def create_optim(self, g_lr, d_lr, alpha=0.5, beta=0.5):<br/>        self.optim_G = torch.optim.Adam(self.netG.parameters(),<br/>                                        lr=g_lr,<br/>                                        betas=(alpha, beta))<br/>        self.optim_D = torch.optim.Adam(self.netD.parameters(),<br/>                                          lr=d_lr,<br/>                                          betas=(alpha, beta))<br/>        self.scheduler_D = MultiStepLR(self.optim_D, milestones=[500,  <br/>         1000])<br/><br/>    def train(self, epochs, d_loss_thresh, log_interval=100, <br/>       export_interval=10, out_dir='', verbose=True):<br/>        self.netG.train()<br/>        self.netD.train()<br/>        total_time = time.time()<br/>        for epoch in range(epochs):<br/>            batch_time = time.time()<br/>            for batch_idx, data in enumerate(self.data_loader):<br/>                data = data.to(self.device)<br/><br/>                batch_size = data.shape[0]<br/>                real_label = torch.Tensor(batch_size).uniform_(0.7, <br/>                  1.2).to(self.device)<br/>                fake_label = torch.Tensor(batch_size).uniform_(0, <br/>                  0.3).to(self.device)<br/><br/>                # Train D<br/>                d_real = self.netD(data)<br/>                d_real = d_real.squeeze()<br/>                d_real_loss = self.criterion(d_real, real_label)<br/><br/>                latent = torch.Tensor(batch_size, <br/>                  self.latent_dim).normal_(0, 0.33).to(self.device)<br/>                fake = self.netG(latent)<br/>                d_fake = self.netD(fake.detach())<br/>                d_fake = d_fake.squeeze()<br/>                d_fake_loss = self.criterion(d_fake, fake_label)<br/><br/>                d_loss = d_real_loss + d_fake_loss<br/><br/>                d_real_acc = torch.ge(d_real.squeeze(), 0.5).float()<br/>                d_fake_acc = torch.le(d_fake.squeeze(), 0.5).float()<br/>                d_acc = torch.mean(torch.cat((d_real_acc, d_fake_acc),0))<br/><br/>                if d_acc &lt;= d_loss_thresh:<br/>                    self.netD.zero_grad()<br/>                    d_loss.backward()<br/>                    self.optim_D.step()<br/><br/>                # Train G<br/>                latent = torch.Tensor(batch_size, <br/>                  self.latent_dim).normal_(0, 0.33).to(self.device)<br/>                fake = self.netG(latent)<br/>                d_fake = self.netD(fake)<br/>                d_fake = d_fake.squeeze()<br/>                g_loss = self.criterion(d_fake, real_label)<br/><br/>                self.netD.zero_grad()<br/>                self.netG.zero_grad()<br/>                g_loss.backward()<br/>                self.optim_G.step()<br/><br/>            if epoch % export_interval == 0:<br/>                samples = fake.cpu().data[:8].squeeze().numpy()<br/>                utils.save_voxels(samples, out_dir, epoch)<br/>            self.scheduler_D.step()</pre>
+<p>You may have noticed that <kbd>real_label</kbd> and <kbd>fake_label</kbd> aren't set to 1 and 0 like they usually are. Instead, randomly initialized labels (<kbd>uniform_(0.7, 1.2)</kbd> and <kbd>uniform_(0, 0.3)</kbd>) are used. This technique is very similar to <strong>soft targets</strong>, which use the softmax output of a larger network as labels (instead of "hard" 0 or 1 labels) to train a smaller, yet identical, network in terms of input-output mappings (which is called <strong>Knowledge Distillation</strong>). This trick generates a smoother loss function over time since it introduces an assumption that the labels are random variables. You can always initialize <kbd>real_label</kbd> randomly and let <kbd>fake_label</kbd> be equal to <kbd>1-real_label</kbd>.</p>
+<p class="mce-root"/>
+<p>We already know that the desired output tensor is sparse and that it should be very easy to fully train the discriminator. Actually, the discriminator will overfit long before the generator is trained properly. Therefore, we only train the discriminator when its training accuracy is not higher than <kbd>d_loss_thresh</kbd>. Note that learning rate decay is used to optimize the generator.</p>
+<p>In the preceding code, we visualized and exported the generated point cloud for every <kbd>export_interval</kbd> epochs. The code for rendering the point cloud is as follows:</p>
+<pre>def save_voxels(voxels, path, idx):<br/>    from mpl_toolkits.mplot3d import Axes3D<br/>    voxels = voxels[:8].__ge__(0.5)<br/>    fig = plt.figure(figsize=(32, 16))<br/>    gs = gridspec.GridSpec(2, 4)<br/>    gs.update(wspace=0.05, hspace=0.05)<br/><br/>    for i, sample in enumerate(voxels):<br/>        x, y, z = sample.nonzero()<br/>        ax = fig.add_subplot(gs[i], projection='3d')<br/>        ax.scatter(x, y, z, zdir='z', c='red')<br/>        ax.set_xticklabels([])<br/>        ax.set_yticklabels([])<br/>    plt.savefig(path + '/{}.png'.format(str(idx)), bbox_inches='tight')<br/>    plt.close()<br/><br/>    with open(path + '/{}.pkl'.format(str(idx)), "wb") as f:<br/>        pickle.dump(voxels, f, protocol=pickle.HIGHEST_PROTOCOL)</pre>
+<p>The next step is to prepare the training dataset for 3D-GAN. You can download the point clouds of 40 different types of objects from <a href="http://3dshapenets.cs.princeton.edu/3DShapeNetsCode.zip">http://3dshapenets.cs.princeton.edu/3DShapeNetsCode.zip</a>. After downloading and extracting the <kbd>zip</kbd> file, move the <kbd>volumetric_data</kbd> folder to any location you like (for example, <kbd>/media/john/DataAsgard/3d_models/volumetric_data</kbd>) and choose a category for model training.</p>
+<p>The code for loading the training point cloud files is as follows (create a <kbd>datasets.py</kbd> file and paste the following code into it):</p>
+<pre>import os<br/>import numpy as np<br/>import scipy.ndimage as nd<br/>import scipy.io as io<br/>import torch<br/>from torch.utils.data import Dataset<br/><br/>def getVoxelFromMat(path, cube_len=64):<br/>    voxels = io.loadmat(path)['instance']<br/>    voxels = np.pad(voxels, (1, 1), 'constant', constant_values=(0, 0))<br/>    if cube_len != 32 and cube_len == 64:<br/>        voxels = nd.zoom(voxels, (2, 2, 2), mode='constant', order=0)<br/>    return voxels<br/><br/><br/>class ShapeNetDataset(Dataset):<br/>    def __init__(self, root, cube_len):<br/>        self.root = root<br/>        self.listdir = os.listdir(self.root)<br/>        self.cube_len = cube_len<br/><br/>    def __getitem__(self, index):<br/>        with open(os.path.join(self.root, self.listdir[index]), "rb") as f:<br/>            volume = np.asarray(getVoxelFromMat(f, self.cube_len), dtype=np.float32)<br/>        return torch.FloatTensor(volume)<br/><br/>    def __len__(self):<br/>        return len(self.listdir)</pre>
+<p>Finally, here is the code for the <kbd>main.py</kbd> file, which initializes and trains 3D-GAN:</p>
+<pre>import argparse<br/>import os<br/>import sys<br/>import numpy as np<br/>import torch<br/>import torch.backends.cudnn as cudnn<br/>import torch.utils.data as DataLoader<br/>import torchvision.datasets as dset<br/>import torchvision.transforms as transforms<br/>import utils<br/>from build_gan import Model<br/>from datasets import ShapeNetDataset<br/><br/>FLAGS = None    <br/><br/>def main():<br/>    device = torch.device("cuda:0" if FLAGS.cuda else "cpu")<br/>    print('Loading data...\n')<br/>    dataset = ShapeNetDataset(FLAGS.data_dir, FLAGS.cube_len)<br/>    dataloader = torch.utils.data.DataLoader(dataset,<br/>                                             FLAGS.batch_size,<br/>                                             shuffle=True,<br/>                                             num_workers=1,<br/>                                             pin_memory=True)<br/><br/><br/>    print('Creating model...\n')<br/>    model = Model(FLAGS.model, device, dataloader, FLAGS.latent_dim, FLAGS.cube_len)<br/>    model.create_optim(FLAGS.g_lr, FLAGS.d_lr)<br/><br/>    # Train<br/>    model.train(FLAGS.epochs, FLAGS.d_loss_thresh, FLAGS.log_interval,<br/>                FLAGS.export_interval, FLAGS.out_dir, True)</pre>
+<p>We used code similar to this to create the command-line parser back in <a href="685b2621-6dbb-4157-a258-f3cf2825728c.xhtml">Chapter 5</a>, <em>Generating Images Based on Label Information</em>. We'll use the same idea here and add a few options into the mix:</p>
+<pre><br/>if __name__ == '__main__':<br/>    from utils import boolean_string<br/>    parser = argparse.ArgumentParser(description='Hands-On GANs - Chapter 11')<br/>    parser.add_argument('--model', type=str, default='3dGan',<br/>                        help='enter `3dGan`.')<br/>    parser.add_argument('--cube_len', type=int, default='32',<br/>                        help='one of `cgan` and `infogan`.')<br/>    parser.add_argument('--cuda', type=boolean_string,<br/>                        default=True, help='enable CUDA.')<br/>    parser.add_argument('--train', type=boolean_string,<br/>                        default=True, help='train mode or eval mode.')<br/>    parser.add_argument('--data_dir', type=str,<br/>                        default='~/data', help='Directory for dataset.')<br/>    parser.add_argument('--out_dir', type=str,<br/>                        default='output', help='Directory for output.')<br/>    parser.add_argument('--epochs', type=int, default=200,<br/>                        help='number of epochs')<br/>    parser.add_argument('--batch_size', type=int,<br/>                        default=128, help='size of batches')<br/>    parser.add_argument('--g_lr', type=float, default=0.0002,<br/>                        help='G learning rate')<br/>    parser.add_argument('--d_lr', type=float, default=0.0002,<br/>                        help='D learning rate')<br/>    parser.add_argument('--d_loss_thresh', type=float, default=0.7,<br/>                        help='D loss threshold')<br/>    parser.add_argument('--latent_dim', type=int,<br/>                        default=100, help='latent space dimension')<br/>    parser.add_argument('--export_interval', type=int,<br/>                        default=10, help='export interval')<br/>    parser.add_argument('--classes', type=int, default=10,<br/>                        help='number of classes')<br/>    parser.add_argument('--img_size', type=int,<br/>                        default=64, help='size of images')<br/>    parser.add_argument('--channels', type=int, default=1,<br/>                        help='number of image channels')<br/>    parser.add_argument('--log_interval', type=int, default=100,<br/>                        help='interval between logging and image sampling')<br/>    parser.add_argument('--seed', type=int, default=1, help='random seed')<br/><br/>    FLAGS = parser.parse_args()<br/>    FLAGS.cuda = FLAGS.cuda and torch.cuda.is_available()<br/><br/>    if FLAGS.seed is not None:<br/>        torch.manual_seed(FLAGS.seed)<br/>        if FLAGS.cuda:<br/>            torch.cuda.manual_seed(FLAGS.seed)<br/>        np.random.seed(FLAGS.seed)<br/><br/>    cudnn.benchmark = True<br/><br/>    if FLAGS.train:<br/>        utils.clear_folder(FLAGS.out_dir)<br/><br/>    log_file = os.path.join(FLAGS.out_dir, 'log.txt')<br/>    print("Logging to {}\n".format(log_file))<br/>    sys.stdout = utils.StdOut(log_file)<br/><br/>    print("PyTorch version: {}".format(torch.__version__))<br/>    print("CUDA version: {}\n".format(torch.version.cuda))<br/><br/>    print(" " * 9 + "Args" + " " * 9 + "| " + "Type" +<br/>          " | " + "Value")<br/>    print("-" * 50)<br/>    for arg in vars(FLAGS):<br/>        arg_str = str(arg)<br/>        var_str = str(getattr(FLAGS, arg))<br/>        type_str = str(type(getattr(FLAGS, arg)).__name__)<br/>        print(" " + arg_str + " " * (20-len(arg_str)) + "|" +<br/>              " " + type_str + " " * (10-len(type_str)) + "|" +<br/>              " " + var_str)<br/>    main()</pre>
+<p>Now, we can run the program by using the following command line. Be sure to provide your proper data directory:</p>
+<pre><strong>python main.py --model 3dgan --train True --epochs 1000 --data_dir Data_Directory</strong></pre>
+<p class="mce-root"/>
+<p>Here, we used the chair category example. It takes about 4 hours to finish 1,000 epochs of training and costs about 1,023 MB GPU memory on a single NVIDIA GTX 1080Ti graphics card. Note that, even though our implementation is heavily based on <a href="https://github.com/rimchang/3DGAN-Pytorch">https://github.com/rimchang/3DGAN-Pytorch</a>, the original code costs about 14 hours and 1,499 MB GPU memory to complete the same task.</p>
+<p><span>The following are some of the 3D chair models that were generated by 3D-GAN. As we can see, despite a few outliers and the misplacement of voxels, the models look convincing in general. You can also check out the 3D-GAN website that was created by the authors of the paper, where an interactive showcase of generated chairs has been provided: <a href="https://meetshah1995.github.io/gan/deep-learning/tensorflow/visdom/2017/04/01/3d-generative-adverserial-networks-for-volume-classification-and-generation.html">https://meetshah1995.github.io/gan/deep-learning/tensorflow/visdom/2017/04/01/3d-generative-adverserial-networks-for-volume-classification-and-generation.html</a>:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-819 image-border" src="assets/48b45e16-c9ea-4238-bbe8-6a4fe321ce7d.png" style="width:55.00em;height:27.92em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Chair models generated by 3D-GAN</div>
+<p>Feel free to select a different object category or even give other datasets a try. Here is a list of point cloud datasets: <a href="http://yulanguo.me/dataset.html">http://yulanguo.me/dataset.html</a>. H<span>ere is a list of papers on 3D point cloud from the past years (at the time of writing): </span><a href="https://github.com/Yochengliu/awesome-point-cloud-analysis">https://github.com/Yochengliu/awesome-point-cloud-analysis</a><span>. I hope you can discover new applications with GANs and 3D point clouds!</span></p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we learned about the fundamental concepts of computer graphics and how to train 3D-GAN to generate 3D objects.</p>
+<p>In the next chapter, we will take a look back at all the useful tricks we have used in various GAN models and introduce more practical techniques that will assist you with model design and training GANs in the future.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Further reading</h1>
+                </header>
+            
+            <article>
+                
+<ol>
+<li> Ahn S H. (2019). <em>OpenGL Projection Matrix</em>. Retrieved from <a href="http://www.songho.ca/opengl/gl_projectionmatrix.html">http://www.songho.ca/opengl/gl_projectionmatrix.html</a>.</li>
+<li>Wu J, Zhang C, Xue T. (2016). <em>Learning a Probabilistic Latent Space of Object Shapes via 3D Generative-Adversarial Modeling</em>. NIPS.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

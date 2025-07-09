@@ -1,0 +1,560 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Image Restoration with GANs</h1>
+                </header>
+            
+            <article>
+                
+<p>Have you ever stumbled upon an image (or meme) you really love from the internet that has poor quality and is blurry, and even Google couldn't help you to find a high-resolution version of it? Unless you are one of the few who have spent years learning math and coding, knowing exactly which fractional-order regularization term in your objective equation can be solved by which numerical method, we might as well give GANs a shot!</p>
+<p>This chapter will help you to perform image super-resolution with SRGAN to generate high-resolution images from low-resolution ones and use a data prefetcher to speed up data loading and increase your GPU's efficiency during training. You will also learn how to implement your own convolution with several methods, including the direct approach, the FFT-based method, and the im2col method. Later on, we will get to see the disadvantages of vanilla GAN loss functions and how to improve them by using Wasserstein loss (the Wasserstein GAN). By the end of this chapter, you will have learned how to train a GAN model to perform image inpainting and fill in the missing parts of an image.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Image super-resolution with SRGAN</li>
+<li>Generative image inpainting</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Image super-resolution with SRGAN</h1>
+                </header>
+            
+            <article>
+                
+<p>Image restoration is a vast field. There are three main processes involved in image restoration:</p>
+<ul>
+<li>Image super-resolution: Expanding an image to a higher resolution</li>
+<li>Image deblur: Turning a blurry image into a sharp one</li>
+<li>Image inpainting: Filling in holes or removing watermarks in an image</li>
+</ul>
+<p>All of these processes involve <span>estimating pixel information from existing pixels. The term</span> <strong>restoration</strong><span> of the pixels actually refers to</span> estimating the way they should have looked<span>. Take image super-resolution, for example: to expand the image size by 2, we need to estimate 3 additional pixels to form a 2 x 2 region with the current pixel. Image restoration has been studied by researchers and organizations for decades and many </span><span>profound</span><span> </span><span>mathematical methods have been developed, which kind of discourages non-mathematicians from having fun with it. Now, intriguingly enough, GANs are starting to gain popularity.</span></p>
+<p>In this section, we will introduce another member of the GAN family, SRGAN, to upscale our images to a higher resolution.</p>
+<p>SRGAN (Super-Resolution Generative Adversarial Network) was proposed by Christian Ledig, Lucas Theis, Ferenc Huszar, et al. in their paper, <em>Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network</em>. It is considered the first method to successfully upscale images by four. Its structure is very straightforward. Like many other GANs, it consists of one generator network and one discriminator network. Their architectures are shown in the following sections.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating a generator</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's take a look at the components of the generator network:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/3db178a0-e043-429c-b455-760cdb9fec3d.png" style="width:38.33em;height:18.83em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Generator architecture of SRGAN (2X)</div>
+<p>In the preceding diagram, we upscale a 512*512 image by 2x (to 1,024*1,024) as an example. The size of the input image is rather arbitrary since the design of each component in the generator network is independent of the size of feature maps. The <span class="packt_screen">upsampling block</span> is responsible for expanding the image size by two. If we want to upscale by four, we simply need to append another upsampling block to the end of the existing one. Using three upsampling blocks will, of course, expand the image size by eight.</p>
+<p class="mce-root">In the generator network, the high-level features are extracted by the five residual blocks, which are combined with the less-processed detail information from a raw image (via the long skip-connection crossing over the residual blocks). The combined feature map is expanded to <img class="fm-editor-equation" src="assets/81499972-4db1-4ada-88ff-f8000c4ade9b.png" style="width:1.67em;height:1.08em;"/> channels (in which <img class="fm-editor-equation" src="assets/1ca46ed6-0d0c-4e42-9ef6-47a8ade74cb3.png" style="width:0.67em;height:0.92em;"/> stands for scale factor and <img class="fm-editor-equation" src="assets/9ef4e851-f96d-448c-b8f4-a5059b456f83.png" style="width:0.83em;height:0.92em;"/> stands for the number of channels in the residual blocks) with the size of <img class="fm-editor-equation" src="assets/59d14244-4a4f-43fc-875b-5dcb8ce7c586.png" style="width:3.08em;height:0.83em;"/>. The upsampling block transforms this <img class="fm-editor-equation" src="assets/654d971b-e31f-47fa-ace9-83b19ffe87d1.png" style="width:7.25em;height:1.50em;"/> <kbd>Tensor</kbd> (<img class="fm-editor-equation" src="assets/5e6bfa9e-638f-4e34-8add-45fdb836d404.png" style="width:0.92em;height:1.08em;"/> stands for batch size) into <img class="fm-editor-equation" src="assets/939adbda-2fba-488f-93a1-96ec6dd93a77.png" style="width:7.33em;height:1.33em;"/>. This is done by <strong>sub</strong>-<strong>pixel convolution</strong>, which was proposed by Wenzhe Shi, Jose Caballero, Ferenc Huszár, et al. in their paper, <em>Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network</em>.</p>
+<p class="mce-root">An example of sub-pixel convolution is shown in the following. For every <img class="fm-editor-equation" src="assets/8505f9ca-374c-4a1c-acbd-4e19dceadf6e.png" style="width:1.42em;height:1.67em;"/> channel in the low-resolution feature map, each channel is only responsible for one pixel inside the <img class="fm-editor-equation" src="assets/4304736c-ad4d-4c86-8d77-d06fdba0c801.png" style="width:3.33em;height:1.00em;"/> block in the high-resolution output. A big advantage of this approach is that it only performs <img class="fm-editor-equation" src="assets/97145156-a1da-44aa-8a56-28ded7205372.png" style="width:2.92em;height:2.00em;"/> of the convolution operations compared to the vanilla convolution layer, which makes it easier and faster to train. </p>
+<p>In PyTorch, the upscaling step in sub-pixel convolution can be done by the <kbd>nn.PixelShuffle</kbd> layer, which is essentially reshaping the input tensor. You can check out the source code in C++ here, <a href="https://github.com/pytorch/pytorch/blob/517c7c98610402e2746586c78987c64c28e024aa/aten/src/ATen/native/PixelShuffle.cpp">pytorch/aten/src/ATen/native/PixelShuffle.cpp</a>, to see how the reshaping is performed.</p>
+<div class="packt_tip"><span>How do we check out the source code of a PyTorch operation? It is easy when using VS Code. We can just keep repeatedly double-clicking the class name and press </span><em>F12</em><span> until we reach the class definition inside the source tree of the </span><kbd>torch</kbd><span> module under the Python environment. We then look for what other method is called inside this class (normally, we can find it in </span><kbd>self.forward</kbd><span>), which will lead us to its C++ implementation.</span></div>
+<p>Here are the steps to reach the C++ source code for implementation of <kbd>nn.PixelShuffle</kbd>:</p>
+<ol>
+<li>Double-click the name, <kbd>PixelShuffle</kbd>, and press <em>F12</em>. It leads us to this line in <kbd>site-packages/torch/nn/modules/__init__.py</kbd><em>:</em></li>
+</ol>
+<pre style="padding-left: 60px">from .pixelshuffle import PixelShuffle</pre>
+<ol start="2">
+<li><span>Double-clicking and pressing <em>F12</em> on <kbd>PixelShuffle</kbd> inside this line brings us to the class definition of <kbd>PixelShuffle</kbd> in</span> <kbd>site-packages/torch/nn/modules/pixelshuffle.py</kbd><span>. Inside its <kbd>forward</kbd> method, we can see that <kbd>F.pixel_shuffle</kbd> is called.</span></li>
+<li>Again, d<span>ouble-click and press </span><em>F12</em><span> on <kbd>pixel_shuffle</kbd>. We reach a snippet like this in</span> <kbd>site-packages/torch/nn/functional.py</kbd><span>:</span></li>
+</ol>
+<pre style="padding-left: 60px">pixel_shuffle = _add_docstr(torch.pixel_shuffle, r"""<br/>...<br/>""")</pre>
+<p style="padding-left: 60px">This is where the C++ part of the code is registered as a Python object in PyTorch. The C++ counterpart of a PyTorch operation is sometimes also called from the <kbd>torch._C._nn</kbd> module. Hovering the mouse over <kbd>torch.pixel_shuffle</kbd> will show us <kbd>pixel_shuffle(self: Tensor, upscale_factor: int) -&gt; Tensor</kbd>, depending on what extensions are used in VS Code. Unfortunately, we cannot find anything useful by pressing <em>F12</em> on it.</p>
+<ol start="4">
+<li>To find the C++ implementation of this <kbd>pixel_shuffle</kbd> function, we can simply search for the <kbd>pixel_shuffle</kbd> keyword inside the PyTorch repository on GitHub. If you have cloned the source code of PyTorch locally, you can type in the following command in the Terminal to search for a keyword in the <kbd>*.cpp</kbd> files:</li>
+</ol>
+<pre style="padding-left: 60px"><strong>$ grep -r --include \*.cpp pixel_shuffle .</strong></pre>
+<p style="padding-left: 60px">Hence, we can find the function definition, <kbd>Tensor pixel_shuffle(const Tensor&amp; self, int64_t upscale_factor)</kbd>, inside <kbd>pytorch/aten/src/ATen/native/PixelShuffle.cpp</kbd>. </p>
+<div class="packt_infobox">If you are interested in how PyTorch was made and how C++ and Python are working together (on CPU and GPU) to deliver such a flexible and easy-to-use interface, you can check out this lone essay written by one of the developers of PyTorch, Edward Z. Yang: <a href="http://blog.ezyang.com/2019/05/pytorch-internals">http://blog.ezyang.com/2019/05/pytorch-internals</a>.</div>
+<p>Now, let's take a look at the code for defining the generator network. Our implementation of SRGAN is mostly based on this repository: <a href="https://github.com/leftthomas/SRGAN">https://github.com/leftthomas/SRGAN</a>. The full working source code for PyTorch 1.3 is also available under the code repository for this chapter. We'll start by creating a new Python file. We'll call it <kbd>srgan.py</kbd>:</p>
+<ol>
+<li>Define the residual block (after, of course, importing the necessary modules).</li>
+</ol>
+<pre style="padding-left: 60px">import math<br/>import torch<br/>import torch.nn.functional as F<br/>from torch import nn<br/>import torchvision.models as models<br/><br/><br/>class ResidualBlock(nn.Module):<br/>    def __init__(self, channels):<br/>        super(ResidualBlock, self).__init__()<br/>        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3,  <br/>          padding=1)<br/>        self.bn1 = nn.BatchNorm2d(channels)<br/>        self.prelu = nn.PReLU()<br/>        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, <br/>          padding=1)<br/>        self.bn2 = nn.BatchNorm2d(channels)<br/><br/>    def forward(self, x):<br/>        residual = self.conv1(x)<br/>        residual = self.bn1(residual)<br/>        residual = self.prelu(residual)<br/>        residual = self.conv2(residual)<br/>        residual = self.bn2(residual)<br/>        return x + residual</pre>
+<p style="padding-left: 60px">Here,<strong> Parametric ReLU</strong> (<strong>PReLU</strong>) is used as an activation function. PReLU is very similar to LeakyReLU, except that the slope factor for negative values is a learnable parameter.</p>
+<ol start="2">
+<li>Define the upsampling block:</li>
+</ol>
+<pre style="padding-left: 60px">class UpsampleBLock(nn.Module):<br/>    def __init__(self, in_channels, up_scale):<br/>        super(UpsampleBLock, self).__init__()<br/>        self.conv = nn.Conv2d(in_channels, in_channels * up_scale **  <br/>          2, kernel_size=3, padding=1)<br/>        self.pixel_shuffle = nn.PixelShuffle(up_scale)<br/>        self.prelu = nn.PReLU()<br/><br/>    def forward(self, x):<br/>        x = self.conv(x)<br/>        x = self.pixel_shuffle(x)<br/>        x = self.prelu(x)<br/>        return x</pre>
+<p style="padding-left: 60px">Here, we use one <kbd>nn.Conv2d</kbd> layer and one <kbd>nn.PixelShuffle</kbd> layer to perform the sub-pixel convolution, for reshaping the low-resolution feature map to high-resolution. It is a recommended method by the PyTorch official example: <a href="https://github.com/pytorch/examples/blob/master/super_resolution/model.py">https://github.com/pytorch/examples/blob/master/super_resolution/model.py</a>.</p>
+<ol start="3">
+<li>Define the generator network with the residual and upsampling blocks:</li>
+</ol>
+<pre style="padding-left: 60px">class Generator(nn.Module):<br/>    def __init__(self, scale_factor):<br/>        upsample_block_num = int(math.log(scale_factor, 2))<br/><br/>        super(Generator, self).__init__()<br/>        self.block1 = nn.Sequential(<br/>            nn.Conv2d(3, 64, kernel_size=9, padding=4),<br/>            nn.PReLU()<br/>        )<br/>        self.block2 = ResidualBlock(64)<br/>        self.block3 = ResidualBlock(64)<br/>        self.block4 = ResidualBlock(64)<br/>        self.block5 = ResidualBlock(64)<br/>        self.block6 = ResidualBlock(64)<br/>        self.block7 = nn.Sequential(<br/>            nn.Conv2d(64, 64, kernel_size=3, padding=1),<br/>            nn.BatchNorm2d(64)<br/>        )<br/>        block8 = [UpsampleBLock(64, 2) for _ in <br/>          range(upsample_block_num)]<br/>        block8.append(nn.Conv2d(64, 3, kernel_size=9, padding=4))<br/>        self.block8 = nn.Sequential(*block8)<br/><br/>    def forward(self, x):<br/>        block1 = self.block1(x)<br/>        block2 = self.block2(block1)<br/>        block3 = self.block3(block2)<br/>        block4 = self.block4(block3)<br/>        block5 = self.block5(block4)<br/>        block6 = self.block6(block5)<br/>        block7 = self.block7(block6)<br/>        block8 = self.block8(block1 + block7)<br/><br/>        return (torch.tanh(block8) + 1) / 2</pre>
+<p class="mce-root"/>
+<p>Don't forget the long skip-connection at the end (<kbd>self.block8(block1 + block7)</kbd>). Finally, the output of the generator network is scaled to [0,1] from the range of [-1,1] by a tanh activation function. It is because the pixel values of the training images lie within the range of [0,1] and we should make it comfortable for the discriminator network to distinguish the differences between real and fake images when we put their values in the same range.</p>
+<div class="packt_tip">We haven't talked about how we should watch out for the trap of value range when training GANs. In the previous chapters, we pretty much always scale the input images to [-1,1] with <kbd>transforms.Normalize((0.5,), (0.5,))</kbd> during the pre-processing of training data. Since the output of <kbd>torch.tanh</kbd> is also [-1,1], there's no need to rescale the generated samples before feeding them to the discriminator network or loss function.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating the discriminator</h1>
+                </header>
+            
+            <article>
+                
+<p>The architecture of the discriminator network is shown in the following:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-799 image-border" src="assets/01f2476b-d501-4e74-9b1a-f3b6ded184da.png" style="width:82.75em;height:24.33em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Discriminator architecture of SRGAN</div>
+<p>The discriminator of SRGAN takes a VGG-like structure that gradually decreases the sizes of feature maps and expands the depth channel, in the hope that each layer contains a similar amount of information. Unlike in the vanilla VGG networks, the discriminator uses a pooling layer to transform the last VGG's feature map to 1 x 1. The final output of the discriminator network is a single value, which indicates whether the input image is high-resolution or low-resolution.</p>
+<p class="mce-root"/>
+<p>Here, we give the definition code of the discriminator network of SRGAN:</p>
+<pre>class Discriminator(nn.Module):<br/>    def __init__(self):<br/>        super(Discriminator, self).__init__()<br/>        self.net = nn.Sequential(<br/>            nn.Conv2d(3, 64, kernel_size=3, padding=1),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),<br/>            nn.BatchNorm2d(64),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(64, 128, kernel_size=3, padding=1),<br/>            nn.BatchNorm2d(128),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1),<br/>            nn.BatchNorm2d(128),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(128, 256, kernel_size=3, padding=1),<br/>            nn.BatchNorm2d(256),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1),<br/>            nn.BatchNorm2d(256),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(256, 512, kernel_size=3, padding=1),<br/>            nn.BatchNorm2d(512),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.Conv2d(512, 512, kernel_size=3, stride=2, padding=1),<br/>            nn.BatchNorm2d(512),<br/>            nn.LeakyReLU(0.2),<br/><br/>            nn.AdaptiveAvgPool2d(1),<br/>            nn.Conv2d(512, 1024, kernel_size=1),<br/>            nn.LeakyReLU(0.2),<br/>            nn.Conv2d(1024, 1, kernel_size=1)<br/>        )<br/><br/>    def forward(self, x):<br/>        batch_size = x.size(0)<br/>        return torch.sigmoid(self.net(x).view(batch_size))</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Defining training loss</h1>
+                </header>
+            
+            <article>
+                
+<p>The loss of SRGAN consists of 4 parts. Here, we let <img class="fm-editor-equation" src="assets/6cab3c8c-90a2-4b60-899e-3b63ac27047d.png" style="width:0.75em;height:0.92em;"/> denote the low-resolution (<strong>LR</strong>) image, <img class="fm-editor-equation" src="assets/eff90a60-1fc9-4b54-a0ad-661704d6fd6d.png" style="width:4.92em;height:1.42em;"/> denote the super-resolution (<strong>SR</strong>) image given by the generator, and <img class="fm-editor-equation" src="assets/962d1574-8041-4f04-9ddf-87bc2c41a8e8.png" style="width:0.75em;height:1.25em;"/> denote the real high-resolution (<strong>HR</strong>) image:</p>
+<ul>
+<li>Adversarial loss <img class="fm-editor-equation" src="assets/f14c42ee-3811-45da-9c6d-0191f7138677.png" style="width:1.75em;height:1.17em;"/>, as similar to previous GAN models</li>
+<li>Pixel-wise content loss <img class="fm-editor-equation" src="assets/44fab683-47ff-459e-b8cb-d3041cfbe389.png" style="width:2.33em;height:1.42em;"/>, which is the MSE loss between the SR and HR images</li>
+<li>VGG loss <img class="fm-editor-equation" src="assets/a052e9a9-9576-4702-a1bd-78d0be41095b.png" style="width:1.92em;height:1.50em;"/>, which is the MSE loss between the last feature maps of a pre-trained VGG network from the SR and HR images</li>
+<li>Regularization loss <img class="fm-editor-equation" src="assets/ab9576be-b21c-418e-a2d4-3be8b7662689.png" style="width:2.17em;height:1.75em;"/>, which is the sum of average L2-norm of pixel gradients in horizontal and vertical directions</li>
+</ul>
+<p>The final training loss is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/ac5a827b-7e94-48fa-a3c3-31d0fe977824.png" style="width:31.75em;height:2.08em;"/></p>
+<p>It is called <strong>perceptual loss</strong>, which means that it takes both pixel-wise similarities and high-level features into consideration when judging the quality of the SR images.</p>
+<p>Note that the L2-norm regularization term in the perceptual loss will actually make images blurry since it adds strong restraints to the pixel gradients. If you feel puzzled by the assertion, imagine a normal distribution in your head, in which the x axis represents the pixel gradient and the <em>y</em> axis tells us how likely a pixel gradient value would appear in the image. In a normal distribution, <img class="fm-editor-equation" src="assets/26c2a7f5-c88b-45d3-ab6a-28d043c2f699.png" style="width:3.42em;height:1.25em;"/>, most of the elements are very close to the <em>y</em> axis, which means that most of the pixels have very small gradients. It indicates that the changes between the neighboring pixels are mostly smooth. Therefore, we don't want the <span>regularization term to dominate the final loss. In fact, the regularization term is deleted from the updated version of the SRGAN paper. You can safely get rid of it as well.</span></p>
+<p>Here is the definition code of the perceptual <kbd>loss</kbd> function:</p>
+<pre>class GeneratorLoss(nn.Module):<br/>    def __init__(self):<br/>        super(GeneratorLoss, self).__init__()<br/>        vgg = models.vgg16(pretrained=True)<br/>        loss_network = nn.Sequential(*list(vgg.features)[:31]).eval()<br/>        for param in loss_network.parameters():<br/>            param.requires_grad = False<br/>        self.loss_network = loss_network<br/>        self.mse_loss = nn.MSELoss()<br/>        self.l2_loss = L2Loss()<br/><br/>    def forward(self, out_labels, out_images, target_images):<br/>        # adversarial Loss<br/>        adversarial_loss = torch.mean(1 - out_labels)<br/>        # vgg Loss<br/>        vgg_loss = self.mse_loss(self.loss_network(out_images), <br/>          self.loss_network(target_images))<br/>        # pixel-wise Loss<br/>        pixel_loss = self.mse_loss(out_images, target_images)<br/>        # regularization Loss<br/>        reg_loss = self.l2_loss(out_images)<br/>        return pixel_loss + 0.001 * adversarial_loss + 0.006 * vgg_loss <br/>         + 2e-8 * reg_loss</pre>
+<p>And the regularization term is calculated as follows:</p>
+<pre>class L2Loss(nn.Module):<br/>    def __init__(self, l2_loss_weight=1):<br/>        super(L2Loss, self).__init__()<br/>        self.l2_loss_weight = l2_loss_weight<br/><br/>    def forward(self, x):<br/>        batch_size = x.size()[0]<br/>        h_x = x.size()[2]<br/>        w_x = x.size()[3]<br/>        count_h = self.tensor_size(x[:, :, 1:, :])<br/>        count_w = self.tensor_size(x[:, :, :, 1:])<br/>        h_l2 = torch.pow((x[:, :, 1:, :] - x[:, :, :h_x - 1, :]), 2).sum()<br/>        w_l2 = torch.pow((x[:, :, :, 1:] - x[:, :, :, :w_x - 1]), 2).sum()<br/>        return self.l2_loss_weight * 2 * (h_l2 / count_h + w_l2 / count_w) <br/>         / batch_size<br/><br/>    @staticmethod<br/>    def tensor_size(t):<br/>        return t.size()[1] * t.size()[2] * t.size()[3]</pre>
+<p>Now, we need to modify the existing <kbd>train.py</kbd> file to support our new functions:</p>
+<pre># from loss import GeneratorLoss<br/># from model import Generator, Discriminator<br/>from srgan1 import GeneratorLoss, Discriminator, Generator</pre>
+<p>The training script provided by <a href="https://github.com/leftthomas/SRGAN">https://github.com/leftthomas/SRGAN</a> works fine with a few other minor fixes by replacing every <kbd>.data[0]</kbd> instance with <kbd>.item()</kbd>.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training SRGAN to generate high-resolution images</h1>
+                </header>
+            
+            <article>
+                
+<p>Of course, we need to have some data to work with. We simply need to download the training images from the links in the <kbd>README.md</kbd> file. You can always use any image collection you like since the training of SRGAN only requires low-resolution images (which can be easily acquired by resizing to smaller scales) besides the original images.</p>
+<p>Create a folder named <kbd>data</kbd> and place the training images into a folder called <kbd>DIV2K_train_HR</kbd> and the valid images into <kbd>DIV2K_valid_HR</kbd>. Next, create a folder named <kbd>epochs</kbd> to hold the epoch data. Finally, create a folder named <kbd>training_results</kbd>.</p>
+<p>To train SRGAN, execute the following command in a Terminal:</p>
+<pre><strong>$ pip install tqdm, pandas</strong><br/><strong>$ python train.py</strong></pre>
+<p>The image collection provided by <kbd>leftthomas</kbd> is sampled from the VOC2012 dataset and contains 16,700 images. With a batch size of 64, it takes about 6.6 hours to train for 100 epochs on a GTX 1080Ti graphics card. The GPU memory usage is about 6433 MB with a batch size of 88 and 7509 MB when the batch size is 96.</p>
+<p>However, during the training of SRGAN, the GPU usage lies below 10% most of the time (observed via <kbd>nvtop</kbd>), which indicates that the loading and pre-processing of data take up too much time. This issue can be solved by two different solutions:</p>
+<ul>
+<li>Putting the dataset on an SSD (preferably, via an NVMe interface)</li>
+<li>Using a data prefetcher to preload the data into GPU memory before the next iteration begins</li>
+</ul>
+<p class="mce-root"/>
+<p>Here, we will talk about how to carry out the second solution. The code for a data prefetcher is borrowed from the ImageNet example of NVIDIA's <a href="https://github.com/NVIDIA/apex">apex</a> project: <a href="https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py">https://github.com/NVIDIA/apex/blob/master/examples/imagenet/main_amp.py</a>. Follow these steps:</p>
+<ol>
+<li>Define the data prefetcher somewhere in your source tree (for example, the <kbd>data_utils.py</kbd> file in SRGAN):</li>
+</ol>
+<pre style="padding-left: 60px">class data_prefetcher():<br/> def __init__(self, loader):<br/> self.loader = iter(loader)<br/> self.stream = torch.cuda.Stream()<br/> self.preload()<br/><br/> def preload(self):<br/> try:<br/> self.next_input, self.next_target = next(self.loader)<br/> except StopIteration:<br/> self.next_input = None<br/> self.next_target = None<br/> return<br/> with torch.cuda.stream(self.stream):<br/> self.next_input = self.next_input.cuda(non_blocking=True)<br/> self.next_target = self.next_target.cuda(non_blocking=True)<br/> self.next_input = self.next_input.float()<br/><br/> def next(self):<br/> torch.cuda.current_stream().wait_stream(self.stream)<br/> input = self.next_input<br/> target = self.next_target<br/> self.preload()<br/> return input, target</pre>
+<p class="mce-root"/>
+<ol start="2">
+<li>Use the data <kbd>prefetcher</kbd> to load samples during training:</li>
+</ol>
+<pre style="padding-left: 60px">for epoch in range(1, NUM_EPOCHS + 1):<br/>    train_bar = tqdm(train_loader)<br/> prefetcher = data_prefetcher(train_bar)<br/> data, target = prefetcher.next()<br/>    ...<br/>    while data is not None:<br/>        // train D<br/>        ...<br/>        // train G<br/>        ...<br/>        data, target = prefetcher.next()</pre>
+<p>Here, the <kbd>tqdm</kbd> module is for printing the progress bar in the Terminal during training and can be treated as its original iterable object. In the training of SRGAN, the data <kbd>prefetcher</kbd> makes a huge difference in GPU efficiency, as shown here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-605 image-border" src="assets/4a89ff61-0dc8-460e-8157-c23db2873be4.png" style="width:69.42em;height:23.75em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">GPU usage before and after using prefetcher to load images into GPU memory</div>
+<p>The data prefetcher can be adjusted to another form of data, which is also included in the source code under the repository for this chapter.</p>
+<p>Some super-resolution results are shown in the following. We can see that SRGAN is doing a good job sharpening the low-resolution images. But we can also notice that it has its limits when dealing with sharp edges between large color blobs (for example, the rocks in the first image and the trees in the third image):</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-800 image-border" src="assets/6c70cff2-7640-4692-afbf-cae3f13a02b6.png" style="width:24.50em;height:33.58em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Super-resolution results by SRGAN</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generative image inpainting</h1>
+                </header>
+            
+            <article>
+                
+<p>We know that GANs, if trained properly, are capable of learning the latent distribution of data and using that information to create new samples. This extraordinary ability of GANs makes them perfect for applications such as image inpainting, which is filling the missing part in images with plausible pixels.</p>
+<p class="mce-root"/>
+<p>In this section, we will learn how to train a GAN model to perform image inpainting, based on the work of Jiahui Yu, Zhe Lin, Jimei Yang, et. al. in their paper, <em>Generative Image Inpainting with Contextual Attention</em>. Although an updated version of their project has been published (<a href="http://jiahuiyu.com/deepfill2">http://jiahuiyu.com/deepfill2</a>), the source code is not yet open source at the time of writing. Therefore, we should try to implement the model in PyTorch based on the source code of its previous version for TensorFlow (<a href="https://github.com/JiahuiYu/generative_inpainting">https://github.com/JiahuiYu/generative_inpainting</a>).</p>
+<p>Before we starting working on addressing image inpainting with GANs, there are a few fundamental concepts to understand as they are crucial to comprehend the method.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Efficient convolution – from im2col to nn.Unfold</h1>
+                </header>
+            
+            <article>
+                
+<p>If you have previously been curious enough to try implementing convolutional neural networks on your own (either with Python or C/C++), you must know the most painful part of work is the backpropagation of gradients, and the most time-consuming part is the convolutions (assuming that you are implementing a plain CNN such as LeNet).</p>
+<p>There are several ways to perform the convolution in your code (apart from directly using deep learning tools such as PyTorch):</p>
+<ol>
+<li>Calculate the convolution directly as per definition, which is usually the slowest way.</li>
+<li>Use <strong>Fast Fourier Transform</strong> (<strong>FFT</strong>), which is not ideal for CNNs, since the sizes of kernels are often way too small compared to the images.</li>
+<li>Treat the convolution as matrix multiplication (in other words, <strong>General Matrix Multiply</strong> or <strong>GeMM</strong>) using <strong>im2col</strong>. This is the most common method used by numerous software and tools and is a lot faster.</li>
+<li>Use the <strong>Winograd</strong> method, which is faster than GeMM under certain circumstances.</li>
+</ol>
+<p><span>In this section</span>, we will only talk about the first three methods. If you want to learn more about the Winograd method, feel free to check out this project, <a href="https://github.com/andravin/wincnn">https://github.com/andravin/wincnn</a>, and this paper, <em>Fast Algorithms for Convolutional Neural Networks,</em> by Andrew Lavin and Scott Gray. Here, we will give Python code for 2D convolution with different methods.</p>
+<p class="mce-root"/>
+<p>Before proceeding, make sure you have installed the prerequisites by typing the following command in the Terminal:</p>
+<pre><strong>$ pip install numpy, scipy</strong></pre>
+<p>Now, let's follow these steps:</p>
+<ol>
+<li>Directly calculate the convolution. Note that all of the following convolution implementations have a stride size of <kbd>1</kbd> and a padding size of <kbd>0</kbd>, which means that the output size is <img class="fm-editor-equation" src="assets/96be635b-77a1-4776-ac2a-76adbed443f3.png" style="width:19.00em;height:1.67em;"/>:</li>
+</ol>
+<pre style="padding-left: 60px"><span>import numpy as np<br/></span><br/>def conv2d_direct(x, w):<br/>    w = np.flip(np.flip(w, 0), 1)<br/>    rows = x.shape[0]<br/>    cols = x.shape[1]<br/>    kh = w.shape[0]<br/>    kw = w.shape[1]<br/>    rst = np.zeros((rows-kh+1, cols-kw+1))<br/>    for i in range(rst.shape[0]):<br/>        for j in range(rst.shape[1]):<br/>            tmp = 0.<br/>            for ki in range(kh):<br/>                for kj in range(kw):<br/>                    tmp += x[i+ki][j+kj] * w[ki][kj]<br/>            rst[i][j] = tmp<br/>    return rst</pre>
+<p style="padding-left: 60px">As we said before, directly calculating the convolution as per definition is extremely slow. Here is the elapsed time when convolving a 512 x 512 image with a 5 x 5 kernel:</p>
+<pre style="padding-left: 60px">x = np.random.randn(512, 512)<br/>w = np.random.randn(5, 5)<br/><br/>from timeit import default_timer as timer<br/>start = timer()<br/>rst1 = conv2d_direct(x, w)<br/>end = timer()<br/>print('Elapsed time (direct): {}'.format(end - start))<br/># 3.868343267000455 seconds on an Intel Core i5-4590 CPU</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mceNonEditable"/>
+<p class="mceNonEditable"/>
+<p class="mceNonEditable"/>
+<p style="padding-left: 60px">We also need to compare its result against a baseline (for example, <kbd>scipy.signal.convolve2d</kbd>) so that we'll know the computation is correct:</p>
+<pre style="padding-left: 60px">from scipy import signal<br/><br/>start = timer()<br/>rst0 = signal.convolve2d(x, w, mode='valid')<br/>end = timer()<br/>print('Elapsed time (reference): {}'.format(end - start))<br/># 0.017827395000495017<br/><br/>error1 = np.max(np.abs(rst1 - rst0))<br/>print('Error: {}'.format(error1))<br/># 1.0658141036401503e-14</pre>
+<p style="padding-left: 60px">Now we know our calculation is correct, the problem is how to do it faster.</p>
+<ol start="2">
+<li>Calculate the convolution with FFT:</li>
+</ol>
+<p style="padding-left: 60px">According to this formula, we can get the result of convolution by performing two Fourier transforms and one inverse Fourier transform:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/5bdfc020-1d58-4ed2-be5e-0ace6eb3951f.png" style="width:12.42em;height:1.33em;"/></p>
+<p style="padding-left: 60px">Since we are dealing with digital images, we need to perform a <strong>Discrete Fourier Transform</strong> (<strong>DFT</strong>), which can be calculated extremely fast with a <strong>Fast Fourier Transform</strong> (<strong>FFT</strong>) method provided by NumPy:</p>
+<pre style="padding-left: 60px">def conv2d_fft(x, w):<br/>    # return signal.fftconvolve(x, w, mode='valid')<br/>    size = np.array(x.shape) + np.array(w.shape) - 1<br/>    fsize = 2 ** np.ceil(np.log2(size)).astype(int)<br/>    fslice = tuple([slice(kn-1, int(sz)-kn+1) for sz, kn in zip(size, w.shape)])<br/>    x_fft = np.fft.fft2(x , fsize)<br/>    w_fft = np.fft.fft2(w , fsize)<br/>    rst = np.fft.ifft2(x_fft * w_fft)<br/>    rst = rst[fslice].real<br/>    return rst</pre>
+<p style="padding-left: 60px">Here are the elapsed time and calculation error of an FFT-based convolution:</p>
+<pre style="padding-left: 60px">Elapsed time (FFT): 0.17074442000011913<br/>Error: 1.0658141036401503e-14</pre>
+<p style="padding-left: 60px">We can see that convolution by FFT is a lot faster than the direct approach and costs almost the same amount of time as <kbd>scipy.signal.convolve2d</kbd>. Can we do it even faster?</p>
+<ol start="3">
+<li>Calculate the convolution with im2col.</li>
+</ol>
+<p>Let's take a pause and think about the first 2 methods. The direct approach involves 4 <kbd>for</kbd> loops and a lot of random access to the matrix elements. The FFT approach turns convolution into matrix multiplication but it requires 2 FFTs and 1 inverse FFT. We know low-level computational tools such as BLAS are very good at matrix multiplication. How about we treat the original convolution as matrix multiplication?</p>
+<p>Take the convolution between a 3 x 3 image and a 2 x 2 kernel, for example (with a stride size of 1 and padding size of 0):</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/92a2131f-b25c-4907-95e2-64ef1c12efbb.png" style="width:27.50em;height:8.50em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Convolution between image and 2 x 2 kernel</span></div>
+<p>We can stretch the input image into a very long vector (1 x 9), and transform the convolution kernel into a very big matrix (9 x 4) so that our output will have the size of 1 x 4 as expected. Of course, we also need to arrange the elements in the big matrix according to the computational process within the convolution (for example, <img class="fm-editor-equation" src="assets/3376f0ae-927c-4b6e-8b39-895aeb02cffc.png" style="width:22.83em;height:1.50em;"/>), as shown here:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/0bb7902b-7f1c-4709-9e81-7f68195cb15f.png" style="width:35.17em;height:16.17em;"/></div>
+<div>
+<div class="packt_figref CDPAlignCenter CDPAlign"><span>Convolution via sparse matrix multiplication</span></div>
+</div>
+<p>This way, we need to calculate the matrix multiplication between a very long vector and a large sparse matrix (in which many elements are zeros). Direct multiplication can be very inefficient (both in terms of time and memory). Even though we can speed up sparse matrix multiplication with some numerical algorithms, we won't go into the details of this approach as there is a more efficient way to turn the convolution into matrix multiplication.</p>
+<div class="packt_tip">Comparing sparse matrix multiplication to a fully-connected layer (<kbd>nn.Linear</kbd>) with the same input and output dimensions (also with the same size weight matrix), we can see that the convolution requires much fewer parameters than a fully connected layer (because there are many zeros in the weight matrix and the elements are mostly reusable). This makes CNNs easier to train and more robust to overfitting than MLP, which is also one of the reasons why CNNs have become more popular in recent years.</div>
+<p>Considering the size of the kernel is often much smaller than the image, we will try stretching the kernel into a vector and rearranging the elements from the input image to match the kernel vector's dimensions, as shown here:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/5bcb163f-2a30-48ae-af02-f158021d4d80.png" style="width:16.75em;height:7.58em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Convolution via im2col</span></div>
+<p>Now, we can see that we only need to perform dense matrix multiplication with much smaller dimensions. The transformation we perform on the input image is called <strong>im2col</strong>. The result of im2col is easy to comprehend: the elements in one row represent the elements of the input image needed to perform a convolution at a given location (this is known as the <strong>sliding window</strong>) and the <img class="fm-editor-equation" src="assets/5188407c-7ab5-49b5-800c-803653717f3e.png" style="width:0.50em;height:1.25em;"/><sup>th</sup> row corresponds to the <img class="fm-editor-equation" src="assets/e453fb88-6f44-4e79-81cc-a039ee1ae3c3.png" style="width:0.50em;height:1.25em;"/><sup>th</sup> output element (<img class="fm-editor-equation" src="assets/c51ff68a-833c-4f38-8a94-d4df04ed42f1.png" style="width:1.33em;height:1.25em;"/>).</p>
+<p>Here is the Python implementation of <kbd>im2col</kbd>:</p>
+<pre>def im2col(x, stride=1):<br/>    # https://stackoverflow.com/a/30110497/3829845<br/>    rows = x.shape[0]<br/>    cols = x.shape[1]<br/>    kh = w.shape[0]<br/>    kw = w.shape[1]<br/>    s0, s1 = x.strides<br/>    nrows = rows-kh+1<br/>    ncols = cols-kw+1<br/>    shape = kh, kw, nrows, ncols<br/>    slides = s0, s1, s0, s1<br/>    L = kh*kw<br/><br/>    x_unfold = np.lib.stride_tricks.as_strided(x, shape=shape, strides=slides)<br/>    return x_unfold.reshape(L, -1)[:,::stride]<br/><br/>def conv2d_gemm(x, w, stride=1):<br/>    w = np.flip(np.flip(w, 0), 1)<br/>    rows = x.shape[0]<br/>    cols = x.shape[1]<br/>    kh = w.shape[0]<br/>    kw = w.shape[1]<br/>    L = kh*kw<br/><br/>    x_unfold = im2col(x)<br/>    y_unfold = np.matmul(x_unfold.transpose(), w.reshape((L, 1)))<br/>    return y_unfold.reshape(rows-kh+1, cols-kw+1)</pre>
+<p><span>Here are the elapsed time and the calculation error:</span></p>
+<pre>Elapsed time (im2col): 0.014781345998926554<br/>Error: 1.0658141036401503e-14</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mceNonEditable"/>
+<p>Treating the convolution as matrix multiplication gains the fastest computational speed among all three methods. It achieves a more than 260x speedup in calculation time compared to the direct approach. Another advantage of im2col is that it is completely compatible with CNNs. In CNNs, the convolutions are often performed in channels, which means that we need to calculate the sum of a group of individual convolutions. For example, say our input feature map has the size of <img class="fm-editor-equation" src="assets/e3cc76c2-39b1-42ba-8862-9e8226738e85.png" style="width:7.17em;height:1.33em;"/> and the weight tensor is <img class="fm-editor-equation" src="assets/11319710-4744-479e-ba7f-6e454293fb93.png" style="width:9.83em;height:1.50em;"/>. For each neuron in the <img class="fm-editor-equation" src="assets/9b613ad3-62bf-4e90-a1e7-e24db54f10a6.png" style="width:1.75em;height:1.00em;"/> channels, it is the sum of <img class="fm-editor-equation" src="assets/9ef11c64-d2f1-4d0d-be06-2f933d34d3c9.png" style="width:1.67em;height:1.08em;"/> times the convolution operations between the image <img class="fm-editor-equation" src="assets/5d62c5f4-0362-4056-a614-e1d205fa4e2f.png" style="width:3.08em;height:1.17em;"/> and kernel <img class="fm-editor-equation" src="assets/ce4965b8-e86a-438a-bccb-46d81a8283f8.png" style="width:4.25em;height:1.50em;"/>. With im2col, the convolution result of a sliding window at a given location is represented by the multiplication of two vectors (because the convolution itself is the summation of element-wise multiplication). We can apply this pattern by filling all elements inside the same sliding window from all <img class="fm-editor-equation" src="assets/107a2bc9-3f69-4c16-bf4e-c39ce6c8d217.png" style="width:1.75em;height:1.17em;"/> channels into one long vector so that the output pixel value in one of the <img class="fm-editor-equation" src="assets/5b943155-3a29-48f3-be2b-f46718b744e8.png" style="width:2.25em;height:1.25em;"/> channels can be obtained via a single vector multiplication. If you wish to learn more about how channel-wise convolution can be performed in Python, check out this Stack Overflow post: <a href="https://stackoverflow.com/q/30109068/3829845">https://stackoverflow.com/q/30109068/3829845</a>.</p>
+<p>Turning 4D tensor convolution into 3D tensor multiplication is where <kbd>nn.Unfold</kbd> comes in handy. Here is a code snippet showing how to explicitly turning convolution into matrix multiplication with PyTorch (based on the official document at <a href="https://pytorch.org/docs/stable/nn.html?highlight=unfold#torch.nn.Unfold">https://pytorch.org/docs/stable/nn.html?highlight=unfold#torch.nn.Unfold</a>):</p>
+<pre>import torch<br/><br/>inp = torch.randn(1, 1, 512, 512)<br/>w = torch.randn(1, 1, 5, 5)<br/>start = timer()<br/>inp_unf = torch.nn.functional.unfold(inp, (5, 5))<br/>out_unf = inp_unf.transpose(1, 2).matmul(w.view(w.size(0), -1).t()).transpose(1, 2)<br/>out = out_unf.view(1, 1, 508, 508)<br/># Or using<br/># out = torch.nn.functional.fold(out_unf, (508, 508), (1, 1))<br/>end = timer()<br/>print('Elapsed time (nn.Unfold): {}'.format(end - start))<br/>error4 = (torch.nn.functional.conv2d(inp, w) - out).abs().max()<br/>print('Error: {}'.format(error4))</pre>
+<p class="mce-root"/>
+<p>The output messages are as follows:</p>
+<pre>Elapsed time (nn.Unfold): 0.021252065999760816<br/>Error: 6.67572021484375e-06</pre>
+<p>It is delightful to see that our <span>Python im2col implementation is even faster than</span> PyTorch. We hope this will encourage you to build your own deep learning toolbox!</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">WGAN – understanding the Wasserstein distance</h1>
+                </header>
+            
+            <article>
+                
+<p>GANs have been known to be hard to train, especially if you have tried to build one from scratch. (Of course, we hope that, after reading this book, training GANs can be a much easier job for you!) Over the past chapters, we have learned several different model design and training techniques that come from many excellent researchers' experience. In this section, we will talk about how to use a better distance measure to improve the training of GANs, namely, the Wasserstein GAN.</p>
+<p><span>The <strong>Wasserstein GAN</strong> (<strong>WGAN</strong>) was proposed by Martin Arjovsky, Soumith Chintala, and Léon Bottou in their paper, <em>Wasserstein GAN</em>. Martin Arjovsky and Léon Bottou also laid the groundwork in an earlier paper, <em>Towards Principled Methods for Training Generative Adversarial Networks</em>. To fully comprehend these papers, you are expected to have fundamental mathematical knowledge in probability theory, measure theory, and functional analysis. We will try our best to keep the mathematical formulae to a minimum and help you to understand the concept of WGAN.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Analyzing the problems with vanilla GAN loss</h1>
+                </header>
+            
+            <article>
+                
+<p>Let's go over the commonly used loss functions for GANs (which have already appeared in previous chapters):</p>
+<ul>
+<li><img class="fm-editor-equation" src="assets/52f2ad13-22c3-4712-a70a-da8eb1f517a3.png" style="width:18.58em;height:2.25em;"/>, which is the vanilla form of GAN loss</li>
+<li><img class="fm-editor-equation" src="assets/22b30b86-c6a2-4074-a518-dcd903743882.png" style="width:9.33em;height:2.08em;"/></li>
+<li><img class="fm-editor-equation" src="assets/cf42caa2-8878-411f-b1c6-4bb9d0df426a.png" style="width:7.42em;height:2.00em;"/></li>
+</ul>
+<p class="mce-root"/>
+<p>The experimental results in previous chapters have already shown that these loss functions work well in several applications. However, let's dig deep into these functions and see what could go wrong when they don't work so well:</p>
+<p><strong>Step 1: </strong>Problems with the first loss function:</p>
+<p>Assume that the generator network is trained and we need to find an optimal discriminator network D. We have the following:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/bf59d642-7d90-4bd3-8154-63bc4616c575.png" style="width:20.33em;height:1.50em;"/>.</p>
+<p>In this formula, <img class="fm-editor-equation" src="assets/fc3813e8-466e-4df5-910a-9f447a29a343.png" style="width:1.33em;height:1.25em;"/> represents the distribution of real data and <img class="fm-editor-equation" src="assets/f1e2f683-c676-4904-b6ef-48dcb7f914d7.png" style="width:1.33em;height:1.33em;"/> represents the distribution of fake (generated) data. <img class="fm-editor-equation" src="assets/16424b9a-9c6a-4b19-b478-91904b8a1d54.png" style="width:0.92em;height:0.92em;"/> is the real data when calculating <img class="fm-editor-equation" src="assets/904c8fdb-9e94-4e7b-b4e2-bba4d7282bba.png" style="width:1.58em;height:2.08em;"/> and the fake data when calculating <img class="fm-editor-equation" src="assets/a200b222-ed26-43e5-8245-1ea9d09e835e.png" style="width:1.92em;height:2.25em;"/>.</p>
+<div class="packt_infobox">We admit that the notation of <img class="fm-editor-equation" src="assets/3f39680e-19c7-47a1-bb81-706542f02142.png" style="width:0.92em;height:0.92em;"/> here is a little bit confusing. However, if we consider that all kinds of data exists in the same data space (for example, all possible 256 x 256 images with three 8-bit channels), and some part of the space belongs to the real data while some part belonging to the generated data. The training of GANs is essentially making the <em>fake</em> part overlap with the <em>real</em> part, hopefully, to become the same as the <em>real</em> part.</div>
+<p>To find the minimum of the formula, we let its derivatives regarding <em>D</em> to be zero and get the following:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/528f1a1a-352f-4f82-aef0-3840bc58007b.png" style="width:12.17em;height:3.00em;"/>.</p>
+<p>Therefore, the first loss function becomes (when D is optimal) as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/e4d427ab-a2b3-4b3d-a8f8-d96d64432e2e.png" style="width:24.08em;height:5.00em;"/></p>
+<p>Here, <img class="fm-editor-equation" src="assets/30baa216-3b31-460a-b017-87314a55ca54.png" style="width:5.50em;height:1.42em;"/> is the<strong> Jensen–Shannon divergence</strong> (<strong>JS divergence</strong>), which is the symmetric version of the <strong>Kullback–Leibler divergence</strong> (<strong>KL divergence</strong>):</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/cf591939-e5e5-4731-a80d-7f0520c68671.png" style="width:30.92em;height:5.92em;"/></p>
+<div class="packt_infobox">The Kullback–Leibler divergence is usually used to describe the distance between two distributions. It equals the <strong>cross entropy</strong> of <img class="fm-editor-equation" src="assets/5eadcab3-c338-471a-9abb-04e9f716d208.png" style="width:1.33em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/3fed48e0-f327-4a28-baae-fb1edef2468b.png" style="width:1.50em;height:1.33em;"/> minus the <strong>entropy</strong> of <img class="fm-editor-equation" src="assets/7a5901b0-0b49-4116-88c0-2babbb749b24.png" style="width:1.33em;height:1.17em;"/>, which is why KL divergence is also called <strong>relative entropy</strong>. Keep in mind that KL divergence is not symmetric, because <img class="fm-editor-equation" src="assets/3f81b8f7-6978-45ff-9842-54859dc1c28c.png" style="width:3.75em;height:1.25em;"/> and <img class="fm-editor-equation" src="assets/21024c0c-5704-4fc9-8a66-b522d620a1dd.png" style="width:3.50em;height:1.17em;"/> makes <img class="fm-editor-equation" src="assets/5fc6767f-3065-4ba7-9c7e-64e9e6b5c8c4.png" style="width:7.50em;height:1.25em;"/> but <img class="fm-editor-equation" src="assets/d2acf37c-455a-41e7-bfe6-9c838059e4dd.png" style="width:4.00em;height:1.33em;"/> and <img class="fm-editor-equation" src="assets/cac29847-b9df-423d-8625-3c1dde691a94.png" style="width:3.75em;height:1.25em;"/> makes <img class="fm-editor-equation" src="assets/601f879d-e4eb-4179-ba9d-0b60517a6edc.png" style="width:9.08em;height:1.42em;"/>. Therefore, KL divergence is strictly not a distance metric. However, the Jensen–Shannon divergence is symmetric and can be used as a distance metric.</div>
+<div class="packt_tip">If you have used TensorBoard to visualize the embedding space learned by a neural network, you may have found a useful technique called <strong>t-SNE</strong> that can wonderfully illustrate high-dimensional data in a 2- or 3-dimensional graph (in a much clearer way than PCA). In t-SNE, a revised version of KL divergence is used to map the high-dimension data to low-dimension. You may check out this blog to learn more about t-SNE: <a href="https://distill.pub/2016/misread-tsne">https://distill.pub/2016/misread-tsne</a>. Also, this Google Techtalk video can be very helpful to understand KL divergence and t-SNE: <a href="https://www.youtube.com/watch?v=RJVL80Gg3lA">https://www.youtube.com/watch?v=RJVL80Gg3lA</a>.</div>
+<p>A problem with JS divergence is that when <img class="fm-editor-equation" src="assets/d0c11a95-82c0-4d34-be8a-3197a0b3b3a4.png" style="width:1.25em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/5de18367-97c1-4207-893a-0e45f84da8a9.png" style="width:1.42em;height:1.42em;"/> are apart from each other (with no or little overlapping part), its value remains <img class="fm-editor-equation" src="assets/b23d43ea-ff17-436a-8ff1-9fc0c23c5024.png" style="width:2.58em;height:1.42em;"/> no matter how far away <img class="fm-editor-equation" src="assets/98127593-c0b8-4550-89e4-219ea61bfcc7.png" style="width:1.17em;height:1.08em;"/> and <img class="fm-editor-equation" src="assets/81bc279b-7b52-430c-80a6-78186a911420.png" style="width:1.25em;height:1.25em;"/> are from each other. It's rather reasonable to assume that <img class="fm-editor-equation" src="assets/0378a6d1-cbb9-48e8-9196-2b1d39473fff.png" style="width:1.25em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/8382d783-08c9-4306-b399-22d02229f4f2.png" style="width:1.33em;height:1.33em;"/> are no way near each other at the beginning of training (since the generator is randomly initialized and <img class="fm-editor-equation" src="assets/98ddb0b2-65d2-44a8-b3ed-e058fa7d237a.png" style="width:1.33em;height:1.33em;"/> could be anywhere in the data space). A nearly constant loss is hardly giving useful information to the derivatives when the discriminator is optimal. Therefore, when using the first form of loss in GANs, a well-trained discriminator will stop the generator from improving itself (<strong>gradient vanishing</strong>).</p>
+<p class="mce-root"/>
+<div class="packt_tip">The gradient vanishing problem in GANs can sometimes be solved by adding annealing noises to the inputs of the discriminator during training. But we will talk about a more principled method later.</div>
+<p><strong>Step 2:</strong> The problems with the other two loss functions:</p>
+<p>Let's take the third loss for example. It can be written as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/63d3f953-fbc9-4a72-8a7c-63b4842b8ed8.png" style="width:29.58em;height:5.33em;"/></p>
+<p>In this formula, the last two terms are irrelevant to the generator. The first two terms are, however, aiming for totally opposite objectives (minimizing the KL divergence while maximizing the JS divergence). This causes the training to be very unstable. On the other hand, the employment of KL divergence can lead to <strong>mode collapse</strong>. Failing to generate realistic samples is severely penalized (<img class="fm-editor-equation" src="assets/36851d77-b8bf-400a-846b-3a8e2688945e.png" style="width:7.67em;height:1.25em;"/> when <img class="fm-editor-equation" src="assets/89ed9c93-32c3-45bf-8812-6a64a2f9ad7d.png" style="width:3.08em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/012144d4-5761-4862-875b-cb1bf1e3e47d.png" style="width:3.33em;height:1.17em;"/>) but generating only a few kinds of realistic samples is not penalized (<img class="fm-editor-equation" src="assets/45c42b2b-3469-4c54-9268-1f09bfe047d7.png" style="width:9.08em;height:1.58em;"/> when <img class="fm-editor-equation" src="assets/31903b68-5617-4344-b713-4ffb0b16e60f.png" style="width:3.08em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/9ce2fd9b-df3c-499b-8f6c-139c0c71b15a.png" style="width:3.58em;height:1.25em;"/>). This makes the generator more prone to generate samples with less <span>variety.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">The advantages of Wasserstein distance</h1>
+                </header>
+            
+            <article>
+                
+<p>Wasserstein distance (also called <strong>Earth Mover's Distance</strong> or <strong>EMD</strong>) is defined as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/3cab7073-2d57-4c28-a044-e06f1d2bd345.png" style="width:21.92em;height:6.92em;"/></p>
+<p class="mce-root"/>
+<p>Don't worry about the preceding equation if you find it hard to understand. It essentially describes the least distance between two variables sampled from all possible joint distributions. In plain words, it is the minimum cost of moving one pile of dirt (in a shape of certain distribution) to form a different pile (another distribution), as shown in the following screenshot:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-801 image-border" src="assets/04dbf900-a69e-42d4-98a9-808d2c8f1d01.png" style="width:35.58em;height:8.17em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">The Wasserstein distance: optimal transportation between two piles (image retrieved from https://vincentherrmann.github.io/blog/wasserstein)</div>
+<p>Compared to JS divergence, the Wasserstein distance can properly describe the distance between real data and fake data even when they are far apart from each other. Therefore, the derivatives can be correctly calculated to update the generator network when the discriminator is good. </p>
+<p>To find the most suitable function, <em>f</em>, we can simply train a neural network to estimate it (luckily, we are already training a discriminator network). An important condition for the second line of the equation to hold is that all functions, <em>f</em>, are <strong>Lipschitz continuous</strong>:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f80f94be-bdbf-4083-90d7-e232f219ffd8.png" style="width:34.58em;height:1.58em;"/></p>
+<p>Lipschitz continuity is easy to achieve in neural networks by clipping any gradient value that's larger than <em>K</em> to be <em>K</em> (<strong>gradient clipping</strong>), or simply clipping the weight values to a constant value (<strong>weight clipping</strong>).</p>
+<div class="packt_infobox">Remember the simple GAN written in Python in <a href="66a945c3-9fd3-4d27-a6ec-b47d2e299e84.xhtml">Chapter 1</a>, <em>Generative Adversarial Networks Fundamentals</em>? We applied both gradient clipping and weight clipping to ensure stable training. If anyone asks why are you clipping (clamping) the tensors in your GANs, you can give a better answer than <em>gradient explosion</em> now.</div>
+<p>Finally, the Wasserstein loss is written as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/dd4107f0-5c0d-427a-b250-4f83ab6b8bf0.png" style="width:19.17em;height:5.42em;"/></p>
+<p class="mce-root"/>
+<p>However, there are also some issues with gradient clipping when training a very deep neural network. First, if the gradients/weights are clamped to [-c, c] too often, they tend to stick with -c or c by the end of training while only a few parameters have values between the two ends. Second, clamping the gradients to a larger or smaller range could cause "invisible" gradient vanishing or explosion. We call it "invisible" because even though the gradient values are extremely large, they are eventually clamped to [-c, c]. But it will be a complete waste of computational resources. Therefore, Ishaan Gulrajani, Faruk Ahmed, Martin Arjovsky, et. al. proposed to add a penalty term to the discriminator loss, namely, <strong>gradient penalty</strong>, in their paper, <em>Improved Training of Wasserstein GANs</em>:</p>
+<p>             <img class="alignnone size-full wp-image-802 image-border" src="assets/5d40bb64-e05e-4b6c-b766-fef866757e64.png" style="width:51.92em;height:5.00em;"/></p>
+<p>The penalty gradient is calculated with regards to a random interpolation between a pair of real data and fake data.</p>
+<p>In a nutshell, to use Wasserstein loss, you'll need to do the following:</p>
+<ul>
+<li>Get rid of the <kbd>Sigmoid</kbd> function at the last layer of the discriminator network.</li>
+<li>Don't apply the <kbd>log</kbd> function to the results when calculating the loss.</li>
+<li>Use the gradient penalty (or simply clip the weights in shallow neural networks).</li>
+<li>Use RMSprop instead of Momentum or Adam to train your networks.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training GAN for image inpainting</h1>
+                </header>
+            
+            <article>
+                
+<p>Now, it's finally time to train a new GAN model for image inpainting. You can get the code for the original PyTorch implementation that comes from <a href="https://github.com/DAA233/generative-inpainting-pytorch">https://github.com/DAA233/generative-inpainting-pytorch</a>. This will be a challenge for you to modify the original code to implement your own. Since you already have the <kbd>CelebA</kbd> dataset, use it as a training dataset for the experiment in this section.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model design for image inpainting</h1>
+                </header>
+            
+            <article>
+                
+<p>The GAN model for image inpainting consists of two generator networks (a coarse generator and a refinement generator) and two discriminator networks (a local discriminator and a global discriminator), as shown here:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/d99696e9-4708-4efc-a8e5-705eaa9e1db1.png" style="width:37.25em;height:23.67em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">GAN model for image inpainting: Image x represents the input image; x<sub>1</sub> and <span>x</span><sub>2</sub> represent generated images by coarse and refinement generators, respectively; <span>x</span><sub>r </sub>represents the original complete image; and m represents the mask for missing part in the image.</div>
+<p>The generator model uses two-stage coarse-to-fine architecture. The coarse generator is a 17-layer encoder-decoder CNN and dilated convolutions are used in the middle to expand the receptive fields. Assume that the size of the input image (<em>x</em>) is 3 x2 56 x 256, then the output (<em><span>x</span><sub>1</sub></em>) of the coarse generator is also 3 x 256 x 256.</p>
+<p>The refinement generator has two branches. One is a 10-layer CNN and the other is called a <strong>Contextual Attention</strong> branch, which is responsible for finding proper reference location in another part of the image to generate the correct pixels for filling the hole. The initial input image, <em>x</em>; the coarse output, <em><span>x</span><sub>1</sub></em>; and the binary mask that marks which pixels are missing in <em>x</em> are fed into the refinement generator together and mapped to a [128, 64, 64] tensor (through 6 convolution layers) before entering the Contextual Attention branch.</p>
+<p class="mce-root"/>
+<p>The calculation process within the Contextual Attention branch is shown here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-803 image-border" src="assets/eacf6e76-16cc-41f1-9f44-a7a0a45beed3.png" style="width:47.17em;height:38.92em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">The calculation of <span>Contextual Attention: Image b is the background, f is the foreground, and m is the mask.</span></div>
+<p>We are not going into details about Contextual Attention due to the limited length of content. The important steps are as illustrated in previous diagram. Since we need to find the most relevant parts between the foreground (the pixels to be filled) and the background (the remaining pixels outside the masked hole), a pixel-wise similarity between every pair of image patches from the foreground and background images is calculated. Calculating all possible pairs one-by-one is apparently inefficient. Therefore, <kbd>nn.Unfold</kbd> is used to create a sliding-window (with a window size of 3 x 3) versions of the foreground and background images (<em>x<sub>i</sub></em> and <em>w<sub>i</sub></em>). To reduce the GPU memory costs, the images are resized to [128,32,32]. Therefore, there are <em>32*32=1,024</em> sliding windows in both images, and the convolution between <span><em>x</em></span><em><sub>i</sub></em><span> and <em>w</em></span><em><sub>i</sub></em> will tell us the pixel similarity in each pair of image patches. The location pair with the highest similarity indicates where the attention is focused when reconstructing the foreground patch.</p>
+<p>To ensure the robustness against slight shifts of attention, the attention value of each pixel is averaged along horizontal and vertical axes, which is why <em>y<sub>i</sub></em> is convolved with identity matrices twice. The attention scores are calculated via a scaled softmax function:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/f15d378f-e45d-46cb-b243-2ff434be0eb7.png" style="width:21.75em;height:1.33em;"/></p>
+<p>Finally, a transposed convolution is performed on <em>y<sub>i</sub></em> with the unfold form of the original background as kernel to reconstruct the missing pixels.</p>
+<p>Both of the outputs of the CNN branch and CA branch have a size of [128,64,64], which are concatenated into one wide tensor of [256,64,64]. And another 7 convolution layers are used to gradually map the reconstructed feature maps to the [3,256,256] image.</p>
+<p>The pixels values in the output images from both coarse and refinement generators are clamped to [-1,1] to suit the discriminator networks.</p>
+<p>Two discriminator networks (local discriminator and global discriminator) with similar structures are used to evaluate the quality of generated images. They both have 4 convolution layers and 1 fully-connected layer. The only difference is that the local discriminator is used to evaluate the cropped image patches (in other words, the missing pixels in the original images, with a size of 3 x 128 x 128) and the global discriminator is used to evaluate the whole images (3 x 256 x 256).</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Implementation of Wasserstein loss</h1>
+                </header>
+            
+            <article>
+                
+<p>Here, we let  <img class="fm-editor-equation" src="assets/dc14ad97-5552-4f01-9340-8e8075f7fae8.png" style="width:2.17em;height:2.17em;"/> and <img class="fm-editor-equation" src="assets/0c63a321-e277-4d4f-8867-65223199e7e2.png" style="width:2.17em;height:2.33em;"/> (outputs of local discriminator) represent the fidelity confidence of the cropped images <img class="fm-editor-equation" src="assets/3a0998c5-91fb-4991-84d2-a900ffcb29c3.png" style="width:1.58em;height:1.58em;"/> and <img class="fm-editor-equation" src="assets/1150b1d1-c918-4418-b4e3-0d5615c53361.png" style="width:1.58em;height:1.50em;"/>, respectively. We let <img class="fm-editor-equation" src="assets/4dc1ae97-893c-45f6-b786-81f01a41edfb.png" style="width:2.33em;height:2.17em;"/> and <img class="fm-editor-equation" src="assets/636512fe-b458-4fb3-9313-25a12e31c261.png" style="width:2.33em;height:2.33em;"/>(<span>outputs of global discriminator</span>) <span>represent the fidelity confidence of whole images <img class="fm-editor-equation" src="assets/f57afb66-578d-46b8-8102-1b236a062c3c.png" style="width:1.50em;height:1.17em;"/> and <img class="fm-editor-equation" src="assets/6ef0df8f-9696-4fbc-a390-a4c7e8cad28e.png" style="width:1.58em;height:1.08em;"/>, respectively. Then, the discriminator's Wasserstein loss is defined as follows:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/094b69de-2fb7-471f-a887-f92455e13dd9.png" style="width:24.42em;height:2.17em;"/>.</p>
+<p>The gradient penalty term for the discriminator is given as follows:</p>
+<p>                                         <img class="alignnone size-full wp-image-804 image-border" src="assets/abf3027d-9c6f-4a78-afca-22e07d6284fc.png" style="width:34.92em;height:9.08em;"/></p>
+<p>The generator's <span>Wasserstein loss is defined as follows:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/ba2610ff-05a1-41b7-b56f-3b5bf23db3a1.png" style="width:17.92em;height:2.17em;"/>.</p>
+<p>The L1 reconstruction loss for the missing pixels is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/020acbfc-bafb-4a26-95bb-a44671373184.png" style="width:21.58em;height:1.67em;"/>.</p>
+<p>The L1 reconstruction loss for the remaining pixels is as follows (apparently, we don't want to change these pixels):</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/2f63ae6d-3b03-45af-bccd-e6c5cb0728a0.png" style="width:46.67em;height:1.67em;"/>.</p>
+<p>Finally, the discriminator loss is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/7a6c1484-f311-4560-87ee-2e00edef0635.png" style="width:11.75em;height:1.42em;"/>.</p>
+<p class="mce-root"/>
+<p>The generator loss is as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/61261909-dd9c-4a93-98d4-b34fc9843c7c.png" style="width:23.67em;height:1.50em;"/></p>
+<p>With a batch size of 24, the training of the inpainting GAN consumes about 10,097 MB GPU memory and costs about 64 hours of training (180k iterations) before generating some decent results. Here are some of the inpainting results.</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/b3cebe1c-228b-432d-bc6b-2c7c6f2ab2b2.png" style="width:28.08em;height:14.08em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Image inpainting results by GAN</div>
+<p>Now, we have pretty much learned most of the stuff we need to generate images with GANs.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>We've gotten a tremendous amount of practical and theoretical knowledge in this chapter, from learning about image deblurring and image resolution enhancement, and from FFA algorithms to implementing the Wasserstein loss function.</p>
+<p>In the next chapter, we will work on training our GANs to break other models.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Useful reading list and references</h1>
+                </header>
+            
+            <article>
+                
+<ul>
+<li>Ledig C, Theis L, Huszar F, et. al. (2017). <em>Photo-Realistic Single Image Super-Resolution Using a Generative Adversarial Network</em>. CVPR.</li>
+<li>Shi W, Caballero J, Huszár F, et. al. (2016). <em>Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network</em>. CVPR.</li>
+<li>Yang E. (May, 2019). <em>PyTorch internals</em>. Retrieved from <a href="http://blog.ezyang.com/2019/05/pytorch-internals">http://blog.ezyang.com/2019/05/pytorch-internals</a>.</li>
+<li>Yu J, Lin Z, Yang J, et, al.. (2018). <em>Generative Image Inpainting with Contextual Attention</em>. CVPR.</li>
+<li>Lavin A, Gray S. (2016). <em>Fast Algorithms for Convolutional Neural Networks</em>. CVPR.</li>
+<li>Warden P. (April 20, 2015). <em>Why GEMM is at the heart of deep learning</em>. Retrieved from <a href="https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning">https://petewarden.com/2015/04/20/why-gemm-is-at-the-heart-of-deep-learning</a>.</li>
+<li>Arjovsky M, Bottou L. (2017). <em>Towards Principled Methods for Training Generative Adversarial Networks</em>. ICLR.</li>
+<li>Arjovsky M, Chintala S, Bottou L. (2017). <em>Wasserstein GAN</em>. ICML.</li>
+<li>Distill. (2016). <em>How to Use t-SNE Effectively</em>. Retrieved from <a href="https://distill.pub/2016/misread-tsne">https://distill.pub/2016/misread-tsne</a>.</li>
+<li>Hui J. (Jun 22, 2018). <em>GAN — Why it is so hard to train Generative Adversarial Networks!</em>. Retrieved from <a href="https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b">https://medium.com/@jonathan_hui/gan-why-it-is-so-hard-to-train-generative-advisory-networks-819a86b3750b</a>.</li>
+<li>Weng L. (Aug 20, 2017). <em>From GAN to WGAN</em>. Retrieved from <a href="https://lilianweng.github.io/lil-log/2017/08/20/from-GAN-to-WGAN.html">https://lilianweng.github.io/lil-log/2017/08/20/from-GAN-to-WGAN.html</a>.</li>
+<li>Herrmann V. (Feb 24, 2017). <em>Wasserstein GAN and the Kantorovich-Rubinstein Duality</em>. Retrieved from <a href="https://vincentherrmann.github.io/blog/wasserstein">https://vincentherrmann.github.io/blog/wasserstein</a>.</li>
+<li>Gulrajani I, Ahmed F, Arjovsky M, et. al. (2017). <em>Improved Training of Wasserstein GANs</em>. NIPS.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

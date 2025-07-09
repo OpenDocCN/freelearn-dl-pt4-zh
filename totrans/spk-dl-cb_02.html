@@ -1,0 +1,1541 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating a Neural Network in Spark</h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, the following recipes will be covered:</p>
+<ul>
+<li>Creating a dataframe in PySpark</li>
+<li>Manipulating columns in a PySpark dataframe</li>
+<li>Converting a PySpark <span>dataframe</span> into an array</li>
+<li>Visualizing the array in a scatterplot</li>
+<li>Setting up weights and biases for input into the neural network</li>
+<li>Normalizing the input data for the neural network</li>
+<li>Validating array for optimal neural network performance</li>
+<li>Setting up the activation function with sigmoid</li>
+<li>Creating the sigmoid derivative function</li>
+<li>Calculating the cost function in a neural network</li>
+<li>Predicting gender based on height and weight</li>
+<li>Visualizing prediction scores</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Introduction</h1>
+                </header>
+            
+            <article>
+                
+<p><span>Much of this book will focus on building deep learning algorithms with libraries in Python, such as TensorFlow and Keras. While these libraries are helpful to build deep neural networks without getting deep into the calculus and linear algebra of deep learning, this chapter will do a deep dive into building a simple neural network in PySpark to make a gender prediction based on height and weight. One of the best ways to understand the foundation of neural networks is to build a model from scratch, without any of the popular deep learning libraries. Once the foundation for a neural network framework is established, understanding and utilizing some of the more popular deep neural network libraries will become much simpler.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating a dataframe in PySpark</h1>
+                </header>
+            
+            <article>
+                
+<p><span>dataframe</span>s will serve as the framework for any and all data that will be used in building deep learning models. Similar to the <kbd>pandas</kbd> library with Python, PySpark has its own built-in functionality to create a <span>dataframe</span>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>There are several ways to create a <span>dataframe</span> in Spark. One common way is by importing a <kbd>.txt</kbd>, <kbd>.csv</kbd>, or <kbd>.json</kbd> file. Another method is to manually enter fields and rows of data into the PySpark dataframe, and while the process can be a bit tedious, it is helpful, especially when dealing with a small dataset. To predict gender based on height and weight, this chapter will build a <span>dataframe</span> manually in PySpark. The dataset used is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1130 image-border" src="assets/57578186-ff94-4049-a2c3-ea7519eac43f.png" style="width:19.00em;height:33.42em;"/></div>
+<p>While the dataset will be manually added to PySpark in this chapter, the dataset can also be viewed and downloaded from the following link:</p>
+<p><a href="https://github.com/asherif844/ApacheSparkDeepLearningCookbook/blob/master/CH02/data/HeightAndWeight.txt">https://github.com/asherif844/ApacheSparkDeepLearningCookbook/blob/master/CH02/data/HeightAndWeight.txt</a></p>
+<p>Finally, we will begin this chapter and future chapters by starting up a Spark environment configured with a Jupyter notebook that was created in <a href="a010c7af-0e48-4bac-9146-47ddecc2cc8e.xhtml">chapter 1</a><span>, </span><em>Setting up your Spark Environment for Deep Learning,</em> using the following terminal command:</p>
+<pre><strong>sparknotebook</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>When working with PySpark, a <kbd>SparkSession</kbd> must first be imported and initialized before any <span>dataframe</span> creation can occur:</p>
+<ol>
+<li>Import a <kbd>SparkSession</kbd> using the following script:</li>
+</ol>
+<pre style="padding-left: 60px"><span>from pyspark.sql import SparkSession<br/></span></pre>
+<ol start="2">
+<li>Configure <span>a</span> <kbd>SparkSession</kbd>:</li>
+</ol>
+<pre style="padding-left: 60px">spark = SparkSession.builder \<br/>         .master("local") \<br/>         .appName("Neural Network Model") \<br/>         .config("spark.executor.memory", "6gb") \<br/>         .getOrCreate()<br/>sc = spark.sparkContext</pre>
+<ol start="3">
+<li>In this situation, the <kbd>SparkSession</kbd> <kbd>appName</kbd> has been named <kbd>Neural Network Model</kbd> and <kbd>6gb</kbd> has been assigned to the session memory. </li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how we create our Spark cluster and configure our first dataframe.</p>
+<ol>
+<li>In Spark, we use <kbd>.master()</kbd> to specify whether we will run our jobs on a distributed cluster or locally.  For the purposes of this chapter and the remaining chapters, we will be executing Spark locally with one worker thread as specified with <kbd>.master('local')</kbd>.  This is fine for testing and development purposes as we are doing in this chapter; however, we may run into performance issues if we deployed this to production.  In production, it is recommended to use <kbd>.master('local[*]')</kbd> to set Spark to run on as many worker nodes that are available locally as possible. If we had 3 cores on our machine and we wanted to set our node count to match that, we would then specify <kbd>.master('local[3]')</kbd>. </li>
+</ol>
+<ol start="2">
+<li>The <kbd>dataframe</kbd> variable, <kbd>df</kbd>, is first created by inserting the row values for each column and then by inserting the column header names using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">df = spark.createDataFrame([('Male', 67, 150), # insert column values<br/>                            ('Female', 65, 135),<br/>                            ('Female', 68, 130),<br/>                            ('Male', 70, 160),<br/>                            ('Female', 70, 130),<br/>                            ('Male', 69, 174),<br/>                            ('Female', 65, 126),<br/>                            ('Male', 74, 188),<br/>                            ('Female', 60, 110),<br/>                            ('Female', 63, 125),<br/>                            ('Male', 70, 173),<br/>                            ('Male', 70, 145),<br/>                            ('Male', 68, 175),<br/>                            ('Female', 65, 123),<br/>                            ('Male', 71, 145),<br/>                            ('Male', 74, 160),<br/>                            ('Female', 64, 135),<br/>                            ('Male', 71, 175),<br/>                            ('Male', 67, 145),<br/>                            ('Female', 67, 130),<br/>                            ('Male', 70, 162),<br/>                            ('Female', 64, 107),<br/>                            ('Male', 70, 175),<br/>                            ('Female', 64, 130),<br/>                            ('Male', 66, 163),<br/>                            ('Female', 63, 137),<br/>                            ('Male', 65, 165),<br/>                            ('Female', 65, 130),<br/>                            ('Female', 64, 109)], <br/>                           ['gender', 'height','weight']) # insert header values</pre>
+<ol start="3">
+<li>In PySpark, the <kbd>show()</kbd> function gives the ability to preview the <span class="packt_screen">top 20 rows</span>, as seen in the following screenshot when using the preceding script:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1132 image-border" src="assets/c40e1c6f-93eb-42c4-881f-51af531af877.png" style="width:18.00em;height:28.58em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>.show()</kbd> functionality defaults to 20 rows if not explicitly stated.  If we only wanted to show the first 5 rows of a dataframe, we would need to explicitly state it as seen in the following script: <kbd>df.show(5)</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about SparkSQL, <span>dataframe</span>s, functions, and data sets in PySpark, visit the following website:</p>
+<p><a href="https://spark.apache.org/docs/latest/sql-programming-guide.html">https://spark.apache.org/docs/latest/sql-programming-guide.html</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Manipulating columns in a PySpark dataframe</h1>
+                </header>
+            
+            <article>
+                
+<p>The<span> </span><span>dataframe</span><span> </span>is almost complete; however, there is one issue that requires addressing before building the neural network. Rather than keeping the gender value as a string, it is better to convert the value to a numeric integer for calculation purposes, which will become more evident as this chapter progresses.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>This section will require  importing the following:</p>
+<ul>
+<li><kbd>from pyspark.sql import functions</kbd></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p><span>This section walks through the steps for the string conversion to a numeric value in the</span><span> </span><span>dataframe</span><span>:</span></p>
+<ul>
+<li>Female --&gt; 0 </li>
+<li>Male --&gt; 1</li>
+</ul>
+<ol>
+<li class="mce-root">Convert a column value inside of a<span> </span><span>dataframe</span><span> </span>requires importing<span> </span><kbd>functions</kbd>:</li>
+</ol>
+<pre style="padding-left: 60px">from pyspark.sql import functions</pre>
+<ol start="2">
+<li>Next, modify the<span> </span><kbd>gender</kbd><span> </span>column to a numeric value using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">df = df.withColumn('gender',functions.when(df['gender']=='Female',0).otherwise(1))</pre>
+<ol start="3">
+<li>Finally, reorder the columns so that<span> </span><kbd>gender</kbd><span> </span>is the last column in the<span> </span><span>dataframe using the following script</span>:</li>
+</ol>
+<pre style="padding-left: 60px">df = df.select('height', 'weight', 'gender')</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the manipulation of the dataframe is applied.</p>
+<ol start="1">
+<li><kbd>functions from pyspark.sql</kbd> have several useful logic applications that can be used to apply if-then transformations to columns in a Spark dataframe.  In our case, we are converting <kbd>Female</kbd> t0 0 and <kbd>Male</kbd> to 1.</li>
+<li>The function to convert to numeric is applied to the Spark dataframe using the <kbd>.withColumn()</kbd> transformation. </li>
+<li>The <kbd>.select()</kbd> feature for a Spark dataframe functions like traditional SQL by selecting the columns in the order and manner requested.</li>
+<li>A final preview of the<span> </span><span>dataframe</span><span> </span>will display the updated dataset, as seen in the following screenshot:</li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1133 image-border" src="assets/f6ab7f97-c69b-4a78-88c8-cfc2c2ce5a36.png" style="width:43.25em;height:34.25em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>In addition to the <kbd>withColumn()</kbd> method for a dataframe, there is also the <kbd>withColumnRenamed()</kbd> method, which is used for renaming columns in a dataframe.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Converting a PySpark dataframe to an array</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to form the building blocks of the neural network, the PySpark <span>dataframe</span> must be converted into an array. Python has a very powerful library, <kbd>numpy</kbd>, that makes working with arrays simple.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd><span>numpy</span></kbd> library should be already available with the installation of the <kbd>anaconda3</kbd> Python package. However, if for some reason the <kbd><span>numpy</span></kbd> library is not available, it can be installed using the following command at the terminal:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1641 image-border" src="assets/08f1438e-fa19-4f98-bfc7-9627bb135aa6.png" style="width:121.83em;height:20.00em;"/></div>
+<p><kbd>pip install</kbd> or <kbd>sudo pip install</kbd> will confirm whether the requirements are already satisfied by using the requested library:</p>
+<pre>import numpy as np</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to convert the dataframe into an array:</p>
+<ol>
+<li>View the data collected from<span> </span>the<span> </span><span>dataframe</span><span> </span>using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">df.select("height", "weight", "gender").collect()</pre>
+<ol start="2">
+<li>Store the values from the collection into an array called <kbd>data_array</kbd> using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">data_array =  np.array(df.select("height", "weight", "gender").collect())</pre>
+<ol start="3">
+<li>Execute the following script to access the first row of the array:</li>
+</ol>
+<pre style="padding-left: 60px">data_array[0]</pre>
+<ol start="4">
+<li>Similarly, execute the following script to access the final row of the array:</li>
+</ol>
+<pre style="padding-left: 60px">data_array[28]</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the dataframe is converted into an array:</p>
+<ol start="1">
+<li>The output of our dataframe can be collected using <kbd>collect()</kbd> and viewed as seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1134 image-border" src="assets/05572b09-0de4-4e0d-b76e-99e90becf5af.png" style="width:26.17em;height:28.42em;"/></div>
+<ol start="2">
+<li>The dataframe is converted into an array and the output of the array from that script can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1135 image-border" src="assets/07d57776-fbb7-404d-99f0-020887beb1cd.png" style="width:35.08em;height:28.83em;"/></div>
+<ol start="3">
+<li><span>Any set of</span><span> </span><kbd>height</kbd><span>,</span><span> </span><kbd>weight</kbd><span>, and</span><span> </span><kbd>gender</kbd><span> </span><span>values can be accessed by referencing the index of the array. The array has a shape of <span class="packt_screen">(29,3)</span> with a length of 29 elements, and each element is composed of three items. While the length is 29, the index starts at <kbd>[0]</kbd> and ends at <kbd>[28]</kbd>.  </span>The outputs for the shape of the array as well as the first and last rows of the array can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1136 image-border" src="assets/8bf08db5-d187-4caf-9f81-bc626952350b.png" style="width:15.58em;height:10.42em;"/></div>
+<ol start="4">
+<li class="mce-root">The first and last values of the array can be compared with the original<span> </span><span>dataframe</span><span> </span>to confirm that the values and order have not changed as a result of the conversion.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>In addition to viewing the data points in an array, it is also useful to retrieve the minimum and maximum points of each feature in an array:</p>
+<ol>
+<li>To retrieve the minimum and maximum values for <kbd>height</kbd>, <kbd>weight</kbd>, and <kbd>gender</kbd>, the following script can be used:</li>
+</ol>
+<pre style="padding-left: 60px">print(data_array.max(axis=0))<br/>print(data_array.min(axis=0))</pre>
+<ol start="2">
+<li>The output from the script can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1137 image-border" src="assets/b2541062-eef7-4d18-9809-03f49782f645.png" style="width:19.83em;height:5.92em;"/></div>
+<p>The maximum <kbd>height</kbd> is <kbd>74</kbd> inches and minimum <kbd>height</kbd> is <kbd>60</kbd> inches. The maximum weight is <kbd>188</kbd> lbs, while the minimum weight is <kbd>107</kbd> lbs. The minimum and maximum values for gender are not as relevant, as we have assigned them numeric values of <kbd>0</kbd> and <kbd>1</kbd>. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>To learn more about <span><span>numpy</span></span>, visit the following website:</p>
+<p><a href="http://www.numpy.org">www.numpy.org</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Visualizing an array in a scatterplot</h1>
+                </header>
+            
+            <article>
+                
+<p>The goal of the neural network that will be developed in this chapter is to predict the gender of an individual if the <kbd>height</kbd> and <kbd>weight</kbd> are known. A powerful method for understanding the relationship between <kbd>height</kbd>, <kbd>weight</kbd>, and <kbd>gender</kbd> is by visualizing the data points feeding the neural network. This can be done with the popular Python visualization library <kbd>matplotlib</kbd>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>As was the case with <kbd><span>numpy</span></kbd>, <kbd>matplotlib</kbd> <span>should be available with the installation of the anaconda3 Python package. However, if for some reason</span> <kbd>matplotlib</kbd><span> is not available, it can be installed using the following command at the terminal:</span></p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1138 image-border" src="assets/4bacc6c7-65ac-4896-9954-9698569e33e9.png" style="width:51.58em;height:21.75em;"/></div>
+<p><kbd>pip install</kbd><span> or</span> <kbd>sudo pip install</kbd><span> will confirm the requirements are already satisfied by using the requested library.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to visualize an array through a scatterplot.</p>
+<ol>
+<li>Import the<span> </span><kbd>matplotlib</kbd><span> </span>library and configure the library to visualize plots inside of the Jupyter notebook using the following script:</li>
+</ol>
+<pre style="padding-left: 60px"> import matplotlib.pyplot as plt<br/> %matplotlib inline</pre>
+<ol start="2">
+<li>Next, determine the minimum and maximum values of the<span> </span><em>x</em><span> </span>and y-axes of the scatterplot using the <kbd>min()</kbd> and <kbd>max()</kbd> functions from<span> </span><kbd><span>numpy</span></kbd>, as seen in the following script:</li>
+</ol>
+<pre class="mce-root" style="padding-left: 60px">min_x = data_array.min(axis=0)[0]-10<br/>max_x = data_array.max(axis=0)[0]+10<br/>min_y = data_array.min(axis=0)[1]-10<br/>max_y = data_array.max(axis=0)[1]+10</pre>
+<ol start="3">
+<li class="mce-root"><span>Execute the following script to plot the</span> <kbd>height</kbd> <span>and</span> <kbd>weight</kbd> <span>for each</span> <kbd>gender</kbd><span>:</span></li>
+</ol>
+<pre class="mce-root" style="padding-left: 60px"># formatting the plot grid, scales, and figure size<br/>plt.figure(figsize=(9, 4), dpi= 75)<br/>plt.axis([min_x,max_x,min_y,max_y])<br/>plt.grid()<br/>for i in range(len(data_array)):<br/>    value = data_array[i]<br/>    # assign labels values to specific matrix elements<br/>    gender = value[2]<br/>    height = value[0]<br/>    weight = value[1]<br/><br/>    # filter data points by gender<br/>    a = plt.scatter(height[gender==0],weight[gender==0], marker <br/>      = 'x', c= 'b', label = 'Female')<br/>    b = plt.scatter(height[gender==1],weight[gender==1], marker <br/>      = 'o', c= 'b', label = 'Male')<br/><br/>   # plot values, title, legend, x and y axis<br/>   plt.title('Weight vs Height by Gender')<br/>   plt.xlabel('Height (in)')<br/>   plt.ylabel('Weight (lbs)')<br/>   plt.legend(handles=[a,b])</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how an array is plotted as a scatterplot:</p>
+<ol>
+<li><span>The </span><kbd>matplotlib</kbd><span> library is imported into the Jupyter notebook and the <kbd>matplotlib</kbd> library</span> <span>is configured to plot visualizations inline in the cells of the Jupyter notebook</span></li>
+<li>The minimum and maximum values of the x and y-axes are determined to size up our plot and give us an optimal looking graph.  The output of the script can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1139 image-border" src="assets/90dc5c16-1ee5-42d7-b0dd-b11c6e01f0af.png" style="width:28.00em;height:13.42em;"/></div>
+<ol start="3">
+<li>A <kbd>10</kbd>-point pixel buffer has been added to each axis to ensure all data points are captured without being cut off.</li>
+<li>
+<p>A loop is created to iterate through each row of values and plot the <kbd>weight</kbd> versus the <kbd>height</kbd>.</p>
+</li>
+<li>
+<p>Additionally, a different style point is assigned to the <kbd>Female gender</kbd>, <kbd>x</kbd>, and the <kbd>Male gender</kbd>, <kbd>o</kbd>.</p>
+</li>
+</ol>
+<ol start="6">
+<li>The output of the script to plot the <span class="packt_screen">Weight vs Height by Gender</span> can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/d8beca7d-6268-47fd-bc4d-20b73a12615d.png"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>The scatterplot gives a quick and easy visual interpretation of what is going on with the data. There is an apparent divide between the upper-right quadrant and the lower-left quadrant of the scatterplot. All of the data points above 140 lbs indicate a <kbd>Male gender</kbd>, with all of the data points below that belong to the <kbd>Female gender</kbd>, as seen in the following screenshot:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/64fe80b4-f02e-4d87-9eaa-c6a016a61ca9.png" style="width:46.50em;height:22.92em;"/></div>
+<p>This scatterplot will help confirm what is to be expected when picking a random height and weight to predict the outcome of the gender when the neural network is created later on in this chapter.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>To learn more about <kbd>matplotlib</kbd>, visit the following website:</p>
+<p><a href="http://www.matplotlib.org/">www.matplotlib.org</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Setting up weights and biases for input into the neural network</h1>
+                </header>
+            
+            <article>
+                
+<p>The framework in PySpark and the data are now complete. It is time to move on to building the neural network. Regardless of the complexity of the neural network, the development follows a similar path:</p>
+<ol>
+<li>Input data</li>
+<li>Add the weights and biases</li>
+<li>Sum the product of the data and weights</li>
+</ol>
+<ol start="4">
+<li>Apply an activation function</li>
+<li>Evaluate the output and compare it to the desired outcome</li>
+</ol>
+<p>This section will focus on setting the weights that create the input which feeds into the activation function.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>A cursory understanding of the building blocks of a simple neural network is helpful in understanding this section and the rest of the chapter.  Each neural network has inputs and outputs.  In our case, the inputs are the height and weight of the individuals and the output is the gender.  In order to get to the output, the inputs are multiplied with values (also known as weights: w1 and w2) and then a bias (b) is added to the end.  This equation is known as the summation function, z, and is given the following equation:</p>
+<div class="CDPAlignCenter CDPAlign">z = (input1) x (w1) + (input2) x (w2) + b</div>
+<p>The weights and the bias are initially just random generated values that can be performed with <kbd><span>numpy</span></kbd>. The weights will literally add weight to inputs by increasing or decreasing their impact on the output. The bias will serve a slightly different role in that it will shift the baseline of the summation (z) upwards or downwards, depending on what is needed to meet the prediction. Each value of z is then converted into a predicted value between 0 and 1 through an activation function.  The activation function is a converter that gives us a value that we can convert into a binary output (male/female). The predicted output is then compared with the actual output.  Initially, the difference between the predicted and actual output will be large as the weights will be random when first starting out.  However, a process known as backpropagation is used to minimize the difference between the actual and the predicted using a technique known as gradient descent.  Once we settle on a negligible difference between the actual and predicted, we store the values of w1, w2, and b for the neural network.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to set up the weights and bias of the neural network.</p>
+<ol>
+<li>Set the randomness of the value generator using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">np.random.seed(12345)</pre>
+<ol start="2">
+<li>Set the weights and biases using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">w1 = np.random.randn()<br/>w2 = np.random.randn()<br/>b= np.random.randn()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the weights and bias are initialized for use in later parts of this chapter:</p>
+<ol>
+<li>The weights are generated randomly using <kbd><span>numpy</span></kbd><span>, </span>and a random seed is set to ensure the same random numbers are generated each time</li>
+<li>The weights will be assigned a generic variable of<span> </span><kbd>w1</kbd><span> </span>and<span> </span><kbd>w2</kbd></li>
+<li>The bias is also generated randomly using<span> </span><kbd><span>numpy</span></kbd><span> </span><span>and a random seed is set to maintain the same random numbers is generated each time</span></li>
+<li>The bias will be assigned a generic variable of<span> </span><kbd>b</kbd></li>
+<li>The values are inserted into a summation function,<span> </span><kbd>z</kbd>, which populates an initial score that will feed into another function, the activation function, to be discussed later on in this chapter</li>
+<li>At the moment, all three variables are completely random.  The output of <kbd>w1</kbd>, <kbd>w2</kbd>, and <kbd>b</kbd> can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/eb68ecc9-2921-4cee-b951-568f84370ed4.png" style="width:40.67em;height:12.33em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>Ultimately, the goal is to get a predicted output that matches the actual output. Summing the product of the weights and the values helps achieve part of this process. Therefore, a random input of <kbd>0.5</kbd> and <kbd>0.5</kbd> would have a summation output of the following:</p>
+<pre>z = <strong>0.5</strong> * w1 + <strong>0.5</strong> * w2 + b </pre>
+<p><span>Or it would have the following output with our current random values for our weights, <kbd>w1</kbd> and <kbd>w2</kbd>:</span></p>
+<pre>z = <strong>0.5</strong> * (-0.2047) + <strong>0.5</strong> * (0.47894) + (-0.51943) = -7.557</pre>
+<p>The variable <kbd>z</kbd> is assigned as the product summation of the weights with the data points. Currently, the weights and biases are completely random. However, as mentioned earlier in the section, through a process called backpropagation<em>,</em> using gradient descent, the weights will be tweaked until a more desirable outcome is determined. Gradient descent is simply the process of identifying the optimal values for our weights that will give us the best prediction output with the least amount of error.  The process of identifying the optimal values involves identifying the local minimum of a function. Gradient descent will be discussed later on in this chapter.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about weights and biases in an artificial neural network, visit the following website:</p>
+<p><a href="https://en.wikipedia.org/wiki/Artificial_neuron">https://en.wikipedia.org/wiki/Artificial_neuron</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Normalizing the input data for the neural network</h1>
+                </header>
+            
+            <article>
+                
+<p>Neural networks work more efficiently when the inputs are normalized. This minimizes the magnitude of a particular input affecting the overall outcome over other potential inputs that have lower values of magnitude. This section will normalize the <kbd>height</kbd> and <kbd>weight</kbd> inputs of the current individuals.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>The normalization of input values requires obtaining the mean and standard deviation of those values for the final calculation.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to normalize the height and weight.</p>
+<ol>
+<li>Slice the array into inputs and outputs using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">X = data_array[:,:2]<br/>y = data_array[:,2]</pre>
+<ol start="2">
+<li>The mean and the standard deviation can be calculated across the 29 individuals using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">x_mean = X.mean(axis=0)<br/>x_std = X.std(axis=0)<br/><br/></pre>
+<ol start="3">
+<li>Create a normalization function to normalize<span> </span><kbd>X</kbd><span> </span>using the following script:</li>
+</ol>
+<pre style="padding-left: 60px"> def normalize(X):<br/>     x_mean = X.mean(axis=0)<br/>     x_std = X.std(axis=0)<br/>     X = (X - X.mean(axis=0))/X.std(axis=0)<br/>     return X</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the height and weight are normalized.</p>
+<ol>
+<li>The<span> </span><kbd>data_array</kbd><span> </span>matrix is split into two matrices:
+<ol>
+<li><kbd>X</kbd><span> </span>is composed of the height and the weight</li>
+<li><kbd>y</kbd><span> </span>is composed of the gender</li>
+</ol>
+</li>
+</ol>
+<ol start="2">
+<li>The output of both arrays can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/cbe8d854-b194-462b-a639-64a48deebd85.png" style="width:34.42em;height:29.25em;"/></div>
+<ol start="3">
+<li>
+<p>The<span> </span><kbd>X</kbd><span> </span>component is the input and is the only part that will undergo the normalization process. The<span> </span><em>y</em><span> </span>component, or the gender, will be disregarded for the moment. The normalization process involves extracting the mean and standard deviation of both inputs for all 29 individuals. <span>The output of the mean and standard deviations for the height and weight can be seen in the following screenshot:</span></p>
+</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/8a23c34c-0387-4848-bd43-9561a6b28e98.png" style="width:30.75em;height:5.67em;"/></div>
+<ol start="4">
+<li>The mean of the height is ~<span class="packt_screen">67</span> inches and the standard deviation of the height is ~<span class="packt_screen">3.4</span> inches. The mean of the weight is ~<span class="packt_screen">145</span> lbs and the standard deviation of the weight is ~<span class="packt_screen">22</span> lbs.</li>
+</ol>
+<ol start="5">
+<li>
+<p>Once they are extracted, the inputs are normalized using the following equation: <kbd>X_norm = (X - X_mean)/X_std</kbd>.</p>
+</li>
+<li>
+<p><span>The</span> <kbd>X</kbd> <span>array is normalized using the Python function</span> <kbd>normalize()</kbd> <span>and the</span> <kbd>X</kbd> <span>array is now assigned to the values of the newly minted normalized set, as seen in the following screenshot:</span></p>
+</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/b44ccd64-f096-46ca-9599-4dadb60cb70c.png" style="width:25.67em;height:35.67em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about normalization in statistics, visit the following website:</p>
+<p><a href="https://en.wikipedia.org/wiki/Normalization_(statistics)">https://en.wikipedia.org/wiki/Normalization_(statistics)</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Validating array for optimal neural network performance</h1>
+                </header>
+            
+            <article>
+                
+<p>A little bit of validation goes a long way in ensuring that our array is normalized for optimal performance within our upcoming neural network.  </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>This section will require a bit of <kbd>numpy</kbd> magic using the <kbd>numpy.stack()</kbd> function.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>The following steps walk through validating that our array has been normalized.</p>
+<ol>
+<li>Execute the following step to print the mean and standard deviation of array inputs:</li>
+</ol>
+<pre style="padding-left: 60px">print('standard deviation')<br/>print(round(X[:,0].std(axis=0),0))<br/>print('mean')<br/>print(round(X[:,0].mean(axis=0),0))</pre>
+<ol start="2">
+<li>Execute the following script to combine height, weight, and gender into one array, <kbd>data_array</kbd>:</li>
+</ol>
+<pre style="padding-left: 60px">data_array = np.column_stack((X[:,0], X[:,1],y))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the array is validated and constructed for optimal future use within the neural network.</p>
+<ol>
+<li>
+<p>The new <kbd>mean</kbd> of the height should be 0 and the<span> </span><kbd>standard deviation</kbd><span> </span>should be 1. This can be seen in the following screenshot:</p>
+</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1140 image-border" src="assets/7540c7bb-c6c1-41b1-8fcd-fdf91baadc9d.png" style="width:19.58em;height:8.25em;"/></div>
+<ol start="2">
+<li><span>This is confirmation of a normalized dataset, as it includes a mean of 0 and a standard deviation of 1.</span></li>
+<li>The original<span> </span><kbd>data_array</kbd><span> </span><span>is no longer useful for a neural network because it contains the original, non-normalized, input values for</span><span> </span><kbd>height</kbd><span>,</span><span> </span><kbd>weight</kbd><span>, and</span><span> </span><kbd>gender</kbd><span>.</span></li>
+<li>Nonetheless, with a little bit of<span> </span><kbd>numpy</kbd><span> magic,</span><span> </span><kbd>data_array</kbd><span> </span><span>can be restructured to include the normalized</span><span> </span><kbd>height</kbd><span> </span><span>and</span><span> </span><kbd>weight</kbd><span>, along with</span><span> </span><kbd>gender</kbd><span>.  This is done with</span> <kbd>numpy.stack()</kbd><span>.   The output of the new array,</span> <kbd>data_array</kbd><span>, can be seen in the following screenshot:</span></li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img src="assets/c337a2fd-0984-4038-a8a7-026525df2a9b.png" style="text-align: center;color: black;font-size: 1em;width:26.17em;height:29.58em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>Our array is now all set.  Our inputs for height and weight are normalized and our output for gender is labeled as 0 or 1.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>To learn more about <kbd>numpy.stack()</kbd>, visit the following website:</p>
+<p><a href="https://docs.scipy.org/doc/numpy/reference/generated/numpy.stack.html">https://docs.scipy.org/doc/numpy/reference/generated/numpy.stack.html</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Setting up the activation function with sigmoid</h1>
+                </header>
+            
+            <article>
+                
+<p>An activation function is used in a neural network to help determine the output, whether it is a yes or no, true or false, or in our case 0 or 1 (male/female).  At this point, the inputs have been normalized and have been summed with the weights and bias: <kbd>w1</kbd>, <kbd>w2</kbd>, and <kbd>b</kbd>. However, the weights and bias are completely random at the moment and are not optimized to produce a predicted output that matches the actual output. The missing link in building the predicted outcome resides with the activation or <kbd>sigmoid</kbd> function, which is shown in the following diagram:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/9ded16b0-c52c-4fcb-9e53-4677113c656b.png"/></div>
+<p>If the number that is produced out of the summation is very small, it will produce an activation of 0. Likewise, if the number produced out of the summation is quite large, it will produce an activation of 1. This function is useful because it restricts the output to a binary outcome, which is quite useful for classification. The consequences of these outputs will be discussed and clarified in the remainder of this chapter.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>sigmoid</kbd> function is similar to the logistic regression function in that it computes a probabilistic outcome between 0 and 1. Additionally, it gives a range of everything in -between. Therefore, a condition could be set to associate any value greater than 0.5 to 1 and less than 0.5 to 0.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps of creating and plotting a sigmoid function with sample data.</p>
+<ol>
+<li>Create the<span> </span><kbd>sigmoid</kbd><span> </span>function<span> </span>using a Python function, as seen in the following script:</li>
+</ol>
+<pre style="padding-left: 60px">def sigmoid(input):<br/>  return 1/(1+np.exp(-input))</pre>
+<ol start="2">
+<li>Create sample<span> </span><kbd>x</kbd><span> </span>values for the<span> </span><kbd>sigmoid</kbd><span> </span>curve using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">X = np.arange(-10,10,1)</pre>
+<ol start="3">
+<li>Additionally, create sample<span> </span><kbd>y</kbd><span> </span>values for the<span> </span><kbd>sigmoid</kbd><span> </span>curve using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">Y = sigmoid(X)</pre>
+<ol start="4">
+<li>Plot the<span> </span><kbd>x</kbd><span> </span>and<span> </span><kbd>y</kbd><span> </span>values for these points using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">plt.figure(figsize=(6, 4), dpi= 75)<br/>plt.axis([-10,10,-0.25,1.2])<br/>plt.grid()<br/>plt.plot(X,Y)<br/>plt.title('Sigmoid Function')<br/>plt.show()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains the mathematics behind the sigmoid function.</p>
+<ol>
+<li><span>The </span><kbd>sigmoid</kbd><span> function is a specialized version of the logistic regression used for classification. The calculation of the logistic regression is expressed with the following formula:</span></li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/761ff6f1-ac53-4570-bb6e-1263f56ffc26.png" style="width:21.08em;height:3.67em;"/></div>
+<ol start="2">
+<li>The variables for the logistic regression function stand for the following:
+<ul>
+<li><em>L</em><span> </span>stands the maximum value of the function</li>
+<li><em>k</em><span> </span>stands for the steepness of the curve</li>
+<li> <em>x<sub>midpoint</sub></em><span> </span>stands for the midpoint value of the function</li>
+</ul>
+</li>
+<li><span>Since the </span><kbd>sigmoid</kbd><span> function has a steepness of value 1, a midpoint of 0, and a maximum value of 1, it produces the following function:</span></li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/69709a0a-e875-4cdf-ab74-9c71a8991598.png" style="width:12.67em;height:2.83em;"/></div>
+<ol start="4">
+<li><span>We can plot a general sigmoid function</span><span> with x-values ranging from -5 to 5, and y-values ranging from 0 to 1 as seen in the following screenshot:</span></li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1141 image-border" src="assets/9fd2bcf1-683d-4818-8a0c-1a8f548fdd1f.png" style="width:24.92em;height:19.17em;"/></div>
+<ol start="5">
+<li>We created our own <kbd>sigmoid</kbd> function with Python and plotted it using sample data between <kbd>-10</kbd> and <kbd>10</kbd>.  Our plot looks very similar to the previous general sigmoid plot.  The output of our <kbd>sigmoid</kbd> function can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1142 image-border" src="assets/de49da85-78f6-4562-8d09-aa632b62fc92.png" style="width:30.42em;height:32.00em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about the origin of the <kbd>sigmoid</kbd> function, visit the following website:</p>
+<p><a href="https://en.wikipedia.org/wiki/Sigmoid_function">https://en.wikipedia.org/wiki/Sigmoid_function</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Creating the sigmoid derivative function</h1>
+                </header>
+            
+            <article>
+                
+<p>The sigmoid function is a unique function where the value of the derivative of the sigmoid function includes the value of the sigmoid function.  You may be asking what's the big deal.  However, since the sigmoid function is already calculated it allows for simpler and more efficient processing when performing backpropagation over many layers.  Additionally, it is the derivative of the sigmoid function that is used in the calculation to derive the optimal <kbd>w1</kbd>, <kbd>w2</kbd>, and <kbd>b</kbd> values to derive the most accurate predicted output. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>A cursory understanding of derivatives from calculus will assist in understanding the sigmoid derivative function.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to create a sigmoid derivative function.</p>
+<ol>
+<li>Just like the<span> </span><kbd>sigmoid</kbd><span> </span>function, create the derivative of the<span> </span><kbd>sigmoid</kbd><span> </span>function can with Python using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">def sigmoid_derivative(x):<br/>    return sigmoid(x) * (1-sigmoid(x))</pre>
+<ol start="2">
+<li>Plot the derivative of the<span> </span><kbd>sigmoid</kbd><span> </span>function alongside the original<span> </span><kbd>sigmoid</kbd><span> </span>function using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">plt.figure(figsize=(6, 4), dpi= 75)<br/>plt.axis([-10,10,-0.25,1.2])<br/>plt.grid()<br/>X = np.arange(-10,10,1)<br/>Y = sigmoid(X)<br/>Y_Prime = sigmoid_derivative(X)<br/>c=plt.plot(X, Y, label="Sigmoid",c='b')<br/>d=plt.plot(X, Y_Prime, marker=".", label="Sigmoid Derivative", c='b')<br/>plt.title('Sigmoid vs Sigmoid Derivative')<br/>plt.xlabel('X')<br/>plt.ylabel('Y')<br/>plt.legend()<br/>plt.show()</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains the math behind the derivative of the sigmoid function along with the logic to create the derivative of the sigmoid function with Python.</p>
+<ol>
+<li>The neural network will require the derivative of the<span> </span><kbd>sigmoid</kbd><span> </span>function to predict an accurate output for <kbd>gender</kbd>. The derivative of the<span> </span><kbd>sigmoid</kbd><span> </span>function is calculated using the following formula:</li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/95d933f9-d2b5-4593-ae6b-3cef9db42678.png" style="width:39.00em;height:2.75em;"/></div>
+<ol start="2">
+<li>We can then create the derivative of the sigmoid function, <kbd>sigmoid_derivate()</kbd>, using the original sigmoid function, <kbd>sigmoid()</kbd>, in Python. We can plot both functions side by side as seen in the following screenshot:</li>
+</ol>
+<div class="mce-root CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1143 image-border" src="assets/22feaa79-5478-49e0-a08c-98b117c41935.png" style="width:34.08em;height:31.83em;"/></div>
+<ol start="3">
+<li><span class="packt_screen">Sigmoid Derivative</span> tracks the slope of the original <span class="packt_screen">Sigmoid</span> function. Early on in the plot, when the slope of the <span class="packt_screen">Sigmoid</span> is completely horizontal, the <span class="packt_screen">Sigmoid Derivative</span> is also <span class="packt_screen">0.0</span>.  The same holds true for <span class="packt_screen">Sigmoid</span> when the value is approaching 1 as the slope is also almost completely horizontal. The peak value of the slope of <span class="packt_screen">Sigmoid</span> is at the midpoint of the x-axis. Consequently, this is also the peak value of <span class="packt_screen">Sigmoid Derivative</span>.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>To get a deeper dive into derivatives, visit the following website:</p>
+<p><a href="https://www.khanacademy.org/math/calculus-home/taking-derivatives-calc">https://www.khanacademy.org/math/calculus-home/taking-derivatives-calc</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Calculating the cost function in a neural network</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">At this point, it is time to bring together all of the parts highlighted earlier on in the chapter to calculate the cost function, which will be used by the neural network to determine how well the predicted outcome matched the original or actual outcome, given the 29 individual data points that are currently available. The purpose of the cost function is to identify the difference between the actual value and the predicted value.  Gradient descent is then used to either increase or decrease the values for <kbd>w1</kbd>, <kbd>w2</kbd>, and <kbd>b</kbd> to decrease the value of the cost function and ultimately achieve our goal of deriving a predicted value that matches the actual value.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">The formula for the cost function is the following:</p>
+<div class="mce-root CDPAlignCenter CDPAlign">cost(x)=(predicted-actual)<sup>2</sup></div>
+<p>If the cost function looks familiar, it's because it is really just another way of minimizing the squared difference between the actual output and the prediction. The purpose of gradient descent or backpropagation in a neural network is to minimize the cost function until the value is close to 0. At that point, the weights and bias (<kbd>w1</kbd>, <kbd>w2</kbd>, and <kbd>b</kbd>) will no longer be random insignificant values generated by <kbd><span>numpy</span></kbd>, but actual significant weights contributing to a neural network model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to calculate the cost function.</p>
+<ol>
+<li>Set a  learning rate value of<span> </span><kbd>0.1</kbd><span> </span>to incrementally change the weights and bias until a final output is selected using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">learningRate = 0.1</pre>
+<ol start="2">
+<li>Initiate a Python list called<span> </span><kbd>allCosts</kbd><span> </span>using the following script. </li>
+</ol>
+<pre style="padding-left: 60px">allCosts = []</pre>
+<ol start="3">
+<li>Create a <kbd>for</kbd> loop that will iterate through 100,000 scenarios using the following script:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1144 image-border" src="assets/94ba5b3d-40e4-4c59-bf85-52850d1f5e9b.png" style="width:35.92em;height:33.67em;"/></div>
+<ol start="4">
+<li>Plot the cost values collected over the 100,000 iterations using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">plt.plot(all_costs)<br/>plt.title('Cost Value over 100,000 iterations')<br/>plt.xlabel('Iteration')<br/>plt.ylabel('Cost Value')<br/>plt.show()</pre>
+<ol start="5">
+<li><span>The final values of the weights and bias can be viewed using the following script:</span></li>
+</ol>
+<pre style="padding-left: 60px">print('The final values of w1, w2, and b')<br/>print('---------------------------------')<br/>print('w1 = {}'.format(w1))<br/>print('w2 = {}'.format(w2))<br/>print('b = {}'.format(b))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the cost function is used to generate weights and bias.</p>
+<ol>
+<li>A <kbd>for</kbd> loop will be implemented that will perform gradient descent on the weights and bias to tweak the values until the cost function gets close to 0.</li>
+<li>The loop will iterate over the cost function 100,000 times. Each time, a random value for<span> </span><kbd>height</kbd><span> </span>and<span> </span><kbd>weight</kbd><span> </span>from the 29 individuals is selected.</li>
+<li> A summation value,<span> </span><kbd>z</kbd>, is calculated from the random<span> </span><kbd>height</kbd><span> </span>and<span> </span><kbd>weight</kbd>, and the input is used to calculate a<span> </span><kbd>predictedGender</kbd><span> </span>score with the<span> </span><kbd>sigmoid</kbd><span> </span>function.</li>
+<li>The cost function is calculated and added to a list that tracks all cost functions through the 100,000 iterations,<span> </span><kbd>allCosts</kbd>.</li>
+<li>A series of partial derivatives is calculated with respect to the summation value (<kbd>z</kbd>) as well as the<span> </span><kbd>cost</kbd><span> </span>function (<kbd>cost</kbd>).</li>
+<li>These calculations are ultimately used to update the weights and bias with respect to the cost function until they (<kbd>w1</kbd>,<span> </span><kbd>w2</kbd>, and<span> </span><kbd>b</kbd>) return a value that is close to 0 for the cost function over the 100,000 iterations.</li>
+<li><span>Ultimately, the goal is for the values to be decreasing for the cost function as the iterations increase.  </span>The output of the cost function values over the 100,000 iterations can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/3480b8b4-1423-4ddb-aefb-0691ef980ce3.png" style="width:31.75em;height:24.58em;"/></div>
+<ol start="8">
+<li class="mce-root">Over the course of the iterations, the cost value dropped from ~0.45 to ~0.01.</li>
+<li><span>Additionally, we can view the final output for the values of</span><span> </span><kbd>w1</kbd><span>,</span><span> </span><kbd>w2</kbd><span>, and</span><span> </span><kbd>b</kbd><span> </span><span>that produced the lowest value of the cost function as seen in the following screenshot:</span></li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/34d2c6f2-b025-4158-ab3c-78821ab39752.png" style="width:27.00em;height:12.42em;"/></div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">There's more...</h1>
+                </header>
+            
+            <article>
+                
+<p>The ability to test the final values of the weights and bias is <span>now</span><span> </span><span>available to compute how well the cost function worked to compute a predicted and how it compared to the actual score.</span></p>
+<p>The following script will create a loop through each individual and calculate a predicted gender score based on the weights (<kbd>w1</kbd>, <kbd>w2</kbd>) and the bias (<kbd>b</kbd>):</p>
+<pre>for i in range(len(data_array)):<br/>    random_individual = data_array[i]<br/>    height = random_individual[0]<br/>    weight = random_individual[1]<br/>    z = height*w1 + weight*w2 + b<br/>    predictedGender=sigmoid(z)<br/>    print("Individual #{} actual score: {} predicted score:                           {}".format(i+1,random_individual[2],predictedGender))</pre>
+<p>The output of the script can be seen in the following screenshot:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/e03197a6-0bf4-4170-bd6e-8396d617aa14.png" style="width:38.50em;height:36.75em;"/></div>
+<p>All 29 of the actual scores approximately <span>match</span><span> </span><span>the predicted scores when rounded. While this is good for confirming the model produced matching results on the training data, ultimately, the test will be to determine whether the model can make accurate gender predictions on new individuals introduced to it.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about minimizing cost functions or squared (difference) error functions using gradient descent, visit the following site:</p>
+<p><a href="https://en.wikipedia.org/wiki/Gradient_descent">https://en.wikipedia.org/wiki/Gradient_descent</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Predicting gender based on height and weight</h1>
+                </header>
+            
+            <article>
+                
+<p>A predictive model is only useful if it can actually predict based on new information. This is the case with a simple logistic or linear regression, or a more complex neural network model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>This is where the fun begins. The only requirements for this section are to pull sample data points for both male and female individuals and use their height and weight values to measure the accuracy of the model created in the previous section.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to predict gender based on height and weight.</p>
+<ol>
+<li>Create a Python function called<span> </span><kbd>input_normalize</kbd><span> </span>to input new values for<span> </span><kbd>height</kbd><span> </span>and<span> </span><kbd>weight</kbd><span> </span>and output a normalized height and weight, as seen in the following script:</li>
+</ol>
+<pre style="padding-left: 60px">def input_normalize(height, weight):<br/>    inputHeight = (height - x_mean[0])/x_std[0]<br/>    inputWeight = (weight - x_mean[1])/x_std[1]<br/>    return inputHeight, inputWeight</pre>
+<ol start="2">
+<li>Assign a variable called<span> </span><kbd>score</kbd><span> </span>to the function for the values of<span> </span><kbd>70</kbd><span> </span>inches for the<span> </span><kbd>height</kbd><span> </span>and<span> </span><kbd>180</kbd><span> </span>lbs for the<span> </span><kbd>weight</kbd>, as seen in the following script:</li>
+</ol>
+<pre style="padding-left: 60px">score = input_normalize(70, 180)</pre>
+<ol start="3">
+<li>Create another Python function, called<span> </span><kbd>predict_gender</kbd>, to output a probability score, <kbd>gender_score</kbd>, between 0 and 1, as well as a gender description, by applying the summation with<span> </span><kbd>w1</kbd>,<span> </span><kbd>w2</kbd>, and<span> </span><kbd>b</kbd><span> </span>as well as the<span> </span><kbd>sigmoid</kbd><span> </span>function, as seen in the following script:</li>
+</ol>
+<pre style="padding-left: 60px">def predict_gender(raw_score):<br/>    gender_summation = raw_score[0]*w1 + raw_score[1]*w2 + b<br/>    gender_score = sigmoid(gender_summation)<br/>    if gender_score &lt;= 0.5:<br/>        gender = 'Female'<br/>    else:<br/>        gender = 'Male'<br/>    return gender, gender_score</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how new inputs for height and weight are used to generate a prediction score for gender.</p>
+<ol start="1">
+<li>A function is created to input new height and weight values and convert the actual values to normalized height and weight values called<span> </span><kbd>inputHeight</kbd><span> </span>and<span> </span><kbd>inputWeight</kbd></li>
+<li>A variable,<span> </span><kbd>score</kbd>, is used to store the normalized values and another function,<span> </span><kbd>predictGender</kbd>, is created to input the score values and output a gender score and description based on the values of<span> </span><kbd>w1</kbd>,<span> </span><kbd>w2</kbd>, and<span> </span><kbd>b</kbd><span> </span>that were created in the previous section.  These values have already been pre-adjusted using gradient descent to tweak the values and minimize the<span> </span><kbd>cost</kbd><span> </span>function.</li>
+<li>Applying the<span> </span><kbd>score</kbd><span> </span>value to the<span> </span><kbd>predict_gender</kbd><span> </span>function should reveal the <span class="packt_screen">gender</span> description and <span class="packt_screen">score</span>, as seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/74e468ef-124b-4aa2-8e77-9e74b610c494.png" style="width:43.25em;height:26.33em;"/></div>
+<ol start="4">
+<li>It appears that the specifications of<span> </span><kbd>70</kbd><span> </span>inches in<span> </span><kbd>height</kbd><span> </span>and<span> </span><kbd>180</kbd><span> </span>lbs in<span> </span><kbd>weight</kbd><span> </span>is a high predictor (99.999%) for <span class="packt_screen">Male</span>.</li>
+<li>Another test for <kbd>50</kbd> inches in <kbd>height</kbd> and <kbd>150</kbd> lbs in <kbd>weight</kbd> will likely reveal a different gender, as seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1145 image-border" src="assets/8eed7441-e377-4a4a-b906-b893a3847ab6.png" style="width:26.17em;height:7.00em;"/></div>
+<ol start="6">
+<li><span>Similarly, this input produces a very low score from the <kbd>sigmoid</kbd> function (0.00000000839) indicating that these features are closely associated with the</span><span> </span><kbd>Female</kbd><span> </span><span>gender.</span></li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">See also</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to learn more about testing, training, and validation data sets, visit the following website:</p>
+<p><a href="https://en.wikipedia.org/wiki/Training,_test,_and_validation_sets">https://en.wikipedia.org/wiki/Training,_test,_and_validation_sets</a></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Visualizing prediction scores</h1>
+                </header>
+            
+            <article>
+                
+<p><span>While we can individually predict the gender based on an individual with a certain height and weight, the entire dataset can be graphed and scored using every data point to determine whether the output is going to score a female or a male.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Getting ready</h1>
+                </header>
+            
+            <article>
+                
+<p>There are no dependencies required for this section.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How to do it...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section walks through the steps to visualize all of the predicted points in a graph.</p>
+<ol>
+<li>Compute the minimum and maximum points of the graph  using the following script:</li>
+</ol>
+<pre style="padding-left: 60px">x_min = min(data_array[:,0])-0.1<br/>x_max = max(data_array[:,0])+0.1<br/>y_min = min(data_array[:,1])-0.1<br/>y_max = max(data_array[:,1])+0.1<br/>increment= 0.05<br/><br/>print(x_min, x_max, y_min, y_max)</pre>
+<ol start="2">
+<li><span>Generate <em>x</em> and <em>y</em> values in increments of 0.05 units and then create an array called</span><span> </span><kbd>xy_data</kbd><span>, as seen in the following script:</span></li>
+</ol>
+<pre style="padding-left: 60px">x_data= np.arange(x_min, x_max, increment)<br/>y_data= np.arange(y_min, y_max, increment)<br/>xy_data = [[x_all, y_all] for x_all in x_data for y_all in y_data]</pre>
+<ol start="3">
+<li><span>Finally, a similar script</span><span> </span><span>to that used earlier in the chapter</span><span> </span><span>is used to generate a gender score and populate a graph, as seen in the following script:</span></li>
+</ol>
+<pre style="padding-left: 60px">for i in range(len(xy_data)):<br/>    data = (xy_data[i])<br/>    height = data[0]<br/>    weight = data[1] <br/>    z_new = height*w1 + weight*w2 + b<br/>    predictedGender_new=sigmoid(z_new)<br/>    # print(height, weight, predictedGender_new)<br/>    ax = plt.scatter(height[predictedGender_new&lt;=0.5],<br/>            weight[predictedGender_new&lt;=0.5],     <br/>            marker = 'o', c= 'r', label = 'Female')    <br/>    bx = plt.scatter(height[predictedGender_new &gt; 0.5],<br/>            weight[predictedGender_new&gt;0.5], <br/>            marker = 'o', c= 'b', label = 'Male') <br/>    # plot values, title, legend, x and y axis<br/>    plt.title('Weight vs Height by Gender')<br/>    plt.xlabel('Height (in)')<br/>    plt.ylabel('Weight (lbs)')<br/>    plt.legend(handles=[ax,bx])</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">How it works...</h1>
+                </header>
+            
+            <article>
+                
+<p>This section explains how the data points are created to generate prediction values that will be graphed.</p>
+<ol>
+<li>The minimum and maximum values of the graph are computed based on the array values. The output of the script can be seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1146 image-border" src="assets/368393bd-0b7d-4d20-a2b5-4a2609fa00e2.png" style="width:37.92em;height:10.08em;"/></div>
+<ol start="2">
+<li>We generate x and y values for each data point within the minimum and maximum values within 0.05 increments and then run each (x,y) point into the prediction score to plot the values.  The <span class="packt_screen">Female</span> gender score is assigned a red color and the <span class="packt_screen">Male</span> gender score is assigned a blue color as seen in the following screenshot:</li>
+</ol>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-1147 image-border" src="assets/0e791280-c635-4aa2-86cd-7768ac3a8399.png" style="width:36.58em;height:38.50em;"/></div>
+<ol start="3">
+<li><span>The graph shows the cutoff between the gender scores depending on the </span><kbd>height</kbd><span> and </span><kbd>weight</kbd><span> selected.</span></li>
+</ol>
+<ol start="2"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

@@ -1,0 +1,711 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-21-rl-in-discrete-optimization">
+<h1 class="chapterNumber">21</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_424">
+<span id="x1-39100021"/>RL in Discrete Optimization
+    </h1>
+<p>The perception of deep <span class="cmbx-10x-x-109">reinforcement learning </span>(<span class="cmbx-10x-x-109">RL</span>) is that it is a tool to be used mostly for playing games. This is not surprising given the fact that, historically, the first success in the field was achieved on the Atari game suite by DeepMind in 2015 (<a class="url" href="https://deepmind.com/research/dqn/"><span class="cmtt-10x-x-109">https://deepmind.com/research/dqn/</span></a>). The Atari benchmark suite turned out to be very successful for RL problems and, even now, lots of research papers use it to demonstrate the efficiency of their methods. As the RL field progresses, the classic 53 Atari games continue to become less and less challenging (at the time of writing, almost all the games have been solved with superhuman accuracy) and researchers are turning to more complex games, like StarCraft and Dota 2.</p>
+<p>This perception, which is especially prevalent in the media, is something that I’ve tried to counterbalance in this book by accompanying Atari games with examples from other domains, including stock trading and <span class="cmbx-10x-x-109">natural language processing</span> (<span class="cmbx-10x-x-109">NLP</span>) problems, web navigation automation, continuous control, board games, and robotics. In fact, RL’s very flexible <span class="cmbx-10x-x-109">Markov decision process </span>(<span class="cmbx-10x-x-109">MDP</span>) model potentially could be applied to a wide variety of domains; computer games are just one convenient and attention-grabbing example of complicated decision-making.</p>
+<p>In this chapter, we will explore a new field in RL application: discrete optimization (which is a branch of mathematics that studies optimization problems on discrete structures), which will be showcased using the famous Rubik’s cube puzzle. I’ve tried to provide a detailed description of the process followed in the paper titled <span class="cmti-10x-x-109">Solving the Rubik’s cube without human knowledge</span>, by UCI researchers McAleer et al. [<span id="x1-391001"/><a href="#">McA+18</a>]. In addition, we will cover my implementation of the method described in the paper (which is in the <span class="cmtt-10x-x-109">Chapter21 </span>directory of the book’s GitHub repository) and discuss directions to improve the method. I’ve combined the description of the paper’s method with code pieces from my version to illustrate the concepts with concrete implementation.</p>
+<p>More specifically, in this chapter, we will:</p>
+<ul>
+<li>
+<p>Briefly discuss the basics of discrete optimization</p>
+</li>
+<li>
+<p>Cover step by step the process followed by McAleer et al. [<span id="x1-391002"/><a href="#">McA+18</a>], who apply RL methods to the Rubik’s cube optimization problem</p>
+</li>
+<li>
+<p>Explore experiments that I’ve done in an attempt to reproduce the paper’s results and directions for future method improvement</p>
+</li>
+</ul>
+<p>Let’s start with an overview of the Rubik’s cube and discrete optimization in general.</p>
+<section class="level3 sectionHead" id="the-rubiks-cube-and-discrete-optimization">
+<h1 class="heading-1" id="sigil_toc_id_354"> <span id="x1-39200021.1"/>The Rubik’s cube and discrete optimization</h1>
+<p>I’m sure you are <span id="dx1-392001"/>aware of what a Rubik’s cube is, so I’m not going to go over the <span id="dx1-392002"/>general description (<a class="url" href="https://en.wikipedia.org/wiki/Rubik/"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Rubik\%27s_Cube</span></a>) of this puzzle, but rather focus on the connections it has to mathematics and computer science.</p>
+<div class="tcolorbox tipbox" id="tcolobox-478">
+<div class="tcolorbox-content">
+<p>If it’s not explicitly stated, by “cube” I mean the 3 <span class="cmsy-10x-x-109">× </span>3 <span class="cmsy-10x-x-109">× </span>3 classic Rubik’s cube. There are lots of variations based on the original 3 <span class="cmsy-10x-x-109">× </span>3 <span class="cmsy-10x-x-109">× </span>3 puzzle, but they are still far less popular than the classic invention.</p>
+</div>
+</div>
+<p>Despite being quite <span id="dx1-392003"/>simple in terms of mechanics and the task at hand, the cube is quite a tricky object in terms of all the transformations we can make by possible rotations of its sides. It was calculated that in total, the cube has <span class="cmsy-10x-x-109">≈ </span>4<span class="cmmi-10x-x-109">.</span>33 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">19</span></sup> distinct states reachable by rotating it. That’s only the states that are reachable without disassembling the cube; by taking it apart and then assembling it, you can get 12 times more states in total: <span class="cmsy-10x-x-109">≈ </span>5<span class="cmmi-10x-x-109">.</span>19 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">20</span></sup>, but those “extra” states make the cube unsolvable without disassembling it.</p>
+<p>All those states are quite intimately intertwined with each other through rotations of the cube’s sides. For example, if we rotate the left side clockwise in some state, we get to the state from which rotation of the same side counterclockwise will destroy the effect of the transformation, and we will get into the original state.</p>
+<p>But if we apply the left-side clockwise rotation three times in a row, the shortest path to the original state will be just a single rotation of the left side clockwise, but not three times counterclockwise (which is also possible, but just not optimal). As the cube has 6 edges and each edge can be rotated in 2 directions, we have 12 possible rotations in total. Sometimes, half turns (which are two consecutive rotations in the same direction) are also included as distinct rotations, but for simplicity, we will treat them as two distinct transformations of the cube.</p>
+<p>In mathematics, there are several areas that study objects of this kind. One of these is abstract algebra, a very broad division of math that studies abstract sets of objects with operations on top of them. In these terms, the Rubik’s cube is an example of quite a complicated group ( <a class="url" href="https://en.wikipedia.org/wiki/Group_theory"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Group_theory</span></a>) with lots of interesting properties.</p>
+<p>The cube is not just states and transformations; it’s a puzzle, with the primary goal to find a sequence of rotations with the solved cube as the end point. Problems of this kind are studied using combinatorial optimization, which is a subfield of applied math and theoretical computer science. This discipline has lots of famous problems of high practical value, for example:</p>
+<ul>
+<li>
+<p>The traveling salesman problem (<a class="url" href="https://en.wikipedia.org/wiki/Travelling_salesman_problem"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Travelling_salesman_problem</span></a>): Finds the shortest closed path in a graph</p>
+</li>
+<li>
+<p>The protein folding simulation (<a class="url" href="https://en.wikipedia.org/wiki/Protein_folding"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Protein_folding</span></a>): Finds possible 3D structures of protein</p>
+</li>
+<li>
+<p>Resource allocation: How to spread a fixed set of resources among consumers to get the best objective</p>
+</li>
+</ul>
+<p>What those problems <span id="dx1-392004"/>have in common is a huge state space, which makes it infeasible to just check all possible combinations to find the best solution. Our “toy cube problem” also falls into the same category, because a state space of 4<span class="cmmi-10x-x-109">.</span>33 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">19</span></sup> makes a brute-force approach very impractical.</p>
+</section>
+<section class="level3 sectionHead" id="optimality-and-gods-number">
+<h1 class="heading-1" id="sigil_toc_id_355"> <span id="x1-39300021.2"/>Optimality and God’s number</h1>
+<p>What makes the <span id="dx1-393001"/>combinatorial optimization problem tricky is that we’re not looking for <span class="cmti-10x-x-109">any solution</span>; we’re in fact interested in the <span class="cmti-10x-x-109">optimal solution </span>of the problem. So, what is the difference? Right after the Rubik’s cube was invented, it was known how to reach the goal state (but it took Ernő Rubik about a month to figure out the first method of solving his own invention, which I expect was a frustrating experience). Nowadays, there are lots of different ways or <span class="cmti-10x-x-109">schemes </span>of cube solving: the beginner’s method (layer by layer), the method by Jessica Fridrich (very popular among speedcubers), and so on.</p>
+<p>All of them vary by the number of moves to be taken. For example, a very simple beginner’s method requires about 100 rotations to solve the cube using just 5<span class="cmmi-10x-x-109">…</span>7 sequences of rotations to be memorized. In contrast, the current world record in the speedcubing competition is solving the cube in 3.13 seconds, which requires much fewer steps, but more sequences need to be memorized. The method by Fridrich requires about 55 moves on average, but you need to familiarize yourself with  120 different sequences of moves. Of course, the big question is: what is the shortest sequence of actions to solve any given state of the cube? Surprisingly, after 50 years since the invention of the cube, humanity still doesn’t know the full answer to this question. Only in 2010 did a group of researchers from Google prove that the minimum number of moves needed to solve <span class="cmti-10x-x-109">any </span>cube state is 20. This number is also known as <span class="cmti-10x-x-109">God’s number</span> (not to be confused with the ”golden ratio” or ”divine proportion,” which is found everywhere in nature). Of course, on average, the optimal solution is shorter, as only a bunch of states require 20 moves and one single state doesn’t require any moves at all (the solved state). This result only proves the minimal amount of moves; it does not find the solution itself. How to find the optimal solution for any given state is still an open question.</p>
+</section>
+<section class="level3 sectionHead" id="approaches-to-cube-solving">
+<h1 class="heading-1" id="sigil_toc_id_356"> <span id="x1-39400021.3"/>Approaches to cube solving</h1>
+<p>Before the <span id="dx1-394001"/>paper by McAleer et al. was published, there were two major directions for solving <span id="dx1-394002"/>the Rubik’s cube:</p>
+<ul>
+<li>
+<p>By using group theory, it is possible to significantly reduce the state space to be checked. One of the most popular solutions using this approach is Kociemba’s algorithm (<a class="url" href="https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik/"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik\%27s_Cube#Kociemba’s_algorithm</span></a>).</p>
+</li>
+<li>
+<p>By using brute-force search accompanied by manually crafted heuristics, we can direct the search in the most promising direction. A vivid example of this is Korf’s algorithm (<a class="url" href="https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik/"><span class="cmtt-10x-x-109">https://en.wikipedia.org/wiki/Optimal_solutions_for_Rubik\%27s_Cube#Korf’s_algorithm</span></a>), which uses A* search with a large database of patterns to cut out bad directions.</p>
+</li>
+</ul>
+<p>McAleer et al. [<span id="x1-394003"/><a href="#">McA+18</a>] introduced a third approach (called autodidactic iteration, or ADI): by training the <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) on lots of randomly shuffled cubes, it is <span id="dx1-394004"/>possible to get the policy that will show us the direction to take toward the solved state. The training is done without any prior knowledge about the domain; the only thing needed is the cube itself (not the physical one, but the computer model of it). This is in contrast with the two preceding methods, which require lots of human knowledge about the domain and labor to implement them in the form of computer code.</p>
+<p>This method has lots of similarities to the AlphaGo Zero method we discussed in the <span id="dx1-394005"/>previous chapter: we need a model of the environment and use <span class="cmbx-10x-x-109">Monte Carlo tree search </span>(<span class="cmbx-10x-x-109">MCTS</span>) to avoid full-state space exploration.</p>
+<p>In the subsequent sections, we will take a detailed look at this approach; we’ll start with data representation. In our cube problem, we have two entities that need to be encoded: actions and states.</p>
+<section class="level4 subsectionHead" id="actions-1">
+<h2 class="heading-2" id="sigil_toc_id_357"> <span id="x1-39500021.3.1"/>Actions</h2>
+<p>Actions are <span id="dx1-395001"/>possible rotations that we can do from any given cube state and, as has already been mentioned, we have only 12 actions in total. For every side, we have two different actions, corresponding to the clockwise and counterclockwise rotation of the side (90<sup><span class="cmsy-8">∘</span></sup> or <span class="cmsy-10x-x-109">−</span>90<sup><span class="cmsy-8">∘</span></sup>). One small, but very important, detail is that a rotation is performed from the position when the desired side is facing toward you. This is obvious for the <span class="cmti-10x-x-109">front </span>side, for example, but for the <span class="cmti-10x-x-109">back </span>side, it might be confusing due to the mirroring of the rotation.</p>
+<p>The names of the actions are taken from the cube sides that we’re rotating: <span class="cmti-10x-x-109">left</span>, <span class="cmti-10x-x-109">right</span>, <span class="cmti-10x-x-109">top</span>, <span class="cmti-10x-x-109">bottom</span>, <span class="cmti-10x-x-109">front</span>, and <span class="cmti-10x-x-109">back</span>. The first letter of a side’s name is used. For instance, the rotation of the <span class="cmti-10x-x-109">right </span>side clockwise is named as <span class="cmmi-10x-x-109">R</span>. There are different notations for counterclockwise actions; sometimes they are denoted with an apostrophe (<span class="cmmi-10x-x-109">R</span><span class="cmsy-10x-x-109">′</span>), with a lowercase letter (<span class="cmmi-10x-x-109">r</span>), or even with a tilde (R̃). The first and last notations are not very practical in computer code, so in my implementation, I’ve used lowercase actions to denote counterclockwise rotations. For the right side, we have two actions: <span class="cmmi-10x-x-109">R </span>and <span class="cmmi-10x-x-109">r</span>, and we have another two for the left side: <span class="cmmi-10x-x-109">L </span>and <span class="cmmi-10x-x-109">l</span>, and so on.</p>
+<p>In my code, the action space is implemented using a Python enum in <span class="cmtt-10x-x-109">libcube/cubes/cube3x3.py</span>, in the <span class="cmtt-10x-x-109">Action </span>class, where each action is mapped into the unique integer value:</p>
+<div class="tcolorbox" id="tcolobox-479">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-564"><code>class Action(enum.Enum): 
+    R = 0 
+    L = 1 
+    T = 2 
+    D = 3 
+    F = 4 
+    B = 5 
+    r = 6 
+    l = 7 
+    t = 8 
+    d = 9 
+    f = 10 
+    b = 11</code></pre>
+</div>
+</div>
+<p>In addition, we describe the dictionary with reverse actions:</p>
+<div class="tcolorbox" id="tcolobox-480">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-565"><code>_inverse_action = { 
+    Action.R: Action.r,   Action.r: Action.R, 
+    Action.L: Action.l,   Action.l: Action.L, 
+    Action.T: Action.t,   Action.t: Action.T, 
+    Action.D: Action.d,   Action.d: Action.D, 
+    Action.F: Action.f,   Action.f: Action.F, 
+    Action.B: Action.b,   Action.b: Action.B, 
+}</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="states">
+<h2 class="heading-2" id="sigil_toc_id_358"> <span id="x1-39600021.3.2"/>States</h2>
+<p>A state is a <span id="dx1-396001"/>particular configuration of the cube’s colored stickers and, as discussed earlier, the size of our state space is very large (4<span class="cmmi-10x-x-109">.</span>33 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">19</span></sup> different states). But the number of states is not the only complication we have; in addition, we have different objectives that we would like to meet when we choose a particular representation of a state:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Avoid redundancy</span>: In the extreme case, we can represent a state of the cube by just recording the colors of every sticker on every side. But if we just count the number of such combinations, we get 6<sup><span class="cmr-8">6</span><span class="cmsy-8">⋅</span><span class="cmr-8">8</span></sup> = 6<sup><span class="cmr-8">48</span></sup> <span class="cmsy-10x-x-109">≈ </span>2<span class="cmmi-10x-x-109">.</span>25 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">37</span></sup>, which is significantly larger than our cube’s state space size, which just means that this representation is highly redundant; for example, it allows all sides of the cube to have one single color (except the center cubelets). If you’re curious to know how I got 6<sup><span class="cmr-8">6</span><span class="cmsy-8">⋅</span><span class="cmr-8">8</span></sup>, this is simple: we have six sides of a cube, each having eight small cubes (we’re not counting centers), so we have 48 stickers in total and each of them could be colored in one of six colors.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Memory efficiency</span>: As you will see shortly, during the training and, even more so, during the model application, we will need to keep in our computer’s memory a large amount of different states of the cube, which might influence the performance of the process. So, we would like the representation to be as compact as possible.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Performance of the transformations</span>: On the other hand, we need to implement all the actions applied to the state, and those actions need to be taken quickly. If our representation is very compact in terms of memory (uses bit-encoding, for example), but requires us to do a lengthy unpacking process for every rotation of the cube’s side, our training might become too slow.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">NN friendliness</span>: Not every data representation is equally as good as input for the NN. This is true not only for our case but for machine learning in general. For example, in NLP, it is common to use bag of words or word embeddings; in computer vision, images are decoded from JPEG into raw pixels; random forests require data to be heavily feature-engineered; and so on.</p>
+</li>
+</ul>
+<p>In the paper, every state of the cube is represented as a 20 <span class="cmsy-10x-x-109">× </span>24 tensor with one-hot encoding. To understand how this is done and why it has this shape, let’s start with the picture taken from the paper shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-396002r1"><span class="cmti-10x-x-109">21.1</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/file315.png" width="500"/> <span id="x1-396002r1"/></p>
+<span class="id">Figure 21.1: Stickers we need to track in the cube are marked in a lighter color </span>
+</div>
+<p>Here, the light color marks the stickers of the cubelets that we need to track; the rest of the stickers (shown in a darker color) are redundant and there is no need to track them. As you know, a cube consists of three types of cubelets: 8 corner cubelets with 3 stickers, 12 side cubelets with 2 stickers, and 6 central ones with a single sticker. It might not be obvious from first sight, but the central cubelets do not need to be tracked at all, as they can’t change their relative position and can only rotate. So, in terms of the central cubelets, we need only to agree on the <span class="cmti-10x-x-109">cube alignment </span>(how the cube is oriented in space) and stick to it.</p>
+<p>In my<span id="dx1-396003"/> implementation, the white side is always on the top, the front is red, the left is green, and so on. This makes our state <span class="cmti-10x-x-109">rotation-invariant</span>, which basically means that all possible rotations of the cube as a whole are considered as the same state.</p>
+<p>As the central cubelets are not tracked at all, on the figure, they are marked with the darker color. What about the rest? Obviously, every cubelet of a particular kind (corner or side) has a unique color combination of its stickers. For example, the assembled cube in my orientation (white on top, red on the front, and so on) has a top-left cubelet facing us with the following colors: green, white, and red. There are no other corner cubelets with those colors (please check in case of any doubt). The same is true for the side cubelets.</p>
+<p>Due to this, to find the position of some particular cubelet, we need to know the position of only one of its stickers. The selection of such stickers is completely arbitrary, but once they are selected, you need to stick to this. As shown in the preceding figure, we track eight stickers from the top side, eight stickers from the bottom, and four additional side stickers: two on the front face and two on the back. This gives us 20 stickers to be tracked.</p>
+<p>Now, let’s discuss where 24 in the tensor dimension comes from. In total, we have 20 different stickers to track, but in which positions could they appear due to cube transformations? It depends on the kind of cubelet we’re tracking. Let’s start with corner cubelets. In total, there are eight corner cubelets and cube transformations can reshuffle them in any order. So, any particular cubelet could end up in any of eight possible corners.</p>
+<p>In addition, every corner cubelet could be rotated, so our “green, white, and red” cubelet could end up in three possible orientations:</p>
+<ul>
+<li>
+<p>White on top, green left, and red front</p>
+</li>
+<li>
+<p>Green on top, red left, and white front</p>
+</li>
+<li>
+<p>Red on top, white left, and green front</p>
+</li>
+</ul>
+<p>So, to precisely indicate the position and orientation of the corner cubelet, we have 8 <span class="cmsy-10x-x-109">× </span>3 = 24 different combinations. In the case of the 12-side cubelets, they have only two stickers, so there are only two orientations possible, which, again, gives us 24 combinations, but they are obtained from a different calculation: 12 <span class="cmsy-10x-x-109">× </span>2 = 24. Finally, we have 20 cubelets to be tracked, 8 corners and 12 sides, each having 24 positions that it could end up in.</p>
+<p>A very popular option to feed such data into an NN is one-hot encoding, when the concrete position of the object has 1, with other positions filled with 0. This gives us the final representation of the state as a tensor with the shape 20 <span class="cmsy-10x-x-109">× </span>24.</p>
+<p>From a redundancy <span id="dx1-396004"/>point of view, this representation is much closer to the total state space; the amount of possible combinations equals 24<sup><span class="cmr-8">20</span></sup> <span class="cmsy-10x-x-109">≈ </span>4<span class="cmmi-10x-x-109">.</span>02 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">27</span></sup>. It is still larger than the cube state space (it could be said that it is <span class="cmti-10x-x-109">significantly </span>larger, as the factor of 10<sup><span class="cmr-8">8</span></sup> is a lot), but it is better than encoding all the colors of every sticker. This redundancy comes from tricky properties of cube transformations; for example, it is not possible to rotate one single corner cubelet (or flip one side cubelet) <span class="cmti-10x-x-109">leaving all others</span> <span class="cmti-10x-x-109">in their places</span>. Mathematical properties are well beyond the scope of this book, but if you’re interested, I recommend the wonderful book by Alexander Frey and David Singmaster called <span class="cmti-10x-x-109">Handbook of Cubik Math</span> [<span id="x1-396005"/><a href="#">FS20</a>].</p>
+<p>You might have noticed that the tensor representation of the cube state has one significant drawback: memory inefficiency. Indeed, by keeping the state as a floating-point tensor of 20 <span class="cmsy-10x-x-109">× </span>24, we’re using 4 <span class="cmsy-10x-x-109">× </span>20 <span class="cmsy-10x-x-109">× </span>24 = 1<span class="cmmi-10x-x-109">,</span>920 bytes of memory, which is a lot given the requirement to keep thousands of states during the training process and millions of them during the cube solving (as you will get to know shortly). To overcome this, in my implementation, I used two representations: one tensor is intended for NN input and another, more compact, representation is needed to store different states for longer. This compact state is saved as a bunch of lists, encoding the permutations of corner and side cubelets, and their orientation. This representation is not only much more memory efficient (160 bytes) but also much more convenient for transformation implementation.</p>
+<p>To illustrate this, what follows is the piece of the cube 3 <span class="cmsy-10x-x-109">× </span>3 library, <span class="cmtt-10x-x-109">libcube/cubes/cube3x3.py</span>, which is responsible for compact representation.</p>
+<p>The variable <span class="cmtt-10x-x-109">intial</span><span class="cmtt-10x-x-109">_state </span>is the encoding of the solved state of the cube. In it, corner and side stickers that we’re tracking are in their original positions, and both orientation lists are set to 0, indicating the initial orientation of the cubelets:</p>
+<div class="tcolorbox" id="tcolobox-481">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-566"><code>State = collections.namedtuple("State", field_names=[ 
+    ’corner_pos’, ’side_pos’, ’corner_ort’, ’side_ort’]) 
+ 
+initial_state = State(corner_pos=tuple(range(8)), side_pos=tuple(range(12)), 
+                      corner_ort=tuple([0]*8), side_ort=tuple([0]*12))</code></pre>
+</div>
+</div>
+<p>The transformation of the cube is a bit complex and includes lots of tables holding the rearrangements of cubelets after different rotations are applied. I’m not going to put this code here; if you’re curious, you can start with the function <span class="cmtt-10x-x-109">transform(state, action) </span>in <span class="cmtt-10x-x-109">libcube/cubes/cube3x3.py</span>. It might also be helpful to check unit tests of this code.</p>
+<p>Besides the <span id="dx1-396011"/>actions and compact state representation and transformation, the module <span class="cmtt-10x-x-109">cube3x3.py </span>includes a function that converts the compact representation of the cube state (as the <span class="cmtt-10x-x-109">State </span>named tuple) into the tensor form. This functionality is provided by the <span class="cmtt-10x-x-109">encode</span><span class="cmtt-10x-x-109">_inplace()</span> method.</p>
+<p>Another functionality implemented is the ability to render the compact state into human-friendly form by applying the <span class="cmtt-10x-x-109">render() </span>function. It is very useful for debugging the transformation of the cube, but it’s not used in the training code.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-training-process">
+<h1 class="heading-1" id="sigil_toc_id_359"> <span id="x1-39700021.4"/>The training process</h1>
+<p>Now that <span id="dx1-397001"/>you know how the state of the cube is encoded in a 20 <span class="cmsy-10x-x-109">× </span>24 tensor, let’s explore the NN architecture and understand how it is trained.</p>
+<section class="level4 subsectionHead" id="the-nn-architecture">
+<h2 class="heading-2" id="sigil_toc_id_360"> <span id="x1-39800021.4.1"/>The NN architecture</h2>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-398003r2"><span class="cmti-10x-x-109">21.2</span></a>, from<span id="dx1-398001"/> the paper by McAleer et al., shows the<span id="dx1-398002"/> network architecture:</p>
+<div class="minipage">
+<p><img alt="PIC" height="252" src="../Images/file316.png" width="251"/> <span id="x1-398003r2"/></p>
+<span class="id">Figure 21.2: The NN architecture transforming the observation (top) to the action and value (bottom) </span>
+</div>
+<p>As the input, it accepts the already familiar cube state representation as a 20 <span class="cmsy-10x-x-109">× </span>24 tensor and produces two outputs:</p>
+<ul>
+<li>
+<p>The policy, which is a vector of 12 numbers, representing the probability distribution over our actions.</p>
+</li>
+<li>
+<p>The value, a single scalar estimating the “goodness” of the state passed. The concrete meaning of a value will be discussed in the next section.</p>
+</li>
+</ul>
+<p>In my <span id="dx1-398004"/>implementation, the architecture is exactly the same as in the paper, and <span id="dx1-398005"/>the model is in the module <span class="cmtt-10x-x-109">libcube/model.py</span>. Between the <span id="dx1-398006"/>input and output, the network has several fully connected layers with <span class="cmbx-10x-x-109">exponential linear unit </span>(<span class="cmbx-10x-x-109">ELU</span>) activations, as discussed in the paper:</p>
+<div class="tcolorbox" id="tcolobox-482">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-567"><code>class Net(nn.Module): 
+    def __init__(self, input_shape, actions_count): 
+        super(Net, self).__init__() 
+ 
+        self.input_size = int(np.prod(input_shape)) 
+        self.body = nn.Sequential( 
+            nn.Linear(self.input_size, 4096), 
+            nn.ELU(), 
+            nn.Linear(4096, 2048), 
+            nn.ELU() 
+        ) 
+        self.policy = nn.Sequential( 
+            nn.Linear(2048, 512), 
+            nn.ELU(), 
+            nn.Linear(512, actions_count) 
+        ) 
+        self.value = nn.Sequential( 
+            nn.Linear(2048, 512), 
+            nn.ELU(), 
+            nn.Linear(512, 1) 
+        ) 
+ 
+    def forward(self, batch, value_only=False): 
+        x = batch.view((-1, self.input_size)) 
+        body_out = self.body(x) 
+        value_out = self.value(body_out) 
+        if value_only: 
+            return value_out 
+        policy_out = self.policy(body_out) 
+        return policy_out, value_out</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">forward() </span>call can be used in two modes: to get both the policy and the value, or whenever <span class="cmtt-10x-x-109">value</span><span class="cmtt-10x-x-109">_only=True</span>, only the value. This saves us some computations in the case when only the value head’s result is of interest.</p>
+</section>
+<section class="level4 subsectionHead" id="the-training">
+<h2 class="heading-2" id="sigil_toc_id_361"> <span id="x1-39900021.4.2"/>The training</h2>
+<p>In this network, the policy tells us what transformation <span id="dx1-399001"/>we should apply to the state, and the value estimates how good the state is. But the big question still remains: how do we train the network?</p>
+<p>As discussed earlier, the <span id="dx1-399002"/>training method proposed in the paper is called <span class="cmbx-10x-x-109">autodidactic iterations </span>(<span class="cmbx-10x-x-109">ADI</span>). Let’s look at its structure. We start with the goal state (the assembled cube) and apply the sequence of random transformations of some predefined length, <span class="cmmi-10x-x-109">N</span>. This gives us a sequence of <span class="cmmi-10x-x-109">N</span> states.</p>
+<p>For each state, <span class="cmmi-10x-x-109">s</span>, in this sequence, we carry out the following procedure:</p>
+<ol>
+<li>
+<div id="x1-399004x1">
+<p>Apply every possible transformation (12 in total) to <span class="cmmi-10x-x-109">s</span>.</p>
+</div>
+</li>
+<li>
+<div id="x1-399006x2">
+<p>Pass those 12 states to our current NN, asking for the value output. This gives us 12 values for every substate of <span class="cmmi-10x-x-109">s</span>.</p>
+</div>
+</li>
+<li>
+<div id="x1-399008x3">
+<p>The target value for <span class="cmmi-10x-x-109">s </span>is calculated as <span class="cmmi-10x-x-109">y</span><sub><span class="cmmi-8">v</span><sub><span class="cmmi-6">i</span></sub></sub> = max<sub><span class="cmmi-8">a</span></sub>(<span class="cmmi-10x-x-109">v</span><sub><span class="cmmi-8">s</span></sub>(<span class="cmmi-10x-x-109">a</span>)+<span class="cmmi-10x-x-109">R</span>(<span class="cmmi-10x-x-109">A</span>(<span class="cmmi-10x-x-109">s,a</span>))), where <span class="cmmi-10x-x-109">A</span>(<span class="cmmi-10x-x-109">s,a</span>) is the state after the action, <span class="cmmi-10x-x-109">a</span>, is applied to <span class="cmmi-10x-x-109">s </span>and <span class="cmmi-10x-x-109">R</span>(<span class="cmmi-10x-x-109">s</span>) equals 1 if <span class="cmmi-10x-x-109">s </span>is the goal state and -1 otherwise.</p>
+</div>
+</li>
+<li>
+<div id="x1-399010x4">
+<p>The target policy for <span class="cmmi-10x-x-109">s </span>is calculated using the same formula, but instead of max, we take argmax: <span class="cmmi-10x-x-109">y</span><sub><span class="cmmi-8">p</span><sub><span class="cmmi-6">i</span></sub></sub> = arg max<sub><span class="cmmi-8">a</span></sub>(<span class="cmmi-10x-x-109">v</span><sub><span class="cmmi-8">s</span></sub>(<span class="cmmi-10x-x-109">a</span>) + <span class="cmmi-10x-x-109">R</span>(<span class="cmmi-10x-x-109">A</span>(<span class="cmmi-10x-x-109">s,a</span>))). This just means that our target policy will have 1 at the position of the maximum value for the substate and 0 on all other positions.</p>
+</div>
+</li>
+</ol>
+<p>This process is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-399011r3"><span class="cmti-10x-x-109">21.3</span></a>, taken from the paper. The sequence of scrambles, <span class="cmmi-10x-x-109">x</span><sub><span class="cmr-8">0</span></sub><span class="cmmi-10x-x-109">,x</span><sub><span class="cmr-8">1</span></sub><span class="cmmi-10x-x-109">,</span><span class="cmmi-10x-x-109">…</span><span class="cmmi-10x-x-109">x</span><sub><span class="cmmi-8">N</span></sub>, is generated, where the cube, <span class="cmmi-10x-x-109">x</span><sub><span class="cmmi-8">i</span></sub>, is shown expanded. For this state, <span class="cmmi-10x-x-109">x</span><sub><span class="cmmi-8">i</span></sub>, we make targets for the policy and value heads from the expanded states by applying the preceding formulas.</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file317.png" width="500"/> <span id="x1-399011r3"/></p>
+<span class="id">Figure 21.3: Data generation for training </span>
+</div>
+<p>Using this process, we can generate any amounts of training data that we want.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-model-application">
+<h1 class="heading-1" id="sigil_toc_id_362"> <span id="x1-40000021.5"/>The model application</h1>
+<p>Okay, imagine <span id="dx1-400001"/>that we have trained the model using the process just described. How should we use it to solve the scrambled cube? From the network’s structure, you might imagine the obvious, but not very successful, way:</p>
+<ol>
+<li>
+<div id="x1-400003x1">
+<p>Feed the model the current state of the cube that we want to solve.</p>
+</div>
+</li>
+<li>
+<div id="x1-400005x2">
+<p>From the policy head, get the largest action to perform (or sample it from the resulting distribution).</p>
+</div>
+</li>
+<li>
+<div id="x1-400007x3">
+<p>Apply the action to the cube.</p>
+</div>
+</li>
+<li>
+<div id="x1-400009x4">
+<p>Repeat the process until the solved state has been reached.</p>
+</div>
+</li>
+</ol>
+<p>On paper, this method should work, but in practice, it has one serious issue: it doesn’t! The main reason for that is our model’s quality. Due to the size of the state space and the nature of the NNs, it just isn’t possible to train an NN to return the exact optimal action for <span class="cmti-10x-x-109">any </span>input state all of the time. Rather than telling us what to do to get the solved state, our model shows us promising directions to explore. Those directions could bring us closer to the solution, but sometimes they could be misleading, just from the fact that this particular state has never been seen during the training. Don’t forget, there are 4<span class="cmmi-10x-x-109">.</span>33 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">19</span></sup> of them, so even with a <span class="cmbx-10x-x-109">graphics processing unit </span>(<span class="cmbx-10x-x-109">GPU</span>) training speed of hundreds of thousands of<span id="dx1-400010"/> states per second, and after a month of training, we will only see a tiny portion of the state space, about 0.0000005%. So, a more sophisticated approach has to be used.</p>
+<p>There is a family of very popular methods, called MCTS, and one of these methods was covered in the last chapter. There are lots of variants of those methods, but the overall idea can be described in comparison with the well-known brute-force search <span id="dx1-400011"/>methods, like <span class="cmbx-10x-x-109">breadth-first search </span>(<span class="cmbx-10x-x-109">BFS</span>) or <span class="cmbx-10x-x-109">depth-first search </span>(<span class="cmbx-10x-x-109">DFS</span>). In BFS <span id="dx1-400012"/>and DFS, we perform an exhaustive search of our state space by trying all the possible actions and exploring all the states that we get from those actions. That behavior is the other extreme of the procedure described previously (when we have something that tells us where to go at every state). But MCTS offers something in between those extremes: we want to perform the search and we have some information about where we should go, but this information could be unreliable, noisy, or just wrong in some situations. However, sometimes, this information could show us the promising directions that could speed up the search process.</p>
+<p>As I’ve mentioned, MCTS is a<span id="dx1-400013"/> family of methods and they vary in their particular details and characteristics. In the paper, a method called <span class="cmbx-10x-x-109">Upper</span> <span class="cmbx-10x-x-109">Confidence Bound 1 </span>is used. This method operates on the tree, where the nodes are the states and the edges are actions connecting those states. The whole tree is enormous in most cases, so we can’t try to build the whole tree, just some tiny portion of it.</p>
+<p>In the beginning, we start with a tree consisting of a single node, which is our current state. At every step of the MCTS, we walk down the tree, exploring some path in the tree, and there are two options we can face:</p>
+<ul>
+<li>
+<p>Our current node is a leaf node (we haven’t explored this direction yet)</p>
+</li>
+<li>
+<p>Our current node is in the middle of the tree and has children</p>
+</li>
+</ul>
+<p>In the case of a leaf node, we “expand” it by applying all the possible actions to the state. All the resulting states are checked for being the goal state (if the goal state of the solved cube has been found, our search is done). The leaf state is passed to the model and the outputs from both the value and policy heads are stored for later use.</p>
+<p>If the node is <span id="dx1-400014"/>not the leaf, we know about its children (reachable states), and we have value and policy outputs from the network. So, we need to make the decision about which path to follow (in other words, which action is more promising to explore). This decision is not a trivial one and this is the exploration versus exploitation problem that we have covered previously in this book. On the one hand, our policy from the network says what to do. But what if it is wrong? This could be solved by exploring surrounding states, but we don’t want to explore all the time (as the state space is enormous). So, we should keep the balance, and this has a direct influence on the performance and the outcome of the search process.</p>
+<p>To solve this, for every state, we keep the counter for every possible action (there are 12 of them), which is incremented every time the action has been chosen during the search. To make the decision to follow a particular action, we use this counter; the more an action has been taken, the less likely it is to be chosen in the future.</p>
+<p>In addition, the value returned by the model is also used in this decision-making. The value is tracked as the maximum from the current state’s value and the value from its children. This allows the most promising paths (from the model perspective) to be seen from the parent’s states.</p>
+<p>To summarize, the action to follow from a non-leaf tree is chosen by using the following formula:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="34" src="../Images/eq75.png" width="394"/>
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="62" src="../Images/eq76.png" width="307"/>
+</div>
+<p>Here, <span class="cmmi-10x-x-109">N</span><sub><span class="cmmi-8">s</span><sub><span class="cmmi-6">t</span></sub></sub>(<span class="cmmi-10x-x-109">a</span>) is a count of times that action <span class="cmmi-10x-x-109">a </span>has been chosen in state <span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub>. <span class="cmmi-10x-x-109">P</span><sub><span class="cmmi-8">s</span><sub><span class="cmmi-6">t</span></sub></sub>(<span class="cmmi-10x-x-109">a</span>) is the policy returned by the model for state <span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub> and <span class="cmmi-10x-x-109">W</span><sub><span class="cmmi-8">s</span><sub><span class="cmmi-6">t</span></sub></sub>(<span class="cmmi-10x-x-109">a</span>) is the maximum value returned by the model for all children states of <span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub> under the branch <span class="cmmi-10x-x-109">a</span>.</p>
+<p>This procedure is <span id="dx1-400015"/>repeated until the solution has been found or our time budget has been exhausted. To speed up the process, MCTS is very frequently implemented in a parallel way, where several searches are performed by multiple threads. In that case, some extra loss could be subtracted from <span class="cmmi-10x-x-109">A</span><sub><span class="cmmi-8">t</span></sub> to prevent multiple threads from exploring the same paths of the tree.</p>
+<p>The final piece in solving the process puzzle is how to get the solution from the MCTS tree once we have reached the goal state. The authors of the paper experimented with two approaches:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Na</span><span class="cmbx-10x-x-109">ïve</span>: Once we have faced the goal state, we use our path from the root state as the solution</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">The BFS way</span>: After reaching the goal state, BFS is performed on the MCTS tree to find the shortest path from the root to this state</p>
+</li>
+</ul>
+<p>According to the authors, the second method finds shorter solutions than the naïve version, which is not surprising, as the stochastic nature of the MCTS process can introduce cycles to the solution path.</p>
+</section>
+<section class="level3 sectionHead" id="results-25">
+<h1 class="heading-1" id="sigil_toc_id_363"> <span id="x1-40100021.6"/>Results</h1>
+<p>The final result <span id="dx1-401001"/>published in the paper is quite impressive. After 44 hours of training on a machine with three GPUs, the network learned how to solve cubes at the same level as (and sometimes better than) human-crafted solvers. The final model has been compared against the two solvers described earlier: the Kociemba two-stage solver and Korf. The method proposed in the paper is named DeepCube.</p>
+<p>To compare efficiency, 640 randomly scrambled cubes were used in all the methods. The depth of the scramble was 1,000 moves. The time limit for the solution was an hour and both the DeepCube and Kociemba solvers were able to solve all of the cubes within the limit. The Kociemba solver is very fast, and its median solution time is just one second, but due to the hardcoded rules implemented in the method, its solutions are not always the shortest ones.</p>
+<p>The DeepCube method took much more time, with the median time being about 10 minutes, but it was able to match the length of the Kociemba solutions or do better in 55% of cases. From my personal perspective, 55% is not enough to say that NNs are significantly better, but at least they are not worse.</p>
+<p>In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-401002r4"><span class="cmti-10x-x-109">21.4</span></a>, taken from the paper, the length distributions for all the solvers are shown. As you can see, the Korf solver wasn’t compared in 1,000 scramble test cases, due to the very long time needed to solve the cube. To compare the performance of DeepCube against the Korf solver, a much easier 15-step scramble test set was created:</p>
+<div class="minipage">
+<p><img alt="PIC" height="324" src="../Images/file318.png" width="500"/> <span id="x1-401002r4"/></p>
+<span class="id">Figure 21.4: The length of solutions found by various solvers </span>
+</div>
+</section>
+<section class="level3 sectionHead" id="the-code-outline">
+<h1 class="heading-1" id="sigil_toc_id_364"> <span id="x1-40200021.7"/>The code outline</h1>
+<p>Now that <span id="dx1-402001"/>you have some context, let’s switch to <span id="dx1-402002"/>the code, which is in the <span class="cmtt-10x-x-109">Chapter21 </span>directory in the book’s GitHub repository. In this section, I’m going to give a quick outline of my implementation and the key design decisions, but before that, I have to emphasize the important points about the code to set up the correct expectations:</p>
+<ul>
+<li>
+<p>I’m not a researcher, so the original goal of this code was just to reimplement the paper’s method. Unfortunately, the paper has very few details about the exact hyperparameters used, so I had to experiment a lot, and still, my results are very different from those published in the paper.</p>
+</li>
+<li>
+<p>At the same time, I’ve tried to implement everything in a general way to simplify further experiments. For example, the exact details about the cube state and transformations are abstracted away, which allows us to implement more puzzles similar to the 3<span class="cmsy-10x-x-109">×</span>3 cube just by adding a new module. In my code, two cubes are implemented: 2<span class="cmsy-10x-x-109">×</span>2 and 3<span class="cmsy-10x-x-109">×</span>3, but any fully observable environment with a fixed set of predictable actions can be implemented and experimented with. The details are given later in this section (in the <span class="cmti-10x-x-109">Cube environments </span>subsection).</p>
+</li>
+<li>
+<p>Code clarity and simplicity were put ahead of performance. Of course, when it was possible to improve performance without introducing much overhead, I did so. For example, the training process was sped up by a factor of five by just splitting the generation of the scrambled cubes and the forward network pass. But if the performance required refactoring everything into multi-GPU and multithreaded mode, I preferred to keep things simple. A very clear example is the MCTS process, which is normally implemented as multithreaded code sharing the tree. It usually gets sped up several times, but requires tricky synchronization between processes. So, my version of MCTS is serial, with only trivial optimization of the batched search.</p>
+</li>
+</ul>
+<p>Overall, the code <span id="dx1-402003"/>consists of the following parts:</p>
+<ol>
+<li>
+<div id="x1-402005x1">
+<p>The cube environment, which defines the observation space, the possible actions, and the exact representation of the state to the network. This part is implemented in the <span class="cmtt-10x-x-109">libcube/cubes </span>module.</p>
+</div>
+</li>
+<li>
+<div id="x1-402007x2">
+<p>The NN part, which describes the model that we will train, the generation of training samples, and the training loop. It includes the training tool <span class="cmtt-10x-x-109">train.py </span>and the module <span class="cmtt-10x-x-109">libcube/model.py</span>.</p>
+</div>
+</li>
+<li>
+<div id="x1-402009x3">
+<p>The solver of cubes or the search process, including the <span class="cmtt-10x-x-109">solver.py</span> utility and the <span class="cmtt-10x-x-109">libcube/mcts.py </span>module, which implements MCTS.</p>
+</div>
+</li>
+<li>
+<div id="x1-402011x4">
+<p>Various tools used to glue up other parts, like configuration files with hyperparameters and tools used to generate cube problem sets.</p>
+</div>
+</li>
+</ol>
+<section class="level4 subsectionHead" id="cube-environments">
+<h2 class="heading-2" id="sigil_toc_id_365"> <span id="x1-40300021.7.1"/>Cube environments</h2>
+<p>As you have <span id="dx1-403001"/>already seen, combinatorial optimization problems are quite large and diverse. Even the narrow area of cube-like puzzles includes a couple of dozen variations. The most popular ones are 2 <span class="cmsy-10x-x-109">× </span>2 <span class="cmsy-10x-x-109">× </span>2, 3 <span class="cmsy-10x-x-109">× </span>3 <span class="cmsy-10x-x-109">× </span>3, and 4 <span class="cmsy-10x-x-109">× </span>4 <span class="cmsy-10x-x-109">× </span>4 Rubik’s cubes, Square-1, and Pyraminx (<a class="url" href="https://ruwix.com/twisty-puzzles/"><span class="cmtt-10x-x-109">https://ruwix.com/twisty-puzzles/</span></a>). At the same time, the method presented in the paper is quite general and doesn’t depend on prior domain knowledge, the amount of actions, and the state space size. The critical assumptions imposed on the problem include:</p>
+<ul>
+<li>
+<p>States of the environment need to be fully observable and observations need to distinguish states from each other. That’s the case for the cube when we can see all the sides’ states, but it doesn’t hold true for most variants of poker, for example, when we can’t see the cards of our opponent.</p>
+</li>
+<li>
+<p>The number of actions needs to be discrete and finite. There is a limited number of actions we can take with the cube, but if our action space is “rotate the steering wheel on angle <span class="cmmi-10x-x-109">α </span><span class="cmsy-10x-x-109">∈ </span>[<span class="cmsy-10x-x-109">−</span>120<sup><span class="cmsy-8">∘</span></sup><span class="cmmi-10x-x-109">…</span>120<sup><span class="cmsy-8">∘</span></sup>],” we have a different problem domain here, as you have already seen in chapters devoted to the continuous control problems.</p>
+</li>
+<li>
+<p>We need to have a reliable model of the environment; in other words, we have to be able to answer questions like “What will be the result of applying action <span class="cmmi-10x-x-109">a</span><sub><span class="cmmi-8">i</span></sub> to the state <span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">j</span></sub>?” Without this, both ADI and MCTS become non-applicable. This is a strong requirement and, for most problems, we don’t have such a model or its outputs are quite noisy. On the other hand, in games like chess or Go, we have such a model: the rules of the game.</p>
+<p>At the same time, as we’ve seen in the previous chapter (about the MuZero method), you can approximate the model with neural networks, but paying the price of lower performance.</p>
+</li>
+<li>
+<p>In addition, our domain is deterministic, as the same action applied to the same state always ends up in the same final state. The counter example might be backgammon, when, on each turn, players roll the dice to get the amount of moves they can possibly make. Most likely, this method could be generalized to this case as well.</p>
+</li>
+</ul>
+<p>To simplify the <span id="dx1-403002"/>application of the methods to domains different from the 3 <span class="cmsy-10x-x-109">× </span>3 cube, all concrete environment details are moved to separate modules, communicating with the rest of the code via the abstract interface <span class="cmtt-10x-x-109">CubeEnv</span>, which is described in the <span class="cmtt-10x-x-109">libcube/cubes/</span><span class="cmtt-10x-x-109">_env.py </span>module. Let’s go through its interface.</p>
+<p>As shown in the following code snippet, the constructor of the class takes a bunch of arguments:</p>
+<ul>
+<li>
+<p>The name of the environment.</p>
+</li>
+<li>
+<p>The type of the environment state.</p>
+</li>
+<li>
+<p>The instance of the initial (assembled) state of the cube.</p>
+</li>
+<li>
+<p>The predicate function to check that a particular state represents the assembled cube. For 3 <span class="cmsy-10x-x-109">× </span>3 cubes, this might look like an overhead, as we possibly could just compare this with the initial state passed in the <span class="cmtt-10x-x-109">initial</span><span class="cmtt-10x-x-109">_state </span>argument, but cubes of size 2 <span class="cmsy-10x-x-109">× </span>2 and 4 <span class="cmsy-10x-x-109">× </span>4, for instance, might have multiple final states, so a separate predicate is needed to cover such cases.</p>
+</li>
+<li>
+<p>The enumeration of actions that we can apply to the state.</p>
+</li>
+<li>
+<p>The transformation function, which takes the state and the action and returns the resulting state.</p>
+</li>
+<li>
+<p>The inverse function, which maps every action into its inverse.</p>
+</li>
+<li>
+<p>The render function to represent the state in human-readable form.</p>
+</li>
+<li>
+<p>The shape of the encoded state tensor.</p>
+</li>
+<li>
+<p>The function to encode the compact state representation into an NN-friendly form.</p>
+</li>
+</ul>
+<div class="tcolorbox" id="tcolobox-483">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-568"><code>class CubeEnv: 
+    def __init__(self, name, state_type, initial_state, is_goal_pred, 
+                 action_enum, transform_func, inverse_action_func, 
+                 render_func, encoded_shape, encode_func): 
+        self.name = name 
+        self._state_type = state_type 
+        self.initial_state = initial_state 
+        self._is_goal_pred = is_goal_pred 
+        self.action_enum = action_enum 
+        self._transform_func = transform_func 
+        self._inverse_action_func = inverse_action_func 
+        self._render_func = render_func 
+        self.encoded_shape = encoded_shape 
+        self._encode_func = encode_func</code></pre>
+</div>
+</div>
+<p>As you can see, cube environments are not compatible with the Gym API; I used this example intentionally to illustrate how you can step beyond Gym.</p>
+<p>Some of the <span id="dx1-403017"/>methods in the <span class="cmtt-10x-x-109">CubeEnv </span>API are just wrappers around functions passed to the constructor. This allows the new environment to be implemented in a separate module, register itself in the environment registry, and provide a consistent interface to the rest of the code:</p>
+<div class="tcolorbox" id="tcolobox-484">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-569"><code>    def __repr__(self): 
+        return "CubeEnv(%r)" % self.name 
+ 
+    def is_goal(self, state): 
+        assert isinstance(state, self._state_type) 
+        return self._is_goal_pred(state) 
+ 
+    def transform(self, state, action): 
+        assert isinstance(state, self._state_type) 
+        assert isinstance(action, self.action_enum) 
+        return self._transform_func(state, action) 
+ 
+    def inverse_action(self, action): 
+        return self._inverse_action_func(action) 
+ 
+    def render(self, state): 
+        assert isinstance(state, self._state_type) 
+        return self._render_func(state) 
+ 
+    def encode_inplace(self, target, state): 
+        assert isinstance(state, self._state_type) 
+        return self._encode_func(target, state)</code></pre>
+</div>
+</div>
+<p>All the other methods in the class provide extended uniform functionality based on those primitive operations.</p>
+<p>The <span class="cmtt-10x-x-109">sample</span><span class="cmtt-10x-x-109">_action() </span>method provides the functionality of randomly sampling the random action. If the <span class="cmtt-10x-x-109">prev</span><span class="cmtt-10x-x-109">_action </span>argument is passed, we exclude the reverse action from possible results, which is handy to avoid a generation of short loops, like <span class="cmmi-10x-x-109">R </span><span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">r </span>or <span class="cmmi-10x-x-109">L </span><span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">l</span>, for example:</p>
+<div class="tcolorbox" id="tcolobox-485">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-570"><code>    def sample_action(self, prev_action=None): 
+        while True: 
+            res = self.action_enum(random.randrange(len(self.action_enum))) 
+            if prev_action is None or self.inverse_action(res) != prev_action: 
+                return res</code></pre>
+</div>
+</div>
+<p>The method <span class="cmtt-10x-x-109">scramble() </span>applies the list of actions (passed as an argument) to the initial state of the cube, returning the final state:</p>
+<div class="tcolorbox" id="tcolobox-486">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-571"><code>    def scramble(self, actions): 
+        s = self.initial_state 
+        for action in actions: 
+            s = self.transform(s, action) 
+        return s</code></pre>
+</div>
+</div>
+<p>The method <span class="cmtt-10x-x-109">scramble</span><span class="cmtt-10x-x-109">_cube() </span>provides the functionality of randomly scrambling the cube, returning all the intermediate<span id="dx1-403050"/> states. In the case of the <span class="cmtt-10x-x-109">return</span><span class="cmtt-10x-x-109">_inverse </span>argument being <span class="cmtt-10x-x-109">False</span>, the function returns the list of tuples with (<span class="cmtt-10x-x-109">depth</span>, <span class="cmtt-10x-x-109">state</span>) for every step of the scrambling process. If the argument is <span class="cmtt-10x-x-109">True</span>, it returns a tuple with three values: (<span class="cmtt-10x-x-109">depth</span>, <span class="cmtt-10x-x-109">state</span>, <span class="cmtt-10x-x-109">inv</span><span class="cmtt-10x-x-109">_action</span>), which are needed in some situations:</p>
+<div class="tcolorbox" id="tcolobox-487">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-572"><code>    def scramble_cube(self, scrambles_count, return_inverse=False, include_initial=False): 
+        assert isinstance(scrambles_count, int) 
+        assert scrambles_count &gt; 0 
+ 
+        state = self.initial_state 
+        result = [] 
+        if include_initial: 
+            assert not return_inverse 
+            result.append((1, state)) 
+        prev_action = None 
+        for depth in range(scrambles_count): 
+            action = self.sample_action(prev_action=prev_action) 
+            state = self.transform(state, action) 
+            prev_action = action 
+            if return_inverse: 
+                inv_action = self.inverse_action(action) 
+                res = (depth+1, state, inv_action) 
+            else: 
+                res = (depth+1, state) 
+            result.append(res) 
+        return result</code></pre>
+</div>
+</div>
+<p>The method <span class="cmtt-10x-x-109">explore</span><span class="cmtt-10x-x-109">_states() </span>implements functionality for ADI and applies all the possible actions to the given cube state. The result is a tuple of lists in which the first list contains the expanded states, and the second has flags of those states as the goal state:</p>
+<div class="tcolorbox" id="tcolobox-488">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-573"><code>    def explore_state(self, state): 
+        res_states, res_flags = [], [] 
+        for action in self.action_enum: 
+            new_state = self.transform(state, action) 
+            is_init = self.is_goal(new_state) 
+            res_states.append(new_state) 
+            res_flags.append(is_init) 
+        return res_states, res_flags</code></pre>
+</div>
+</div>
+<p>With this generic <span id="dx1-403080"/>functionality, a similar environment might be implemented and plugged into the existing training and testing methods with very little boilerplate code. As an example, I have provided both the 2 <span class="cmsy-10x-x-109">× </span>2 <span class="cmsy-10x-x-109">× </span>2 cube and the 3 <span class="cmsy-10x-x-109">× </span>3 <span class="cmsy-10x-x-109">× </span>3 cube that I used in my experiments. Their internals reside in <span class="cmtt-10x-x-109">libcube/cubes/cube2x2.py </span>and <span class="cmtt-10x-x-109">libcube/cubes/cube3x3.py</span>, which you can use as a base to implement your own environments of this kind. Every environment needs to register itself by creating the instance of the <span class="cmtt-10x-x-109">CubeEnv </span>class and passing the instance into the function <span class="cmtt-10x-x-109">register()</span>, defined in <span class="cmtt-10x-x-109">libcube/cubes/</span><span class="cmtt-10x-x-109">_env.py</span>. The following is the relevant piece of code from the <span class="cmtt-10x-x-109">cube2x2.py </span>module:</p>
+<div class="tcolorbox" id="tcolobox-489">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-574"><code>_env.register(_env.CubeEnv(name="cube2x2", state_type=State, initial_state=initial_state, 
+                           is_goal_pred=is_initial, action_enum=Action, 
+                           transform_func=transform, inverse_action_func=inverse_action, 
+                           render_func=render, encoded_shape=encoded_shape, 
+                           encode_func=encode_inplace))</code></pre>
+</div>
+</div>
+<p>Once this is done, the cube environment can be obtained by using the <span class="cmtt-10x-x-109">libcube.cubes.get() </span>method, which takes the environment name as an argument. The rest of the code uses only the public interface of the <span class="cmtt-10x-x-109">CubeEnv </span>class, which makes the code cube-type agnostic and simplifies the extensibility.</p>
+</section>
+<section class="level4 subsectionHead" id="training-2">
+<h2 class="heading-2" id="sigil_toc_id_366"> <span id="x1-40400021.7.2"/>Training</h2>
+<p>The training <span id="dx1-404001"/>process is implemented in the tool <span class="cmtt-10x-x-109">train.py </span>and the module <span class="cmtt-10x-x-109">libcube/model.py</span>, and it is a straightforward implementation of the training process described in the paper, with one difference: the code supports two methods of calculating the target values for the value head of the network. One of the methods is exactly how it was described in the paper and the other is my modification, which I’ll explain in detail in the subsequent section.</p>
+<p>To simplify the experimentation and make the results reproducible, all the parameters of the training are specified in a separate <span class="cmtt-10x-x-109">.ini </span>file, which gives the following options for training:</p>
+<ul>
+<li>
+<p>The name of the environment to be used; currently, <span class="cmtt-10x-x-109">cube2x2 </span>and <span class="cmtt-10x-x-109">cube3x3 </span>are available.</p>
+</li>
+<li>
+<p>The name of the run, which is used in TensorBoard names and directories to save models.</p>
+</li>
+<li>
+<p>What target value calculation method in ADI will be used. I implemented two of them: one is described in the paper and then there is my modification, which, from my experiments, has more stable convergence.</p>
+</li>
+<li>
+<p>The training parameters: the batch size, the usage of CUDA, the learning rate, the learning rate decay, and others.</p>
+</li>
+</ul>
+<p>You can <span id="dx1-404002"/>find the examples of my experiments in the <span class="cmtt-10x-x-109">ini </span>folder in the repo. During the training, TensorBoard metrics of the parameters are written in the <span class="cmtt-10x-x-109">runs </span>folder. Models with the best loss value are saved in the <span class="cmtt-10x-x-109">saves</span> directory.</p>
+<p>To give you an idea of what the configuration file looks like, the following is <span class="cmtt-10x-x-109">ini/cube2x2-paper-d200.ini</span>, which defines the experiment for a 2 <span class="cmsy-10x-x-109">× </span>2 cube, using the value calculation method from the paper and a scramble depth of <span class="cmtt-10x-x-109">200</span>:</p>
+<div class="tcolorbox" id="tcolobox-490">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-575"><code>[general] 
+cube_type=cube2x2 
+run_name=paper 
+ 
+[train] 
+cuda=True 
+lr=1e-5 
+batch_size=10000 
+scramble_depth=200 
+report_batches=10 
+checkpoint_batches=100 
+lr_decay=True 
+lr_decay_gamma=0.95 
+lr_decay_batches=1000</code></pre>
+</div>
+</div>
+<p>To start the training, you need to pass the <span class="cmtt-10x-x-109">.ini </span>file to the <span class="cmtt-10x-x-109">train.py </span>utility; for example, this is how the preceding <span class="cmtt-10x-x-109">.ini </span>file could be used to train the model:</p>
+<pre class="lstlisting" id="listing-576"><code>$ ./train.py -i ini/cube2x2-paper-d200.ini -n t1</code></pre>
+<p>The extra argument <span class="cmtt-10x-x-109">-n </span>gives the name of the run, which will be combined with the name in the <span class="cmtt-10x-x-109">.ini </span>file to be used as the name of a TensorBoard series.</p>
+</section>
+<section class="level4 subsectionHead" id="the-search-process">
+<h2 class="heading-2" id="sigil_toc_id_367"> <span id="x1-40500021.7.3"/>The search process</h2>
+<p>The result <span id="dx1-405001"/>of the training is a model file with the network’s weights. The file could be used to solve cubes using MCTS, which is implemented in the tool <span class="cmtt-10x-x-109">solver.py </span>and the module <span class="cmtt-10x-x-109">libcube/mcts.py</span>.</p>
+<p>The solver tool is quite flexible and could be used in various modes:</p>
+<ol>
+<li>
+<div id="x1-405003x1">
+<p>To solve a single scrambled cube given as a comma-separated list of action indices, passed in the <span class="cmtt-10x-x-109">-p </span>option. For example, <span class="cmtt-10x-x-109">-p 1,6,1 </span>is a cube scrambled by applying the second action, then the seventh action, and finally, the second action again. The concrete meaning of the actions is environment-specific, which is passed with the <span class="cmtt-10x-x-109">-e </span>option. You can find actions with their indices in the cube environment module. For example, the actions <span class="cmtt-10x-x-109">1,6,1 </span>for a 2<span class="cmsy-10x-x-109">×</span>2 cube mean an <span class="cmmi-10x-x-109">L </span><span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">R</span><span class="cmsy-10x-x-109">′→</span><span class="cmmi-10x-x-109">L</span> transformation.</p>
+</div>
+</li>
+<li>
+<div id="x1-405005x2">
+<p>To read permutations from a text file (one cube per line) and solve them. The file name is passed with the <span class="cmtt-10x-x-109">-i </span>option. There are several sample problems available in the folder <span class="cmtt-10x-x-109">cubes</span><span class="cmtt-10x-x-109">_tests</span>. You can generate your own random problem sets using the <span class="cmtt-10x-x-109">gen</span><span class="cmtt-10x-x-109">_cubes.py </span>tool, which allows you to set the random seed, the depth of the scramble, and other options.</p>
+</div>
+</li>
+<li>
+<div id="x1-405007x3">
+<p>To generate a random scramble of the given depth and solve it.</p>
+</div>
+</li>
+<li>
+<div id="x1-405009x4">
+<p>To run a series of tests with increasing complexity (scramble depth), solve them, and write a CSV file with the result. This mode is enabled by passing the <span class="cmtt-10x-x-109">-o </span>option and is very useful for evaluating the quality of the trained model, but it can take lots of time to complete. Optionally, plots with those test results are produced.</p>
+</div>
+</li>
+</ol>
+<p>In all cases, you need to pass the environment name with the <span class="cmtt-10x-x-109">-e </span>option and the file with the model’s weights (the <span class="cmtt-10x-x-109">-m </span>option). In addition, there are other parameters, allowing you to tweak MCTS options and time or search step limits. You can find the names of those options in the code of <span class="cmtt-10x-x-109">solver.py</span>.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-experiment-results">
+<h1 class="heading-1" id="sigil_toc_id_368"> <span id="x1-40600021.8"/>The experiment results</h1>
+<p>Unfortunately, the <span id="dx1-406001"/>paper provided no details about very important aspects of the method, like training hyperparameters, how deeply cubes were scrambled during the training, and the obtained convergence. To fill in the missing blanks, I experimented with various values of hyperparameters (<span class="cmtt-10x-x-109">.ini </span>files are available in the GitHub repo), but still my results are very different from those published in the paper. I observed that the training convergence of the original method is very unstable. Even with a small learning rate and a large batch size, the training eventually diverges, with the value loss component growing exponentially. Examples of this behavior are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-406002r5"><span class="cmti-10x-x-109">21.5</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-406003r6"><span class="cmti-10x-x-109">21.6</span></a> (obtained from the 2 <span class="cmsy-10x-x-109">× </span>2 environment):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_05.png" width="500"/> <span id="x1-406002r5"/></p>
+<span class="id">Figure 21.5: Values predicted by the value head during training on the paper’s method </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_06.png" width="600"/> <span id="x1-406003r6"/></p>
+<span class="id">Figure 21.6: The policy loss (left) and value loss (right) during the typical run of the paper’s method </span>
+</div>
+<p>After several <span id="dx1-406004"/>experiments with this problem, I came to the conclusion that this behavior is a result of the wrong value objective being proposed in the method. Indeed, in the formula <span class="cmmi-10x-x-109">y</span><sub><span class="cmmi-8">v</span><sub><span class="cmmi-6">i</span></sub></sub> = max<sub><span class="cmmi-8">a</span></sub>(<span class="cmmi-10x-x-109">v</span><sub><span class="cmmi-8">s</span></sub>(<span class="cmmi-10x-x-109">a</span>) + <span class="cmmi-10x-x-109">R</span>(<span class="cmmi-10x-x-109">A</span>(<span class="cmmi-10x-x-109">s,a</span>))), the value <span class="cmmi-10x-x-109">v</span><sub><span class="cmmi-8">s</span></sub>(<span class="cmmi-10x-x-109">a</span>) returned by the network is always added to the actual reward, <span class="cmmi-10x-x-109">R</span>(<span class="cmmi-10x-x-109">s</span>), even for the goal state. With this, the actual values returned by the network could be anything: <span class="cmsy-10x-x-109">−</span>100, 10<sup><span class="cmr-8">6</span></sup>, or 3<span class="cmmi-10x-x-109">.</span>1415. This is not a great situation for NN training, especially with the <span class="cmbx-10x-x-109">mean squared error </span>(<span class="cmbx-10x-x-109">MSE</span>) objective.</p>
+<p>To check this, I modified the method of the target value calculation by assigning a 0 target for the goal state:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq77.png" width="539"/>
+</div>
+<p>This target could be enabled in the <span class="cmtt-10x-x-109">.ini </span>file by specifying the parameter <span class="cmtt-10x-x-109">value</span><span class="cmtt-10x-x-109">_targets</span><span class="cmtt-10x-x-109">_method </span>to be <span class="cmtt-10x-x-109">zero</span><span class="cmtt-10x-x-109">_goal</span><span class="cmtt-10x-x-109">_value</span>, instead of the default <span class="cmtt-10x-x-109">value</span><span class="cmtt-10x-x-109">_targets</span><span class="cmtt-10x-x-109">_method=paper</span>.</p>
+<p>With this simple<span id="dx1-406005"/> modification, the training process converged much quicker to stable values returned by the value head of the network. An example of this convergence is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-406006r7"><span class="cmti-10x-x-109">21.7</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-406007r8"><span class="cmti-10x-x-109">21.8</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_07.png" width="500"/> <span id="x1-406006r7"/></p>
+<span class="id">Figure 21.7: Values predicted by the value head during training </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_08.png" width="600"/> <span id="x1-406007r8"/></p>
+<span class="id">Figure 21.8: The policy loss (left) and value loss (right) after modifications in value calculation </span>
+</div>
+<section class="level4 subsectionHead" id="the-2-2-cube">
+<h2 class="heading-2" id="sigil_toc_id_369"> <span id="x1-40700021.8.1"/>The 2 <span class="cmsy-10x-x-109">× </span>2 cube</h2>
+<p>In the paper, the <span id="dx1-407001"/>authors reported<span id="dx1-407002"/> training for 44 hours on a machine with three Titan Xp GPUs. During the training, their model saw 8 billion cube states. Those numbers correspond to the training speed  50,000 cubes/second. My implementation shows 15,000 cubes/second on a single GTX 1080 Ti, which is comparable. So, to repeat the training process on a single GPU, we need to wait for almost six days, which is not very practical for experimentation and hyperparameter tuning.</p>
+<p>To overcome this, I implemented a much simpler 2 <span class="cmsy-10x-x-109">× </span>2 cube environment, which takes just an hour or two to train. To reproduce my training, there are two <span class="cmtt-10x-x-109">.ini</span> files in the repo:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">ini/cube2x2-paper-d200.ini</span>: This uses the value target method described in the paper</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">ini/cube2x2-zero-goal-d200.ini</span>: The value target is set to 0 for goal states</p>
+</li>
+</ul>
+<p>Both configurations use batches of 10k states and a scramble depth of 200, and the training parameters are the same. After the training, using both configurations, two models were produced:</p>
+<ul>
+<li>
+<p>The paper’s method: loss 0.032572</p>
+</li>
+<li>
+<p>The zero-goal method: loss 0.012226</p>
+</li>
+</ul>
+<p>To perform a fair comparison, I generated 20 test scrambles for depths 1<span class="cmmi-10x-x-109">…</span>50 (1,000 test cubes in total), which are available in <span class="cmtt-10x-x-109">cubes</span><span class="cmtt-10x-x-109">_test/3ed</span>, and ran the <span class="cmtt-10x-x-109">solver.py </span>utility on the best model produced by each method. For every test scramble, the limit for searches was set to 30,000. This utility produced CSV files (available in <span class="cmtt-10x-x-109">csvs/3ed</span>) with details about every test outcome.</p>
+<p>My experiments have shown that the model described in the paper was able to solve 55% of test cubes, while the model with zero-goal modification solved 100%. The results for both models depending on scramble depth are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-407004r9"><span class="cmti-10x-x-109">21.9</span></a>. On the left plot, the ratio of solved cubes is shown. On the right plot, the average MCTS <span id="dx1-407003"/>search steps per scramble depth are displayed. As you can see, the modified version requires significantly (3x-5x) fewer MCTS searches to find a solution, so the learned policy is better.</p>
+<div class="minipage">
+<p><img alt="PIC" height="200" src="../Images/B22150_21_09.png" width="600"/> <span id="x1-407004r9"/></p>
+<span class="id">Figure 21.9: The ratio of solved 2 <span class="cmsy-10x-x-109">× </span>2 cubes (left) and average count of MCTS searches needed for various scramble depths </span>
+</div>
+<p>Finally, let’s check the length of the found solutions. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-407005r10"><span class="cmti-10x-x-109">21.10</span></a>, both the naïve and BFS solution lengths are plotted. From those plots, it can be seen that the naïve solutions are much longer (by a factor of 10) than solutions found by BFS. Such a difference might be an indication of untuned MCTS parameters, which could be improved. In naïve solutions, the zero goal finds shorter solutions (which might again be an indication of a better policy).</p>
+<div class="minipage">
+<p><img alt="PIC" height="200" src="../Images/B22150_21_10.png" width="600"/> <span id="x1-407005r10"/></p>
+<span class="id">Figure 21.10: A comparison of naïve (left) and BFS (right) ways of solution generation </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="the-3-3-cube">
+<h2 class="heading-2" id="sigil_toc_id_370"> <span id="x1-40800021.8.2"/>The 3 <span class="cmsy-10x-x-109">× </span>3 cube</h2>
+<p>The <span id="dx1-408001"/>training of the 3 <span class="cmsy-10x-x-109">× </span>3 cube model is much more heavy; we’ve just scratched <span id="dx1-408002"/>the surface here. But my limited experiments show that zero-goal modifications to the training method greatly improve the training stability and resulting model quality. Training requires about 20 hours, so running lots of experiments requires time and patience.</p>
+<p>My results are not as shiny as those reported in the paper: the best model I was able to<span id="dx1-408003"/> obtain can solve cubes up to a scrambling depth of 12<span class="cmmi-10x-x-109">…</span>15, but consistently fails at more complicated problems. Probably, those numbers could be improved with more <span class="cmbx-10x-x-109">central processing unit </span>(<span class="cmbx-10x-x-109">CPU</span>) cores plus parallel MCTS. To get the data, the search process was limited to 100k steps and, for every scramble depth, five random scrambles were generated (available in <span class="cmtt-10x-x-109">cubes</span><span class="cmtt-10x-x-109">_tests/3ed </span>in the repo). But again, the modified version shows better results – the model trained using the paper’s method was able to solve only problems with a scramble depth of 9, but the modified version was able to reach a depth of 13.</p>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-408004r11"><span class="cmti-10x-x-109">21.11</span></a> shows a comparison of solution rates (left plot) for the method presented in the paper and the modified version with the zero-value target. On the right part of the figure, the average number of MCTS searches is shown.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_11.png" width="600"/> <span id="x1-408004r11"/></p>
+<span class="id">Figure 21.11: The ratio of solved 3 <span class="cmsy-10x-x-109">× </span>3 cubes by both methods (left) and the average number of MCTS searches </span>
+</div>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-408006r12"><span class="cmti-10x-x-109">21.12</span></a> shows the <span id="dx1-408005"/>length of the optimal solution found. As before, naïve search produces longer results than the BFS-optimized one. The BFS length almost perfectly aligned with the scramble depth:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_21_12.png" width="600"/> <span id="x1-408006r12"/></p>
+<span class="id">Figure 21.12: A comparison of naïve (left) and BFS (right) solution lengths for 3 <span class="cmsy-10x-x-109">× </span>3 cube </span>
+</div>
+<p>In theory, after a depth of 20, it should saturate (because “the God number” is 20), but my version wasn’t able to solve any cubes with a scramble longer than 13, so it is hard to tell.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="further-improvements-and-experiments">
+<h1 class="heading-1" id="sigil_toc_id_371"> <span id="x1-40900021.9"/>Further improvements and experiments</h1>
+<p>There are <span id="dx1-409001"/>lots of directions and things that could be tried:</p>
+<ul>
+<li>
+<p>More input and network engineering: The cube is a complicated thing, so simple feed-forward NNs may not be the best model. Probably, the network could greatly benefit from convolutions.</p>
+</li>
+<li>
+<p>Oscillations and instability during training might be a sign of a common RL issue with inter-step correlations. The usual approach is the target network, when we use the old version of the network to get bootstrapped values.</p>
+</li>
+<li>
+<p>The priority replay buffer might help the training speed.</p>
+</li>
+<li>
+<p>My experiments show that the samples’ weighting (inversely proportional to the scramble depth) helps to get a better policy that knows how to solve slightly scrambled cubes, but might slow down the learning of deeper states. Probably, this weighting could be made adaptive to make it less aggressive in later training stages.</p>
+</li>
+<li>
+<p>Entropy loss could be added to the training to regularize our policy.</p>
+</li>
+<li>
+<p>The 2<span class="cmsy-10x-x-109">×</span>2 cube model doesn’t take into account the fact that the cube doesn’t have central cubelets, so the whole cube could be rotated. This might not be very important for a 2 <span class="cmsy-10x-x-109">× </span>2 cube, as the state space is small, but the same observation will be critical for 4 <span class="cmsy-10x-x-109">× </span>4 cubes.</p>
+</li>
+<li>
+<p>More experiments are needed to get better training and MCTS parameters.</p>
+</li>
+</ul>
+</section>
+<section class="level3 sectionHead" id="summary-20">
+<h1 class="heading-1" id="sigil_toc_id_372"> <span id="x1-41000021.10"/>Summary</h1>
+<p>In this chapter, we discussed discrete optimization problems – a subfield of the optimization domain that deals with discrete structures like graphs or sets. We checked RL’s applicability using the Rubik’s cube as a well-known, but still challenging, problem. But in general, this topic is much wider than just puzzles – the same methods could be used in optimizing schedules, optimal route planning, and other practical topics.</p>
+<p>In the final chapter of the book, we will talk about multi-agent problems in RL.</p>
+</section>
+</section>
+</div></body></html>

@@ -1,0 +1,366 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer383">
+<h1 class="chapter-number" id="_idParaDest-102"><a id="_idTextAnchor106"/>9</h1>
+<h1 id="_idParaDest-103"><a id="_idTextAnchor107"/>Defining Expressiveness for Graph Classification</h1>
+<p>In the previous chapter, we traded accuracy for scalability. We saw that it was instrumental in applications such as recommender systems. However, it raises several questions about what makes GNNs “accurate.” Where does this precision come from? Can we use this knowledge to design <span class="No-Break">better GNNs?</span></p>
+<p>This chapter will clarify what makes a GNN powerful by introducing the <strong class="bold">Weisfeiler-Leman</strong> (<strong class="bold">WL</strong>) test. This test will give us the framework to understand an essential concept in GNNs – <strong class="bold">expressiveness</strong>. We will use it to compare different GNN layers and see which one is the most expressive. This result will then be used to design a more powerful GNN than GCNs, GATs, <span class="No-Break">and GraphSAGE.</span></p>
+<p>Finally, we will implement it using PyTorch Geometric to perform a new task – graph classification. We will implement a new GNN on the <strong class="source-inline">PROTEINS</strong> dataset, comprising 1,113 graphs representing proteins. We will compare different methods for graph classification and analyze <span class="No-Break">our results.</span></p>
+<p>By the end of this chapter, you will understand what makes a GNN expressive and how to measure it. You will be able to implement a new GNN architecture based on the WL test and perform graph classification using <span class="No-Break">various techniques.</span></p>
+<p>In this chapter, we will cover the following <span class="No-Break">main topics:</span></p>
+<ul>
+<li><span class="No-Break">Defining expressiveness</span></li>
+<li>Introducing <span class="No-Break">the GIN</span></li>
+<li>Classifying graphs <span class="No-Break">with GIN</span></li>
+</ul>
+<h1 id="_idParaDest-104"><a id="_idTextAnchor108"/>Technical requirements</h1>
+<p>All the code examples from this chapter can be found on GitHub <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter09"><span class="No-Break">https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter09</span></a><span class="No-Break">.</span></p>
+<p>Installation steps required to run the code on your local machine can be found in the <em class="italic">Preface</em> section of <span class="No-Break">this book.</span></p>
+<h1 id="_idParaDest-105">Defining <a id="_idTextAnchor109"/>expressiveness</h1>
+<p>Neural networks are used <a id="_idIndexMarker514"/>to approximate functions. This is justified by the <strong class="bold">universal approximation theorem</strong>, which states that a feedforward neural network with only one layer can approximate any smooth function. But what about universal function approximation on graphs? This is a more complex problem that requires the ability to distinguish <span class="No-Break">graph structures.</span></p>
+<p>With GNNs, our goal is to produce the best node embeddings possible. This means that different nodes must have different embeddings, and similar nodes must have similar embeddings. But how do we know that two nodes are similar? Embeddings are computed using node features and connections. Therefore, we have to compare their features and neighbors to <span class="No-Break">distinguish nodes.</span></p>
+<p>In graph theory, this is referred to<a id="_idIndexMarker515"/> as the graph <strong class="bold">isomorphism</strong> problem. Two graphs are isomorphic (“the same”) if they have the same connections, and their only difference is a permutation of their nodes (see <span class="No-Break"><em class="italic">Figure 9</em></span><em class="italic">.1</em>). In 1968, Weisfeiler and Lehman [1] proposed an efficient algorithm to solve this problem, now known as the <span class="No-Break">WL test.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer354">
+<img alt="Figure 9.1 – An example of two isomorphic graphs" height="485" src="image/B19153_09_001.jpg" width="1163"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.1 – An example of two isomorphic graphs</p>
+<p>The WL test <a id="_idIndexMarker516"/>aims to build <a id="_idIndexMarker517"/>the <strong class="bold">canonical form</strong> of a graph. We can then compare the canonical form of two graphs to check whether they are isomorphic or not. However, this test is not perfect, and non-isomorphic graphs can share the same canonical form. This can be surprising, but it is an intricate problem that is still not completely understood; for instance, the complexity of the WL algorithm <span class="No-Break">is unknown.</span></p>
+<p>The WL test works<a id="_idIndexMarker518"/> <span class="No-Break">as follows:</span></p>
+<ol>
+<li>At the beginning, each node in the graph receives the <span class="No-Break">same color.</span></li>
+<li>Each node aggregates its own color and the colors of <span class="No-Break">its neighbors.</span></li>
+<li>The result is fed to a hash function that produces a <span class="No-Break">new color.</span></li>
+<li>Each node aggregates its new color and the new colors of <span class="No-Break">its neighbors.</span></li>
+<li>The result is fed to a hash function that produces a <span class="No-Break">new color.</span></li>
+<li>These steps are repeated until no more nodes <span class="No-Break">change color.</span></li>
+</ol>
+<p>The following figure summarizes<a id="_idIndexMarker519"/> the <span class="No-Break">WL algorithm.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer355">
+<img alt="Figure 9.2 – An application of the WL algorithm to get the canonical form of a graph" height="500" src="image/B19153_09_002.jpg" width="1198"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.2 – An application of the WL algorithm to get the canonical form of a graph</p>
+<p>The resulting colors give us the canonical form of the graph. If two graphs do not share the same colors, they are not isomorphic. Conversely, we cannot be sure they are isomorphic if they obtain the <span class="No-Break">same colors.</span></p>
+<p>The steps we described should be familiar; they are surprisingly close to what GNNs perform. Colors are a form of embeddings, and the hash function is an aggregator. But it is not just any aggregator; the hash <a id="_idIndexMarker520"/>function is particularly suited for this task. Would it still be as efficient if we were to replace it with another function, such as a mean or max aggregator (as seen in <a href="B19153_08.xhtml#_idTextAnchor096"><span class="No-Break"><em class="italic">Chapter 8</em></span></a><span class="No-Break">)?</span></p>
+<p>Let’s see the result for <span class="No-Break">each operator:</span></p>
+<ul>
+<li>With the mean aggregator, having 1 blue node and 1 red node, or 10 blue nodes and 10 red nodes, results in the same embedding (half blue and <span class="No-Break">half red).</span></li>
+<li>With the max aggregator, half of the nodes would be ignored in the previous example; the embedding would only consider the blue or <span class="No-Break">red color.</span></li>
+<li>With the sum aggregator, however, every node contributes to the final embedding; having 1 red node and 1 blue node is different from having 10 blue nodes and 10 <span class="No-Break">red nodes.</span></li>
+</ul>
+<p>Indeed, the sum aggregator can discriminate more graph structures than the other two. If we follow this logic, this can only mean one thing – the aggregators we have been using so far are suboptimal, since they are strictly less expressive than a sum. Can we use this knowledge to build better GNNs? In the next section, we will introduce the <strong class="bold">Graph Isomorphism Network</strong> (<strong class="bold">GIN</strong>) based on <span class="No-Break">this idea.</span></p>
+<h1 id="_idParaDest-106"><a id="_idTextAnchor110"/>Introducing the GIN</h1>
+<p>In the<a id="_idIndexMarker521"/> previous section, we saw that the GNNs introduced in the previous chapters were less expressive than the WL test. This is an issue because the ability to distinguish more graph structures seems to be connected to the quality of the resulting embeddings. In this section, we will translate the theoretical framework into a new GNN architecture – <span class="No-Break">the GIN.</span></p>
+<p>Introduced in 2018 by Xu et al. in a paper called “<em class="italic">How Powerful are Graph Neural Networks?</em>” [2], the GIN is designed to be as expressive as the WL test. The authors generalized our observations on aggregation by dividing it into <span class="No-Break">two functions:</span></p>
+<ul>
+<li><strong class="bold">Aggregate</strong>: This function, <img alt="" height="46" src="image/Formula_B19153_09_001.png" width="31"/>, selects<a id="_idIndexMarker522"/> the neighboring nodes that the <span class="No-Break">GNN considers</span></li>
+<li><strong class="bold">Combine</strong>: This<a id="_idIndexMarker523"/> function, <img alt="" height="44" src="image/Formula_B19153_09_002.png" width="31"/>, combines the embeddings from the selected nodes to produce the new embedding of the <span class="No-Break">target node</span></li>
+</ul>
+<p>The embedding of the <img alt="" height="34" src="image/Formula_B19153_09_003.png" width="21"/> node can be written as <span class="No-Break">the following:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer359">
+<img alt="" height="87" src="image/Formula_B19153_09_004.jpg" width="546"/>
+</div>
+</div>
+<p>In the case of a GCN, the <img alt="" height="45" src="image/Formula_B19153_09_005.png" width="31"/> function aggregates every neighbor of the <img alt="" height="33" src="image/Formula_B19153_09_006.png" width="20"/> node, and <img alt="" height="46" src="image/Formula_B19153_09_007.png" width="32"/> applies a specific mean aggregator. In the case of GraphSAGE, the neighborhood sampling is the <img alt="" height="40" src="image/Formula_B19153_09_008.png" width="27"/> function, and we saw three options for <img alt="" height="45" src="image/Formula_B19153_09_009.png" width="33"/> – the mean, LSTM, and <span class="No-Break">max aggregators.</span></p>
+<p>So, what are these functions in the GIN? Xu et al. argue that they <a id="_idIndexMarker524"/>have to be <strong class="bold">injective</strong>. As shown in <span class="No-Break"><em class="italic">Figure 9</em></span><em class="italic">.3</em>, injective functions map distinct inputs to distinct outputs. This is precisely what we want to distinguish graph structures. If the functions were not injective, we would end up with the same output for different inputs. In this case, our embeddings would be less valuable because they would contain <span class="No-Break">less information.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer365">
+<img alt="Figure 9.3 – A mapping diagram of an injective function" height="407" src="image/B19153_09_003.jpg" width="403"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.3 – A mapping diagram of an injective function</p>
+<p>The GIN’s <a id="_idIndexMarker525"/>authors use a clever trick to design these two functions – they simply approximate them. In the GAT layer, we learned the self-attention weights. In this example, we can learn both functions using a single MLP, thanks to the universal <span class="No-Break">approximation theorem:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer366">
+<img alt="" height="210" src="image/Formula_B19153_09_010.jpg" width="697"/>
+</div>
+</div>
+<p>Here, <img alt="" height="26" src="image/Formula_B19153_09_011.png" width="23"/> is a learnable parameter or a fixed scalar, representing the importance of the target node’s embedding compared to its neighbors’. The authors also emphasize that the MLP must have more than one layer to distinguish specific <span class="No-Break">graph structures.</span></p>
+<p>We now have a GNN that is as expressive as the WL test. Can we do even better? The answer is yes. The WL test can be generalized to a hierarchy of higher-level tests known as <strong class="bold">k-WL</strong>. Instead of<a id="_idIndexMarker526"/> considering individual nodes, <img alt="" height="38" src="image/Formula_B19153_09_012.png" width="28"/>-WL tests look at <img alt="" height="36" src="image/Formula_B19153_09_013.png" width="27"/>-tuples of nodes. It means that they are non-local, since they can look at distant nodes. This is also why <img alt="" height="47" src="image/Formula_B19153_09_014.png" width="144"/>-WL tests can distinguish more graph structures than <img alt="" height="40" src="image/Formula_B19153_09_015.png" width="28"/>-WL tests <span class="No-Break">for <img alt="" height="39" src="image/Formula_B19153_09_016.png" width="110"/></span><span class="No-Break">.</span></p>
+<p>Several architectures based on <img alt="" height="35" src="image/Formula_B19153_09_017.png" width="27"/>-WL tests have been proposed, such <a id="_idIndexMarker527"/>as the <strong class="bold">k-GNN</strong> by Morris et al. [3]. While these architectures help us better understand how GNNs work, they tend to underperform in practice compared to less expressive models, such as GNNs or GATs [4]. But all hope is not lost, as we will see in the next section in the particular context of <span class="No-Break">graph classification.</span></p>
+<h1 id="_idParaDest-107"><a id="_idTextAnchor111"/>Classifying graphs using GIN</h1>
+<p>We<a id="_idIndexMarker528"/> could directly implement a GIN model for node classification, but this architecture is more interesting for performing graph classification. In this section, we will see how to transform node embeddings into graph embeddings<a id="_idIndexMarker529"/> using <strong class="bold">global pooling</strong> techniques. We will then apply these techniques to the <strong class="source-inline">PROTEINS</strong> dataset and compare our results using GIN and <span class="No-Break">GCN models.</span></p>
+<h2 id="_idParaDest-108"><a id="_idTextAnchor112"/>Graph classification</h2>
+<p>Graph classification <a id="_idIndexMarker530"/>is based on the node embeddings that a GNN produces. This operation is often called global pooling or <strong class="bold">graph-level readout</strong>. There<a id="_idIndexMarker531"/> are three simple ways of <span class="No-Break">implementing it:</span></p>
+<ul>
+<li><strong class="bold">Mean global pooling</strong>: The <a id="_idIndexMarker532"/>graph embedding <img alt="" height="44" src="image/Formula_B19153_09_018.png" width="47"/> is obtained<a id="_idIndexMarker533"/> by averaging the embeddings of every node in <span class="No-Break">the graph:</span></li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer375">
+<img alt="" height="172" src="image/Formula_B19153_09_019.jpg" width="331"/>
+</div>
+</div>
+<ul>
+<li><strong class="bold">Max global pooling</strong>: The<a id="_idIndexMarker534"/> graph embedding is obtained by selecting<a id="_idIndexMarker535"/> the highest value for each <span class="No-Break">node dimension:</span><div class="IMG---Figure" id="_idContainer376"><img alt="" height="66" src="image/Formula_B19153_09_020.jpg" width="377"/></div></li>
+</ul>
+<ul>
+<li><strong class="bold">Sum global pooling</strong>: The graph<a id="_idIndexMarker536"/> embedding is obtained by <a id="_idIndexMarker537"/>summing the embeddings of every node in <span class="No-Break">the graph:</span></li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer377">
+<img alt="" height="144" src="image/Formula_B19153_09_021.jpg" width="207"/>
+</div>
+</div>
+<p>According to <a id="_idIndexMarker538"/>what we saw in the first section, the sum global pooling is strictly more expressive than the two other techniques. The GIN’s authors also note that to consider all structural information, it is necessary to consider embeddings produced by every layer of the GNN. In summary, we concatenate the sum of node embeddings produced by each of the <em class="italic">k</em> layers of <span class="No-Break">our GNN:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer378">
+<img alt="" height="152" src="image/Formula_B19153_09_022.jpg" width="525"/>
+</div>
+</div>
+<p>This solution elegantly combines the expressive power of the sum operator with the memory of each layer provided by <span class="No-Break">the concatenation.</span></p>
+<h2 id="_idParaDest-109"><a id="_idTextAnchor113"/>Implementing the GIN</h2>
+<p>We <a id="_idIndexMarker539"/>will now implement a GIN model with the previous graph-level readout function on the <strong class="source-inline">PROTEINS [5, 6, </strong><span class="No-Break"><strong class="source-inline">7]</strong></span><span class="No-Break"> dataset.</span></p>
+<p>This dataset comprises 1,113 graphs representing proteins, where every node is an amino acid. An edge connects two nodes when their distance is lower than 0.6 nanometers. The goal of this dataset is to classify each protein as an <strong class="bold">enzyme</strong>. Enzymes are a particular <a id="_idIndexMarker540"/>type of protein that act as catalysts to speed up chemical reactions in a cell. For instance, enzymes called lipases aid in the digestion of food. <span class="No-Break"><em class="italic">Figure 9</em></span><em class="italic">.4</em> shows the 3D plot of <span class="No-Break">a protein.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer379">
+<img alt="Figure 9.4 – An example of a protein in 3D" height="659" src="image/B19153_09_004.jpg" width="1050"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.4 – An example of a protein in 3D</p>
+<p>Let’s implement <a id="_idIndexMarker541"/>a GIN model on <span class="No-Break">this dataset:</span></p>
+<ol>
+<li value="1">First, we import the <strong class="source-inline">PROTEINS</strong> dataset using the <strong class="source-inline">TUDataset</strong> class from PyTorch Geometric and print <span class="No-Break">the information:</span><pre class="console">
+from torch_geometric.datasets import TUDataset
+dataset = TUDataset(root='.', name='PROTEINS').shuffle()
+print(f'Dataset: {dataset}')
+print('-----------------------')
+print(f'Number of graphs: {len(dataset)}')
+print(f'Number of nodes: {dataset[0].x.shape[0]}')
+print(f'Number of features: {dataset.num_features}')
+print(f'Number of classes: {dataset.num_classes}')
+<strong class="bold">Dataset: PROTEINS(1113)</strong>
+<strong class="bold">-----------------------</strong>
+<strong class="bold">Number of graphs: 1113</strong>
+<strong class="bold">Number of nodes: 30</strong>
+<strong class="bold">Number of features: 0</strong>
+<strong class="bold">Number of classes: 2</strong></pre></li>
+<li>We<a id="_idIndexMarker542"/> split the data (graphs) into training, validation, and test sets with an 80/10/10 <span class="No-Break">split respectively:</span><pre class="console">
+from torch_geometric.loader import DataLoader
+train_dataset = dataset[:int(len(dataset)*0.8)]
+val_dataset   = dataset[int(len(dataset)*0.8):int(len(dataset)*0.9)]
+test_dataset  = dataset[int(len(dataset)*0.9):]
+print(f'Training set   = {len(train_dataset)} graphs')
+print(f'Validation set = {len(val_dataset)} graphs')
+print(f'Test set       = {len(test_dataset)} graphs')</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="console">
+<strong class="bold">Training set   = 890 graphs</strong>
+<strong class="bold">Validation set = 111 graphs</strong>
+<strong class="bold">Test set       = 112 graphs</strong></pre></li>
+<li>We <a id="_idIndexMarker543"/>convert these splits into mini-batches using the <strong class="source-inline">DataLoader</strong> object with a batch size of 64. This means that each batch will contain up to <span class="No-Break">64 graphs:</span><pre class="console">
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+val_loader   = DataLoader(val_dataset, batch_size=64, shuffle=True)
+test_loader  = DataLoader(test_dataset, batch_size=64, shuffle=True)</pre></li>
+<li>We can verify that by printing information about each batch, <span class="No-Break">as follows:</span><pre class="console">
+print('\nTrain loader:')
+for i, batch in enumerate(train_loader):
+    print(f' - Batch {i}: {batch}')
+print('\nValidation loader:')
+for i, batch in enumerate(val_loader):
+    print(f' - Batch {i}: {batch}')
+print('\nTest loader:')
+for i, batch in enumerate(test_loader):
+    print(f' - Batch {i}: {batch}')
+<strong class="bold">Train loader:</strong>
+<strong class="bold"> - Batch 0: DataBatch(edge_index=[2, 8622], x=[2365, 0], y=[64], batch=[2365], ptr=[65])</strong>
+<strong class="bold"> - Batch 1: DataBatch(edge_index=[2, 6692], x=[1768, 0], y=[64], batch=[1768], ptr=[65])</strong>
+<strong class="bold">…</strong>
+<strong class="bold"> - Batch 13: DataBatch(edge_index=[2, 7864], x=[2102, 0], y=[58], batch=[2102], ptr=[59])</strong>
+<strong class="bold">Validation loader:</strong>
+<strong class="bold"> - Batch 0: DataBatch(edge_index=[2, 8724], x=[2275, 0], y=[64], batch=[2275], ptr=[65])</strong>
+<strong class="bold"> - Batch 1: DataBatch(edge_index=[2, 8388], x=[2257, 0], y=[47], batch=[2257], ptr=[48])</strong>
+<strong class="bold">Test loader:</strong>
+<strong class="bold"> - Batch 0: DataBatch(edge_index=[2, 7906], x=[2187, 0], y=[64], batch=[2187], ptr=[65])</strong>
+<strong class="bold"> - Batch 1: DataBatch(edge_index=[2, 9442], x=[2518, 0], y=[48], batch=[2518], ptr=[49])</strong></pre></li>
+</ol>
+<p>Let’s start <a id="_idIndexMarker544"/>implementing a GIN model. The first question we have to answer is the composition of our GIN layer. We need an MLP with at least two layers. Following the authors’ guidelines, we can also introduce batch normalization to standardize the inputs of each hidden layer, which stabilizes and speeds up training. In summary, our GIN layer has the <span class="No-Break">following composition:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer380">
+<img alt="" height="58" src="image/Formula_B19153_09_023.jpg" width="951"/>
+</div>
+</div>
+<p>In code, it is defined <span class="No-Break">as follows:</span></p>
+<pre class="console">
+import torch
+torch.manual_seed(0)
+import torch.nn.functional as F
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
+from torch_geometric.nn import GINConv
+from torch_geometric.nn import global_add_pool
+class GIN(torch.nn.Module):
+    def __init__(self, dim_h):
+        super(GIN, self).__init__()
+        self.conv1 = GINConv(
+            Sequential(Linear(dataset.num_node_features, dim_h), BatchNorm1d(dim_h), ReLU(), Linear(dim_h, dim_h), ReLU()))
+        self.conv2 = GINConv(
+            Sequential(Linear(dim_h, dim_h), BatchNorm1d(dim_h), ReLU(), Linear(dim_h, dim_h), ReLU()))
+        self.conv3 = GINConv(
+            Sequential(Linear(dim_h, dim_h), BatchNorm1d(dim_h), ReLU(), Linear(dim_h, dim_h), ReLU()))</pre>
+<p class="callout-heading">Note</p>
+<p class="callout">PyTorch Geometric also offers<a id="_idIndexMarker545"/> the GINE layer, a modified version of the GIN layer. It was introduced in 2019 by Hu et al. in “<em class="italic">Strategies for Pre-training Graph Neural Networks</em>” [8]. Its major improvement over the previous GIN version is the ability to consider edge features during the aggregation process. The <strong class="source-inline">PROTEINS</strong> dataset does not have edge features, which is why we will implement the classic GIN <span class="No-Break">model instead.</span></p>
+<ol>
+<li value="6">Our model is not complete yet. We must not forget that we want to perform graph classification. It requires the sum of every node embedding in the graph for each layer. In other words, we will need to store one vector of <strong class="source-inline">dim_h</strong> size per layer – three, in this example. This is why we add a linear layer with <strong class="source-inline">3*dim_h</strong> size before the final linear layer for binary classification (<strong class="source-inline">data.num_classes</strong> = <span class="No-Break">2):</span><pre class="console">
+        self.lin1 = Linear(dim_h*3, dim_h*3)
+        self.lin2 = Linear(dim_h*3, dataset.num_classes)</pre></li>
+<li>We must<a id="_idIndexMarker546"/> implement the logic to connect our initialized layers. Each layer produces a different embedding tensor – <strong class="source-inline">h1</strong>, <strong class="source-inline">h2</strong>, and <strong class="source-inline">h3</strong>. We sum them using the <strong class="source-inline">global_add_pool()</strong> function and then concatenate them with <strong class="source-inline">torch.cat()</strong>. This gives us the input to our classifier, which acts as a regular neural network with a <span class="No-Break">dropout layer:</span><pre class="console">
+    def forward(self, x, edge_index, batch):
+        # Node embeddings
+        h1 = self.conv1(x, edge_index)
+        h2 = self.conv2(h1, edge_index)
+        h3 = self.conv3(h2, edge_index)
+        # Graph-level readout
+        h1 = global_add_pool(h1, batch)
+        h2 = global_add_pool(h2, batch)
+        h3 = global_add_pool(h3, batch)
+        # Concatenate graph embeddings
+        h = torch.cat((h1, h2, h3), dim=1)
+        # Classifier
+        h = self.lin1(h)
+        h = h.relu()
+        h = F.dropout(h, p=0.5, training=self.training)
+        h = self.lin2(h)
+        return F.log_softmax(h, dim=1)</pre></li>
+<li>We can<a id="_idIndexMarker547"/> now implement a regular training loop with mini-batching for <span class="No-Break">100 epochs:</span><pre class="console">
+def train(model, loader):
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    epochs = 100
+    model.train()
+    for epoch in range(epochs+1):
+        total_loss = 0
+        acc = 0
+        val_loss = 0
+        val_acc = 0
+        # Train on batches
+        for data in loader:
+            optimizer.zero_grad()
+            out = model(data.x, data.edge_index, data.batch)
+            loss = criterion(out, data.y)
+            total_loss += loss / len(loader)
+            acc += accuracy(out.argmax(dim=1), data.y) / len(loader)
+            loss.backward()
+            optimizer.step()
+            # Validation
+            val_loss, val_acc = test(model, val_loader)</pre></li>
+<li>We print the<a id="_idIndexMarker548"/> training and validation accuracy every 20 epochs and return the <span class="No-Break">trained model:</span><pre class="console">
+        # Print metrics every 20 epochs
+        if(epoch % 20 == 0):
+            print(f'Epoch {epoch:&gt;3} | Train Loss: {total_loss:.2f} | Train Acc: {acc*100:&gt;5.2f}% | Val Loss: {val_loss:.2f} | Val Acc: {val_acc*100:.2f}%')
+    return model</pre></li>
+<li>Unlike the <strong class="source-inline">test</strong> function from the previous chapter, this one must also include mini-batching, since our validation and test loaders contain more than <span class="No-Break">one batch:</span><pre class="console">
+@torch.no_grad()
+def test(model, loader):
+    criterion = torch.nn.CrossEntropyLoss()
+    model.eval()
+    loss = 0
+    acc = 0
+    for data in loader:
+        out = model(data.x, data.edge_index, data.batch)
+        loss += criterion(out, data.y) / len(loader)
+        acc += accuracy(out.argmax(dim=1), data.y) / len(loader)
+    return loss, acc</pre></li>
+<li>We <a id="_idIndexMarker549"/>define the function we will use to calculate the <span class="No-Break">accuracy score:</span><pre class="console">
+def accuracy(pred_y, y):
+    return ((pred_y == y).sum() / len(y)).item()</pre></li>
+<li>Let’s instantiate and train our <span class="No-Break">GIN model:</span><pre class="console">
+gin = GIN(dim_h=32)
+gin = train(gin, train_loader)
+<strong class="bold">Epoch 0 | Train Loss: 1.33 | Train Acc: 58.04% | Val Loss: 0.70 | Val Acc: 59.97%</strong>
+<strong class="bold">Epoch 20 | Train Loss: 0.54 | Train Acc: 74.50% | Val Loss: 0.55 | Val Acc: 76.86%</strong>
+<strong class="bold">Epoch 40 | Train Loss: 0.50 | Train Acc: 76.28% | Val Loss: 0.56 | Val Acc: 74.73%</strong>
+<strong class="bold">Epoch 60 | Train Loss: 0.50 | Train Acc: 76.77% | Val Loss: 0.54 | Val Acc: 72.04%</strong>
+<strong class="bold">Epoch 80 | Train Loss: 0.49 | Train Acc: 76.95% | Val Loss: 0.57 | Val Acc: 73.67%</strong>
+<strong class="bold">Epoch 100 | Train Loss: 0.50 | Train Acc: 76.04% | Val Loss: 0.53 | Val Acc: 69.55%</strong></pre></li>
+<li>Finally, let’s <a id="_idIndexMarker550"/>test it using the <span class="No-Break">test loader:</span><pre class="console">
+test_loss, test_acc = test(gin, test_loader)
+print(f'Test Loss: {test_loss:.2f} | Test Acc: {test_acc*100:.2f}%')
+<strong class="bold">Test Loss: 0.44 | Test Acc: 81.77%</strong></pre></li>
+</ol>
+<p>To better understand this final test score, we can implement a GCN that performs graph classification with a simple global mean pooling (<strong class="source-inline">global_mean_pool()</strong> in PyTorch Geometric). With the exact same setting, it achieves an average accuracy score of 53.72% (± 0.73%) on 100 experiments. This is much lower than the average 76.56% (± 1.77%) obtained by the <span class="No-Break">GIN model.</span></p>
+<p>We can conclude that the entire GIN architecture is much more suited for this graph classification task than GCNs. According to the theoretical framework we used, this is explained by the fact that GCNs are strictly less expressive than GINs. In other words, GINs can distinguish more graph structures than GCNs, which is why they are more accurate. We can verify this assumption by visualizing the mistakes made by <span class="No-Break">both models:</span></p>
+<ol>
+<li value="1">We import the <strong class="source-inline">matplotlib</strong> and <strong class="source-inline">networkx</strong> libraries to make a 4x4 plot <span class="No-Break">of proteins:</span><pre class="console">
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+from torch_geometric.utils import to_networkx
+fig, ax = plt.subplots(4, 4)</pre></li>
+<li>For each <a id="_idIndexMarker551"/>protein, we get the final classification from our GNN (the GIN in this case). We give the prediction a green color if it is correct (<span class="No-Break">red otherwise):</span><pre class="console">
+for i, data in enumerate(dataset[-16:]):
+    out = gcn(data.x, data.edge_index, data.batch)
+    color = "green" if out.argmax(dim=1) == data.y else "red"</pre></li>
+<li>We convert our protein into a <strong class="source-inline">networkx</strong> graph for convenience. We can then draw it using the <span class="No-Break"><strong class="source-inline">nx.draw_networkx()</strong></span><span class="No-Break"> function:</span><pre class="console">
+    ix = np.unravel_index(i, ax.shape)
+    ax[ix].axis('off')
+    G = to_networkx(dataset[i], to_undirected=True)
+    nx.draw_networkx(G,
+                    pos=nx.spring_layout(G, seed=0),
+                    with_labels=False,
+                    node_size=10,
+                    node_color=color,
+                    width=0.8,
+                    ax=ax[ix]
+                    )</pre></li>
+<li>We obtain the following plot for the <span class="No-Break">GIN model.</span></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer381">
+<img alt="Figure 9.5 – Graph classifications produced by the GIN model" height="882" src="image/B19153_09_005.jpg" width="907"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.5 – Graph classifications produced by the GIN model</p>
+<ol>
+<li value="5">We<a id="_idIndexMarker552"/> repeat this process for the GCN and get the <span class="No-Break">following visualization.</span></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer382">
+<img alt="Figure 9.6 – Graph classifications produced by the GCN model" height="884" src="image/B19153_09_006.jpg" width="907"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 9.6 – Graph classifications produced by the GCN model</p>
+<p>As <a id="_idIndexMarker553"/>expected, the GCN model makes more mistakes. Understanding which graph structures are not adequately captured would require extensive analysis for each protein correctly classified by GIN. However, we can see that the GIN also makes different mistakes. This is interesting because it shows that these models can <span class="No-Break">be complementary.</span></p>
+<p>Creating ensembles from models that make different mistakes is a common technique in machine learning. We could use different approaches, such as a third model trained on our final classifications. As creating ensembles is not the goal of this chapter, we will implement a simple model-averaging <span class="No-Break">technique instead:</span></p>
+<ol>
+<li value="1">First, we set the models in evaluation mode and define the variables to store <span class="No-Break">accuracy scores:</span><pre class="console">
+gcn.eval()
+gin.eval()
+acc_gcn = 0
+acc_gin = 0
+acc_ens = 0</pre></li>
+<li>We <a id="_idIndexMarker554"/>get the final classifications for each model and combine them to get the <span class="No-Break">ensemble’s predictions:</span><pre class="console">
+for data in test_loader:
+    out_gcn = gcn(data.x, data.edge_index, data.batch)
+    out_gin = gin(data.x, data.edge_index, data.batch)
+    out_ens = (out_gcn + out_gin)/2</pre></li>
+<li>We calculate the accuracy scores for the three sets <span class="No-Break">of predictions:</span><pre class="console">
+    acc_gcn += accuracy(out_gcn.argmax(dim=1), data.y) / len(test_loader)
+    acc_gin += accuracy(out_gin.argmax(dim=1), data.y) / len(test_loader)
+    acc_ens += accuracy(out_ens.argmax(dim=1), data.y) / len(test_loader)</pre></li>
+<li>Finally, let’s print <span class="No-Break">the results:</span><pre class="console">
+print(f'GCN accuracy:     {acc_gcn*100:.2f}%')
+print(f'GIN accuracy:     {acc_gin*100:.2f}%')
+print(f'GCN+GIN accuracy: {acc_ens*100:.2f}%')
+<strong class="bold">GCN accuracy: 72.14%</strong>
+<strong class="bold">GIN accuracy: 80.99%</strong>
+<strong class="bold">GCN+GIN accuracy: 81.25%</strong></pre></li>
+</ol>
+<p>In this <a id="_idIndexMarker555"/>example, our ensemble outperforms both models with an accuracy score of 81.25% (compared to 72.14% for the GCN and 80.99% for the GIN). This result is significant, as it shows the possibilities offered by this kind of technique. However, this is not necessarily the case in general; even with this example, the ensemble model does not consistently outperform the GIN. We could enrich it with embeddings from other architectures, such as <strong class="source-inline">Node2Vec</strong>, and see whether it improves the <span class="No-Break">final accuracy.</span></p>
+<h1 id="_idParaDest-110"><a id="_idTextAnchor114"/>Summary</h1>
+<p>In this chapter, we defined the expressive power of GNNs. This definition is based on another algorithm, the WL method, which outputs the canonical form of a graph. This algorithm is not perfect, but it can distinguish most graph structures. It inspired the GIN architecture, designed to be as expressive as the WL test and, therefore, strictly more expressive than GCNs, GATs, <span class="No-Break">or GraphSAGE.</span></p>
+<p>We then implemented this architecture for graph classification. We saw different methods to combine node embeddings into graph embeddings. GIN offers a new technique, which incorporates a sum operator and the concatenation of graph embeddings produced by every GIN layer. It significantly outperformed the classic global mean pooling obtained with GCN layers. Finally, we combined predictions made by both models into a simple ensemble, which increased the accuracy score <span class="No-Break">even further.</span></p>
+<p>In <a href="B19153_10.xhtml#_idTextAnchor116"><span class="No-Break"><em class="italic">Chapter 10</em></span></a><em class="italic">, Predicting Links with Graph Neural Networks</em>, we will explore another popular task with GNNs – link prediction. In fact, this is not entirely new, as previous techniques we saw such as <strong class="source-inline">DeepWalk</strong> and <strong class="source-inline">Node2Vec</strong> were already based on this idea. We will explain why and introduce two new GNN frameworks – the Graph (Variational) Autoencoder and SEAL. Finally, we will implement and compare them on the <strong class="source-inline">Cora</strong> dataset on a link <span class="No-Break">prediction task.</span></p>
+<h1 id="_idParaDest-111"><a id="_idTextAnchor115"/>Further reading</h1>
+<ul>
+<li>[1] Weisfeiler and Lehman, A.A. (1968) A Reduction of a Graph to a Canonical Form and an Algebra Arising during This Reduction. Nauchno-Technicheskaya <span class="No-Break">Informatsia, 9.</span></li>
+<li>[2] K. Xu, W. Hu, J. Leskovec, and S. Jegelka, <em class="italic">How Powerful are Graph Neural Networks?</em> arXiv, 2018. <span class="No-Break">doi: 10.48550/ARXIV.1810.00826.</span></li>
+<li>[3] C. Morris et al., <em class="italic">Weisfeiler and Leman Go Neural: Higher-order Graph Neural Networks</em>. arXiv, 2018. <span class="No-Break">doi: 10.48550/ARXIV.1810.02244.</span></li>
+<li>[4] V. P. Dwivedi et al. <em class="italic">Benchmarking graph neural networks</em>. arXiv, 2020. <span class="No-Break">doi: 10.48550/ARXIV.2003.00982.</span></li>
+<li>[5] K. M. Borgwardt, C. S. Ong, S. Schoenauer, S. V. N. Vishwanathan, A. J. Smola, and H. P. Kriegel. <em class="italic">Protein function prediction via graph kernels</em>. Bioinformatics, 21(Suppl 1):i47–i56, <span class="No-Break">Jun 2005.</span></li>
+<li>[6] P. D. Dobson and A. J. Doig. <em class="italic">Distinguishing enzyme structures from non-enzymes without alignments</em>. J. Mol. Biol., 330(4):771–783, <span class="No-Break">Jul 2003.</span></li>
+<li>[7] Christopher Morris and Nils M. Kriege and Franka Bause and Kristian Kersting and Petra Mutzel and Marion Neumann. <em class="italic">TUDataset: A collection of benchmark datasets for learning with graphs</em>. In ICML 2020 Workshop on Graph Representation Learning <span class="No-Break">and Beyond.</span></li>
+<li>[8] W. Hu et al., <em class="italic">Strategies for Pre-training Graph Neural Networks</em>. arXiv, 2019. <span class="No-Break">doi: 10.48550/ARXIV.1905.12265.</span></li>
+</ul>
+</div>
+</div></body></html>

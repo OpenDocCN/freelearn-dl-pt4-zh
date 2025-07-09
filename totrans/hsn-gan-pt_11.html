@@ -1,0 +1,321 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Image Generation from Description Text</h1>
+                </header>
+            
+            <article>
+                
+<p>In the previous chapters, we have been mainly dealing with image synthesis and image-to-image translation tasks. Now, it's time for us to move from the CV field to the NLP field and discover the potential of GANs in other applications. Perhaps you have seen some CNN models being used for image/video captioning. Wouldn't it be great if we could reverse this process and generate images from description text?</p>
+<p>In this chapter, you will learn about the basics of word embeddings and how are they used in the NLP field. You will also learn how to design a text-to-image GAN model so that you can generate images based on one sentence of description text. Finally, you will understand how to stack two or more Conditional GAN models to perform text-to-image synthesis with much higher resolution with StackGAN and StackGAN++.</p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Text-to-image synthesis with GANs</li>
+<li>Generating photo-realistic images with StackGAN++</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Text-to-image synthesis with GANs</h1>
+                </header>
+            
+            <article>
+                
+<p>From <a href="3894df8d-1a40-418e-ac36-d9357abdfd6a.xhtml">Chapter 4</a>, <em>Building Your First GAN with PyTorch</em>, to <a href="f05fbf9f-30b6-41d4-b706-5f3ef0d6fff7.xhtml">Chapter 8</a>, <em>Training Your GANs to Break Different Models</em>, we have learned almost every basic application of GANs in computer vision, especially when it comes to image synthesis. You're probably wondering how GANs are used in other fields, such as text or audio generation. In this chapter, we will gradually move from CV to NLP by combining the two fields together and try to generate realistic images from description text. This process is called <strong>text-to-image </strong><span><strong>synthesis</strong> (or text-to-image </span>translation).</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>We know that almost every GAN model generates synthesized data by establishing a definite mapping from a certain form of input data to the output data. Therefore, in order to generate an image from a corresponding description sentence, we need to understand how to represent sentences with vectors.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Quick introduction to word embedding</h1>
+                </header>
+            
+            <article>
+                
+<p>It's rather easy to define an approach for transforming the words in a sentence into vectors. We can simply assign different values to all the possible words (for example, let 001 represent <em>I</em>, 002 represent <em>eat</em>, and 003 represent <em>apple</em>) so that the sentence can be uniquely represented by a vector (for example, <em>I eat apple</em> would become [001, 002, 003]). This is basically how words are represented in computers. However, languages are much more complicated and flexible than cold digits. Without knowing the meaning of words (for example, a noun or a verb, positive or negative), it is nearly impossible to establish the relationship between the words and understand the meaning of the sentence. Furthermore, it is very hard to find a synonym of a word based on hardcoded values since the distance between the values does not represent the similarity between the corresponding words.</p>
+<p><span>Methods that have been designed to map words, phrases, or sentences to vectors are called <strong>word embeddings</strong>. </span>One of the most successful word embedding techniques is called <strong>word2vec</strong>. If you want to learn more about word2vec, feel free to check out the paper <em>word2vec Parameter Learning Explained</em>, <a href="https://arxiv.org/pdf/1411.2738.pdf">https://arxiv.org/pdf/1411.2738.pdf</a>, by Xin Rong.</p>
+<div class="packt_infobox">The term <strong>embedding</strong> means projecting data to a different space so that it's easier to analyze. You may have seen this term being used in some old papers or articles about CNNs, where the output vector of a learned fully connected layer is used to visualize whether the models are trained properly.</div>
+<p>Word embeddings are mostly used to solve two types of problems in NLP:</p>
+<ul>
+<li><strong>CBOW</strong> (<strong>Continuous Bag-of-Word</strong>) models, which are used to predict a single word based on several other words in the context</li>
+<li>Skip-Gram models, which are the opposite of CBOWs and are used to predict the context words based on the target word</li>
+</ul>
+<p class="mce-root"/>
+<p>The following diagram provides us with an overview of the <span class="packt_screen">CBOW</span> and <span class="packt_screen">Skip-Gram</span> models:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-805 image-border" src="assets/9b9d6576-7fd3-4acb-b186-a7b7d208c6cb.png" style="width:43.25em;height:27.33em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Two types of word embeddings. Image retrieved from Xin Rong, 2014</div>
+<div class="packt_infobox">Another common term in NLP is <strong>language modeling</strong>. Compared to word embeddings, language models predict the possibilities of sentences or, more specifically, the possibilities of words appearing at the next position in a sentence. Since language modeling takes the order of words into consideration, many language models are built upon word embeddings to get good results.</div>
+<p>Simply put, a learned word embedding is a vector that represents a sentence that is easier for machine learning algorithms to analyze and understand the meaning of <span>the original sentence. </span>Check out the official tutorial about word embedding to learn how to implement CBOW and Skip-Gram models in PyTorch: <a href="https://pytorch.org/tutorials/beginner/nlp/word_embeddings_tutorial.html#sphx-glr-beginner-nlp-word-embeddings-tutorial-py">https://pytorch.org/tutorials/beginner/nlp/word_embeddings_tutorial.html#sphx-glr-beginner-nlp-word-embeddings-tutorial-py</a>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Translating text to image with zero-shot transfer learning</h1>
+                </header>
+            
+            <article>
+                
+<p>In <a href="f05fbf9f-30b6-41d4-b706-5f3ef0d6fff7.xhtml">Chapter 8</a>, <em>Training Your GANs to Break Different Models</em>, we learned about the basic steps we need to take in order to perform transfer learning in image classification tasks. Under more realistic circumstances, it becomes harder to transfer this learned knowledge to another domain because there can be many new forms of data that the pretrained model hasn't met before, especially when we try to generate images based on description text (or in a reverse process where we generate description text from given images). For example, if the model is only trained on white cats, it won't know what to do when we ask it to generate images of black cats. This is where zero-shot transfer learning comes into play.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Zero-shot learning</h1>
+                </header>
+            
+            <article>
+                
+<p><strong>Zero-shot learning</strong> refers to a machine learning process where we need to predict new samples with labels that haven't been seen before. It is often done by providing additional information to the pretraining process. For example, we can tell the model that the objects known as <strong>white cats</strong> have two properties: a color, that is, white, and the shape of a cat. This makes it easy for the model to know that replacing the white color with black would give us <em>black cats</em> when we ask for them.</p>
+<div class="packt_infobox">Similarly, the machine learning process where the new samples are only labeled once per class (or very few samples are labeled per class) is called <strong>one-shot learning</strong>.</div>
+<p>In order to establish the zero-shot learning ability between text and image, we will use the word embedding model proposed by Scott Reed, Zeynep Akata, and Bernt Schiele, et al in their paper, <em>Learning Deep Representations of Fine-Grained Visual Descriptions</em>. Their model is designed for one purpose: finding the most matching images from a large collection based on a single query sentence.</p>
+<p class="mce-root"/>
+<p>The following image is an example of image search results from a single query sentence:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/cb24ab6f-7baa-4120-888d-0b5566458c51.png" style="width:42.08em;height:22.25em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Examples of image search results from a single query sentence on the CUB-200-2011 dataset</div>
+<p>We won't dive into the implementation details of the word embedding method here and instead use the pretrained <kbd>char-CNN-RNN</kbd> results provided by the authors. </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">GAN architecture and training</h1>
+                </header>
+            
+            <article>
+                
+<p>The design of the GAN model in this section is based on the text-to-image model proposed by Scott Reed, Zeynep Akata, and Xinchen Yan, et al in their paper, <em>Generative Adversarial Text to Image Synthesis</em>. Here, we will describe and define the architectures of the generator and discriminator networks and the training process.</p>
+<p>The generator network has two inputs, including a latent noise vector, <img class="fm-editor-equation" src="assets/1c8d67dc-79fd-4232-8a34-666a701583bd.png" style="width:0.75em;height:0.92em;"/>, and the embedding vector, <img class="fm-editor-equation" src="assets/e747bae2-9b44-4376-b675-4e9729446fcd.png" style="width:0.58em;height:1.25em;"/>, of the description sentence. The embedding vector, <img class="fm-editor-equation" src="assets/11b94c85-71d6-420b-9a62-79bfa784a8ba.png" style="width:0.58em;height:1.25em;"/>, has a length of 1,024, which is mapped by a fully-connected layer to a vector of 128. This vector is concatenated with the noise vector, <img class="fm-editor-equation" src="assets/11db02c9-d480-43ee-a5f7-913ae50abb22.png" style="width:0.75em;height:0.92em;"/>, to form a tensor with a size of <kbd>[B, 228, 1, 1]</kbd> (in which B represents the batch size and is omitted from now on). Five transposed convolution layers (with a kernel size of 4, a stride size of 2, and a padding size of 1) are used to gradually expand the size of feature map (while decreasing the channel width) to <kbd>[3, 64, 64]</kbd>, which is the generated image after a <kbd>Tanh</kbd> activation function. Batch normalization layers and <kbd>ReLU</kbd> activation functions are used in the hidden layers.</p>
+<p class="mce-root"/>
+<p>Let's create a new file named <kbd>gan.py</kbd> to define the networks. Here is the code definition of the generator network:</p>
+<pre>import torch<br/>import torch.nn as nn<br/><br/>class Generator(nn.Module):<br/>    def __init__(self, channels, latent_dim=100, embed_dim=1024, embed_out_dim=128):<br/>        super(Generator, self).__init__()<br/>        self.channels = channels<br/>        self.latent_dim = latent_dim<br/>        self.embed_dim = embed_dim<br/>        self.embed_out_dim = embed_out_dim<br/><br/>        self.text_embedding = nn.Sequential(<br/>            nn.Linear(self.embed_dim, self.embed_out_dim),<br/>            nn.BatchNorm1d(self.embed_out_dim),<br/>            nn.LeakyReLU(0.2, inplace=True)<br/>        )<br/><br/>        model = []<br/>        model += self._create_layer(self.latent_dim + self.embed_out_dim, 512, 4, stride=1, padding=0)<br/>        model += self._create_layer(512, 256, 4, stride=2, padding=1)<br/>        model += self._create_layer(256, 128, 4, stride=2, padding=1)<br/>        model += self._create_layer(128, 64, 4, stride=2, padding=1)<br/>        model += self._create_layer(64, self.channels, 4, stride=2, padding=1, output=True)<br/><br/>        self.model = nn.Sequential(*model)<br/><br/>    def _create_layer(self, size_in, size_out, kernel_size=4, stride=2, padding=1, output=False):<br/>        layers = [nn.ConvTranspose2d(size_in, size_out, kernel_size, stride=stride, padding=padding, bias=False)]<br/>        if output:<br/>            layers.append(nn.Tanh())<br/>        else:<br/>            layers += [nn.BatchNorm2d(size_out),<br/>                 nn.ReLU(True)]<br/>        return layers<br/><br/>    def forward(self, noise, text):<br/>        text = self.text_embedding(text)<br/>        text = text.view(text.shape[0], text.shape[1], 1, 1)<br/>        z = torch.cat([text, noise], 1)<br/>        return self.model(z)</pre>
+<p class="mce-root"/>
+<p>The discriminator network also has two inputs, which are the generated/real image, <img class="fm-editor-equation" src="assets/0436cf09-e622-40e4-8157-8609fe701657.png" style="width:0.75em;height:0.75em;"/>, and the embedding vector, <img class="fm-editor-equation" src="assets/9f0ec161-c717-458c-b755-b6afd4802065.png" style="width:0.42em;height:0.92em;"/>. The input image, <img class="fm-editor-equation" src="assets/59d4e74c-a099-4663-af65-b478c69c594d.png" style="width:0.92em;height:0.92em;"/>, is a tensor with a size of <kbd>[3, 64, 64]</kbd> and is mapped to <kbd>[512, 4, 4]</kbd> through four convolution layers. The discriminator network has two outputs and the <kbd>[512, 4, 4]</kbd> feature map is also the second output tensor. The embedding vector, <img class="fm-editor-equation" src="assets/7fc07115-6a51-46f0-b573-b19b8a5b963f.png" style="width:0.42em;height:0.92em;"/>, is mapped to a vector with a length of 128 and expanded to a tensor of size <kbd>[128, 4, 4]</kbd>, which is then concatenated with the image feature map. Finally, the concatenated tensor (with a size of <kbd>[640, 4, 4]</kbd>) is fed into another convolution layer that gives us the prediction value.</p>
+<p>The code definition of the discriminator network is as follows:</p>
+<pre>class Embedding(nn.Module):<br/>    def __init__(self, size_in, size_out):<br/>        super(Embedding, self).__init__()<br/>        self.text_embedding = nn.Sequential(<br/>            nn.Linear(size_in, size_out),<br/>            nn.BatchNorm1d(size_out),<br/>            nn.LeakyReLU(0.2, inplace=True)<br/>        )<br/><br/>    def forward(self, x, text):<br/>        embed_out = self.text_embedding(text)<br/>        embed_out_resize = embed_out.repeat(4, 4, 1, 1).permute(2, 3, 0, 1)<br/>        out = torch.cat([x, embed_out_resize], 1)<br/>        return out<br/><br/>class Discriminator(nn.Module):<br/>    def __init__(self, channels, embed_dim=1024, embed_out_dim=128):<br/>        super(Discriminator, self).__init__()<br/>        self.channels = channels<br/>        self.embed_dim = embed_dim<br/>        self.embed_out_dim = embed_out_dim<br/><br/>        self.model = nn.Sequential(<br/>            *self._create_layer(self.channels, 64, 4, 2, 1, <br/>              normalize=False),<br/>            *self._create_layer(64, 128, 4, 2, 1),<br/>            *self._create_layer(128, 256, 4, 2, 1),<br/>            *self._create_layer(256, 512, 4, 2, 1)<br/>        )<br/>        self.text_embedding = Embedding(self.embed_dim, self.embed_out_dim)<br/>        self.output = nn.Sequential(<br/>            nn.Conv2d(512 + self.embed_out_dim, 1, 4, 1, 0, bias=False),<br/>            nn.Sigmoid()<br/>        )<br/><br/>    def _create_layer(self, size_in, size_out, kernel_size=4, stride=2,  <br/>      padding=1, normalize=True):<br/>        layers = [nn.Conv2d(size_in, size_out, kernel_size=kernel_size, <br/>          stride=stride, padding=padding)]<br/>        if normalize:<br/>            layers.append(nn.BatchNorm2d(size_out))<br/>        layers.append(nn.LeakyReLU(0.2, inplace=True))<br/>        return layers<br/><br/>    def forward(self, x, text):<br/>        x_out = self.model(x)<br/>        out = self.text_embedding(x_out, text)<br/>        out = self.output(out)<br/>        return out.squeeze(), x_out</pre>
+<p>The training process of both networks can be seen in the following diagram. We can see that training text-to-image GANs is very similar to the vanilla GAN, except that the intermediate outputs (the second output tensors) of the discriminator from the real and generated images are used to calculate the <span class="packt_screen">L1</span> loss, while the real/generated images are used to calculate the <span class="packt_screen">L2</span> loss:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-906 image-border" src="assets/39c793ee-d4b7-484b-9544-c55fee800106.png" style="width:27.92em;height:20.92em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Training process of a text-to-image GAN, in which <em>x*</em> represents the real image, <em>x</em> represents the generated image, <em>t</em> represents the text embedding vector, and <em>z</em> represents the latent noise vector. The dotted arrows coming out of the discriminator, <em>D</em>, represent the intermediate output tensors</div>
+<p>As we introduce the following code, things are going to be presented in a somewhat non-linear fashion. This is to ensure that you understand the processes that are involved at each point. </p>
+<p>Let's create a new file named <kbd>build_gan.py</kbd> and create a one-stop train/eval API, just like we did in some of the previous chapters. We will only show the crucial parts of the training process. You may fill in the blanks yourself as an exercise or refer to the full source code under the <kbd>text2image</kbd> folder in the code repository for this chapter:</p>
+<pre>import os<br/>import time<br/><br/>import torch<br/>import torchvision.utils as vutils<br/><br/>from gan import Generator as netG<br/>from gan import Discriminator as netD<br/><br/>def _weights_init(m):<br/>    # init weights in conv and batchnorm layers<br/>    ...<br/><br/>class Model(object):<br/>    def __init__(self, name, device, data_loader, channels, l1_coef, l2_coef):<br/>        # parse argument values<br/>        ...<br/>        self.netG = netG(self.channels)<br/>        self.netG.apply(_weights_init)<br/>        self.netG.to(self.device)<br/>        self.netD = netD(self.channels)<br/>        self.netD.apply(_weights_init)<br/>        self.netD.to(self.device)<br/>        self.loss_adv = torch.nn.BCELoss()<br/>        self.loss_l1 = torch.nn.L1Loss()<br/>        self.loss_l2 = torch.nn.MSELoss()<br/>        self.l1_coef = l1_coef<br/>        self.l2_coef = l2_coef</pre>
+<p>Now, let's work on the training process (which is defined in <kbd>Model.train()</kbd>):</p>
+<pre>    def train(self, epochs, log_interval=100, out_dir='', verbose=True):<br/>        self.netG.train()<br/>        self.netD.train()<br/>        for epoch in range(epochs):<br/>            for batch_idx, data in enumerate(self.data_loader):<br/>                image = data['right_images'].to(self.device)<br/>                embed = data['right_embed'].to(self.device)<br/><br/>                real_label = torch.ones((image.shape[0]), <br/>                 device=self.device)<br/>                fake_label = torch.zeros((image.shape[0]), <br/>                 device=self.device)<br/><br/>                # Train D<br/>                self.optim_D.zero_grad()<br/><br/>                out_real, _ = self.netD(image, embed)<br/>                loss_d_real = self.loss_adv(out_real, real_label)<br/><br/>                noise = torch.randn((image.shape[0], 100, 1, 1), <br/>                 device=self.device)<br/>                image_fake = self.netG(noise, embed)<br/>                out_fake, _ = self.netD(image_fake, embed)<br/>                loss_d_fake = self.loss_adv(out_fake, fake_label)<br/><br/>                d_loss = loss_d_real + loss_d_fake<br/>                d_loss.backward()<br/>                self.optim_D.step()<br/><br/>                # Train G<br/>                self.optim_G.zero_grad()<br/>                noise = torch.randn((image.shape[0], 100, 1, 1), <br/>                 device=self.device)<br/>                image_fake = self.netG(noise, embed)<br/>                out_fake, act_fake = self.netD(image_fake, embed)<br/>                _, act_real = self.netD(image, embed)<br/><br/>                l1_loss = self.loss_l1(torch.mean(act_fake, 0), <br/>                 torch.mean(act_real, 0).detach())<br/>                g_loss = self.loss_adv(out_fake, real_label) + \<br/>                    self.l1_coef * l1_loss + \<br/>                    self.l2_coef * self.loss_l2(image_fake, image)<br/>                g_loss.backward()<br/>                self.optim_G.step()</pre>
+<p>Here, we use the Caltech-UCSD Birds-200-2011 (<strong>CUB-200-2011</strong>) dataset, which contains 11,788 annotated bird images. Instead of processing the bird images and training the word embedding vectors by ourselves, we will use the pretrained embeddings by the authors directly (<a href="https://github.com/reedscot/icml2016">https://github.com/reedscot/icml2016</a>). In the GitHub repository (<a href="https://github.com/aelnouby/Text-to-Image-Synthesis">https://github.com/aelnouby/Text-to-Image-Synthesis</a>), an HDF5 database file containing image files, embedding vectors, and original description text is kindly provided.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p>Let's download the database file (which is around 5.7 GB in size) from the Google Drive link that's provided (<a href="https://drive.google.com/open?id=1mNhn6MYpBb-JwE86GC1kk0VJsYj-Pn5j">https://drive.google.com/open?id=1mNhn6MYpBb-JwE86GC1kk0VJsYj-Pn5j</a>) and put it in a folder (for example, <kbd>/media/john/DataAsgard/text2image/birds</kbd>). Let's also download the custom dataset class (<a href="https://github.com/aelnouby/Text-to-Image-Synthesis/blob/master/txt2image_dataset.py">https://github.com/aelnouby/Text-to-Image-Synthesis/blob/master/txt2image_dataset.py</a>) because it's a little bit tricky to get exported HDF5 database elements into PyTorch tensors correctly. This also means that we need to install the <kbd>h5py</kbd> library before running the script with <kbd>pip install h5py</kbd>.</p>
+<p>Finally, let's create a <kbd>main.py</kbd> file and fill in the argument parsing code, as we have done many times already, and call <kbd>Model.train()</kbd> from it. Again, we omit most of the code in <kbd>main.py</kbd>. You can refer to the full source code in this chapter's code repository if you need any help:</p>
+<pre>import argparse<br/>import os<br/>import sys<br/><br/>import numpy as np<br/>import torch<br/>import torch.backends.cudnn as cudnn<br/>import utils<br/><br/>from torch.utils.data import DataLoader<br/>from build_gan import Model<br/>from txt2image_dataset import Text2ImageDataset<br/><br/>FLAGS = None<br/><br/>def main():<br/>    ...<br/>    device = torch.device("cuda:0" if FLAGS.cuda else "cpu")<br/><br/>    print('Loading data...\n')<br/>    dataloader = DataLoader(Text2ImageDataset(os.path.join(FLAGS.data_dir, '{}.hdf5'.format(FLAGS.dataset)), split=0),<br/>        batch_size=FLAGS.batch_size, shuffle=True, num_workers=8)<br/><br/>    print('Creating model...\n')<br/>    model = Model(FLAGS.model, device, dataloader, FLAGS.channels, FLAGS.l1_coef, FLAGS.l2_coef)<br/><br/>    if FLAGS.train:<br/>        model.create_optim(FLAGS.lr)<br/><br/>        print('Training...\n')<br/>        model.train(FLAGS.epochs, FLAGS.log_interval, FLAGS.out_dir, True)<br/><br/>        model.save_to('')<br/>    else:<br/>        ...</pre>
+<p>It takes about 2 and a half hours to finish 200 epochs of training and costs about 1,753 MB of GPU memory with a batch size of 256. Some of the results by the end of training are as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/ca438617-3483-41df-bc7b-2fedd6e06e4d.png" style="width:37.50em;height:18.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Images generated by a text-to-image GAN on the CUB-200-2011 dataset</div>
+<p>The method that we used in this section was proposed more than 3 years ago, and so the quality of the generated images is not as good as it should be in this day and age. Therefore, we will introduce you to StackGAN and StackGAN++ so that you can generate high-resolution results.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generating photo-realistic images with StackGAN++</h1>
+                </header>
+            
+            <article>
+                
+<p>The generation of images from description text can be considered as a <strong>Conditional GAN</strong> (<strong>CGAN</strong>) process in which the embedding vector of the description sentence is used as the additional label information. Luckily for us, we already know how to use CGAN models to generate convincing images. Now, we need to figure out how to generate large images with CGAN.</p>
+<p class="mce-root"/>
+<p>Do you remember how we used two generators and two discriminators to fill out the missing holes in images (image inpainting) in <a href="c9fec01a-2b58-4de3-a62d-da11928e5afe.xhtml">Chapter 7</a>, <em>Image Restoration with GANs</em>? It's also possible to stack two CGANs together so that we can get high-quality images. This is exactly what StackGAN does.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">High-resolution text-to-image synthesis with StackGAN</h1>
+                </header>
+            
+            <article>
+                
+<p><strong>StackGAN</strong> was proposed by Han Zhang, Tao Xu, and Hongsheng Li, et al in their paper, <em>StackGAN: Text to Photo-Realistic Image Synthesis with Stacked Generative Adversarial Networks</em>. </p>
+<p>The embedding vector, <img class="fm-editor-equation" src="assets/c7f5af9d-724c-4630-9d94-ddae4343edd5.png" style="width:0.92em;height:0.75em;"/>, of the description sentence is processed by the Conditioning Augmentation step to create a conditional vector, <img class="fm-editor-equation" src="assets/93aef638-6af8-466f-a4e7-94b7a5037865.png" style="width:0.75em;height:1.08em;"/>. In Conditioning Augmentation, a pair of mean, <img class="fm-editor-equation" src="assets/759a63f4-c271-44c0-9583-202625fd74fa.png" style="width:0.75em;height:1.00em;"/>, and standard deviation, <img class="fm-editor-equation" src="assets/6c7dc87d-7ac5-40a3-bab8-1b6ac7c86251.png" style="width:0.83em;height:0.92em;"/>, vectors are calculated from the <span>embedding vector, <img class="fm-editor-equation" src="assets/5d858e81-a298-40db-a739-282de8b317b3.png" style="width:1.33em;height:1.08em;"/>, to generate the conditional vector, <img class="fm-editor-equation" src="assets/6649db62-a8e5-4699-910f-bc54419ebfdc.png" style="width:0.42em;height:0.58em;"/>, based on the Gaussian distribution, <img class="fm-editor-equation" src="assets/f96b7563-a795-4250-86c9-a307f98a1df3.png" style="width:3.50em;height:1.08em;"/>. This process lets us create much more unique conditional vectors from limited text embeddings and ensures that all the conditional variables obey the same Gaussian distribution. At the same time, <img class="fm-editor-equation" src="assets/9dbac81e-46b0-4230-9c91-8857b5fb2b43.png" style="width:0.75em;height:1.00em;"/> and <img class="fm-editor-equation" src="assets/a60ba181-13b0-40aa-adcc-49d5bbcc7e25.png" style="width:0.67em;height:0.75em;"/> are restrained so that they're not too far away from <img class="fm-editor-equation" src="assets/6329474d-f9f9-4b0b-ae9b-bf551ef8809c.png" style="width:2.83em;height:1.00em;"/>. This is done by adding a Kullback-Leibler divergence (<strong>KL divergence</strong>) term to the generator's loss functions.</span></p>
+<p>A latent vector, <img class="fm-editor-equation" src="assets/d95c20b8-4a36-4510-9505-ed6745508a7b.png" style="width:0.67em;height:0.83em;"/> (which is sampled from <img class="fm-editor-equation" src="assets/58bb6f57-35ad-4540-9427-61f6369f215c.png" style="width:3.08em;height:1.08em;"/>), is combined with the <span>conditional vector, </span><img class="fm-editor-equation" src="assets/238c0643-d964-4c2d-8d3e-438eaf7112df.png" style="width:0.50em;height:0.75em;"/>, to serve as the input of the <strong>Stage-I Generator</strong>. The first generator network generates a low-resolution image with a size of 64 x 64. The low-resolution image is passed to the <strong>Stage-I Discriminator</strong>, which also takes the <span>embedding vector, </span><img class="fm-editor-equation" src="assets/c681f0ec-8d8f-43ae-ad5a-adf43138327c.png" style="width:1.33em;height:1.08em;"/>, as input to predict the fidelity of the low-resolution image. The loss functions of the Stage-I Generator and Discriminator are as follows:</p>
+<p>                           <img class="alignnone size-full wp-image-807 image-border" src="assets/b3599625-7cd2-4d78-be35-7eecdeb8edda.png" style="width:30.00em;height:4.67em;"/></p>
+<p>In the preceding equations, <img class="fm-editor-equation" src="assets/27d8a610-f64a-41a2-a357-58a8ab0b3df6.png" style="width:0.75em;height:0.83em;"/> in <img class="fm-editor-equation" src="assets/93bbbd44-48d1-4c9b-a9d8-7561dc2de372.png" style="width:1.75em;height:2.00em;"/> is the output of the Stage-I Generator <img class="fm-editor-equation" src="assets/68201ed0-605a-4081-981c-29f3055abe4c.png" style="width:2.67em;height:0.83em;"/>, in which <img class="fm-editor-equation" src="assets/6cb26ab9-a50b-4c09-b227-d64470257f64.png" style="width:1.17em;height:1.00em;"/> is the conditional vector and <img class="fm-editor-equation" src="assets/b9920f48-2f92-4098-b1ab-6e5d49abcaeb.png" style="width:1.58em;height:1.00em;"/>represents the KL divergence.</p>
+<p>Then, the low-resolution image is fed into the <strong>Stage-II Generator</strong>. Again, <span>the </span><span>embedding vector, </span><img class="fm-editor-equation" src="assets/c096dd4e-3d3c-4cd5-9266-26dcf2bb073b.png" style="width:1.33em;height:1.08em;"/>, is also passed to the second generator to help create the high-resolution image that's 256 x 256 in size. The quality of the high-resolution image is judged by the <strong>Stage-II Discriminator</strong>, <span>which also takes</span><span> </span><img class="fm-editor-equation" src="assets/71aff809-f328-4c93-8222-8f5e9486d639.png" style="width:1.25em;height:1.00em;"/><span> as input. The loss functions in the second stage are similar to the first stage, as follows:</span></p>
+<p>                          <img class="alignnone size-full wp-image-808 image-border" src="assets/86afb79c-8af9-46cf-82e8-aee5f5cd0487.png" style="width:33.25em;height:5.17em;"/></p>
+<p><span>In the preceding equations , </span><img class="fm-editor-equation" src="assets/cc9a10ce-ed57-4f71-ad42-55d19c91d2b2.png" style="width:0.75em;height:0.83em;"/><span> in </span><img class="fm-editor-equation" src="assets/cd3dfe50-c9df-489a-a1cc-c0467eeb951a.png" style="width:1.58em;height:1.83em;"/><span> is the output of the Stage-II Generator, <img class="fm-editor-equation" src="assets/e9134e36-e6cb-41de-97b9-715bb863bff2.png" style="width:3.58em;height:1.00em;"/></span><span>, in which <img class="fm-editor-equation" src="assets/88488533-71cb-47cb-b839-c2ea31bd15ce.png" style="width:6.42em;height:1.25em;"/> is the output of the Stage-I Generator and <img class="fm-editor-equation" src="assets/af026797-9233-4afb-80a2-d8258da7aa46.png" style="width:1.25em;height:1.08em;"/></span><span> is the conditional vector.</span></p>
+<div class="packt_infobox">Some images that have been generated by StackGAN will be provided in the upcoming sections. If you are interested in trying out StackGAN, the authors of the paper have opensourced a PyTorch version here: <a href="https://github.com/hanzhanggit/StackGAN-Pytorch">https://github.com/hanzhanggit/StackGAN-Pytorch</a>.</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">From StackGAN to StackGAN++</h1>
+                </header>
+            
+            <article>
+                
+<p><strong>StackGAN++</strong> (also called StackGAN v2) is an improved version of StackGAN and was proposed by Han Zhang, Tao Xu, and Hongsheng Li, et al in their paper, <em>StackGAN++: Realistic Image Synthesis with Stacked Generative Adversarial Networks</em>. Compared to StackGAN, there are three main differences in the design of StackGAN++, which are as follows.</p>
+<ul>
+<li><strong>Multi-scale image synthesis</strong>: It uses a tree-like structure (as shown in the following diagram) in which each branch represents an individual generator network and the size of generated image increases as the tree becomes higher. The quality of the images that are generated by each branch is estimated by a different discriminator network.</li>
+<li><strong>Employment of unconditional loss</strong>: Besides using label information (calculated from text embedding) to estimate the fidelity of images, additional loss terms, where the images are the only inputs, are added to the loss function of every generator and discriminator (as shown in the following equation).</li>
+</ul>
+<p style="padding-left: 60px">The loss functions of the discriminator and generator at the <img class="fm-editor-equation" src="assets/e5ab09e2-29b8-4f74-8d79-99967bc59a1d.png" style="width:0.42em;height:1.08em;"/> th branch are defined as follows:</p>
+<p>                                           <img class="alignnone size-full wp-image-809 image-border" src="assets/eb599287-74c7-4877-ad25-1d1f92ea0dad.png" style="width:22.08em;height:8.25em;"/></p>
+<p style="padding-left: 60px">In the preceding equation, the first line in each loss function is called the conditional loss, and the second line is called the unconditional loss. They are calculated by the <strong>JCU Discriminator</strong>, which was illustrated in the previous diagram.</p>
+<ul>
+<li><strong>Color-consistency restraints</strong>: Since there can be several branches in the tree structure, it is important to ensure that the images that are generated by different branches are similar to each other. Therefore, a color-consistency regularization term is added to the generator's loss function (with a scale factor, of course).</li>
+</ul>
+<p>The color-consistency regularization is defined as follows:</p>
+<p class="CDPAlignCenter CDPAlign"><img class="fm-editor-equation" src="assets/b9c0f454-d81e-4113-8967-9fd21a1a7d7b.png" style="width:32.42em;height:4.75em;"/></p>
+<p>In the preceding formula, <img class="fm-editor-equation" src="assets/38e5f946-4502-4b72-b44c-931f0436ef6c.png" style="width:0.75em;height:0.83em;"/> represents the batch size, while <img class="fm-editor-equation" src="assets/5bea8296-a644-474c-86e8-41508819fe46.png" style="width:1.92em;height:1.67em;"/> and <img class="fm-editor-equation" src="assets/d76aef4f-8ff0-4d0d-8489-31b5077db110.png" style="width:1.83em;height:1.75em;"/> represent the mean and covariance of the <img class="fm-editor-equation" src="assets/5f6dd24c-3cd2-4375-8067-9fe9084b84f0.png" style="width:0.42em;height:1.00em;"/> th image generated by the <img class="fm-editor-equation" src="assets/abff9797-76f8-4e79-88e8-b77d97d73a58.png" style="width:0.42em;height:1.08em;"/> th generator. This makes sure that the images that are generated by neighboring branches have similar color structures.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training StackGAN++ to generate images with better quality</h1>
+                </header>
+            
+            <article>
+                
+<p>The authors of StackGAN++ have kindly open sourced the full source code here: <a href="https://github.com/hanzhanggit/StackGAN-v2">https://github.com/hanzhanggit/StackGAN-v2</a>. Follow these steps to train StackGAN++ on the CUB-200-2011 dataset. Make sure you have created a <strong>Python 2.7</strong> environment with PyTorch in Anaconda since there will be decoding errors from <kbd>pickle</kbd> when loading the pretrained text embeddings. You can follow the steps in <a href="4459c703-9610-43e7-9eda-496d63a45924.xhtml">Chapter 2</a>, <em>Getting Started with PyTorch 1.3</em>, to create a new environment:</p>
+<ol>
+<li>Install the prerequisites by running the following command in your Terminal:</li>
+</ol>
+<pre style="padding-left: 60px"><strong>$ pip install pyyaml tensorboard-pytorch scipy python-dateutil easydict pandas torchfile</strong></pre>
+<p style="padding-left: 60px">Make sure you don't have <kbd>tensorboard</kbd> installed in your Python 2.7 environment since StackGAN++ calls <kbd>FileWriter</kbd> to write logging information to TensorBoard and <kbd>FileWriter</kbd> has been removed in the latest version of TensorBoard. If you don't want to uninstall TensorBoard, you can downgrade it by running <kbd>pip install tensorboard==1.0.0a6</kbd>.</p>
+<ol start="2">
+<li>Download the source code of StackGAN++:</li>
+</ol>
+<pre style="padding-left: 60px"><strong>$ git clone https://github.com/hanzhanggit/StackGAN-v2 &amp;&amp; cd StackGAN-v2</strong></pre>
+<ol start="3">
+<li>Download the <span>CUB-200-2011</span> dataset from <a href="http://www.vision.caltech.edu/visipedia/CUB-200-2011.html">http://www.vision.caltech.edu/visipedia/CUB-200-2011.html</a> and put the <kbd>CUB_200_2011</kbd> folder in the <kbd>data/birds</kbd> directory, so that the images are located at paths such as <kbd>data/birds/CUB_200_2011/images/001.Black_footed_Albatross/Black_Footed_Albatross_0001_796111.jpg</kbd>. The compressed file that needs to be downloaded is about 1.1 GB in size.</li>
+<li>Download the pretrained text embeddings from <a href="https://drive.google.com/open?id=0B3y_msrWZaXLT1BZdVdycDY5TEE">https://drive.google.com/open?id=0B3y_msrWZaXLT1BZdVdycDY5TEE</a> and move the three folders in it to <kbd>data/birds</kbd>. Make sure that you rename the <kbd>text_c10</kbd> folder to <kbd>text</kbd>.</li>
+<li>Navigate to the code folder and start the training process:</li>
+</ol>
+<pre style="padding-left: 60px"><strong>$ cd code &amp;&amp; python main.py --cfg cfg/birds_3stages.yml --gpu 0</strong></pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p style="padding-left: 60px">You only need to make a few changes to the source code of StackGAN++ so that it can run under PyTorch 1.1; for example, you can replace all the <kbd>.data[0]</kbd> with <kbd>.item()</kbd> in <kbd>trainer.py</kbd>. There are also several deprecation warnings that we can fix. You can refer to the source code located under the <kbd>stackgan-v2</kbd> folder in this book's code repository for this chapter for more information.</p>
+<ol start="6">
+<li>(Optional) Test your trained model. Specify the model file in the <kbd>code/cfg/eval_birds.yml</kbd> file like so:</li>
+</ol>
+<pre style="padding-left: 60px"><strong>    NET_G: '../output/birds_3stages_2019_07_16_23_57_11/Model/netG_220800.pth'</strong></pre>
+<p>Then, run the following script in your Terminal to begin the evaluation process:</p>
+<pre><strong>$ python main.py --cfg cfg/eval_birds.yml --gpu 0</strong></pre>
+<p>The evaluation costs about 7,819 MB of GPU memory and takes 12 minutes to finish. The generated images will be located in the <kbd>output/birds_3stages_2019_07_16_23_57_11/Model/iteration220800/single_samples/valid</kbd> folder.</p>
+<p>It takes about 48 hours to finish 600 epochs of training on a GTX 1080Ti graphics card and costs about 10,155 MB of GPU memory. Here are some of the images that are generated by the end of the training process:</p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/06294c97-6264-40bf-8ac6-3771f30b8f00.png" style="width:46.17em;height:17.33em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Image generated by StackGAN++</div>
+<p>While this process takes a very long time and a large amount of GPU memory, you can see that the results are very nice.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary </h1>
+                </header>
+            
+            <article>
+                
+<p>In this chapter, we have learned how to generate low-resolution and high-resolution images based on description text.</p>
+<p>In the next chapter, we will focus on directly generating sequence data, such as text and audio, with GANs.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Further reading</h1>
+                </header>
+            
+            <article>
+                
+<ol>
+<li>Rong X. (2014). <em>word2vec Parameter Learning Explained</em>. arXiv:1411.2738.</li>
+<li>Reed S, Akata Z, Schiele B, et. al. (2016). <em>Learning Deep Representations of Fine-Grained Visual Descriptions</em>. CVPR.</li>
+<li><span>Reed S, Akata Z,</span> Yan X, et al (2016). <em>Generative Adversarial Text to Image Synthesis</em>. ICML.</li>
+<li>Zhang H, Xu T, Li H, et al (2017). <em>StackGAN: Text to Photo-realistic Image Synthesis with Stacked Generative Adversarial Networks</em>. ICCV.</li>
+<li><span>Zhang H, Xu T, Li H, et al (2018). <em>StackGAN++: Realistic Image Synthesis with Stacked Generative Adversarial Networks</em>. IEEE Trans. on Pattern Analysis and Machine Intelligence.</span></li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

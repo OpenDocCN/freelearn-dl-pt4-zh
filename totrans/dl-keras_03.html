@@ -1,0 +1,668 @@
+<html><head></head><body>
+        <section>
+
+            <header>
+                <h1 class="header-title">Deep Learning with ConvNets</h1>
+            </header>
+
+            <article>
+                
+<p>In previous chapters, we discussed dense nets, in which each layer is fully connected to the adjacent layers. We applied those dense networks to classify the MNIST handwritten characters dataset. In that context, each pixel in the input image is assigned to a neuron for a total of 784 (28 x 28 pixels) input neurons. However, this strategy does not leverage the spatial structure and relations of each image. In particular, this piece of code transforms the bitmap representing each written digit into a flat vector, where the spatial locality is gone:</p>
+<pre>
+#X_train is 60000 rows of 28x28 values --&gt; reshaped in 60000 x 784<br/>X_train = X_train.reshape(60000, 784)<br/>X_test = X_test.reshape(10000, 784)<br/>o
+</pre>
+<p>Convolutional neural networks (also called ConvNet) leverage spatial information and are therefore very well suited for classifying images. These nets use an ad hoc architecture inspired by biological data taken from physiological experiments done on the visual cortex. As discussed, our vision is based on multiple cortex levels, each one recognizing more and more structured information. First, we see single pixels; then from them, we recognize simple geometric forms. And then... more and more sophisticated elements such as objects, faces, human bodies, animals, and so on.</p>
+<p>Convolutional neural networks are indeed fascinating. Over a short period of time, they become a <em>disruptive</em> technology, breaking all the state-of-the-art results in multiple domains, from text, to video, to speech going well beyond the initial image processing domain where they were originally conceived.</p>
+<p>In this chapter, we will cover the following topics:</p>
+<ul>
+<li>Deep convolutional neural networks</li>
+<li>Image classification</li>
+</ul>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Deep convolutional neural network — DCNN</h1>
+            </header>
+
+            <article>
+                
+<p>A <strong>deep convolutional neural network</strong> (<strong>DCNN</strong>) consists of many neural network layers. Two different types of layers, convolutional and pooling, are typically alternated. The depth of each filter increases from left to right in the network. The last stage is typically made of one or more fully connected layers:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="209" src="assets/B06258_04_01.png" width="678"/></div>
+<p>There are three key intuitions beyond ConvNets:</p>
+<ul>
+<li>Local receptive fields</li>
+<li>Shared weights</li>
+<li>Pooling</li>
+</ul>
+<p>Let's review them.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Local receptive fields</h1>
+            </header>
+
+            <article>
+                
+<p>If we want to preserve spatial information, then it is convenient to represent each image with a matrix of pixels. Then, a simple way to encode the local structure is to connect a submatrix of adjacent input neurons into one single hidden neuron belonging to the next layer. That single hidden neuron represents one local receptive field. Note that this operation is named convolution and it gives the name to this type of network.</p>
+<p>Of course, we can encode more information by having overlapping submatrices. For instance, let's suppose that the size of each single submatrix is 5 x 5 and that those submatrices are used with MNIST images of 28 x 28 pixels. Then we will be able to generate 23 x 23 local receptive field neurons in the next hidden layer. In fact it is possible to slide the submatrices by only 23 positions before touching the borders of the images. In Keras, the size of each single submatrix is called <strong>stride length</strong>, and this is a hyperparameter that can be fine-tuned during the construction of our nets.</p>
+<p>Let's define the feature map from one layer to another layer. Of course, we can have multiple feature maps that learn independently from each hidden layer. For instance, we can start with 28 x 28 input neurons for processing MINST images and then recall <em>k</em> feature maps of size 23 x 23 neurons each (again with a stride of 5 x 5) in the next hidden layer.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Shared weights and bias</h1>
+            </header>
+
+            <article>
+                
+<p>Let's suppose that we want to move away from the pixel representation in a row by gaining the ability to detect the same feature independently from the location where it is placed in the input image. A simple intuition is to use the same set of weights and bias for all the neurons in the hidden layers. In this way, each layer will learn a set of position-independent latent features derived from the image.</p>
+<p>Assuming that the input image has shape <em>(256, 256)</em> on three channels with <em>tf</em> (TensorFlow) ordering, this is represented as <em>(256, 256, 3)</em>. Note that with th (Theano) mode, the channel's dimension (the depth) is at index <em>1</em>; in <em>tf</em> (TensoFlow) mode, it is at index <em>3</em>.</p>
+<p>In Keras, if we want to add a convolutional layer with dimensionality of the output 32 and extension of each filter 3 x 3, we will write:</p>
+<pre>
+model = Sequential()<br/>model.add(Conv2D(32, (3, 3), input_shape=(256, 256, 3))
+</pre>
+<p>Alternatively, we will write:</p>
+<pre>
+model = Sequential()<br/>model.add(Conv2D(32, kernel_size=3, input_shape=(256, 256, 3))
+</pre>
+<p>This means that we are applying a 3 x 3 convolution on a 256 x 256 image with three input channels (or input filters), resulting in 32 output channels (or output filters).</p>
+<p>An example of convolution is provided in the following diagram:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="311" src="assets/B06258_04_02.png" width="667"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Pooling layers</h1>
+            </header>
+
+            <article>
+                
+<p>Let's suppose that we want to summarize the output of a feature map. Again, we can use the spatial contiguity of the output produced from a single feature map and aggregate the values of a submatrix into a single output value that synthetically describes the <em>meaning</em> associated with that physical region.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Max-pooling</h1>
+            </header>
+
+            <article>
+                
+<p>One easy and common choice is <em>max-pooling</em>, which simply outputs the maximum activation as observed in the region. In Keras, if we want to define a max-pooling layer of size 2 x 2, we will write:</p>
+<pre>
+model.add(MaxPooling2D(pool_size = (2, 2)))
+</pre>
+<p>An example of max-pooling is shown in the following diagram:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="173" src="assets/B06258_04_03.png" width="291"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Average pooling</h1>
+            </header>
+
+            <article>
+                
+<p>Another choice is average pooling, which simply aggregates a region into the average values of the activations observed in that region.</p>
+<p>Note that Keras implements a large number of pooling layers and a complete list is available at: <a href="https://keras.io/layers/pooling/" target="_blank">https://keras.io/layers/pooling/</a>. In short, all pooling operations are nothing more than a summary operation on a given region.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">ConvNets summary</h1>
+            </header>
+
+            <article>
+                
+<p>So far, we have described the basic concepts of ConvNets. CNNs apply convolution and pooling operations in one dimension for audio and text data along the time dimension, in two dimensions for images along the (height x width) dimensions, and in three dimensions for videos along the (height x width x time) dimensions. For images, sliding the filter over input volume produces a map that gives the responses of the filter for each spatial position. In other words, a ConvNet has multiple filters stacked together which learn to recognize specific visual features independently of the location in the image. Those visual features are simple in the initial layers of the network, and then more and more sophisticated deeper in the network.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">An example of DCNN — LeNet</h1>
+            </header>
+
+            <article>
+                
+<p>Yann le Cun proposed (for more information refer to: <span><em>Convolutional Networks for Images, Speech, and Time-Series</em>, by Y. LeCun and Y. Bengio, </span>brain theory neural networks<span>, vol. 3361, 1995</span>) a family of ConvNets named LeNet trained for recognizing MNIST handwritten characters with robustness to simple geometric transformations and to distortion. The key intuition here is to have low-layers alternating convolution operations with max-pooling operations. The convolution operations are based on carefully chosen local receptive fields with shared weights for multiple feature maps. Then, higher levels are fully connected layers based on a traditional MLP with hidden layers and softmax as the output layer.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">LeNet code in Keras</h1>
+            </header>
+
+            <article>
+                
+<p>To define LeNet code, we use a convolutional 2D module, which is:</p>
+<pre>
+keras.<span>layers.convolutional.Conv2D(filters, kernel_size, </span><span>padding=</span><span class="hljs-string">'valid'</span>)
+</pre>
+<p>Here, <kbd>filters</kbd> is the number of convolution kernels to use (for example, the dimensionality of the output), <kbd>kernel_size</kbd> is a<span>n integer or tuple/list of two integers, specifying the width and height of the 2D convolution window (can be a single integer to specify the same value for all spatial dimensions)</span>, and <kbd>padding='same'</kbd> means that padding is used. There are two options: <kbd>padding='valid'</kbd> means that the convolution is only computed where the input and the filter fully overlap, and therefore the output is smaller than the input, while <kbd>padding='same'</kbd> means that we have an output that is the <em>same</em> size as the input, for which the area around the input is padded with zeros.</p>
+<p>In addition, we use a <kbd>MaxPooling2D</kbd> module:</p>
+<pre>
+keras.layers.pooling.MaxPooling2D(pool_size=(2, 2), strides=(2, 2))
+</pre>
+<p>Here, <kbd>pool_size=(2, 2)</kbd> is a tuple of two integers representing the factors by which the image is vertically and horizontally downscaled. So <em>(2, 2)</em> will halve the image in each dimension, and <kbd>strides=(2, 2)</kbd> is the stride used for processing.</p>
+<p>Now, let us review the code. First we import a number of modules:</p>
+<pre>
+from keras import backend as K<br/>from keras.models import Sequential<br/>from keras.layers.convolutional import Conv2D<br/>from keras.layers.convolutional import MaxPooling2D<br/>from keras.layers.core import Activation<br/>from keras.layers.core import Flatten<br/>from keras.layers.core import Dense<br/>from keras.datasets import mnist<br/>from keras.utils import np_utils<br/>from keras.optimizers import SGD, RMSprop, Adam<br/>import numpy as np<br/>import matplotlib.pyplot as plt
+</pre>
+<p>Then we define the LeNet network:</p>
+<pre>
+#define the ConvNet<br/>class LeNet:<br/>    @staticmethod<br/>    def build(input_shape, classes):<br/>         model = Sequential()<br/>         # CONV =&gt; RELU =&gt; POOL
+</pre>
+<p>We have a first convolutional stage with ReLU activations followed by a max-pooling. Our net will learn 20 convolutional filters, each one of which has a size of 5 x 5. The output dimension is the same one of the input shape, so it will be 28 x 28. Note that since the <kbd>Convolution2D</kbd> is the first stage of our pipeline, we are also required to define its <kbd>input_shape</kbd>. The max-pooling operation implements a sliding window that slides over the layer and takes the maximum of each region with a step of two pixels vertically and horizontally:</p>
+<pre>
+model.add(Convolution2D(20, kernel_size=5, padding="same",<br/>input_shape=input_shape))<br/>model.add(Activation("relu"))<br/>model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))<br/># CONV =&gt; RELU =&gt; POOL
+</pre>
+<p>Then a second convolutional stage with ReLU activations follows, again by a max-pooling. In this case, we increase the number of convolutional filters learned to 50 from the previous 20. Increasing the number of filters in deeper layers is a common technique used in deep learning:</p>
+<pre>
+model.add(Conv2D(50, kernel_size=5, border_mode="same"))<br/>model.add(Activation("relu"))<br/>model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+</pre>
+<p>Then we have a pretty standard flattening and a dense network of 500 neurons, followed by a softmax classifier with 10 classes:</p>
+<pre>
+# Flatten =&gt; RELU layers<br/>model.add(Flatten())<br/>model.add(Dense(500))<br/>model.add(Activation("relu"))<br/># a softmax classifier<br/>model.add(Dense(classes))<br/>model.add(Activation("softmax"))<br/>return model
+</pre>
+<p>Congratulations, You have just defined the first deep learning network! Let's see how it looks visually:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="261" src="assets/B06258_04_04.png" width="666"/></div>
+<p>Now we need some additional code for training the network, but this is very similar to what we have already described in <a href="c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml" target="_blank">Chapter 1</a>, <em>Neural Network Foundations</em>. This time, we also show the code for printing the loss:</p>
+<pre>
+# network and training<br/>NB_EPOCH = 20<br/>BATCH_SIZE = 128<br/>VERBOSE = 1<br/>OPTIMIZER = Adam()<br/>VALIDATION_SPLIT=0.2<br/>IMG_ROWS, IMG_COLS = 28, 28 # input image dimensions<br/>NB_CLASSES = 10 # number of outputs = number of digits<br/>INPUT_SHAPE = (1, IMG_ROWS, IMG_COLS)<br/># data: shuffled and split between train and test sets<br/>(X_train, y_train), (X_test, y_test) = mnist.load_data()<br/>k.set_image_dim_ordering("th")<br/># consider them as float and normalize<br/>X_train = X_train.astype('float32')<br/>X_test = X_test.astype('float32')<br/>X_train /= 255<br/>X_test /= 255<br/># we need a 60K x [1 x 28 x 28] shape as input to the CONVNET<br/>X_train = X_train[:, np.newaxis, :, :]<br/>X_test = X_test[:, np.newaxis, :, :]<br/>print(X_train.shape[0], 'train samples')<br/>print(X_test.shape[0], 'test samples')<br/># convert class vectors to binary class matrices<br/>y_train = np_utils.to_categorical(y_train, NB_CLASSES)<br/>y_test = np_utils.to_categorical(y_test, NB_CLASSES)<br/># initialize the optimizer and model<br/>model = LeNet.build(input_shape=INPUT_SHAPE, classes=NB_CLASSES)<br/>model.compile(loss="categorical_crossentropy", optimizer=OPTIMIZER,<br/>metrics=["accuracy"])<br/>history = model.fit(X_train, y_train,<br/>batch_size=BATCH_SIZE, epochs=NB_EPOCH,<br/>verbose=VERBOSE, validation_split=VALIDATION_SPLIT)<br/>score = model.evaluate(X_test, y_test, verbose=VERBOSE)<br/>print("Test score:", score[0])<br/>print('Test accuracy:', score[1])<br/># list all data in history<br/>print(history.history.keys())<br/># summarize history for accuracy<br/>plt.plot(history.history['acc'])<br/>plt.plot(history.history['val_acc'])<br/>plt.title('model accuracy')<br/>plt.ylabel('accuracy')<br/>plt.xlabel('epoch')<br/>plt.legend(['train', 'test'], loc='upper left')<br/>plt.show()<br/># summarize history for loss<br/>plt.plot(history.history['loss'])<br/>plt.plot(history.history['val_loss'])<br/>plt.title('model loss')<br/>plt.ylabel('loss')<br/>plt.xlabel('epoch')<br/>plt.legend(['train', 'test'], loc='upper left')<br/>plt.show()
+</pre>
+<p>Now let's run the code. As you can see, the time had a significant increase and each iteration in our deep net now takes ~134 seconds against ~1-2 seconds for the net defined in <a href="c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml" target="_blank">Chapter 1</a>, <em>Neural Network Foundations</em>. However, the accuracy has reached a new peak at 99.06%:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="447" src="assets/B06258_04_05.png" width="524"/></div>
+<p>Let's plot the model accuracy and the model loss, and we understand that we can train in only 4 - 5 iterations to achieve a similar accuracy of 99.2%:</p>
+<table class="a" style="width: 728px;height: 326px">
+<tbody>
+<tr>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="239" src="assets/B06258_04_06.png" width="307"/></div>
+</td>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="242" src="assets/B06258_04_07.png" width="311"/></div>
+</td>
+</tr>
+</tbody>
+</table>
+<p><br/>
+<br/>
+In the following screenshot, we show the final accuracy achieved by our model:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/B06258_04_08.png"/></div>
+<p>Let's see some of the MNIST images just to understand how good the number 99.2% is! For instance, there are many ways in which humans write a 9, one of them appearing in the following diagram. The same holds for 3, 7, 4, and 5. The number <strong>1</strong> in this diagram is so difficult to recognize that probably even a human will have issues with it:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="176" src="assets/B06258_04_09.png" width="253"/></div>
+<p>We can summarize all the progress made so far with our different models in the following graph. Our simple net started with an accuracy of <span class="packt_screen">92.22%</span>, which means that about 8 handwritten characters out of 100 are not correctly recognized. Then, we gained 7% with the deep learning architecture by reaching an accuracy of <span class="packt_screen">99.20%</span>, which means that about 1 handwritten character out of 100 is incorrectly recognized:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="299" src="assets/B06258_04_10.png" width="484"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Understanding the power of deep learning</h1>
+            </header>
+
+            <article>
+                
+<p>Another test that we can run to better understand the power of deep learning and ConvNet is to reduce the size of the training set and observe the consequent decay in performance. One way to do this is to split the training set of 50,000 examples into two different sets:</p>
+<ul>
+<li>The proper training set used for training our model will progressively reduce its size of (5,900, 3,000, 1,800, 600, and 300) examples</li>
+<li>The validation set used to estimate how well our model has been trained will consist of the remaining examples</li>
+</ul>
+<p>Our test set is always fixed and it consists of 10,000 examples.</p>
+<p>With this setup, we compare the just-defined deep learning ConvNet against the first example of neural network defined in <a href="c2484fb4-248d-49ed-8166-06aff812e5e9.xhtml" target="_blank">Chapter 1</a>, <em>Neural Network Foundations</em>. As we can see in the following graph, our deep network always outperforms the simple network and the gap is more and more evident when the number of examples provided for training is progressively reduced. With 5,900 training examples the deep learning net had an accuracy of 96.68% against an accuracy of 85.56% of the simple net. More important, with only 300 training examples our deep learning net still has an accuracy of 72.44% while the simple net shows a significant decay at 48.26%. All the experiments are run for only four training iterations. This confirms the breakthrough progress achieved with deep learning. At first glance this could be surprising from a mathematical point of view because the deep network has many more unknowns (the weights), so one would think we need many more data points. However, preserving the spatial information, adding convolution, pooling, and feature maps is innovation with ConvNets, and this was optimized on millions of years (since this organization has been inspired by the visual cortex):</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="420" src="assets/B06258_04_11.png" width="680"/></div>
+<p>A list of state-of-the-art results for MNIST is available at: <a href="http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html" target="_blank">http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html</a>. As of January, 2017, the best result has an error rate of 0.21%.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Recognizing CIFAR-10 images with deep learning</h1>
+            </header>
+
+            <article>
+                
+<p>The CIFAR-10 dataset contains 60,000 color images of 32 x 32 pixels in 3 channels divided into 10 classes. Each class contains 6,000 images. The training set contains 50,000 images, while the test sets provides 10,000 images. This image taken from the CIFAR repository (<a href="https://www.cs.toronto.edu/~kriz/cifar.html" target="_blank">https://www.cs.toronto.edu/~kriz/cifar.html</a>) describes a few random examples from the 10 classes:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="448" src="assets/B06258_04_12.png" width="577"/></div>
+<p>The goal is to recognize previously unseen images and assign them to one of the 10 classes. Let us define a suitable deep net.</p>
+<p>First of all we import a number of useful modules, define a few constants, and load the dataset:</p>
+<pre>
+from keras.datasets import cifar10<br/>from keras.utils import np_utils<br/>from keras.models import Sequential<br/>from keras.layers.core import Dense, Dropout, Activation, Flatten<br/>from keras.layers.convolutional import Conv2D, MaxPooling2D<br/>from keras.optimizers import SGD, Adam, RMSprop<br/>import matplotlib.pyplot as plt<br/><br/># CIFAR_10 is a set of 60K images 32x32 pixels on 3 channels<br/>IMG_CHANNELS = 3<br/>IMG_ROWS = 32<br/>IMG_COLS = 32<br/><br/>#constant<br/>BATCH_SIZE = 128<br/>NB_EPOCH = 20<br/>NB_CLASSES = 10<br/>VERBOSE = 1<br/>VALIDATION_SPLIT = 0.2<br/>OPTIM = RMSprop()<br/><br/>#load dataset<br/>(X_train, y_train), (X_test, y_test) = cifar10.load_data()<br/>print('X_train shape:', X_train.shape)<br/>print(X_train.shape[0], 'train samples')<br/>print(X_test.shape[0], 'test samples')<br/><br/>
+</pre>
+<p>Now let's do a one-hot encoding and normalize the images:</p>
+<pre>
+# convert to categorical<br/>Y_train = np_utils.to_categorical(y_train, NB_CLASSES)<br/>Y_test = np_utils.to_categorical(y_test, NB_CLASSES)<br/><br/># float and normalization<br/>X_train = X_train.astype('float32')<br/>X_test = X_test.astype('float32')<br/>X_train /= 255<br/>X_test /= 255
+</pre>
+<p>Our net will learn 32 convolutional filters, each of which with a 3 x 3 size. The output dimension is the same one of the input shape, so it will be 32 x 32 and activation is ReLU, which is a simple way of introducing non-linearity. After that we have a max-pooling operation with pool size 2 x 2 and a dropout at 25%:</p>
+<pre>
+# network<br/>model = Sequential()<br/>model.add(Conv2D(32, (3, 3), padding='same',<br/>input_shape=(IMG_ROWS, IMG_COLS, IMG_CHANNELS)))<br/>model.add(Activation('relu'))<br/>model.add(MaxPooling2D(pool_size=(2, 2)))<br/>model.add(Dropout(0.25))
+</pre>
+<p>The next stage in the deep pipeline is a dense network with 512 units and ReLU activation followed by a dropout at 50% and by a softmax layer with 10 classes as output, one for each category:</p>
+<pre>
+model.add(Flatten())<br/>model.add(Dense(512))<br/>model.add(Activation('relu'))<br/>model.add(Dropout(0.5))<br/>model.add(Dense(NB_CLASSES))<br/>model.add(Activation('softmax'))<br/>model.summary()
+</pre>
+<p>After defining the network, we can train the model. In this case, we split the data and compute a validation set in addition to the training and testing sets. The training is used to build our models, the validation is used to select the best performing approach, while the test set is to check the performance of our best models on fresh unseen data:</p>
+<pre>
+# train<br/>model.compile(loss='categorical_crossentropy', optimizer=OPTIM,<br/>metrics=['accuracy'])<br/>model.fit(X_train, Y_train, batch_size=BATCH_SIZE,<br/>epochs=NB_EPOCH, validation_split=VALIDATION_SPLIT,<br/>verbose=VERBOSE)<br/>score = model.evaluate(X_test, Y_test,<br/>batch_size=BATCH_SIZE, verbose=VERBOSE)<br/>print("Test score:", score[0])<br/>print('Test accuracy:', score[1])
+</pre>
+<p>In this case we save the architecture of our deep network:</p>
+<pre>
+#save model<br/>model_json = model.to_json()<br/>open('cifar10_architecture.json', 'w').write(model_json)<br/>And the weights learned by our deep network on the training set<br/>model.save_weights('cifar10_weights.h5', overwrite=True)
+</pre>
+<p>Let us run the code. Our network reaches a test accuracy of 66.4% with 20 iterations. We also print the accuracy and loss plot, and dump the network with <kbd>model.summary()</kbd>:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="619" src="assets/B06258_04_13-1.png" width="480"/></div>
+<p>In the following graph, we report the accuracy and the lost achieved by our net on both train and test datasets:</p>
+<table class="a0">
+<tbody>
+<tr>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="191" src="assets/B06258_04_14.png" width="307"/></div>
+</td>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="191" src="assets/B06258_04_15.png" width="307"/></div>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Improving the CIFAR-10 performance with deeper a network</h1>
+            </header>
+
+            <article>
+                
+<p>One way to improve the performance is to define a deeper network with multiple convolutional operations. In this example, we have a sequence of modules:</p>
+<div class="CDPAlignCenter CDPAlign"><em>conv+conv+maxpool+dropout+conv+conv+maxpool</em></div>
+<p>Followed by a standard <em>dense+dropout+dense</em>. All the activation functions are ReLU.</p>
+<p>Let us see the code for the new network:</p>
+<pre>
+model = Sequential()<br/>model.add(Conv2D(32, (3, 3), padding='same',<br/>input_shape=(IMG_ROWS, IMG_COLS, IMG_CHANNELS)))<br/>model.add(Activation('relu'))<br/>model.add(Conv2D(32, (3, 3), padding='same'))<br/>model.add(Activation('relu'))<br/>model.add(MaxPooling2D(pool_size=(2, 2)))<br/>model.add(Dropout(0.25))<br/>model.add(Conv2D(64, (3, 3), padding='same'))<br/>model.add(Activation('relu'))<br/>model.add(Conv2D(64, 3, 3))<br/>model.add(Activation('relu'))<br/>model.add(MaxPooling2D(pool_size=(2, 2)))<br/>model.add(Dropout(0.25))<br/>model.add(Flatten())<br/>model.add(Dense(512))<br/>model.add(Activation('relu'))<br/>model.add(Dropout(0.5))<br/>model.add(Dense(NB_CLASSES))<br/>model.add(Activation('softmax'))
+</pre>
+<p>Congratulations! You have defined a deeper network. Let us run the code! First we dump the network, then we run for 40 iterations reaching an accuracy of 76.9%:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="616" src="assets/B06258_04_16.png" width="689"/></div>
+<p>In the following screenshot, we will see the accuracy reached after 40 iterations:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="106" src="assets/B06258_04_17-2.png" width="701"/></div>
+<p>So we have an improvement of 10.5% with respect to the previous simpler deeper network. For the sake of completeness, let us also report the accuracy and loss during training, shown as follows:</p>
+<table class="a1">
+<tbody>
+<tr>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="191" src="assets/B06258_04_18.png" width="307"/></div>
+</td>
+<td>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="191" src="assets/B06258_04_19-1.png" width="307"/></div>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Improving the CIFAR-10 performance with data augmentation</h1>
+            </header>
+
+            <article>
+                
+<p>Another way to improve the performance is to generate more images for our training. The key intuition is that we can take the standard CIFAR training set and augment this set with multiple types of transformations including rotation, rescaling, horizontal/vertical flip, zooming, channel shift, and many more. Let us see the code:</p>
+<pre>
+from keras.preprocessing.image import ImageDataGenerator<br/>from keras.datasets import cifar10<br/>import numpy as np<br/>NUM_TO_AUGMENT=5<br/><br/>#load dataset<br/>(X_train, y_train), (X_test, y_test) = cifar10.load_data()<br/><br/># augumenting<br/>print("Augmenting training set images...")<br/>datagen = ImageDataGenerator(<br/>rotation_range=40,<br/>width_shift_range=0.2,<br/>height_shift_range=0.2,<br/>zoom_range=0.2,<br/>horizontal_flip=True,<br/>fill_mode='nearest')
+</pre>
+<p>The <kbd>rotation_range</kbd> is a value in degrees (<kbd>0</kbd> - <kbd>180</kbd>) for randomly rotating pictures. <kbd>width_shift</kbd> and <kbd>height_shift</kbd> are ranges for randomly translating pictures vertically or horizontally. <kbd>zoom_range</kbd> is for randomly zooming pictures. <kbd>horizontal_flip</kbd> is for randomly flipping half of the images horizontally. <kbd>fill_mode</kbd> is the strategy used for filling in new pixels that can appear after a rotation or a shift:</p>
+<pre>
+xtas, ytas = [], []<br/>for i in range(X_train.shape[0]):<br/>num_aug = 0<br/>x = X_train[i] # (3, 32, 32)<br/>x = x.reshape((1,) + x.shape) # (1, 3, 32, 32)<br/>for x_aug in datagen.flow(x, batch_size=1,<br/>save_to_dir='preview', save_prefix='cifar', save_format='jpeg'):<br/>if num_aug &gt;= NUM_TO_AUGMENT:<br/>break<br/>xtas.append(x_aug[0])<br/>num_aug += 1
+</pre>
+<p>After augmentation, we will have generated many more training images starting from the standard CIFAR-10 set:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="377" src="assets/B06258_04_20.png" width="696"/></div>
+<p>Now we can apply this intuition directly for training. Using the same ConvNet defined previously we simply generate more augmented images and then we train. For efficiency, the generator runs in parallel to the model. This allows an image augmentation on the CPU and in parallel to training on the GPU. Here is the code:</p>
+<pre>
+#fit the dataget<br/>datagen.fit(X_train)<br/><br/># train<br/>history = model.fit_generator(datagen.flow(X_train, Y_train,<br/>batch_size=BATCH_SIZE), samples_per_epoch=X_train.shape[0],<br/>epochs=NB_EPOCH, verbose=VERBOSE)<br/>score = model.evaluate(X_test, Y_test,<br/>batch_size=BATCH_SIZE, verbose=VERBOSE)<br/>print("Test score:", score[0])<br/>print('Test accuracy:', score[1])
+</pre>
+<p>Each iteration is now more expensive because we have more training data. So let us run for 50 iterations only and see that we reach an accuracy of 78.3%:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="181" src="assets/B06258_04_21.png" width="700"/></div>
+<p>The results obtained during our experiments are summarized in the following graph:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="413" src="assets/B06258_04_22.png" width="669"/></div>
+<p>A list of state-of-the-art results for CIFAR-10 is available at: <a href="http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html" target="_blank">http://rodrigob.github.io/are_we_there_yet/build/classification_datasets_results.html</a>. As of January, 2017, the best result has an accuracy of 96.53%.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Predicting with CIFAR-10</h1>
+            </header>
+
+            <article>
+                
+<p>Now let us suppose that we want to use the deep learning model we just trained for CIFAR-10 for a bulk evaluation of images. Since we saved the model and the weights, we do not need to train every time:</p>
+<pre>
+import numpy as np<br/>import scipy.misc<br/>from keras.models import model_from_json<br/>from keras.optimizers import SGD<br/><br/>#load model<br/>model_architecture = 'cifar10_architecture.json'<br/>model_weights = 'cifar10_weights.h5'<br/>model = model_from_json(open(model_architecture).read())<br/>model.load_weights(model_weights)<br/><br/>#load images<br/>img_names = ['cat-standing.jpg', 'dog.jpg']<br/>imgs = [np.transpose(scipy.misc.imresize(scipy.misc.imread(img_name), (32, 32)),<br/>(1, 0, 2)).astype('float32')<br/>for img_name in img_names]<br/>imgs = np.array(imgs) / 255<br/><br/># train<br/>optim = SGD()<br/>model.compile(loss='categorical_crossentropy', optimizer=optim,<br/>metrics=['accuracy'])<br/><br/># predict<br/>predictions = model.predict_classes(imgs)<br/>print(predictions)
+</pre>
+<p>Now let us get the prediction for a <img height="28" src="assets/B06258_04_23-2.jpg" width="33"/> and for a <img height="28" src="assets/B06258_04_24-1.jpg" width="38"/>.</p>
+<p>We get categories <kbd>3</kbd> (cat) and <kbd>5</kbd> (dog) as output, as expected:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="70" src="assets/B06258_04_25-2.png" width="628"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Very deep convolutional networks for large-scale image recognition</h1>
+            </header>
+
+            <article>
+                
+<p>In 2014, an interesting contribution for image recognition was presented (for more information refer to: <span><em>Very Deep Convolutional Networks for Large-Scale Image Recognition</em>, by K. Simonyan and A. Zisserman,</span> <span>2014</span>). The paper shows that, <em>a significant improvement on the prior-art configurations can be achieved by pushing the depth to 16-19 weight layers</em>. One model in the paper denoted as <em>D</em> or VGG-16 has 16 deep layers. An implementation in Java Caffe (<a href="http://caffe.berkeleyvision.org/" target="_blank">http://caffe.berkeleyvision.org/</a>) has been used for training the model on the ImageNet ILSVRC-2012 (<a href="http://image-net.org/challenges/LSVRC/2012/" target="_blank">http://image-net.org/challenges/LSVRC/2012/</a>) dataset, which includes images of 1,000 classes and is split into three sets: training (1.3 million images), validation (50,000 images), and testing (100,000 images). Each image is (224 x 224) on three channels. The model achieves 7.5% top 5 error on ILSVRC-2012-val and 7.4% top 5 error on ILSVRC-2012-test.</p>
+<p>According to the ImageNet site:</p>
+<p>The goal of this competition is to estimate the content of photographs for the purpose of retrieval and automatic annotation using a subset of the large hand-labeled ImageNet dataset (10 million labeled images depicting 10,000 + object categories) as training. Test images will be presented with no initial annotation—no segmentation or labels—and algorithms will have to produce labelings specifying what objects are present in the images.</p>
+<p>The weights learned by the model implemented in Caffe have been directly converted in Keras (for more information refer to: <a href="https://gist.github.com/baraldilorenzo/07d7802847aaad0a35d3" target="_blank">https://gist.github.com/baraldilorenzo/07d7802847aaad0a35d3</a>) and can be used for preloading into the Keras model, which is implemented next as described in the paper:</p>
+<pre>
+from keras.models import Sequential<br/>from keras.layers.core import Flatten, Dense, Dropout<br/>from keras.layers.convolutional import Conv2D, MaxPooling2D, ZeroPadding2D<br/>from keras.optimizers import SGD<br/>import cv2, numpy as np<br/><br/># define a VGG16 network<br/>def VGG_16(weights_path=None):<br/>model = Sequential()<br/>model.add(ZeroPadding2D((1,1),input_shape=(3,224,224)))<br/>model.add(Conv2D(64, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(64, (3, 3), activation='relu'))<br/>model.add(MaxPooling2D((2,2), strides=(2,2)))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(128, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(128, (3, 3), activation='relu'))<br/>model.add(MaxPooling2D((2,2), strides=(2,2)))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(256, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(256, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(256, (3, 3), activation='relu'))<br/>model.add(MaxPooling2D((2,2), strides=(2,2)))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(MaxPooling2D((2,2), strides=(2,2)))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(ZeroPadding2D((1,1)))<br/>model.add(Conv2D(512, (3, 3), activation='relu'))<br/>model.add(MaxPooling2D((2,2), strides=(2,2)))<br/>model.add(Flatten())<br/>#top layer of the VGG net<br/>model.add(Dense(4096, activation='relu'))<br/>model.add(Dropout(0.5))<br/>model.add(Dense(4096, activation='relu'))<br/>model.add(Dropout(0.5))<br/>model.add(Dense(1000, activation='softmax'))<br/>if weights_path:<br/>model.load_weights(weights_path)<br/>return model
+</pre>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Recognizing cats with a VGG-16 net</h1>
+            </header>
+
+            <article>
+                
+<p>Now let us test the image of a <img height="24" src="assets/B06258_04_26.jpg" width="33"/>:</p>
+<pre>
+im = cv2.resize(cv2.imread('cat.jpg'), (224, 224)).astype(np.float32)<br/>im = im.transpose((2,0,1))<br/>im = np.expand_dims(im, axis=0)<br/><br/># Test pretrained model<br/>model = VGG_16('/Users/gulli/Keras/codeBook/code/data/vgg16_weights.h5')<br/>optimizer = SGD()<br/>model.compile(optimizer=optimizer, loss='categorical_crossentropy')<br/>out = model.predict(im)<br/>print np.argmax(out)
+</pre>
+<p>When the code is executed, the class <kbd>285</kbd> is returned, which corresponds (for more information refer to: <a href="https://gist.github.com/yrevar/942d3a0ac09ec9e5eb3a" target="_blank">https://gist.github.com/yrevar/942d3a0ac09ec9e5eb3a</a>) to Egyptian cat:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="88" src="assets/B06258_04_27-2.png" width="520"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Utilizing Keras built-in VGG-16 net module</h1>
+            </header>
+
+            <article>
+                
+<p>Keras applications are pre-built and pre-trained deep learning models. Weights are downloaded automatically when instantiating a model and stored at <kbd>~/.keras/models/</kbd>. Using built-in code is very easy:</p>
+<pre>
+from keras.models import Model<br/>from keras.preprocessing import image<br/>from keras.optimizers import SGD<br/>from keras.applications.vgg16 import VGG16<br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import cv2<br/><br/># prebuild model with pre-trained weights on imagenet<br/>model = VGG16(weights='imagenet', include_top=True)<br/>sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)<br/>model.compile(optimizer=sgd, loss='categorical_crossentropy')<br/><br/># resize into VGG16 trained images' format<br/>im = cv2.resize(cv2.imread('steam-locomotive.jpg'), (224, 224))<br/>im = np.expand_dims(im, axis=0)<br/><br/># predict<br/>out = model.predict(im)<br/>plt.plot(out.ravel())<br/>plt.show()<br/>print np.argmax(out)<br/>#this should print 820 for steaming train
+</pre>
+<p>Now, let us consider a train:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/B06258_04_28.jpg"/></div>
+<p>It's like the ones my grandfather drove. If we run the code, we get result <kbd>820</kbd>, which is the image net code for <em>steaming train</em>. Equally important is the fact that all the other classes have very weak support, as shown in the following graph:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="206" src="assets/B06258_04_29-1.png" width="299"/></div>
+<p>To conclude this section, note that VGG-16 is only one of the modules that are pre-built in Keras. A full list of pre-trained Keras models is available at: <a href="https://keras.io/applications/" target="_blank">https://keras.io/applications/</a>.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Recycling pre-built deep learning models for extracting features</h1>
+            </header>
+
+            <article>
+                
+<p>One very simple idea is to use VGG-16 and, more generally, DCNN, for feature extraction. This code implements the idea by extracting features from a specific layer:</p>
+<pre>
+from keras.applications.vgg16 import VGG16<br/>from keras.models import Model<br/>from keras.preprocessing import image<br/>from keras.applications.vgg16 import preprocess_input<br/>import numpy as np<br/><br/># pre-built and pre-trained deep learning VGG16 model<br/>base_model = VGG16(weights='imagenet', include_top=True)<br/>for i, layer in enumerate(base_model.layers):<br/>     print (i, layer.name, layer.output_shape)<br/><br/># extract features from block4_pool block<br/>model =<br/>Model(input=base_model.input, output=base_model.get_layer('block4_pool').output)<br/>img_path = 'cat.jpg'<br/>img = image.load_img(img_path, target_size=(224, 224))<br/>x = image.img_to_array(img)<br/>x = np.expand_dims(x, axis=0)<br/>x = preprocess_input(x)<br/><br/># get the features from this block<br/>features = model.predict(x)
+</pre>
+<p>Now you might wonder why we want to extract the features from an intermediate layer in a DCNN. The key intuition is that, as the network learns to classify images into categories, each layer learns to identify the features that are necessary to do the final classification. Lower layers identify lower order features such as color and edges, and higher layers compose these lower order feature into higher order features such as shapes or objects. Hence the intermediate layer has the capability to extract important features from an image, and these features are more likely to help in different kinds of classification. This has multiple advantages. First, we can rely on publicly available large-scale training and transfer this learning to novel domains. Second, we can save time for expensive large training. Third, we can provide reasonable solutions even when we don't have a large number of training examples for our domain. We also get a good starting network shape for the task at hand, instead of guessing it.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Very deep inception-v3 net used for transfer learning</h1>
+            </header>
+
+            <article>
+                
+<p>Transfer learning is a very powerful deep learning technique which has more applications in different domains. The intuition is very simple and can be explained with an analogy. Suppose you want to learn a new language, say Spanish; then it could be useful to start from what you already know in a different language, say English.</p>
+<p>Following this line of thinking, computer vision researchers now commonly use pre-trained CNNs to generate representations for novel tasks, where the dataset may not be large enough to train an entire CNN from scratch. Another common tactic is to take the pre-trained ImageNet network and then to fine-tune the entire network to the novel task.</p>
+<p>Inception-v3 net is a very deep ConvNet developed by Google. Keras implements the full network described in the following diagram and it comes pre-trained on ImageNet. The default input size for this model is 299 x 299 on three channels:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="245" src="assets/B06258_04_59.png" width="657"/></div>
+<p>This skeleton example is inspired by a scheme available at: <a href="https://keras.io/applications/" target="_blank">https://keras.io/applications/</a>. We suppose to have a training dataset <em>D</em> in a domain, different from ImageNet. <em>D</em> has 1,024 features in input and 200 categories in output. Let us see a code fragment:</p>
+<pre>
+from keras.applications.inception_v3 import InceptionV3<br/>from keras.preprocessing import image<br/>from keras.models import Model<br/>from keras.layers import Dense, GlobalAveragePooling2D<br/>from keras import backend as K<br/><br/># create the base pre-trained model<br/>base_model = InceptionV3(weights='imagenet', include_top=False)
+</pre>
+<p>We use a trained inception-v3; we do not include the top model because we want to fine-tune on <em>D</em>. The top level is a dense layer with 1,024 inputs and where the last output level is a softmax dense layer with 200 classes of output. <kbd>x = GlobalAveragePooling2D()(x)</kbd> is used to convert the input to the correct shape for the dense layer to handle. In fact, <kbd>base_model.output</kbd> tensor has the shape <em>(samples, channels, rows, cols)</em> for <kbd>dim_ordering="th"</kbd> or <em>(samples, rows, cols, channels)</em> for <kbd>dim_ordering="tf"</kbd> but dense needs them as <em>(samples, channels)</em> and <kbd>GlobalAveragePooling2D</kbd> averages across <em>(rows, cols)</em>. So if you look at the last four layers (where <kbd>include_top=True</kbd>), you see these shapes:</p>
+<pre>
+# layer.name, layer.input_shape, layer.output_shape<br/>('mixed10', [(None, 8, 8, 320), (None, 8, 8, 768), (None, 8, 8, 768), (None, 8, 8, 192)], (None, 8, 8, 2048))<br/>('avg_pool', (None, 8, 8, 2048), (None, 1, 1, 2048))<br/>('flatten', (None, 1, 1, 2048), (None, 2048))<br/>('predictions', (None, 2048), (None, 1000))
+</pre>
+<p>When you do <kbd>include_top=False,</kbd> you are removing the last three layers and exposing the <kbd>mixed10</kbd> layer, so the <kbd>GlobalAveragePooling2D</kbd> layer converts the <em>(None, 8, 8, 2048)</em> to <em>(None, 2048)</em>, where each element in the <em>(None, 2048)</em> tensor is the average value for each corresponding <em>(8, 8)</em> subtensor in the <em>(None, 8, 8, 2048)</em> tensor:</p>
+<pre>
+<em># add a global spatial average pooling layer<br/></em>x = base_model.output<br/>x = GlobalAveragePooling2D()(x)<em># let's add a fully-connected layer as first layer<br/></em>x = Dense(1024, activation='relu')(x)<em># and a logistic layer with 200 classes as last layer<br/></em>predictions = Dense(200, activation='softmax')(x)<em># model to train<br/></em>model = Model(input=base_model.input, output=predictions)
+</pre>
+<p>All the convolutional levels are pre-trained, so we freeze them during the training of the full model:</p>
+<pre>
+<em># that is, freeze all convolutional InceptionV3 layers<br/></em><strong>for</strong> layer <strong>in</strong> base_model.layers: layer.trainable = <strong>False</strong>
+</pre>
+<p>The model is then compiled and trained for a few epochs so that the top layers are trained:</p>
+<pre>
+<em># compile the model (should be done *after* setting layers to non-trainable)<br/></em>model.compile(optimizer='rmsprop', loss='categorical_crossentropy')<br/><br/><em># train the model on the new data for a few epochs</em> model.fit_generator(...)
+</pre>
+<p>Then we freeze the top layers in inception and fine-tune some inception layer. In this example, we decide to freeze the first 172 layers (an hyperparameter to tune):</p>
+<pre>
+<em># we chose to train the top 2 inception blocks, that is, we will freeze<br/><br/></em><em># the first 172 layers and unfreeze the rest: <br/></em><strong>for</strong> layer <strong>in</strong> <br/>model.layers[:172]: layer.trainable = <strong>False <br/></strong><strong>for</strong> layer <strong>in</strong> <br/>model.layers[172:]: layer.trainable = <strong>True</strong>
+</pre>
+<p>The model is then recompiled for fine-tune optimization. We need to recompile the model for these modifications to take effect:</p>
+<pre>
+<em># we use SGD with a low learning rate<br/></em><strong>from</strong> keras.optimizers<br/><strong>import</strong> SGD<br/>model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), loss='categorical_crossentropy')<br/><br/><em># we train our model again (this time fine-tuning the top 2 inception blocks)<br/></em><em># alongside the top Dense layers<br/></em>model.fit_generator(...)
+</pre>
+<p>Now we have a new deep network that reuses the standard Inception-v3 network, but it is trained on a new domain <em>D</em> via transfer learning. Of course, there are many parameters to fine-tune for achieving good accuracy. However, we are now reusing a very large pre-trained network as a starting point via transfer learning. In doing so, we can save the need to train on our machines by reusing what is already available in Keras.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Summary</h1>
+            </header>
+
+            <article>
+                
+<p>In this chapter, we learned how to use Deep Learning ConvNets for recognizing MNIST handwritten characters with high accuracy. Then we used the CIFAR 10 dataset to build a deep learning classifier in 10 categories, and the ImageNet datasets to build an accurate classifier in 1,000 categories. In addition, we investigated how to use large deep learning networks such as VGG16 and very deep networks such as InceptionV3. The chapter concluded with a discussion on transfer learning in order to adapt pre-built models trained on large datasets so that they can work well on a new domain.</p>
+<p>In the next chapter, we will introduce generative adversarial networks used to reproduce synthetic data that looks like data generated by humans; and we will present WaveNet, a deep neural network used for reproducing human voice and musical instruments with high quality.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    </body></html>

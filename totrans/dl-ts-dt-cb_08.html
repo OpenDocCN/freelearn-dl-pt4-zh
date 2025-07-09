@@ -1,0 +1,466 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer048">
+			<h1 id="_idParaDest-321" class="chapter-number"><a id="_idTextAnchor433"/>8</h1>
+			<h1 id="_idParaDest-322"><a id="_idTextAnchor434"/>Deep Learning for Time Series Classification</h1>
+			<p>In this chapter, we’ll tackle <strong class="bold">time series classification</strong> (<strong class="bold">TSC</strong>) problems using deep learning. As the<a id="_idIndexMarker504"/> name implies, TSC is a classification task involving time series data. The dataset contains several time series, and each of these has an associated categorical label. This problem is similar to a standard classification task, but the input explanatory variables are time series. We’ll explore how <a id="_idIndexMarker505"/>to approach this problem using different approaches. Besides using the <strong class="bold">K-nearest neighbors</strong> model to tackle this task, we’ll also develop different neural networks, such as a <strong class="bold">residual neural network</strong> (<strong class="bold">ResNet</strong>) and a <a id="_idIndexMarker506"/>convolutional <span class="No-Break">neural network.</span></p>
+			<p>By the end of this chapter, you’ll be able to set up a TSC task using a PyTorch Lightning data module and solve it with different models. You’ll also learn how to use the <strong class="source-inline">sktime</strong> Python library to solve <span class="No-Break">this problem.</span></p>
+			<p>This chapter contains the <span class="No-Break">following recipes:</span></p>
+			<ul>
+				<li>Tackling TSC with <span class="No-Break">K-nearest neighbors</span></li>
+				<li>Building a <strong class="source-inline">DataModule</strong> class <span class="No-Break">for TSC</span></li>
+				<li>Convolutional neural networks <span class="No-Break">for TSC</span></li>
+				<li>ResNets <span class="No-Break">for TSC</span></li>
+				<li>Tackling TSC problems <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">sktime</strong></span></li>
+			</ul>
+			<h1 id="_idParaDest-323"><a id="_idTextAnchor435"/>Technical requirements</h1>
+			<p>We’ll focus on the PyTorch Lightning ecosystem to build deep learning models. Besides that, we’ll also use scikit-learn to create a baseline. Overall, the list of libraries used in the package is <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><span class="No-Break">scikit-learn (1.3.2)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">pandas</strong></span><span class="No-Break"> (2.1.3)</span></li>
+				<li><span class="No-Break">NumPy (1.26.2)</span></li>
+				<li><span class="No-Break">Torch (2.1.1)</span></li>
+				<li>PyTorch <span class="No-Break">Lightning (2.1.2)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">sktime</strong></span><span class="No-Break"> (0.24.1)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">keras-self-attention</strong></span><span class="No-Break"> (0.51.0)</span></li>
+			</ul>
+			<p>As an example, we’ll use the <strong class="source-inline">Car</strong> dataset from the repository available at the following link: <a href="https://www.timeseriesclassification.com">https://www.timeseriesclassification.com</a>. You can learn more about the dataset in the <span class="No-Break">following work:</span></p>
+			<p>Thakoor, Ninad, and Jean Gao. <em class="italic">Shape classifier based on generalized probabilistic descent method with hidden Markov descriptor</em>. Tenth IEEE <strong class="bold">International Conference on Computer Vision</strong> (<strong class="bold">ICCV</strong>’05) Volume 1. Vol. 1. <span class="No-Break">IEEE, 2005.</span></p>
+			<p>The code and datasets used in this chapter can be found at the following GitHub <span class="No-Break">URL: </span><a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook"><span class="No-Break">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookboo<span id="_idTextAnchor436"/><span id="_idTextAnchor437"/>k</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-324"><a id="_idTextAnchor438"/>Tackling TSC with K-nearest neighbors</h1>
+			<p>In this recipe, we’ll <a id="_idIndexMarker507"/>show you how to tackle TSC tasks using a popular method called K-nearest neighbors. The <a id="_idIndexMarker508"/>goal of this recipe is to show you how standard machine-learning models can be used to solve <span class="No-Break">this problem.</span></p>
+			<h2 id="_idParaDest-325"><a id="_idTextAnchor439"/>Getting ready</h2>
+			<p>First, let’s start by loading the data <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pandas</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+import pandas as pd
+data_directory = 'assets/datasets/Car'
+train = pd.read_table(f'{data_directory}/Car_TRAIN.tsv', header=None)
+test = pd.read_table(f'{data_directory}/Car_TEST.tsv', header=None)</pre>			<p>The <a id="_idIndexMarker509"/>dataset is already split into a training and testing set, so we read them separately. Now, let’s see how to build a K-nearest neighbor model using <span class="No-Break">this dat<a id="_idTextAnchor440"/>aset.</span></p>
+			<h2 id="_idParaDest-326"><a id="_idTextAnchor441"/>How to do it…</h2>
+			<p>Here, we <a id="_idIndexMarker510"/>describe the steps necessary for building a time series classifier <span class="No-Break">using scikit-learn:</span></p>
+			<ol>
+				<li>Let’s start by splitting the target variable from the <span class="No-Break">explanatory variables:</span><pre class="source-code">
+y_train = train.iloc[:, 0]
+y_test = test.iloc[:, 0]
+X_train = train.iloc[:, 1:]
+X_test = test.iloc[:, 1:]</pre><p class="list-inset">The first column of each dataset (index <strong class="source-inline">0</strong>) contains the target variable, which we assign to the <strong class="source-inline">y_train</strong> and <strong class="source-inline">y_test</strong> objects for the training and testing sets, respectively. The <strong class="source-inline">X_train</strong> and <strong class="source-inline">X_test</strong> objects contain the input explanatory time series for the <span class="No-Break">corresponding datasets.</span></p><p class="list-inset">This particular dataset contains four different classes. Here’s what the distribution <span class="No-Break">looks like:</span></p></li>			</ol>
+			<div>
+				<div id="_idContainer043" class="IMG---Figure">
+					<img src="image/B21145_08_001.jpg" alt="Figure 8.1: Distribution of the four classes in the dataset" width="1264" height="814"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.1: Distribution of the four classes in the dataset</p>
+			<ol>
+				<li value="2">Afterward, we <a id="_idIndexMarker511"/>need to <a id="_idIndexMarker512"/>normalize the time series. We accomplish this using the <strong class="source-inline">MinMaxScaler</strong> method from scikit-learn, which brings all values into a range between <strong class="source-inline">0</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">:</span><pre class="source-code">
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)</pre><p class="list-inset">In the preceding code, we fit the scaler using the training set, and then use it to transform the data in <span class="No-Break">both datasets.</span></p></li>				<li>Finally, we’re ready to create a K-nearest neighbors <span class="No-Break">classification model:</span><pre class="source-code">
+classifier = KNeighborsTimeSeriesClassifier()
+classifier.fit(X_train, y_train)
+predictions = classifier.predict(X_test)</pre><p class="list-inset">In the preceding code, we create a <strong class="source-inline">KNeighborsTimeSeriesClassifier</strong> instance<a id="_idIndexMarker513"/> that <a id="_idIndexMarker514"/>implements K-nearest neighbors and fits it using the training set. Then, we apply this model to the testing set by calling the <span class="No-Break"><strong class="source-inline">predict</strong></span><span class="No-Break"><strong class="source-inline">()</strong></span><span class="No-Break"> method.</span></p><p class="list-inset">The following figure shows the confusion matrix concerning the predictions of the K-nearest <span class="No-Break">neighbor model:</span></p></li>			</ol>
+			<div>
+				<div id="_idContainer044" class="IMG---Figure">
+					<img src="image/B21145_08_002.jpg" alt="Figure 8.2: Confusion matrix for the predictions of the K-nearest neighbor model" width="841" height="742"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.2: Confusion matrix for the predictions of the K-nearest neighbor model</p>
+			<h2 id="_idParaDest-327"><a id="_idTextAnchor442"/>How it works…</h2>
+			<p>TSC problems <a id="_idIndexMarker515"/>are like standard classification tasks where the input explanatory variables are time series. So, the process for tackling the problem is similar. After splitting the explanatory variables (<strong class="source-inline">X</strong>) from the<a id="_idIndexMarker516"/> target variable (<strong class="source-inline">y</strong>), we prepare the explanatory variables using operators such as normalization functions. Then, we can use any classifier to solve this task. In this recipe, we use the K-nearest neighbor model, which is well-known for being a simple yet effective approach for <span class="No-Break">this task.</span></p>
+			<p>Note that the normalization step using <strong class="source-inline">MinMaxScaler</strong> is important to bring all observations into a common <span class="No-Break">value range.</span></p>
+			<h2 id="_idParaDest-328"><a id="_idTextAnchor443"/>There’s more…</h2>
+			<p>The <strong class="source-inline">sktime</strong> Python library provides several methods for tackling TSC problems. Here’s the link to the <span class="No-Break">documentation: </span><a href="https://www.sktime.net/en/stable/examples/02_classification.html"><span class="No-Break">https://www.sktime.net/en/stable/examples/02_classification.html</span></a><span class="No-Break">.</span></p>
+			<p>In this recipe, we used the K-nearest neighbors model using default parameters. For example, we used the Minkowski metric, which may not be the best one. For time series, distance metrics such as dynamic time warping are usually <span class="No-Break">better approaches.</span></p>
+			<h1 id="_idParaDest-329"><a id="_idTextAnchor444"/>Building a DataModule class for TSC</h1>
+			<p>In this recipe, we<a id="_idIndexMarker517"/> return to the PyTorch Lightning framework. We’ll build a <strong class="source-inline">DataModule</strong> class to encapsulate the data preprocessing <a id="_idIndexMarker518"/>and the passing of observations <span class="No-Break">to models.</span></p>
+			<h2 id="_idParaDest-330"><a id="_idTextAnchor445"/>Getting ready</h2>
+			<p>Let’s load the dataset from the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+import pandas as pd
+data_directory = 'assets/datasets/Car'
+train = pd.read_table(f'{data_directory}/Car_TRAIN.tsv', header=None)
+test = pd.read_table(f'{data_directory}/Car_TEST.tsv', header=None)</pre>			<p>Next, we’ll build a <strong class="source-inline">DataModule</strong> class to handle <span class="No-Break">t<a id="_idTextAnchor446"/>his dataset.</span></p>
+			<h2 id="_idParaDest-331"><a id="_idTextAnchor447"/>How to do it…</h2>
+			<p>In the<a id="_idIndexMarker519"/> previous chapters, we used <strong class="source-inline">TimeSeriesDataSet</strong> from PyTorch Forecasting to handle the data preparation for us. This <a id="_idIndexMarker520"/>class managed several steps. These include normalization and transformation of the data for supervised learning. However, in TSC, an observation uses the entire time series <span class="No-Break">as input:</span></p>
+			<ol>
+				<li>We’ll start creating a simpler variant of <strong class="source-inline">TimeSeriesDataSet</strong> to handle the passing of observations to <span class="No-Break">the model:</span><pre class="source-code">
+from torch.utils.data import Dataset
+class TSCDataset(Dataset):
+    def __init__(self, X_data, y_data):
+        self.X_data = X_data
+        self.y_data = y_data
+    def __getitem__(self, index):
+        return self.X_data[index], self.y_data[index]
+    def __len__(self):
+        return l<a id="_idTextAnchor448"/>en(self.X_data)</pre><p class="list-inset">The <strong class="source-inline">__getitem__</strong><strong class="source-inline">()</strong> method is used internally to get observations from the dataset and pass them to the model, while the <strong class="source-inline">__len__</strong><strong class="source-inline">()</strong> method outputs the size of <span class="No-Break">the dataset.</span></p></li>				<li>Then, we’re ready<a id="_idIndexMarker521"/> to build our <strong class="source-inline">LightningDataModule</strong> class. Here’s <a id="_idIndexMarker522"/><span class="No-Break">the constructor:</span><pre class="source-code">
+from torch.utils.data import Dataset, DataLoader
+import lightning.pytorch as pl
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+class TSCDataModule(pl.LightningDataModule):
+    def __init__(self, train_df, test_df, batch_size=1):
+        super().__init__()
+        self.train_df = train_df
+        self.test_df = test_df
+        self.batch_size = batch_size
+        self.scaler = MinMaxScaler()
+        self.encoder = OneHotEncoder(categories='auto',
+            sparse_output=False)
+        self.train = None
+        self.validation = None
+        self.test = None</pre><p class="list-inset"><strong class="source-inline">TSCDataModule</strong> contains the <strong class="source-inline">self.train</strong>, <strong class="source-inline">self.validation</strong>, and <strong class="source-inline">self.test</strong> dataset attributes that will be filled with the <strong class="source-inline">setup</strong><strong class="source-inline">()</strong> method. Besides that, the constructor also sets up the normalization method based on <strong class="source-inline">MinMaxScaler</strong> and the one-hot encoder called <strong class="source-inline">OneHotEncoder</strong>. We use the one-hot encoder to transform the target variable into a set of binary variables. This <a id="_idIndexMarker523"/>process is necessary for the training of <span class="No-Break">neural networks.</span></p></li>				<li>Then, the<a id="_idIndexMarker524"/> <strong class="source-inline">setup</strong><strong class="source-inline">()</strong> method is implemented <span class="No-Break">as follows:</span><pre class="source-code">
+def setup(self, stage=None):
+    y_train = self.encoder.fit_transform(
+        self.train_df.iloc[:, 0].values.reshape(-1, 1)
+    )
+    y_test = self.encoder.transform(
+        self.test_df.iloc[:,0].values.reshape(-1, 1))
+    X_train = train.iloc[:, 1:]
+    X_test = test.iloc[:, 1:]
+    X_train = self.scaler.fit_transform(X_train)
+    X_test = self.scaler.transform(X_test)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_train, y_train, test_size=0.2, stratify=y_train
+    )
+    X_train, X_val, X_test = [
+        torch.tensor(arr, dtype=torch.float).unsqueeze(1)
+        for arr in [X_train, X_val, X_test]
+    ]
+    y_train, y_val, y_test = [
+        torch.tensor(arr, dtype=torch.long)
+        for arr in [y_train, y_val, y_test]
+    ]
+    self.train = TSCDataset(X_train, y_train)
+    self.validation = TSCDataset(X_val, y_val)
+    self.test = TSCDataset(X_test, y_test)</pre><p class="list-inset">In the <a id="_idIndexMarker525"/>preceding code, we use the encoder to transform the target variable and do the same using the normalization <a id="_idIndexMarker526"/>method with the explanatory variables. Then, we create a validation set based on the training instances. We also cast the data objects as torch data structures using the <strong class="source-inline">torch.tensor()</strong> method. Finally, we create the <strong class="source-inline">TSCDataset</strong> instances based on the training, validation, and <span class="No-Break">testing sets.</span></p></li>				<li>We create the data loader methods using the <strong class="source-inline">DataLoader</strong> class directly on the <span class="No-Break">respective dataset:</span><pre class="source-code">
+    def train_dataloader(self):
+        return DataLoader(self.train, 
+            batch_size=self.batch_size)
+    def val_dataloader(self):
+        return DataLoader(self.validation, 
+            batch_size=self.batch_size)
+    def test_dataloader(self):
+        return DataLoader(self.test, batch_size=self.batch_size)</pre></li>				<li>Finally, here’s an<a id="_idIndexMarker527"/> example of how to get an <a id="_idIndexMarker528"/>observation using this <span class="No-Break">data module:</span><pre class="source-code">
+datamodule = TSCDataModule(train_df=train, test_df=test)
+datamodule.setup()
+x, y = next(iter(datamodule.train_dataloader()))</pre></li>			</ol>
+			<p>In the next recipe, we’ll learn how to build a classification model using this <span class="No-Break">data module.</span></p>
+			<h2 id="_idParaDest-332"><a id="_idTextAnchor449"/>How it works…</h2>
+			<p>We <a id="_idIndexMarker529"/>created a <strong class="source-inline">DataModule</strong> class tailored for TSC classification problems. We encapsulated the data logic within the <strong class="source-inline">setup</strong><strong class="source-inline">()</strong> method, thus enabling us to use the PyTorch Lightning ecosystem to build deep <span class="No-Break">learning models.</span></p>
+			<p>In this case, TSC problems do not involve autoregression. So, we created a simple variant of the <strong class="source-inline">TimeSeriesDataSet</strong> class to handle the process of passing the data <span class="No-Break">to models.</span></p>
+			<h1 id="_idParaDest-333"><a id="_idTextAnchor450"/>Convolutional neural networks for TSC</h1>
+			<p>In this <a id="_idIndexMarker530"/>recipe, we’ll walk you through building a<a id="_idIndexMarker531"/> convolutional neural network to tackle TSC problems. We’ll use the <strong class="source-inline">DataModule</strong> class created in the previous recipe to <span class="No-Break">do this.</span></p>
+			<h2 id="_idParaDest-334"><a id="_idTextAnchor451"/>Getting ready</h2>
+			<p>We start again by importing the dataset used in the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+import pandas as pd
+data_directory = 'assets/datasets/Car'
+train = pd.read_table(f'{data_directory}/Car_TRAIN.tsv', header=None)
+test = pd.read_table(f'{data_directory}/Car_TEST.tsv', header=None)
+datamodule = TSCDataModule(train_df=train,
+                           test_df=test,
+                           batch_size=8)</pre>			<p>We also create an instance of the <strong class="source-inline">TSCDataModule</strong> data module we defined in the previous recipe. Let’s see how to create a convolutional neural network classifier to handle <span class="No-Break">this task.</span></p>
+			<h2 id="_idParaDest-335"><a id="_idTextAnchor452"/>How to do it…</h2>
+			<p>Here, we will walk you through the steps of building a convolutional neural network for TSC problems <span class="No-Break">using PyTorch:</span></p>
+			<ol>
+				<li>Let’s start by creating the neural network based <span class="No-Break">on PyTorch:</span><pre class="source-code">
+from torch import nn
+class ConvolutionalTSC(nn.Module):
+    def __init__(self, input_dim, output_dim=1):
+        super(ConvolutionalTSC, self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=input_dim,
+                               out_channels=64,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1)
+        self.conv2 = nn.Conv1d(in_channels=64,
+                               out_channels=32,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1)
+        self.conv3 = nn.Conv1d(in_channels=32,
+                               out_channels=16,
+                               kernel_size=3,
+                               stride=1,
+                               padding=1)
+        self.maxp = nn.MaxPool1d(kernel_size=3)
+        self.fc1 = nn.Linear(in_features=336, out_features=32)
+        self.fc2 = nn.Linear(in_features=32, 
+            out_features=output_dim)
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = self.maxp(x)
+        x = F.relu(self.conv2(x))
+        x = self.maxp(x)
+        x = F.relu(self.conv3(x))
+        x = self.maxp(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        x = self.fc2(x)
+        return x</pre></li>				<li>We <a id="_idIndexMarker532"/>then <a id="_idIndexMarker533"/>wrap this model within a <strong class="source-inline">LightningModule</strong> class from PyTorch Lightning <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">TSCCnnModel</strong></span><span class="No-Break">:</span><pre class="source-code">
+import torch.nn.functional as F
+import lightning.pytorch as pl
+class TSCCnnModel(pl.LightningModule):
+    def __init__(self, output_dim):
+        super().__init__()
+        self.network = ConvolutionalTSC(
+            input_dim=1,
+            output_dim=output_dim,
+        )
+    def forward(self, x):
+        x = x.type(torch.FloatTensor)
+        return self.network(x)</pre><p class="list-inset">This <a id="_idIndexMarker534"/>module also contains the usual training, validation, and testing steps. These <a id="_idIndexMarker535"/>are implemented <span class="No-Break">as follows:</span></p><pre class="source-code">    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_pred = self.forward(x)
+        loss = F.cross_entropy(y_pred, 
+            y.type(torch.FloatTensor))
+        self.log('train_loss', loss)
+        return loss
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_pred = self(x)
+        loss = F.cross_entropy(y_pred, 
+            y.type(torch.FloatTensor))
+        self.log('val_loss', loss)
+        return loss
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_pred = self(x)
+        loss = F.cross_entropy(y_pred, 
+            y.type(torch.FloatTensor))
+        self.log('test_loss', loss)
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.01)</pre><p class="list-inset">These<a id="_idIndexMarker536"/> steps <a id="_idIndexMarker537"/>are similar to those developed for forecasting problems, but in this case, we use cross entropy as the <span class="No-Break"><strong class="source-inline">loss</strong></span><span class="No-Break"><strong class="source-inline">()</strong></span><span class="No-Break"> function.</span></p></li>				<li>We are now ready to train the model, which we do with a <strong class="source-inline">Trainer</strong> instance <span class="No-Break">as follows:</span><pre class="source-code">
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import EarlyStopping
+model = TSCCnnModel(output_dim=4)
+early_stop_callback = EarlyStopping(monitor="val_loss",
+    min_delta=1e-4,
+    patience=10,
+    verbose=False,
+    mode="min")
+trainer = pl.Trainer(
+    max_epochs=30,
+    accelerator='cpu',
+    log_every_n_steps=2,
+    enable_model_summary=True,
+    callbacks=[early_stop_callback],
+)
+trainer.fit(model, datamodule)</pre><p class="list-inset">In the<a id="_idIndexMarker538"/> preceding code, we set the output dimension to <strong class="source-inline">4</strong> when creating an instance of the <strong class="source-inline">TSCCnnModel</strong> class, which represents the number of classes in the dataset. We also set up an early stopping callback to drive the training process of <a id="_idIndexMarker539"/><span class="No-Break">the network.</span></p></li>			</ol>
+			<h2 id="_idParaDest-336"><a id="_idTextAnchor453"/>How it works…</h2>
+			<p>Convolutional neural networks <a id="_idIndexMarker540"/>have been successfully applied to TSC problems. In this recipe, we explored developing a classifier based on PyTorch Lightning’s <strong class="source-inline">LightningModule</strong>. We create a <strong class="source-inline">ConvolutionalTSC</strong> class that extends the <strong class="source-inline">nn.Module</strong> class. In the constructor of this class, we define the layers of the network: three convolutional layers (<strong class="source-inline">conv1</strong>, <strong class="source-inline">conv2</strong>, and <strong class="source-inline">conv3</strong>), and two densely connected layers (<strong class="source-inline">fc1</strong> and <strong class="source-inline">fc2</strong>). The <strong class="source-inline">forward()</strong> method details how these layers are composed together. Then, the convolutional layers stack on top of each other, and a max pooling operation (<strong class="source-inline">MaxPool1d</strong>) is applied after each convolution. Finally, we stack two densely connected layers, where the last one is the <span class="No-Break">output layer.</span></p>
+			<p>The following figure shows the confusion matrix for the convolution <span class="No-Break">neural network:</span></p>
+			<div>
+				<div id="_idContainer045" class="IMG---Figure">
+					<img src="image/B21145_08_003.jpg" alt="Figure 8.3: Confusion matrix for the convolutional neural network" width="853" height="709"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.3: Confusion matrix for the convolutional neural network</p>
+			<p>The results<a id="_idIndexMarker541"/> obtained with the neural network are better than those when using the K-nearest <span class="No-Break">neighbor model.</span></p>
+			<p>The workflow of this model follows the same logic as other recipes based on PyTorch Lightning. The main difference to take into account is that we’re dealing with a classification problem. So, we need to set a loss function that deals with this problem. Cross-entropy is the usual go-to function to train neural networks for classification tasks. The output dimension of the neural network is also set according to the number of classes. Essentially, there’s an output unit for each class in <span class="No-Break">the dataset.</span></p>
+			<h1 id="_idParaDest-337"><a id="_idTextAnchor454"/>ResNets for TSC</h1>
+			<p>This <a id="_idIndexMarker542"/>recipe shows you how to train a ResNet for TSC tasks. ResNets are a<a id="_idIndexMarker543"/> type of deep neural network architecture widely used in computer vision problems, such as image classification or object detection. Here, you’ll learn how to use them for modeling time <span class="No-Break">series data.</span></p>
+			<h2 id="_idParaDest-338"><a id="_idTextAnchor455"/>Getting ready</h2>
+			<p>We’ll continue with the same dataset and data module as in the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+import pandas as pd
+data_directory = 'assets/datasets/Car'
+train = pd.read_table(f'{data_directory}/Car_TRAIN.tsv', header=None)
+test = pd.read_table(f'{data_directory}/Car_TEST.tsv', header=None)
+datamodule = TSCDataModule(train_df=train,
+    test_df=test,
+    batch_size=8)</pre>			<p>Let’s see how to build a ResNet and train it with <span class="No-Break">PyTorch Lightning.</span></p>
+			<h2 id="_idParaDest-339"><a id="_idTextAnchor456"/>How to do it…</h2>
+			<p>In this section, we describe the process of creating a ResNet for <span class="No-Break">TSC tasks:</span></p>
+			<ol>
+				<li>Let’s start by creating a ResNet using <strong class="source-inline">nn.Module</strong> from the <span class="No-Break"><strong class="source-inline">torch</strong></span><span class="No-Break"> library:</span><pre class="source-code">
+class ResidualNeuralNetworkModel(nn.Module):
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int = 64,
+                 num_classes: int = 1):
+        super().__init__()
+        self.input_args = {
+            'in_channels': in_channels,
+            'num_classes': num_classes
+        }
+        self.layers = nn.Sequential(*[
+            ResNNBlock(in_channels=in_channels,
+                out_channels=out_channels),
+            ResNNBlock(in_channels=out_channels,
+                out_channels=out_channels * 2),
+            ResNNBlock(in_channels=out_channels * 2,
+                out_channels=out_channels * 2),
+        ])
+        self.fc = nn.Linear(mid_channels * 2, num_classes)
+    def forward(self, x):
+        x = self.layers(x)
+        return self.fc(x.mean(dim=-1))</pre><p class="list-inset">Then, we wrap <strong class="source-inline">ResidualNeuralNetworkModel</strong> <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">pl.LightningModule</strong></span><span class="No-Break">:</span></p><pre class="source-code">class TSCResNet(pl.LightningModule):
+    def __init__(self, output_dim):
+        super().__init__()
+        self.resnet = \
+            ResidualNeuralNetworkModel(in_channels=1,
+                num_pred_classes=output_dim)
+    def forward(self, x):
+        out = self.resnet.forward(x)
+        return out</pre></li>				<li>The<a id="_idIndexMarker544"/> training, validation, and testing steps are implemented<a id="_idIndexMarker545"/> identically to in the <span class="No-Break">previous recipe:</span><pre class="source-code">
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.type(torch.FloatTensor)
+        y = y.type(torch.FloatTensor)
+        y_pred = self.forward(x)
+        loss = F.cross_entropy(y_pred, y)
+        self.log('train_loss', loss)
+        return loss
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.type(torch.FloatTensor)
+        y = y.type(torch.FloatTensor)
+        y_pred = self(x)
+        loss = F.cross_entropy(y_pred, y)
+        self.log('val_loss', loss)
+        return loss
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        x = x.type(torch.FloatTensor)
+        y = y.type(torch.FloatTensor)
+        y_pred = self(x)
+        loss = F.cross_entropy(y_pred, y)
+        acc = Accuracy(task='multiclass', num_classes=4)
+        acc_score = acc(y_pred, y)
+        self.log('acc_score', acc_score)
+        self.log('test_loss', loss)
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.01)</pre><p class="list-inset">Note that we<a id="_idIndexMarker546"/> transform the predictions and the actual <a id="_idIndexMarker547"/>values into a <strong class="source-inline">torch.FloatTensor</strong> structure for computing the <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> function. We set cross-entropy as the <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> function, which is typically used in classification. In the testing stage, we also evaluate the accuracy of <span class="No-Break">the model.</span></p></li>				<li>Finally, here’s <a id="_idIndexMarker548"/>the workflow for training and testing the model based on PyTorch <a id="_idIndexMarker549"/><span class="No-Break">Lightning’s </span><span class="No-Break"><strong class="source-inline">Trainer</strong></span><span class="No-Break">:</span><pre class="source-code">
+model = TSCResNet(output_dim=4)
+datamodule = TSCDataModule(train_df=train, test_df=test, 
+    batch_size=8)
+early_stop_callback = EarlyStopping(monitor="val_loss",
+    min_delta=1e-4,
+    patience=20,
+    verbose=False,
+    mode="min")
+trainer = pl.Trainer(
+    max_epochs=100,
+    accelerator='cpu',
+    log_every_n_steps=2,
+    enable_model_summary=True,
+    callbacks=[early_stop_callback],
+)
+trainer.fit(model, datamodule)
+trainer.test(model, datamodule)</pre><p class="list-inset">Essentially, after<a id="_idIndexMarker550"/> defining the model, the training and testing process with PyTorch Lightning’s <strong class="source-inline">Trainer</strong> is similar to that shown in the <span class="No-Break">previous recipe.</span></p></li>			</ol>
+			<h2 id="_idParaDest-340"><a id="_idTextAnchor457"/>How it works…</h2>
+			<p>ResNets <a id="_idIndexMarker551"/>have <a id="_idIndexMarker552"/>shown promising performance in TSC problems. The idea is to learn the difference (residual) between the original input and a transformed output obtained from a convolutional layer. In the preceding code, we create a neural network that takes as input <span class="No-Break">three parameters:</span></p>
+			<ul>
+				<li><strong class="source-inline">in_channels</strong>: The number of input channels, which is equal to 1 because our time series <span class="No-Break">are univariate</span></li>
+				<li><strong class="source-inline">out_channels</strong>: The number of output channels from each <span class="No-Break">residual block</span></li>
+				<li><strong class="source-inline">num_classes</strong>: The number of classes in <span class="No-Break">the dataset</span></li>
+			</ul>
+			<p>The layers of the neural network are composed of three residual blocks named <strong class="source-inline">ResNNBlock</strong>. Residual blocks are the cornerstone of ResNets and are designed to solve the vanishing gradient problem. You can check the implementation of the residual blocks named <strong class="source-inline">ResNNBlock</strong> at the following URL: <a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook</a>. The output from the residual blocks is passed on to a <span class="No-Break">linear layer.</span></p>
+			<p>The following figure shows the confusion matrix for <span class="No-Break">the ResNet:</span></p>
+			<div>
+				<div id="_idContainer046" class="IMG---Figure">
+					<img src="image/B21145_08_004.jpg" alt="Figure 8.4: Confusion matrix for the ResNet" width="856" height="713"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.4: Confusion matrix for the ResNet</p>
+			<p>Like in the <a id="_idIndexMarker553"/>previous recipe, we wrap the implementation of the ResNet with the PyTorch Lightning framework. In the testing stage of this recipe, we also include the accuracy metric, which tells us the percentage of cases the model gets right. This metric is commonly used in TSC problems, though it might not be very informative for datasets with an imbalanced <span class="No-Break">target distribution.</span></p>
+			<h1 id="_idParaDest-341"><a id="_idTextAnchor458"/>Tackling TSC problems with sktime</h1>
+			<p>In this recipe, we <a id="_idIndexMarker554"/>explore an alternative approach<a id="_idIndexMarker555"/> to PyTorch for TSC problems, which is <strong class="source-inline">sktime</strong>. <strong class="source-inline">sktime</strong> is a <a id="_idIndexMarker556"/>Python library devoted to time series modeling, which includes several neural network models <span class="No-Break">for TSC.</span></p>
+			<h2 id="_idParaDest-342"><a id="_idTextAnchor459"/>Getting ready</h2>
+			<p>You can install <strong class="source-inline">sktime</strong> using <strong class="source-inline">pip</strong>. You’ll also need the <strong class="source-inline">keras-self-attention</strong> library, which includes self-attention methods necessary for running some of the methods <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">sktime</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+pip install 'sktime[dl]'
+pip install keras-self-attention</pre>			<p>The <a id="_idIndexMarker557"/>trailing <strong class="source-inline">dl</strong> tag in squared brackets when installing <strong class="source-inline">sktime</strong> means you want to include the optional deep learning models available in <span class="No-Break">the library.</span></p>
+			<p>In this recipe, we’ll use an example dataset available in <strong class="source-inline">sktime</strong>. We’ll load it in the <span class="No-Break">next section.</span></p>
+			<h2 id="_idParaDest-343"><a id="_idTextAnchor460"/>How to do it…</h2>
+			<p>As the <a id="_idIndexMarker558"/>name implies, the <strong class="source-inline">sktime</strong> library follows a design pattern similar to scikit-learn. So, our approach to building a deep learning model using <strong class="source-inline">sktime</strong> will be similar to the workflow described in the <em class="italic">Tackling TSC with K-nearest </em><span class="No-Break"><em class="italic">neighbors</em></span><span class="No-Break"> recipe.</span></p>
+			<p>Let’s start by loading <span class="No-Break">the dataset:</span></p>
+			<pre class="source-code">
+from sktime.datasets import load_italy_power_demand
+X_train, y_train = \
+    load_italy_power_demand(split="train", return_type="numpy3D")
+X_test, y_test = load_italy_power_demand(split="test",
+    return_type="numpy3D")</pre>			<p>In the preceding code, we load a dataset concerning energy demand in Italy. You can check the following link for more information about this <span class="No-Break">dataset: </span><a href="https://www.timeseriesclassification.com/description.php?Dataset=ItalyPowerDemand"><span class="No-Break">https://www.timeseriesclassification.com/description.php?Dataset=ItalyPowerDemand</span></a><span class="No-Break">.</span></p>
+			<p>The data was originally used in the <span class="No-Break">following work:</span></p>
+			<p>Keogh, Eamonn, et al. <em class="italic">Intelligent icons: Integrating lite-weight data mining and visualization into GUI operating systems</em>. Sixth <strong class="bold">International Conference on Data</strong> Mining (<strong class="bold">ICDM</strong>’06). <span class="No-Break">IEEE, 2006.</span></p>
+			<p>We<a id="_idIndexMarker559"/> use <strong class="source-inline">load_italy_power_demand</strong> to load the<a id="_idIndexMarker560"/> train and test sets as <strong class="source-inline">numpy</strong> <span class="No-Break">data structures.</span></p>
+			<p>Now, let’s see how to build different types of neural networks using <span class="No-Break">this dataset.</span></p>
+			<h3>Fully connected neural network</h3>
+			<p>We <a id="_idIndexMarker561"/>start by training a fully connected neural network. The configuration of this network, including <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> and <strong class="source-inline">activation</strong><strong class="source-inline">()</strong> <a id="_idIndexMarker562"/>functions, is passed as arguments to the <span class="No-Break"><strong class="source-inline">FCNClassifier</strong></span><span class="No-Break"> instance:</span></p>
+			<pre class="source-code">
+from sktime.classification.deep_learning.fcn import FCNClassifier
+fcn = FCNClassifier(n_epochs=200,
+    loss='categorical_crossentropy',
+    activation='sigmoid',
+    batch_size=4)
+fcn.fit(X_train, y_train)
+fcn_pred = fcn.predict(X_test)</pre>			<p>The training and inference steps are done using the <strong class="source-inline">fit</strong><strong class="source-inline">()</strong> and <strong class="source-inline">predict</strong><strong class="source-inline">()</strong> methods, respectively. If you’re used to scikit-learn methods, this approach should be familiar <span class="No-Break">to you.</span></p>
+			<h3>Convolutional neural network</h3>
+			<p>As we <a id="_idIndexMarker563"/>learned in the <em class="italic">Convolutional neural networks for TSC</em> recipe, convolutional models can be an effective approach to classifying time series. Here’s the implementation available on <strong class="source-inline">sktime</strong> <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">CNNClassifier</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+from sktime.classification.deep_learning.cnn import CNNClassifier
+cnn = CNNClassifier(n_epochs=200,
+    loss='categorical_crossentropy',
+    activation='sigmoid',
+    kernel_size=7,
+    batch_size=4)
+cnn.fit(X_train, y_train)
+cnn_pred = cnn.predict(X_test)</pre>			<p>You <a id="_idIndexMarker564"/>can also set other parameters concerning <a id="_idIndexMarker565"/>convolutions, such as <strong class="source-inline">avg_pool_size</strong> or <strong class="source-inline">n_conv_layers</strong>. Check the documentation for a complete list of parameters at the following <span class="No-Break">link: </span><a href="https://www.sktime.net/en/stable/api_reference/auto_generated/sktime.classification.deep_learning.CNNClassifier.html"><span class="No-Break">https://www.sktime.net/en/stable/api_reference/auto_generated/sktime.classification.deep_learning.CNNClassifier.html</span></a><span class="No-Break">.</span></p>
+			<h3>LSTM-FCN neural network</h3>
+			<p>Recurrent neural networks<a id="_idIndexMarker566"/> can also be <a id="_idIndexMarker567"/>useful for this problem. Here’s a combination of an LSTM with a fully connected layer that is available <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">LSTMFCNClassifier</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+from sktime.classification.deep_learning.lstmfcn import( 
+    LSTMFCNClassifier)
+lstmfcn = LSTMFCNClassifier(n_epochs=200,
+                            attention=True,
+                            batch_size=4)
+lstmfcn.fit(X_train, y_train)
+lstmfcn_pred = lstmfcn.predict(X_test)</pre>			<p>This method <a id="_idIndexMarker568"/>also includes an attention <a id="_idIndexMarker569"/>mechanism that improves classification <span class="No-Break">accuracy significantly.</span></p>
+			<h3>TapNet model</h3>
+			<p>The <strong class="bold">TapNet</strong> (short for <strong class="bold">time series attentional prototype network</strong>) is a deep neural network designed for TSC. It was originally created to handle multivariate time <a id="_idIndexMarker570"/>series, but <a id="_idIndexMarker571"/>it’s also applicable to univariate ones. Here’s how you train this model <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">sktime</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+from sktime.classification.deep_learning.tapnet import(
+    TapNetClassifier)
+tapnet = TapNetClassifier(n_epochs=200,
+                          loss='categorical_crossentropy',
+                          batch_size=4)
+tapnet.fit(X_train, y_train)
+tapnet_pred = tapnet.predict(X_test)</pre>			<p>This model can manage a low-dimensional space (small number of features), and work well under a semi-supervised setting – that is, when there’s a large number of unlabeled <span class="No-Break">observations available.</span></p>
+			<h3>InceptionTime model</h3>
+			<p><strong class="source-inline">InceptionTime</strong> is a <a id="_idIndexMarker572"/>state-of-the-art deep <a id="_idIndexMarker573"/>learning method for TSC problems. In practice, <strong class="source-inline">InceptionTime</strong> is an ensemble of deep convolutional neural networks that is inspired by the inception architecture created for computer <span class="No-Break">vision tasks:</span></p>
+			<pre class="source-code">
+from sktime.classification.deep_learning import( 
+    InceptionTimeClassifier)
+inception = InceptionTimeClassifier(n_epochs=200,
+        loss='categorical_crossentropy',
+        use_residual=True,
+        batch_size=4)
+inception.fit(X_train, y_train)
+inception_pred = inception.predict(X_test)</pre>			<p>The <a id="_idIndexMarker574"/>model <a id="_idIndexMarker575"/>also includes optional residual connections, which, in the preceding code, we use by setting the <strong class="source-inline">use_residual</strong> parameter <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">True</strong></span><span class="No-Break">.</span></p>
+			<h3>Evaluation</h3>
+			<p>We can <a id="_idIndexMarker576"/>use standard classification metrics to evaluate the performance of TSC models. Here’s how to compute the accuracy of the models we trained in <span class="No-Break">this recipe:</span></p>
+			<pre class="source-code">
+from sklearn.metrics import accuracy_score
+perf = {
+    'FCN': accuracy_score(y_test, fcn_pred),
+    'CNN': accuracy_score(y_test, cnn_pred),
+    'InceptionTime': accuracy_score(y_test, inception_pred),
+    'TapNet': accuracy_score(y_test, tapnet_pred),
+    'LSTMFCN': accuracy_score(y_test, lstmfcn_pred),
+}</pre>			<p>The results are shown in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer047" class="IMG---Figure">
+					<img src="image/B21145_08_005.jpg" alt="Figure 8.5: Accuracy of the models" width="1650" height="666"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 8.5: Accuracy of the models</p>
+			<p>Overall, <strong class="source-inline">InceptionTime</strong> appears<a id="_idIndexMarker577"/> to be the best approach for this <span class="No-Break">particular problem.</span></p>
+			<h2 id="_idParaDest-344"><a id="_idTextAnchor461"/>How it works…</h2>
+			<p>In this recipe, we <a id="_idIndexMarker578"/>use the <strong class="source-inline">sktime</strong> Python library to build deep-learning models for TSC. While you can use PyTorch as we’ve shown in the other recipes of this chapter, <strong class="source-inline">sktime</strong> provides an extensive toolkit for tackling TSC tasks. Since <strong class="source-inline">sktime</strong> follows the philosophy of scikit-learn, most of the work is done using the <strong class="source-inline">fit</strong><strong class="source-inline">()</strong> and <strong class="source-inline">predict</strong><strong class="source-inline">()</strong> methods of the <span class="No-Break">respective class.</span></p>
+			<h2 id="_idParaDest-345"><a id="_idTextAnchor462"/>There’s more…</h2>
+			<p>You can check the documentation of <strong class="source-inline">sktime</strong> for other models, including some that are not based on deep learning. Here’s the <span class="No-Break">link: </span><a href="https://www.sktime.net/en/stable/users.html"><span class="No-Break">https://www.sktime.net/en/stable/users.html</span></a><span class="No-Break">.</span></p>
+			<p>In most of the models we used in this recipe, we set the parameters to their default values. But, you can create a validation set and optimize the configuration of the models for <span class="No-Break">better performance.</span></p>
+		</div>
+	</div>
+</div>
+</body></html>

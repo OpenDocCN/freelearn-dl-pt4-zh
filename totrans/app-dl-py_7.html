@@ -1,0 +1,460 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Productization</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">This chapter focuses on how to <em>productize</em> a deep learning model. We use the word <em>productize</em> to define the creation of a software product from a deep learning model that can be used by other people and applications.</p>
+<p class="mce-root">We are interested in models that use new data when it becomes available, continuously learning patterns from new data and, consequently, making better predictions. We study two strategies to deal with new data: one that re-trains an existing model, and another that creates a completely new model. Then, we implement the latter strategy in our Bitcoin prices prediction model so that it can continuously predict new Bitcoin prices.</p>
+<p class="mce-root">This chapter also provides an exercise of how to deploy a model as a web application. By the end of this chapter, we will be able to deploy a working web-application (with a functioning HTTP API) and modify it to our heart's content.</p>
+<p class="mce-root">We use a web application as an example of how to deploy deep learning models because of its simplicity and prevalence (after all, web application are quite common), but many other possibilities are available.</p>
+<p><span>By the end of this chapter, you will be able to:<br/></span></p>
+<ul>
+<li><span>Handle new data</span></li>
+<li><span>Deploy a model as a web application<br/></span></li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Handling New Data</h1>
+                </header>
+            
+            <article>
+                
+<p>Models can be trained once in a set of data and can then be used to make predictions. Such static models can be very useful, but it is often the case that we want our model to continuously learn from new data—and to continuously get better as it does so.</p>
+<p>In this section, we will discuss two strategies on how to re-train a deep learning model and how to implement them in Python.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Separating Data and Model</h1>
+                </header>
+            
+            <article>
+                
+<p>When building a deep learning application, the two most important areas are data and model. From an architectural point of view, we suggest that these two areas be separate. We believe that is a good suggestion because each of these areas include functions inherently separated from each other. Data is often required to be collected, cleaned, organized, and normalized; and models need to be trained, evaluated, and able to make predictions. Both of these areas are dependent, but are better dealt with separately.</p>
+<p>As a matter of following that suggestion, we will be using two classes to help us build our web application: <kbd>CoinMarketCap()</kbd> and <kbd>Model()</kbd> :</p>
+<ul>
+<li><kbd>CoinMarketCap()</kbd> : This is a class designed for fetching Bitcoin prices from the following website: <a href="https://coinmarketcap.com/">http://www.coinmarketcap.com</a>. This is the same place where our original Bitcoin data comes from. This class makes it easy to retrieve that data on a regular schedule, returning a Pandas DataFrame with the parsed records and all available historical data. <kbd>CoinMarketCap()</kbd> is our data component.</li>
+<li><kbd>Model()</kbd> <span>: This class implements all the code we have written so far into a single class. That class provides facilities for interacting with our previously trained models, and also allows for the making of predictions using de-normalized data— which is much easier to understand. The <kbd>Model()</kbd> class is our model component.</span></li>
+</ul>
+<p>These two classes are used extensively throughout our example application and define the data and model components.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Data Component</h1>
+                </header>
+            
+            <article>
+                
+<p class="mce-root">The <kbd>CoinMarketCap()</kbd> class creates methods for retrieving and parsing data. It contains one relevant method, <kbd>historic()</kbd> , which is detailed in the following code:<span><br/></span></p>
+<pre><span>    @classmethod<br/><strong>    def historic(cls, start='2013-04-28', stop=None,</strong><br/><strong>    ticker='bitcoin', return_json=False):</strong><br/>    start = start.replace('-', '')<br/>    if not stop:<br/>        stop = datetime.now().strftime('%Y%m%d')<br/>    base_url = 'https://coinmarketcap.com/currencies'</span></pre>
+<p class="mce-root"/>
+<pre><span><br/>    url = '/{}/historical-10. data/?start={}&amp;end={}'.format(ticker, start,<br/>    stop)<br/>    r = requests.get(url)</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 1</em>: <kbd>historic()</kbd> method from the <kbd>CoinMarketCap()</kbd> class.</div>
+<div class="CDPAlignCenter CDPAlign packt_figref">This method collects data from the CoinMarketCap website,<span>parses it, and returns a Pandas DataFrame.</span></div>
+<p class="mce-root">The <kbd>historic()</kbd> class returns a Pandas DataFrame, ready to be used by the <kbd>Model()</kbd> class.</p>
+<p class="mce-root">When working in other models, consider creating a program component (for example, a Python class) that fulfils the same functions the <kbd>CoinMarketCap()</kbd> class does. That is, create a component that fetches data from wherever it is available, parses that data, and makes it available in a usable format for your modeling component.</p>
+<p class="mce-root">The <kbd>CoinMarketCap()</kbd> class uses the parameter <kbd>ticker</kbd> to determine what cryptocurrency to collect. CoinMarketCap has many other cryptocurrencies available, including very popular ones like Ethereum (ethereum) and Bitcoin Cash (bitcoin-cash). Use the ticker parameter to change the cryptocurrency and train a different model than using the Bitcoin model created in this book.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Model Component</h1>
+                </header>
+            
+            <article>
+                
+<p>The <kbd>Model()</kbd> class is where we implement the application's model component. That class contains file methods that implement all the different modeling topics from this book. These are:</p>
+<ul>
+<li><kbd>build()</kbd> : Builds an LSTM model using Keras. This function works as a simple wrapper for a manually created model.</li>
+<li><kbd>train()</kbd> : Trains model using data that the class was instantiated with.</li>
+<li><kbd>evaluate()</kbd> : Makes an evaluation of the model using a set of loss functions.</li>
+<li><kbd>save()</kbd> : Saves the model as a file locally.</li>
+<li><kbd>predict()</kbd> : Makes and returns predictions based on an input sequence of weeks ordered observations.</li>
+</ul>
+<p>We use these methods throughout this chapter to work, train, evaluate, and issue predictions with our model. The<kbd>Model()</kbd> class is an example of how to wrap essential Keras functions into a web application. The preceding methods are implemented almost exactly as in preceded chapters, but with syntactic sugar added for enhancing their interfaces.</p>
+<p>For example, the method <kbd>train()</kbd> is implemented in the following code:</p>
+<pre><strong>    def train(self, data=None, epochs=300, verbose=0</strong>, batch_size=1):<br/>        self.train_history = self.model.fit(<br/>            x=self.X, y=self.Y,<br/>            batch_size=batch_size, epochs=epochs,<br/>            verbose=verbose, shuffle=False)<br/>    self.last_trained = datetime.now().strftime('%Y-%m-%d %H:%M:%S')<br/>    return self.train_history</pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 2</em>: <kbd>train()</kbd> method from the <kbd>Model()</kbd> class. This method trains a model available in self.model using data from self.<kbd>X</kbd> and self.<kbd>Y</kbd>.</div>
+<p>In the preceding snippet, you will be able to notice that the <kbd>train()</kbd> method resembles the solution to <em>Activities 6</em> and 7 from C<em>hapter 6</em>, <em>Model Evaluation and Optimization</em>. The general idea is that each of the processes from the Keras workflow (build or design, train, evaluate, and predict) can easily be turned into distinct parts of a program. In our case, we made them into methods that can be invoked from the <kbd>Model() class</kbd>. This organizes our program and provides a series of constraints (such as on the model architecture or certain API parameters) which help us deploy our model in a stable environment.</p>
+<p><span>In the next sections, we explore common strategies for dealing with new data.<br/></span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Dealing with New Data</h1>
+                </header>
+            
+            <article>
+                
+<p>The core idea of machine learning models—neural networks included—is that they can learn patterns from data. Imagine that a model was trained with a certain dataset and it is now issuing predictions. Now, imagine that new data is available. What strategies can we employ so that a model can take advantage of the newly available data to learn new patterns and improve its predictions?</p>
+<p>In this section, we discuss two strategies: re-training an old model and training a new model.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Re-Training an Old Model</h1>
+                </header>
+            
+            <article>
+                
+<p>With this strategy, we re-train an existing model with new data. Using this strategy, one can continuously adjust the model parameters to adapt to new phenomena. However, data used in later training periods may be significantly different to other, earlier data. Such differences may cause significant changes to the model parameters, making it learn new patterns and forget old patterns. This phenomenon is generally referred to as <em>catastrophic forgetting</em>.</p>
+<div class="packt_infobox">Catastrophic forgetting is a common phenomenon affecting neural networks. Deep learning researchers have been trying to tackle this problem for many years. DeepMind, a Google-owned deep learning research group from the United Kingdom, has made notable advancements in finding a solution. The article <em>Overcoming Catastrophic Forgetting in Neural Networks</em>, by et. al. is a good reference of such work. The paper is available at: <a href="https://arxiv.org/pdf/1612.00796.pdf">https://arxiv. org/pdf/1612.00796.pdf</a>.</div>
+<p>The same interface used for training (<kbd>model.fit()</kbd> ) for the fist time can be used for training with new data:</p>
+<pre><span>    X_train_new, Y_train_new = load_new_data()<br/><br/>    model.fit(x=X_train_new, y=Y_train_new,<br/>    batch_size=1, epochs=100,<br/>    verbose=0)</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 3</em>: Snippet that implements a TensorBoard callback in our LSTM model<span><br/></span></div>
+<p>In Keras, when models are trained, their weight information is kept—this is the model's state. When one uses the <kbd>model.save()</kbd> method, that state is also saved. And when one invokes the method <kbd>model.fit()</kbd> , the model is re-trained with the new dataset, using the previous state as a starting point.</p>
+<p>In typical Keras models, this technique can be used without further issues. However, when working with LSTM models, this technique has one key limitation: the shape of both train and validation data must be the same. For example, our LSTM model (<kbd>bitcoin_lstm_v0</kbd>) uses 76 weeks to predict one week into the future. If we attempt to re-train the network with 77 weeks in the coming week, the model raises an exception with information regarding the incorrect shape of data.</p>
+<p>One way of dealing with this is to arrange data in the format expected by the model. In our case, we would need to configure our model to predict a future week using 40 weeks. Using this solution, we fist train the model with the fist 40 weeks of 2017, then continue to re-train it over the following weeks until we reach week 50.</p>
+<p>We use the <kbd>Model()</kbd> class to perform this operation in the following code:</p>
+<pre><span>    M = Model(data=model_data[0*7:7*40 + 7],<br/>        variable='close',<br/>        predicted_period_size=7)<br/>    M.build()<br/>    6 M.train()<br/></span><span>    for i in range(1, 10 + 1):<br/></span><strong>    M.train(model_data[i*7:7*(40 + i) + 7])</strong></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 4</em>: Snippet that implements a re-training technique<span><br/></span></div>
+<p>This technique tends to be fast to train, and also tends to work well with series that are large. The next technique is easier to implement and works well in smaller series.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training a New Model</h1>
+                </header>
+            
+            <article>
+                
+<p>Another strategy is to create and train a new model every time new data is available. This approach tends to reduce catastrophic forgetting, but training time increases as data increases. Its implementation is quite simple.</p>
+<p>Using the Bitcoin model as an example, let's now assume that we have old data for 49 weeks of 2017, and that after a week, new data is available. We represent this with the variables <kbd>old_data</kbd> and <kbd>new_data</kbd> in the following quotes:</p>
+<pre>    old_data = model_data[0*7:7*48 + 7]<br/>    new_data = model_data[0*7:7*49 + 7]<br/><br/>    M = Model(data=old_data,<br/>        variable='close',<br/>        predicted_period_size=7)<br/>    M.build()<br/>    M.train()<br/><br/><strong>    M = Model(data=new_data,</strong><br/><strong>        variable='close',</strong><br/><strong>        predicted_period_size=7)</strong><br/><strong>    M.build()</strong><br/><strong>    M.train()</strong></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 5</em>: Snippet that implements a strategy for training a new model when new data is available</div>
+<p>This approach is very simple to implement and tends to work well for small datasets. This will be the preferred solution for our Bitcoin price-predictions application.</p>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activity:Dealing with New Data</h1>
+                </header>
+            
+            <article>
+                
+<p><span>In this activity, we re-train our model every time new data is available.<br/></span></p>
+<p>First, we start by importing <kbd>cryptonic</kbd>. Cryptonic is a simple software application developed for this book that implements all the steps up to this section using Python classes and modules. Consider Cryptonic as a template of how you could develop similar applications.</p>
+<p><kbd>cryptonic</kbd> is provided as a Python module alongside this activity. First, we will start a Jupyter Notebook instance, and then we will load the <kbd>cryptonic</kbd> package.</p>
+<ol>
+<li>Using your terminal, navigate to the directory <em>Chapter_7/activity_8</em> and execute the following code to start a Jupyter Notebook instance:</li>
+</ol>
+<pre><span>      $ jupyter notebook </span></pre>
+<ol start="2">
+<li>Open the URL provided by the application in your browser and open the Jupyter Notebook named <kbd>Activity_8_Re_training_a_model_dynamically.ipynb</kbd>.</li>
+</ol>
+<p style="padding-left: 60px">Now, we will load both classes from <kbd>cryptonic: Model()</kbd> and<kbd>CoinMarketCap()</kbd> . These classes facilitate the process of manipulating our model and also the process of getting data from the website CoinMarketCap (<a href="https://coinmarketcap.com/">https://coinmarketcap.com/</a>).</p>
+<ol start="3">
+<li>In the Jupyter Notebook instance, navigate to the header <strong>Fetching Real-Time Data</strong>. We will now be fetching updated historical data from <kbd>CoinMarketCap</kbd>. Simply call the method:</li>
+</ol>
+<pre>      $ historic_data = CoinMarketCap.historic() </pre>
+<p style="padding-left: 60px">The variable <kbd>historic_data</kbd> is now populated with a Pandas DataFrame that contains data up to today or yesterday. This is great and makes it easier to retrain our model when more data is available.</p>
+<p style="padding-left: 60px">The data contains practically the same variables from our earlier dataset. However, much of the data comes from an earlier period. Recent Bitcoin prices have gained a lot of volatility compared to the prices of a few years ago. Before using this data in our model, let's make sure to filter it to dates after January 1, 2017.</p>
+<ol start="4">
+<li>Using the Pandas API, filter the data for only the dates available in 2017:</li>
+</ol>
+<pre>      $ model_data = # filter the dataset using pandas here </pre>
+<p style="padding-left: 60px">You should be able to do this by using the date variable as the filtering index. Make sure the data is filtered before you continue.</p>
+<p style="padding-left: 60px">The class <kbd>Model()</kbd> compiles all the code we have written so far in all of our activities. We will use that class to build, train, and evaluate our model in this activity.</p>
+<ol start="5">
+<li><span>Using the Model() class, we now train a model using the preceding filtered data:<br/></span></li>
+</ol>
+<pre><span>      M = Model(data=model_data,<br/>         variable='close',<br/>         predicted_period_size=7)<br/>      M.build()<br/>      M.train()<br/>      M.predict(denormalized=True) </span></pre>
+<p style="padding-left: 60px">The preceding steps showcase the complete workflow when using the <kbd>Model()</kbd> class for training a model.</p>
+<p style="padding-left: 60px">Next, we'll focus on re-training our model every time more data is available. This re-adjusts the weights of the network to new data.</p>
+<p style="padding-left: 60px">In order to do this, we have configured our model to predict a week using 40 weeks. We now want to use the remaining 10 full weeks to create overlapping periods of 40 weeks that include one of those 10 weeks at a time, and re-train the model for every one of those periods.</p>
+<ol start="6">
+<li>Navigate to the header <strong>Re-Train Old Model</strong> in the Jupyter Notebook. Now, complete the range function and the <strong>model_data</strong> filtering parameters, using an index to split the data in overlapping groups of seven days. Then, re-train our model and collect the results:</li>
+</ol>
+<pre><span>      results = []<br/>      for i in range(A, B):<br/>         M.train(model_data[C:D])<br/>         results.append(M.evaluate()) </span></pre>
+<p style="padding-left: 60px">The variables <kbd>A</kbd>, <kbd>B</kbd>, <kbd>C</kbd>, and <kbd>D</kbd> are placeholders. Use integers to create overlapping groups of seven days in which the overlap is of one day.</p>
+<p style="padding-left: 60px">After you have re-trained your model, go ahead and invoke the <kbd>M.predict(denormalized=True)</kbd> function and appreciate the results.</p>
+<p style="padding-left: 60px">Next, we'll focus on creating and training a new model every time new data is available. In order to do this, we now assume that we have old data for 49 weeks of 2017, and after a week, we now have new data. We represent this with the variables <kbd>old_data</kbd> and <kbd>new_data</kbd>.</p>
+<ol start="7">
+<li>Navigate to the header <strong>Training a New Model</strong> and split the data between the variables <kbd>old_data</kbd> and <kbd>new_data</kbd>:</li>
+</ol>
+<pre><span>      old_data = model_data[0*7:7*48 + 7]<br/>      new_data = model_data[0*7:7*49 + 7] </span></pre>
+<ol start="8">
+<li><span>Then, train the model with <kbd>old_data</kbd> first:<br/></span></li>
+</ol>
+<pre><span>      M = Model(data=old_data,<br/>        variable='close',<br/>        predicted_period_size=7)<br/>      M.build()<br/>      M.train()</span></pre>
+<p>This strategy is about building the model from scratch and training it when new data is available. Go ahead and implement that in the following cells.</p>
+<p>We now have all the pieces that we need in order to train our model dynamically. In the next section, we will deploy our model as a web application, making its predictions available in the browser via an HTTP API.</p>
+<p>In this section, we learned about two strategies for training a model when new data is available:</p>
+<ul>
+<li>Re-training an old model</li>
+<li>Training a new model</li>
+</ul>
+<p>The latter creates a new model that is trained with the full set of data, except the observations in the test set. The former trains a model once on available data, then continues to create overlapping batches to re-train that same model every time new data is available.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deploying a Model as a Web Application</h1>
+                </header>
+            
+            <article>
+                
+<p>In this section, we will deploy our model as a web application. We will use an example web application—called "<kbd>cryptonic</kbd>"—to deploy our model, exploring its architecture so that we can make modifications in the future. The intention is to have you use this application as a starter for more complex applications; a starter that is fully working and can be expanded as you see fit.</p>
+<p>Aside from familiarity with Python, this topic assumes familiarity with creating web applications. Specifically, we assume that you have some knowledge about web servers, routing, the HTTP protocol, and caching. You will be able to locally deploy the demonstrated cryptonic application without extensive knowledge of these topics, but learning these topics will make any future development much easier.</p>
+<p>Finally, Docker is used to deploy our web applications, so basic knowledge of that technology is also useful.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Application Architecture and Technologies</h1>
+                </header>
+            
+            <article>
+                
+<p>In order to deploy our web applications, we will use the tools and technologies described on Table 1. Flask is key because it helps us create an HTTP interface to our model, allowing us to access an HTTP endpoint (such as /<kbd>predict</kbd>) and receive data back in a universal format. The other components are used because they are popular choices when developing web applications:</p>
+<table style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td style="width: 26%"><strong><span>Tool or Technology<br/></span></strong></td>
+<td style="width: 38.635%"><strong><span>Description<br/></span></strong></td>
+<td style="width: 32.365%"><strong><span>Role<br/></span></strong></td>
+</tr>
+<tr>
+<td style="width: 26%"><span>Docker<br/></span></td>
+<td style="width: 38.635%"><span>Docker is a technology used for working<br/>
+with applications packaged in the form of<br/>
+containers. Docker is an increasingly popular<br/>
+technology for building web applications.<br/></span></td>
+<td style="width: 32.365%"><span>Packages Python<br/>
+application and UI.<br/></span></td>
+</tr>
+<tr>
+<td style="width: 26%"><span>Flask<br/></span></td>
+<td style="width: 38.635%"><span>Flask is a micro-framework for building web<br/>
+applications in Python.<br/></span></td>
+<td style="width: 32.365%"><span>Creates application<br/>
+routes<br/></span></td>
+</tr>
+<tr>
+<td style="width: 26%"><span>Vue.js<br/></span></td>
+<td style="width: 38.635%"><span>JavaScript framework that works by<br/>
+dynamically changing templates on the<br/>
+frontend based on data inputs from the<br/>
+backend.<br/></span></td>
+<td style="width: 32.365%"><span>Renders a user interface.<br/></span></td>
+</tr>
+<tr>
+<td style="width: 26%"><span>Nginx<br/></span></td>
+<td style="width: 38.635%"><span>Web server easily configurable to route traffic<br/>
+to Dockerized applications and handle SSL<br/>
+certificates for an HTTPS connection.<br/></span></td>
+<td style="width: 32.365%"><span>Routes traffic between user and Flask<br/>
+application.<br/></span></td>
+</tr>
+<tr>
+<td style="width: 26%"><span>Redis<br/></span></td>
+<td style="width: 38.635%"><span>Key-value database. It's a popular choice<br/>
+for implementing caching systems due to its<br/>
+simplicity and speed.<br/></span></td>
+<td style="width: 32.365%"><span>Cache API requests.<br/></span></td>
+</tr>
+</tbody>
+</table>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Table 1</em>: Tools and technologies used for deploying a deep learning web application<span><br/></span></div>
+<p><span>These components fit together, as shown in the following figure:<br/></span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/4882144f-5d91-4ae6-9e85-a5da11185a70.png" style="width:77.25em;height:31.75em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><span>Figure 1: System architecture for the web application built in this project<br/></span></div>
+<p>A user visits the web application using their browser. That traffic is then routed by <kbd>Nginx</kbd> to the Docker container containing the Flask application (by default, running on port 5000). The Flask application has instantiated our Bitcoin model at startup. If a model has been given, it uses that model without training; if not, it creates a new model and trains it from scratch using data from CoinMarketCap.</p>
+<p>After having a model ready, the application verifies if the request has been cached on Redis—if yes, it returns the cached data. If no cache exists, then it will go ahead and issue predictions which are rendered in the UI.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Deploying and Using Cryptonic</h1>
+                </header>
+            
+            <article>
+                
+<p><kbd>cryptonic</kbd> is developed as a Dockerized application. In Docker terms, that means that the application can be built as a Docker image and then deployed as a Docker container in either a development or a production environment.</p>
+<p>Docker uses files called <kbd>Dockerfile</kbd> for describing the rules for how to build an image and what happens when that image is deployed as a container. Cryptonic's Dockerfile is available in the following code:</p>
+<pre><span>    FROM python:3.6<br/>    COPY . /cryptonic<br/>    WORKDIR "/cryptonic"<br/>    RUN pip install -r requirements.txt<br/></span><span>    EXPOSE 5000<br/>    CMD ["python", "run.py"]<br/></span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 6</em>: Docker file for the cryptonic image<span><br/></span></div>
+<p><span>A Docker file can be used to build a Docker image with the following command:<br/></span></p>
+<pre>     <span>$ docker build --tag cryptonic:latest</span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 7</em>: Docker command for building a Docker image locally<span><br/></span></div>
+<p>This command will make the image <kbd>cryptonic:latest</kbd> available to be deployed as a container. The building process can be repeated on a production server, or the image can be directly deployed and then run as a container.</p>
+<p>After an image has been built and is available, one can run the cryptonic application by using the command docker run, as shown in the following code:</p>
+<pre>     <span>$ docker run --publish 5000:5000 \ <br/>             --detach cryptonic:latest</span></pre>
+<div class="packt_figref CDPAlignCenter CDPAlign"><em>Snippet 8</em>: Example executing the docker run command in the terminal<span><br/></span></div>
+<p>The <kbd>--publish</kbd> flag binds port 5000 on localhost to port 5000 on the Docker container, and <kbd>--detach</kbd> runs the container as a daemon in the background.</p>
+<p>In case you have trained a different model and would like to use that instead of training a new model, you can alter the <kbd>MODEL_NAME</kbd> environment variable on the docker-compose. yml, as shown in Snippet 9. That variable should contain the filename of the model you have trained and want served (for example, <kbd>bitcoin_lstm_v1_trained.h5</kbd>)—it should also be a Keras model. If you do that, make sure to also mount a local directory into the / models folder. The directory that you decide to mount must have your model file.</p>
+<p>The <kbd>cryptonic</kbd> application also includes a number of environment variables that you may find useful when deploying your own model:</p>
+<ul>
+<li><span><kbd>MODEL_NAME</kbd>: Allows one to provide a trained model to be used by the application.</span></li>
+<li><span><kbd>BITCOIN_START_DATE</kbd>: Determines which day to use as the starting day for the Bitcoin series. Bitcoin prices have a lot more variance in recent years than earlier ones. This parameter filters the data to only years of interest. The default is January 1, 2017.</span></li>
+<li><span><kbd>PERIOD_SIZE</kbd>: Sets the period size in terms of days. The default is 7.</span></li>
+<li><span><kbd>EPOCHS</kbd>: Configures the number of epochs that the model trains on every run. The default is 300.<br/></span></li>
+</ul>
+<p><span>These variables can be configured in the <kbd>docker-compose.yml</kbd> file, as shown in the following code:<br/></span></p>
+<pre>    version: "3"<br/>    services:<br/>    cache:<br/>    image: cryptonic-cache:latest<br/>    volumes: - $PWD/cache_data:/data<br/>    networks:- cryptonic<br/>    ports: - "6379:6379"<br/>        environment:<br/>            - MODEL_NAME=bitcoin_lstm_v0_trained.h5<br/>            - BITCOIN_START_DATE=2017-01-01<br/>            - EPOCH=300<br/>            - PERIOD_SIZE=7</pre>
+<div class="packt_figref CDPAlignCenter CDPAlign"><em>Snippet 9</em>: <kbd>docker-compose.yml</kbd> file including environment variables<span><br/></span></div>
+<p>The easiest way to deploy cryptonic is to use the <kbd>docker-compose.yml</kbd> file from Snippet 9. This file contains all the specifications necessary for the application to run, including instructions on how to connect with the Redis cache, and what environment variables to use. After navigating to the location of the <kbd>docker-compose.yml file</kbd>, cryptonic can then be started with the command <kbd>docker-compose up</kbd>, as shown in the following code:</p>
+<pre>     <span>$ docker-compose up -d </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 10</em>: Starting a Docker application with docker-compose. The flag -d executes the application in the background.</div>
+<p><span>After being deployed, cryptonic can be accessed on port <kbd>5000</kbd> via a web browser. The application has a simple user interface with a time-series plot depicting real historical prices (in other words, observed) and predicted future prices from the deep learning model (in other words, predicted). One can also read, in the text, both the RMSE and the MAPE calculated using the <kbd>Model().evaluate()</kbd> method:</span></p>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/c4f9e7fd-36c2-4123-a2f4-1b7bfb335b64.png" style="width:70.67em;height:48.50em;"/></p>
+<div class="packt_figref CDPAlignCenter CDPAlign">Figure 2: Screenshot of the deployed cryptonic application<span><br/></span></div>
+<p>Aside from its user interface (developed using <kbd>Vue.js</kbd>), the application has an HTTP API that makes predictions when invoked.</p>
+<p>The API has the endpoint /<kbd>predict</kbd>, which returns a JSON object containing the de-normalized Bitcoin prices prediction for a week into the future:</p>
+<pre><span>    {<br/>    message: "API for making predictions.",<br/>    period_length: 7,<br/>    result: [<br/>        15847.7,<br/>        15289.36,<br/>        17879.07,<br/>    …<br/>        17877.23,<br/>        17773.08<br/>    ],<br/>        success: true,<br/>        version: 1<br/>    } </span></pre>
+<div class="CDPAlignCenter CDPAlign packt_figref"><em>Snippet 11</em>: Example JSON output from the /predict endpoint<span><br/></span></div>
+<p>The application can now be deployed in a remote server and used to continuously predict Bitcoin prices.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Activity:Deploying a Deep Learning Application</h1>
+                </header>
+            
+            <article>
+                
+<p><span>In this activity, we deploy our model as a web application locally. This allows us to connect to the web application using a browser or to use another application through the application's HTTP API. Before we continue, make sure that you have the following applications installed and available in your computer:<br/></span></p>
+<ul>
+<li><span>Docker (Community Edition) 17.12.0-ce or later</span></li>
+<li><span>Docker Compose (docker-compose) 1.18.0 or later<br/></span></li>
+</ul>
+<p><span>Both of the components above can be downloaded and installed in all major systems from the website: <a href="https://www.docker.com/">http://docker.com/.</a> These are essential for completing this activity. Make sure these are available in your system before moving forward.<br/></span></p>
+<ol>
+<li><span>Using your terminal, navigate to the cryptonic directory and build the docker images for all the required components:<br/></span></li>
+</ol>
+<pre><span>      $ docker build --tag cryptonic:latest .    <br/>      $ docker build --tag cryptonic-cache:latest ./ cryptonic-cache/ </span></pre>
+<ol start="2">
+<li>Those two commands build the two images that we will use in this application: cryptonic (containing the Flask application) and cryptonic-cache (containing the Redis cache).</li>
+</ol>
+<ol start="3">
+<li>After building the images, identify the <kbd>docker-compose.yml</kbd> file and open it in a text editor. Change the parameter <kbd>BITCOIN_START_DATE</kbd> to a date other than 2017- 01-01:</li>
+</ol>
+<pre><span>      BITCOIN_START_DATE = # Use other date here </span></pre>
+<ol start="4">
+<li>As a final step, deploy your web application locally using docker-compose, as follows:</li>
+</ol>
+<pre><span>      docker-compose up </span></pre>
+<p style="padding-left: 60px">You should see a log of activity on your terminal, including training epochs from your model.</p>
+<ol start="5">
+<li>After the model has been trained, you can visit your application on <kbd>http:// localhost:5000</kbd> and make predictions on <kbd>http://localhost:5000/predict</kbd>:</li>
+</ol>
+<p class="CDPAlignCenter CDPAlign"><img src="assets/b5aed7a8-3696-433f-8f2d-21b8f41ec65f.png" style="width:68.67em;height:47.17em;"/></p>
+<div class="CDPAlignCenter CDPAlign packt_figref">Figure 3: Screenshot of the cryptonic application deployed locally</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>This chapter concludes our journey into creating a deep learning model and deploying it as a web application. Our very last steps included deploying a model that predicts Bitcoin prices built using Keras and using a TensorFlow engine. We finished our work by packaging the application as a Docker container and deploying it so that others can consume the predictions of our model—as well as other applications via its API.</p>
+<p>Aside from that work, you have also learned that there is much that can be improved. Our Bitcoin model is only an example of what a model can do (particularly LSTMs). The challenge now is two fold: how can you make that model perform better as time passes? And, what features can you add to your web application to make your model more accessible? Good luck and keep learning!</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

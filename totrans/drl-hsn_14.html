@@ -1,0 +1,679 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-14-web-navigation">
+<h1 class="chapterNumber">14</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_417">
+<span id="x1-24700014"/>Web Navigation
+    </h1>
+<p>We will now take a look at some other practical applications of <span class="cmbx-10x-x-109">reinforcement</span> <span class="cmbx-10x-x-109">learning </span>(<span class="cmbx-10x-x-109">RL</span>): web navigation and browser automation. This is a really useful example of how RL methods could be applied to a practical problem, including the complications you might face and how they could be addressed.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Discuss <span class="cmbx-10x-x-109">web navigation </span>in general and the practical application of browser automation</p>
+</li>
+<li>
+<p>Explore how web navigation can be solved with an RL approach</p>
+</li>
+<li>
+<p>Take a deep look at one very interesting, but commonly overlooked and a bit abandoned, RL benchmark that was implemented by OpenAI, called <span class="cmbx-10x-x-109">Mini World of Bits (MiniWoB)</span>.</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="the-evolution-of-web-navigation">
+<h1 class="heading-1" id="sigil_toc_id_221"> <span id="x1-24800014.1"/>The evolution of web navigation</h1>
+<p>When the web was<span id="dx1-248001"/> invented, it started as several text-only web pages interconnected by hyperlinks. If you’re curious, here is the home of the first web page, <a class="url" href="http://info.cern.ch"><span class="cmtt-10x-x-109">http://info.cern.ch</span></a>, with text and links. The only thing you can do is read the text and click on links to navigate between pages.</p>
+<p>Several <span id="dx1-248002"/>years later, in 1995, the <span class="cmbx-10x-x-109">Internet Engineering Task Force </span>(<span class="cmbx-10x-x-109">IETF</span>) published the HTML 2.0 specification, which had a lot of extensions to the original version invented by Tim Berners-Lee. Among these extensions were forms and form elements that allowed web page authors to add activity to their websites. Users could enter and change text, toggle checkboxes, select drop-down lists, and push buttons. The set of controls was similar to a minimalistic set of <span class="cmbx-10x-x-109">graphical user</span> <span class="cmbx-10x-x-109">interface </span>(<span class="cmbx-10x-x-109">GUI</span>) application controls. The difference was that this happened inside the browser’s window, and both the data and <span class="cmbx-10x-x-109">user interface </span>(<span class="cmbx-10x-x-109">UI</span>) controls that users interacted with were defined by the server’s page, but not by the local installed application.</p>
+<p>Fast forward 29 years, and now we have JavaScript, HTML5 canvas, and Microsoft Office applications working inside our browsers. The boundary between the desktop and the web is so thin and blurry that you may not even know whether the app you’re using is an HTML page or a native app. However, it is still the browser that understands HTML and communicates with the outside world using HTTP.</p>
+<p>At its core, web <span id="dx1-248003"/>navigation is defined as the process of a user interacting with a website or websites. The user can click on links, type text, or carry out any other actions to reach their goal, such as sending an email, finding out the exact dates of the French Revolution, or checking recent Facebook notifications. All this will be done using web navigation, so that leaves a question: can our program learn how to do the same?</p>
+</section>
+<section class="level3 sectionHead" id="browser-automation-and-rl">
+<h1 class="heading-1" id="sigil_toc_id_222"> <span id="x1-24900014.2"/>Browser automation and RL</h1>
+<p>For a long<span id="dx1-249001"/> time, automating website interaction focused on the very practical tasks of <span class="cmbx-10x-x-109">website testing </span>and <span class="cmbx-10x-x-109">web scraping</span>. Website testing<span id="dx1-249002"/> is especially critical when you <span id="dx1-249003"/>have a complicated website that you (or other people) have developed and you want to ensure that it does what it is supposed to do. For example, if you have a login page that has been redesigned and is ready to be deployed on a live website, then you will want to be sure that this new design does sane things in case a wrong password is entered, the user clicks on <span class="cmti-10x-x-109">I forgot my password</span>, and so on. A complex website could potentially include hundreds or thousands of use cases that should be tested on every release, so all such functions should be automated.</p>
+<p>Web scraping solves the problem of extracting data from websites at scale. For example, if you want to build a system that aggregates all prices for all the pizza places in your town, you will potentially need to deal with hundreds of different websites, which could be problematic to build and maintain. Web scraping tools try to solve the problem of interacting with websites, providing various functionality from simple HTTP requests and subsequent HTML parsing to full emulation of the user moving the mouse, clicking buttons, user’s reaction delays, and so on.</p>
+<p>The standard approach to browser automation normally allows you to control the real browser, such as Chrome or Firefox, with your program, which can observe the web page data, like the <span class="cmbx-10x-x-109">Document Object Model </span>(<span class="cmbx-10x-x-109">DOM</span>) tree and an object’s location on the screen, and issue the actions, like moving the mouse, pressing some keys, pushing the <span class="cmbx-10x-x-109">Back </span>button, or just executing some JavaScript code. The connection to the RL problem setup is obvious: our agent interacts with the web page and browser by issuing actions and observing the state. The reward is not that clear and should be task-specific, like successfully filling a form in or reaching the page with the desired information. Practical applications of a system that could learn browser tasks are related to the previous use cases, and include the following:</p>
+<ul>
+<li>
+<p>In web testing for very large websites, it’s extremely tedious to define the testing process using low-level browser actions like “move the mouse five pixels <span id="dx1-249004"/>to the left, then press the left button.” What you want to do is give the system some demonstrations and let it generalize and repeat the shown actions in all similar situations, or at least make it robust enough for UI redesign, button text change, and so on.</p>
+</li>
+<li>
+<p>There are many cases when you don’t know the problem in advance, for example, when you want the system to explore the weak points of the website, like security vulnerabilities. In that case, the RL agent could try a lot of weird actions very quickly, much faster than humans could. Of course, the action space for security testing is enormous, so random clicking won’t be as effective as experienced human testers. In that case, the RL-based system could, potentially, combine the prior knowledge and experience of humans but still keep the ability to explore and learn from this exploration.</p>
+</li>
+<li>
+<p>Another potential domain that could benefit from RL browser automation is scraping and web data extraction in general. For example, you might want to extract some data from hundreds of thousands of different websites, like hotel websites, car rental agents, or other businesses around the world. Very often, before you get to the desired data, a form with parameters needs to be filled out, which becomes a very nontrivial task given the different websites’ design, layout, and natural language flexibility. With such a task, an RL agent can save tons of time and effort by extracting the data reliably and at scale.</p>
+</li>
+</ul>
+</section>
+<section class="level3 sectionHead" id="challenges-in-browser-automation">
+<h1 class="heading-1" id="sigil_toc_id_223"> <span id="x1-25000014.3"/>Challenges in browser automation</h1>
+<p>Potential practical <span id="dx1-250001"/>applications of browser automation with RL are attractive but have one very serious drawback: they’re too large to be used for research and the comparison of methods. In fact, the implementation of a full-sized web scraping system could take months of effort from a team, and most of the issues would not be directly related to RL, like data gathering, browser engine communication, input and output representation, and lots of other questions that real production system development consists of.</p>
+<p>By solving all these issues, we can easily miss the forest by looking at the trees. That’s why researchers love benchmark datasets, like MNIST, ImageNet, and the Atari suite. However, not every problem makes a good benchmark. On the one hand, it should be simple enough to allow quick experimentation and comparison between methods. On the other hand, the benchmark has to be challenging and leave room for improvement. For example, Atari benchmarks consist of a wide variety of games, from very simple ones that can be solved in half an hour (like Pong), to quite complex games that were properly solved only recently (like Montezuma’s Revenge, which requires the complex planning of actions). To the best of my knowledge, there is only one such benchmark for the browser automation domain, which makes it even worse that this benchmark was undeservedly forgotten by the RL community. As an attempt to fix this issue, we will take a look at the benchmark in this chapter. Let’s talk about its history first.</p>
+</section>
+<section class="level3 sectionHead" id="the-miniwob-benchmark">
+<h1 class="heading-1" id="sigil_toc_id_224"> <span id="x1-25100014.4"/>The MiniWoB benchmark</h1>
+<p>In December 2016, OpenAI published <span id="dx1-251001"/>a dataset called MiniWoB that contains 80 browser-based tasks. These tasks are observed at the pixel level (strictly speaking, besides pixels, a text description of tasks is given to the agent) and <span id="dx1-251002"/>are supposed to be communicated with the mouse and keyboard actions using the <span class="cmbx-10x-x-109">Virtual Network Computing </span>(<span class="cmbx-10x-x-109">VNC</span>) client. VNC is a standard remote desktop protocol by which a VNC server allows clients to connect to and work with a server’s GUI applications using the mouse and keyboard via the network.</p>
+<p>The 80 tasks vary a lot in terms of complexity and the actions required from the agent. Some tasks are very simple, even for RL, like “click on the dialog’s close button,” or “push the single button,” but some require multiple steps, for example, “open collapsed groups and click on the link with some text,” or “select a specific date using the date picker tool” (and this date is randomly generated every episode). Some of the tasks are simple for humans but require character recognition, for example, “mark checkboxes with this text” (and the text is generated randomly). Some screenshots of MiniWoB problems are shown in the following figure:</p>
+<div class="minipage">
+<p><img alt="PIC" height="500" src="../Images/B22150_14_01.png" width="500"/> <span id="x1-251003r1"/></p>
+<span class="id">Figure 14.1: MiniWoB environments </span>
+</div>
+<p>Unfortunately, despite <span id="dx1-251004"/>the brilliant idea and the challenging nature of MiniWoB, it was almost abandoned by OpenAI right after the initial release. Several years later, a group of Stanford researchers released an updated version called <span class="cmbx-10x-x-109">MiniWoB++</span>, which had more games and a reworked architecture.</p>
+</section>
+<section class="level3 sectionHead" id="miniwob">
+<h1 class="heading-1" id="sigil_toc_id_225"> <span id="x1-25200014.5"/>MiniWoB++</h1>
+<p>Instead <span id="dx1-252001"/>of using VNC protocol and a real web browser, MiniWoB++ uses the Selenium (<a class="url" href="https://www.selenium.dev"><span class="cmtt-10x-x-109">https://www.selenium.dev</span></a>) library for web browser automation, which has significantly increased the performance and stability of the environment.</p>
+<p>Currently, MiniWob++ is being maintained by the Farama Foundation ( <a class="url" href="https://miniwob.farama.org/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/</span></a>), which is really great news for the RL community. In this chapter, we’ll use their latest version, but before jumping into the RL part of the agent, we need to understand how MiniWoB++ works.</p>
+<section class="level4 subsectionHead" id="installation-1">
+<h2 class="heading-2" id="sigil_toc_id_226"> <span id="x1-25300014.5.1"/>Installation</h2>
+<p>The original MiniWoB <span id="dx1-253001"/>used VNC and OpenAI Universe, which created lots of complications during installation and usage. The previous edition of this book provided a custom Docker image with detailed installation instructions. Now, it is much simpler: you don’t need to deal with Docker and VNC anymore. The Selenium library (which is a de facto standard in browser automation) hides all the complications of communicating with the browser, which is started in the background in headless mode. Selenium supports various browsers, but the MiniWoB++ developers recommend using Chrome or Chromium, as other browsers might render environments differently.</p>
+<p>Besides the MiniWoB++ package (which can be installed with <span class="cmtt-10x-x-109">pip install</span> <span class="cmtt-10x-x-109">miniwob==1.0</span>), you will need <span class="cmtt-10x-x-109">chromedriver </span>to be set up on your machine. ChromeDriver is a small binary that communicates with the browser and runs it in the “testing mode.” The version of ChromeDriver has to match the installed version of Chrome (to check, go to <span class="cmbx-10x-x-109">Chrome </span><span class="cmsy-10x-x-109">→</span> <span class="cmbx-10x-x-109">About Google Chrome</span>), so please download the <span class="cmtt-10x-x-109">chromedriver</span> archive for your platform and Chrome version from this website: <a class="url" href="https://googlechromelabs.github.io/chrome-for-testing/"><span class="cmtt-10x-x-109">https://googlechromelabs.github.io/chrome-for-testing/</span></a>.</p>
+<p>Be careful: besides the ChromeDriver archive, they also provide archives for the full version of Chrome, most likely you don’t need it. For example, <span class="cmtt-10x-x-109">chromedriver </span>for Chrome v123 on Mac M2 hardware will have this URL: <a class="url" href="https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.122/mac-arm64/chromedriver-mac-arm64.zip"><span class="cmtt-10x-x-109">https://storage.googleapis.com/chrome-for-testing-public/123.0.6312.122/mac-arm64/chromedriver-mac-arm64.zip</span></a>. In the archive, a single <span class="cmtt-10x-x-109">chromedriver </span>binary is present, which should be put somewhere in the <span class="cmtt-10x-x-109">PATH </span>of your shell (on Mac and Linux machines, you can use the <span class="cmtt-10x-x-109">which chromedriver </span>console command, which has to write the full path to the binary. If nothing is shown, you need to modify the <span class="cmtt-10x-x-109">PATH</span>). To test your installation, you can use a simple program, <span class="cmtt-10x-x-109">Chapter14/adhoc/01</span><span class="cmtt-10x-x-109">_wob</span><span class="cmtt-10x-x-109">_create.py</span>. If everything is working, a browser window with a task will appear for 2 seconds.</p>
+</section>
+<section class="level4 subsectionHead" id="actions-and-observations">
+<h2 class="heading-2" id="sigil_toc_id_227"> <span id="x1-25400014.5.2"/>Actions and observations</h2>
+<p>In contrast <span id="dx1-254001"/>with Atari games and the other Gym environments that we have worked with so<span id="dx1-254002"/> far, MiniWoB exposes a much more generic action space. Atari games used six or seven discrete actions corresponding to the controller’s buttons and joystick directions. CartPole’s action space is even smaller, with just two actions. However, the browser gives our agent much more flexibility in terms of what it can do. First, the full keyboard, with control keys and the up/down state of every key, is exposed. So, your agent can decide to press 10 buttons simultaneously and it will be totally fine from a MiniWoB point of view. The second part of the action space is the mouse: you can move the mouse to any coordinates and control the state of its buttons. This significantly increases the dimensionality of the action space that the agent needs to learn how to handle. In addition, the mouse allows double-clicking and mouse-wheel up/down scrolling events.</p>
+<p>In terms of observation space, MiniWoB is also much richer than the environments we’ve dealt with so far. The full observation is represented as a dict with the following data:</p>
+<ul>
+<li>
+<p>Text with a description of the task, like <span class="cmbx-10x-x-109">Click button ONE </span>or <span class="cmbx-10x-x-109">You</span> <span class="cmbx-10x-x-109">are playing as X in TicTacToe, win the game</span></p>
+</li>
+<li>
+<p>Screen’s pixel as RGB values</p>
+</li>
+<li>
+<p>List of all DOM elements from the underlying web page with attributes (dimensions, colors, font, etc.)</p>
+</li>
+</ul>
+<p>Besides that, you can access the underlying browser to get even more information (to get some information that is not directly provided, like CSS attributes or raw HTML data).</p>
+<p>As you can see, this set of tasks has lots of flexibility for experimentation: you can focus on the visual side of the task, working at the pixel level; you can use DOM information (the environment allows you to click on specific elements); or use NLP components — to understand the task description and plan the actions.</p>
+</section>
+<section class="level4 subsectionHead" id="simple-example">
+<h2 class="heading-2" id="sigil_toc_id_228"> <span id="x1-25500014.5.3"/>Simple example</h2>
+<p>To gain some <span id="dx1-255001"/>practical experience with MiniWoB, let’s take a look at the program you used to validate your installation, which you will find at <span class="cmtt-10x-x-109">Chapter14/adhoc/01</span><span class="cmtt-10x-x-109">_wob</span><span class="cmtt-10x-x-109">_create.py</span>.</p>
+<p>First, we need to register the MiniWoB environment in Gymnasium, which is done with the <span class="cmtt-10x-x-109">register</span><span class="cmtt-10x-x-109">_envs() </span>function:</p>
+<div class="tcolorbox" id="tcolobox-304">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-370"><code>import time 
+import gymnasium as gym 
+import miniwob 
+from miniwob.action import ActionTypes 
+ 
+RENDER_ENV = True 
+ 
+if __name__ == "__main__": 
+    gym.register_envs(miniwob)</code></pre>
+</div>
+</div>
+<p>In fact, this <span class="cmtt-10x-x-109">register</span><span class="cmtt-10x-x-109">_envs() </span>function does nothing, as all the environments are registered when the module is imported. But modern IDEs are smart enough to start complaining about unused modules, so this method creates the impression for the IDE that the module is being used in the code.</p>
+<p>Then we create an environment using the standard <span class="cmtt-10x-x-109">gym.make() </span>method:</p>
+<div class="tcolorbox" id="tcolobox-305">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-371"><code>    env = gym.make(’miniwob/click-test-2-v1’, render_mode=’human’ if RENDER_ENV else None) 
+    print(env) 
+    try: 
+        obs, info = env.reset() 
+        print("Obs keys:", list(obs.keys())) 
+        print("Info dict:", info) 
+        assert obs["utterance"] == "Click button ONE." 
+        assert obs["fields"] == (("target", "ONE"),) 
+        print("Screenshot shape:", obs[’screenshot’].shape)</code></pre>
+</div>
+</div>
+<p>In our example, we’re using the <span class="cmtt-10x-x-109">click-test-2 </span>problem, which asks you to click on one of two buttons randomly placed on the webpage. The Farama website contains a very convenient list of environments that you can play with yourself. The <span class="cmtt-10x-x-109">click-test-2 </span>problem is available here: <a class="url" href="https://miniwob.farama.org/environments/click-test-2/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/click-test-2/</span></a>.</p>
+<p>On <span id="dx1-255020"/>environment creation, we passed the <span class="cmtt-10x-x-109">render</span><span class="cmtt-10x-x-109">_mode </span>argument. If it equals <span class="cmtt-10x-x-109">’human’</span>, then the browser window will be shown in the background. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-255021r2"><span class="cmti-10x-x-109">14.2</span></a>, you can see the window:</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file178.png" width="288"/> <span id="x1-255021r2"/></p>
+<span class="id">Figure 14.2: <span class="cmtt-10x-x-109">click-test-2 </span>environment </span>
+</div>
+<p>If we run the program, it will show us the environment object and information about the observation (which is quite a large dict, so, I output just a list of its keys). The following is the part that is shown by the code:</p>
+<pre class="lstlisting" id="listing-372"><code>$ python adhoc/01_wob_create.py 
+&lt;OrderEnforcing&lt;PassiveEnvChecker&lt;ClickTest2Env&lt;miniwob/click-test-2-v1&gt;&gt;&gt;&gt; 
+Obs keys: [’utterance’, ’dom_elements’, ’screenshot’, ’fields’] 
+Info dict: {’done’: False, ’env_reward’: 0, ’raw_reward’: 0, ’reason’: None, ’root_dom’: [1] body @ (0, 0) classes=[] children=1} 
+Screenshot shape: (210, 160, 3)</code></pre>
+<p>As you can see, we <span id="dx1-255027"/>have <span class="cmtt-10x-x-109">utterance </span>(which is a task to be performed), DOM elements, <span class="cmtt-10x-x-109">screenshot </span>with exactly the same dimensions as the Atari platform (I don’t think this is just a coincidence!), and a list of <span class="cmtt-10x-x-109">fields</span>, which are task-specific important elements in the DOM tree.</p>
+<p>Now, let’s go back to our code. The following snippet finds the element in the <span class="cmtt-10x-x-109">dom</span><span class="cmtt-10x-x-109">_elements </span>list that we have to click on to perform the task:</p>
+<div class="tcolorbox" id="tcolobox-306">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-373"><code>        if RENDER_ENV: 
+            time.sleep(2) 
+ 
+        target_elems = [e for e in obs[’dom_elements’] if e[’text’] == "ONE"] 
+        assert target_elems 
+        print("Target elem:", target_elems[0])</code></pre>
+</div>
+</div>
+<p>The code is iterating over the <span class="cmtt-10x-x-109">dom</span><span class="cmtt-10x-x-109">_elements </span>observation’s field, filtering elements that have the text <span class="cmtt-10x-x-109">ONE</span>. The element that is found has quite a rich set of attributes:</p>
+<pre class="lstlisting" id="listing-374"><code>Target elem: {’ref’: 4, ’parent’: 3, ’left’: array([80.], dtype=float32), ’top’: array([134.], dtype=float32), ’width’: array([40.], dtype=float32), ’height’: array([40.], dtype=float32), ’tag’: ’button’, ’text’: ’ONE’, ’value’: ’’, ’id’: ’subbtn’, ’classes’: ’’, ’bg_color’: array([0.9372549, 0.9372549, 0.9372549, 1.      ], dtype=float32), ’fg_color’: array([0., 0., 0., 1.], dtype=float32), ’flags’: array([0, 0, 0, 1], dtype=int8)}</code></pre>
+<p>Now, let’s look at the final piece of the code, where we take the reference of the element (which is an integer identifier) and create the <span class="cmtt-10x-x-109">CLICK</span><span class="cmtt-10x-x-109">_ELEMENT</span> action:</p>
+<div class="tcolorbox" id="tcolobox-307">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-375"><code>        action = env.unwrapped.create_action( 
+            ActionTypes.CLICK_ELEMENT, ref=target_elems[0]["ref"]) 
+        obs, reward, terminated, truncated, info = env.step(action) 
+        print(reward, terminated, info) 
+    finally: 
+        env.close()</code></pre>
+</div>
+</div>
+<p>As we have already mentioned, MiniWoB provides a rich set of actions to be executed. This particular one emulates a mouse click on a specific DOM element.</p>
+<p>As a result of this action, we should get a reward, which in fact does happen:</p>
+<pre class="lstlisting" id="listing-376"><code>0.7936 True {’done’: True, ’env_reward’: 0.7936, ’raw_reward’: 1, ’reason’: None, ’elapsed’: 2.066638231277466}</code></pre>
+<p>If you <span id="dx1-255042"/>disable rendering with <span class="cmtt-10x-x-109">RENDER</span><span class="cmtt-10x-x-109">_ENV = False</span>, everything that happens in the console and the browser won’t be shown. This mode will also lead to a higher reward, as the reward decreases with time. Full headless mode on my machine obtains a reward of 0.9918 in 0.09 seconds.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-simple-clicking-approach">
+<h1 class="heading-1" id="sigil_toc_id_229"> <span id="x1-25600014.6"/>The simple clicking approach</h1>
+<p>To get started <span id="dx1-256001"/>with web navigation, let’s implement a simple A3C agent that decides where it should click given the image observation. This approach can solve only a small subset of the full MiniWoB suite, and we will discuss the restrictions of this approach later. For now, it will allow us to get a better understanding of the problem.</p>
+<p>As with the previous chapter, I won’t discuss the complete source code here. Instead, we will focus on the most important functions and I will provide a brief overview of the rest. The complete source code is available in the GitHub repository.</p>
+<section class="level4 subsectionHead" id="grid-actions">
+<h2 class="heading-2" id="sigil_toc_id_230"> <span id="x1-25700014.6.1"/>Grid actions</h2>
+<p>When we talked <span id="dx1-257001"/>about MiniWoB architecture and organization, we mentioned that the richness and flexibility of the action space creates a lot of challenges for the RL agent. The active area inside the browser is just 210 <span class="cmsy-10x-x-109">× </span>160 pixels, but even with such a small area, our agent could be asked to move the mouse, perform clicks, drag objects, and so on. Just the mouse alone could be problematic to master, as, in the extreme case, there could be an almost infinite number of different actions that the agent could perform, like pressing the mouse button at some point and dragging the mouse to a different location. In our example, we will simplify our problem a lot by just considering clicks at some fixed grid points inside the active webpage area. The sketch of our action space is shown in the following figure:</p>
+<div class="minipage">
+<p><img alt="PIC" height="252" src="../Images/file179.png" width="500"/> <span id="x1-257002r3"/></p>
+<span class="id">Figure 14.3: A grid action space </span>
+</div>
+<p>In the <span id="dx1-257003"/>original version of MiniWob, the wrapper for such actions was already present in OpenAI Universe. But since it is not available for MiniWoB++, I implemented it myself in the <span class="cmtt-10x-x-109">lib/wob.py </span>module. Let’s quickly check the code, starting with the constructor:</p>
+<div class="tcolorbox" id="tcolobox-308">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-377"><code>WIDTH = 160 
+HEIGHT = 210 
+X_OFS = 0 
+Y_OFS = 50 
+BIN_SIZE = 10 
+WOB_SHAPE = (3, HEIGHT, WIDTH) 
+ 
+class MiniWoBClickWrapper(gym.ObservationWrapper): 
+    FULL_OBS_KEY = "full_obs" 
+ 
+    def __init__(self, env: gym.Env, keep_text: bool = False, 
+                 keep_obs: bool = False, bin_size: int = BIN_SIZE): 
+        super(MiniWoBClickWrapper, self).__init__(env) 
+        self.bin_size = bin_size 
+        self.keep_text = keep_text 
+        self.keep_obs = keep_obs 
+        img_space = spaces.Box(low=0, high=255, shape=WOB_SHAPE, dtype=np.uint8) 
+        if keep_text: 
+            self.observation_space = spaces.Tuple( 
+                (img_space, spaces.Text(max_length=1024))) 
+        else: 
+            self.observation_space = img_space 
+        self.x_bins = WIDTH // bin_size 
+        count = self.x_bins * ((HEIGHT - Y_OFS) // bin_size) 
+        self.action_space = spaces.Discrete(count)</code></pre>
+</div>
+</div>
+<p>In the constructor, we create the observation space (which is a tensor of 3 <span class="cmsy-10x-x-109">× </span>210 <span class="cmsy-10x-x-109">× </span>160) and the action space, which will be 256 discrete actions <span id="dx1-257029"/>for a bin size of 10. As an option, we can ask the wrapper to preserve the text of the task to be performed. This functionality will be used in subsequent examples in the chapter.</p>
+<p>Then we provide a class method to create the environment with a specific configuration:</p>
+<div class="tcolorbox" id="tcolobox-309">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-378"><code>    @classmethod 
+    def create(cls, env_name: str, bin_size: int = BIN_SIZE, keep_text: bool = False, 
+               keep_obs: bool = False, **kwargs) -&gt; "MiniWoBClickWrapper": 
+        gym.register_envs(miniwob) 
+        x_bins = WIDTH // bin_size 
+        y_bins = (HEIGHT - Y_OFS) // bin_size 
+        act_cfg = ActionSpaceConfig( 
+            action_types=(ActionTypes.CLICK_COORDS, ), coord_bins=(x_bins, y_bins)) 
+        env = gym.make(env_name, action_space_config=act_cfg, **kwargs) 
+        return MiniWoBClickWrapper( 
+            env, keep_text=keep_text, keep_obs=keep_obs, bin_size=bin_size)</code></pre>
+</div>
+</div>
+<p>Besides just creating the environment and wrapping it, we’re asking for a custom <span class="cmtt-10x-x-109">ActionSpaceConfig</span>, which will take into account our grid’s dimensions. With this customization, we will need to pass the (<span class="cmmi-10x-x-109">x,y</span>) coordinates of the grid cell to perform the click action. Then, we define a helper method, which converts the full observation <span class="cmtt-10x-x-109">dict </span>into the format we need. The <span class="cmtt-10x-x-109">reset() </span>method is just calling this method:</p>
+<div class="tcolorbox" id="tcolobox-310">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-379"><code>    def _observation(self, observation: dict) -&gt; np.ndarray | tt.Tuple[np.ndarray, str]: 
+        text = observation[’utterance’] 
+        scr = observation[’screenshot’] 
+        scr = np.transpose(scr, (2, 0, 1)) 
+        if self.keep_text: 
+            return scr, text 
+        return scr 
+ 
+    def reset(self, *, seed: int | None = None, options: dict[str, tt.Any] | None = None) \ 
+            -&gt; tuple[gym.core.WrapperObsType, dict[str, tt.Any]]: 
+        obs, info = self.env.reset(seed=seed, options=options) 
+        if self.keep_obs: 
+            info[self.FULL_OBS_KEY] = obs 
+        return self._observation(obs), info</code></pre>
+</div>
+</div>
+<p>Now, the final <span id="dx1-257055"/>piece of the wrapper, the <span class="cmtt-10x-x-109">step() </span>method:</p>
+<div class="tcolorbox" id="tcolobox-311">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-380"><code>    def step(self, action: int) -&gt; tt.Tuple[ 
+        gym.core.WrapperObsType, gym.core.SupportsFloat, bool, bool, dict[str, tt.Any] 
+    ]: 
+        b_x, b_y = action_to_bins(action, self.bin_size) 
+        new_act = { 
+            "action_type": 0, 
+            "coords": np.array((b_x, b_y), dtype=np.int8), 
+        } 
+        obs, reward, is_done, is_tr, info = self.env.step(new_act) 
+        if self.keep_obs: 
+            info[self.FULL_OBS_KEY] = obs 
+        return self._observation(obs), reward, is_done, is_tr, info 
+ 
+ 
+def action_to_bins(action: int, bin_size: int = BIN_SIZE) -&gt; tt.Tuple[int, int]: 
+    row_bins = WIDTH // bin_size 
+    b_y = action // row_bins 
+    b_x = action % row_bins 
+    return b_x, b_y</code></pre>
+</div>
+</div>
+<p>To perform the action, we need to convert the index of the grid cell index (in the 0<span class="cmmi-10x-x-109">…</span>255 range) into the (<span class="cmmi-10x-x-109">x,y</span>) coordinates of the cell. Then, as an action for the underlying MiniWoB environment, we pass a dict with <span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_type=0 </span>(which is an index in <span class="cmtt-10x-x-109">ActionSpaceConfig </span>we used in the environment creation) and a NumPy array with those cell coordinates.</p>
+<p>To illustrate the wrapper, there is a small program in the GitHub repository in the <span class="cmtt-10x-x-109">adhoc/03</span><span class="cmtt-10x-x-109">_clicker.py </span>file, which uses a brute force approach on the <span class="cmtt-10x-x-109">click-dialog-v1 </span>task. The goal is to close the randomly placed dialog using the corner button with the cross. In this example (we’re not showing the code here), we sequentially click through all the 256 grid cells to illustrate the wrapper.</p>
+</section>
+<section class="level4 subsectionHead" id="the-rl-part-of-our-implementation">
+<h2 class="heading-2" id="sigil_toc_id_231"> <span id="x1-25800014.6.2"/>The RL part of our implementation</h2>
+<p>With the <span id="dx1-258001"/>transformation of observation and actions, the RL part is quite straightforward. We will use the A3C method to train the agent, which should decide from the 160 <span class="cmsy-10x-x-109">× </span>210 observation which grid cell to click on. Besides the policy, which is a probability distribution over 256 grid cells, our agent estimates the value of the state, which will be used as a baseline in policy gradient estimation.</p>
+<p>There are several modules in this example:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">lib/common.py</span>: Methods shared among examples in this chapter, including the already familiar <span class="cmtt-10x-x-109">RewardTracker </span>and <span class="cmtt-10x-x-109">unpack</span><span class="cmtt-10x-x-109">_batch</span> functions</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">lib/model.py</span>: Includes a definition of the model, which we’ll take a look at in the next section</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">lib/wob.py</span>: Includes MiniWoB-specific code, like environment wrappers and other utility functions</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_train.py</span>: The script used to train the clicker model</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_play.py</span>: The script that loads the model weights and uses them against the single environment, recording observations and counting statistics about the reward</p>
+</li>
+</ul>
+<p>There is nothing new in the code in these modules, so it is not shown here. You can find it in the GitHub repository.</p>
+</section>
+<section class="level4 subsectionHead" id="the-model-and-training-code">
+<h2 class="heading-2" id="sigil_toc_id_232"> <span id="x1-25900014.6.3"/>The model and training code</h2>
+<p>The model is <span id="dx1-259001"/>very straightforward and uses the same patterns that you have seen in other A3C examples. I haven’t spent much time optimizing and fine-tuning the architecture and hyperparameters, so it’s likely that the final result could be improved significantly (you can try doing this yourself based on what you’ve learned in this book so far). The following is the model definition with two convolution layers, a single-layered policy, and value heads:</p>
+<div class="tcolorbox" id="tcolobox-312">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-381"><code>class Model(nn.Module): 
+    def __init__(self, input_shape: tt.Tuple[int, ...], n_actions: int): 
+        super(Model, self).__init__() 
+ 
+        self.conv = nn.Sequential( 
+            nn.Conv2d(input_shape[0], 64, 5, stride=5), 
+            nn.ReLU(), 
+            nn.Conv2d(64, 64, 3, stride=2), 
+            nn.ReLU(), 
+            nn.Flatten(), 
+        ) 
+        size = self.conv(torch.zeros(1, *input_shape)).size()[-1] 
+        self.policy = nn.Linear(size, n_actions) 
+        self.value = nn.Linear(size, 1) 
+ 
+    def forward(self, x: torch.ByteTensor) -&gt; tt.Tuple[torch.Tensor, torch.Tensor]: 
+        xx = x / 255.0 
+        conv_out = self.conv(xx) 
+        return self.policy(conv_out), self.value(conv_out)</code></pre>
+</div>
+</div>
+<p>You’ll find the <span id="dx1-259021"/>training script in <span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_train.py</span>, and it is exactly the same as in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch016.xhtml#x1-20300012"><span class="cmti-10x-x-109">12</span></a>. We’re using <span class="cmtt-10x-x-109">AsyncVectorEnv </span>with 8 parallel environments, which starts 8 Chrome instances in the background. If your machine’s memory allows, you can increase this count and check the effect on the training.</p>
+</section>
+<section class="level4 subsectionHead" id="training-results-1">
+<h2 class="heading-2" id="sigil_toc_id_233"> <span id="x1-26000014.6.4"/>Training results</h2>
+<p>By default, the <span id="dx1-260001"/>training uses the <span class="cmtt-10x-x-109">click-dialog-v1 </span>problem, and it took about 8 minutes of training to reach an average reward of 0.9. <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-260002r4"><span class="cmti-10x-x-109">14.4</span></a> shows the plots with average reward and number of steps:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_14_04.png" width="600"/> <span id="x1-260002r4"/></p>
+<span class="id">Figure 14.4: Training reward (left) and count of steps in episodes (right) </span>
+</div>
+<p>The <span class="cmtt-10x-x-109">episode</span><span class="cmtt-10x-x-109">_steps </span>chart on the right shows the mean count of actions that the agent should carry out before the end of the episode. Ideally, for this problem, the count should be 1, as the only action that the agent needs to take is to click on the dialog’s close button. However, in fact, the agent sees seven to nine frames before the episode ends. This happens for two reasons: the cross on the dialog close button may appear after some delay, and the browser inside the container adds a time gap before the agent clicks and the reward is obtained.</p>
+<p>To check the learned policy, you can use the <span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_play.py </span>tool, which loads the model and uses it in one environment. It can play several episodes to test the average model performance:</p>
+<pre class="lstlisting" id="listing-382"><code>$ ./wob_click_play.py -m saves/best_0.923_45400.dat --verbose 
+0 0.0 False {’done’: False, ’env_reward’: 0, ’raw_reward’: 0, ’reason’: None, ’elapsed’: 0.1620042324066162, ’root_dom’: [1] body @ (0, 0) classes=[] children=2} 
+1 0.9788 True {’done’: True, ’env_reward’: 0.9788, ’raw_reward’: 1, ’reason’: None, ’elapsed’: 0.19491100311279297} 
+Round 0 done 
+Done 1 rounds, mean steps 2.00, mean reward 0.979</code></pre>
+<p>If this begins <span id="dx1-260008"/>with the <span class="cmtt-10x-x-109">--render </span>command-line option, the browser window will be shown during the agent’s actions.</p>
+</section>
+<section class="level4 subsectionHead" id="simple-clicking-limitations">
+<h2 class="heading-2" id="sigil_toc_id_234"> <span id="x1-26100014.6.5"/>Simple clicking limitations</h2>
+<p>Unfortunately, the <span id="dx1-261001"/>demonstrated approach can only be used to solve relatively simple problems, like <span class="cmtt-10x-x-109">click-dialog</span>. If you try to use it for more complicated tasks, convergence is unlikely. There are several reasons for this.</p>
+<p>First, our agent is stateless, which means that it makes the decisions about actions only from observations, without taking into account its previous actions. You may remember that in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, we discussed the Markov property of the <span class="cmbx-10x-x-109">Markov decision process </span>(<span class="cmbx-10x-x-109">MDP</span>) and that this Markov property allowed us to discard all previous history, keeping only the current observation. Even in relatively simple problems from MiniWoB, this Markov property could be violated. For example, there is a problem called <span class="cmtt-10x-x-109">click-button-sequence </span>(the screenshot is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-261002r5"><span class="cmti-10x-x-109">14.5</span></a>, and documentation for this environment is available at <a class="url" href="https://miniwob.farama.org/environments/click-button-sequence/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/click-button-sequence/</span></a>), which requires our agent to first click on button ONE and then on button TWO. Even if our agent is lucky enough to randomly click on the buttons in the required order, it won’t be able to distinguish from the single image which button needs to be clicked on next.</p>
+<div class="minipage">
+<p><img alt="PIC" height="400" src="../Images/file182.png" width="500"/> <span id="x1-261002r5"/></p>
+<span class="id">Figure 14.5: An example of an environment that the stateless agent could struggle to solve </span>
+</div>
+<p>Despite the <span id="dx1-261003"/>simplicity of this problem, we cannot use our RL methods to solve it, because MDP formalism is not applicable anymore. Such problems <span id="dx1-261004"/>are called <span class="cmbx-10x-x-109">partially observable MDPs</span>, or POMDPs (we briefly discussed these in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>), and the usual approach for them is to allow the agent to keep some kind of state. The challenge here is to find the balance between keeping only minimal relevant information and overwhelming the agent with non-relevant information by adding everything into the observation.</p>
+<p>Another issue that we can face with our example is that the data required to solve the problem might not be available in the image or could be in an inconvenient form. For example, two problems, <span class="cmtt-10x-x-109">click-tab </span>( <a class="url" href="https://miniwob.farama.org/environments/click-tab/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/click-tab/</span></a>) and <span class="cmtt-10x-x-109">click-checkboxes</span> (<a class="url" href="https://miniwob.farama.org/environments/click-checkboxes/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/click-checkboxes/</span></a>), are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-261005r6"><span class="cmti-10x-x-109">14.6</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="400" src="../Images/file183.png" width="500"/> <span id="x1-261005r6"/></p>
+<span class="id">Figure 14.6: An example of environments where the text description is important </span>
+</div>
+<p>In the first one, you <span id="dx1-261006"/>need to click on one of three tabs, but every time, the tab that needs to be clicked is randomly chosen. Which tab needs to be clicked is shown in a description (provided with an in-text field of observation and shown at the top of the environment’s page), but our agent sees only pixels, which makes it complicated to connect the tiny number at the top with the outcome of the random click result. The situation is even worse with the <span class="cmtt-10x-x-109">click-checkboxes </span>problem, when several checkboxes with randomly generated text need to be clicked. One of the possible ways to prevent overfitting to the problem is to use some kind of <span class="cmbx-10x-x-109">optical character recognition </span>(<span class="cmbx-10x-x-109">OCR</span>) network to convert the image in the observation into text form. Another approach (which will be shown in the next section) is to mix the text description into the agent’s observations.</p>
+<p>Yet another issue could be related to the dimensionality of the action space that the agent needs to explore. Even for single-click problems, the number of actions could be very large, so it can take a long time for the agent to discover how to behave. One of the possible solutions here is incorporating demonstrations into the training. For example, in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-261007r7"><span class="cmti-10x-x-109">14.7</span></a>, there is a problem called <span class="cmtt-10x-x-109">count-sides</span> (<a class="url" href="https://miniwob.farama.org/environments/count-sides/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/count-sides/</span></a>). The goal there is to click on the button that corresponds to the number of sides of the shape shown:</p>
+<div class="minipage">
+<p><img alt="PIC" height="400" src="../Images/file184.png" width="500"/> <span id="x1-261007r7"/></p>
+<span class="id">Figure 14.7: Examples of the <span class="cmtt-10x-x-109">count-sides </span>environment </span>
+</div>
+<p>This issue was <span id="dx1-261008"/>addressed by adding human demonstrations into the training. In my experiments, training from scratch gave zero progress after a day of training. However, after adding a couple of dozen examples of correct clicks, it successfully solved the problem in 15 minutes of training. Of course, we could spend time fine-tuning the hyperparameters further, but still, the effect of the demonstrations is quite impressive. Later in this chapter, we will take a look at how we can record and inject human demonstrations to improve convergence.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="adding-text-description">
+<h1 class="heading-1" id="sigil_toc_id_235"> <span id="x1-26200014.7"/>Adding text description</h1>
+<p>As a first step <span id="dx1-262001"/>to improve our clicker agent, we’ll add the text description of the problem into the model. I have already mentioned that some problems contain vital information that is provided in a text description, like the index of tabs that need to be clicked or the list of entries that the agent needs to check. The same information is shown at the top of the image observation, but pixels are not always the best representation of simple text.</p>
+<p>To take this text into account, we need to extend our model’s input from an image only to an image and text data. We worked with text in the previous chapter, so a <span class="cmbx-10x-x-109">recurrent neural network </span>(<span class="cmbx-10x-x-109">RNN</span>) is quite an obvious choice (maybe not the best for such a toy problem, but it is flexible and scalable).</p>
+<section class="level4 subsectionHead" id="implementation-10">
+<h2 class="heading-2" id="sigil_toc_id_236"> <span id="x1-26300014.7.1"/>Implementation</h2>
+<p>In this section, we <span id="dx1-263001"/>will just focus on the most important points of the implementation. You will find the whole code in the <span class="cmtt-10x-x-109">Chapter16/wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_mm</span><span class="cmtt-10x-x-109">_train.py </span>module. In comparison to our clicker model, a text extension doesn’t add too much.</p>
+<p>First, we should ask <span class="cmtt-10x-x-109">MiniWoBClickWrapper </span>to keep the text obtained from the observation. The complete source code of this class was shown earlier in this chapter, in the <span class="cmti-10x-x-109">Grid actions </span>section. To keep the text, we should pass <span class="cmtt-10x-x-109">keep</span><span class="cmtt-10x-x-109">_text=True </span>to the wrapper constructor, which makes this class return a tuple with a NumPy array and text string, instead of just a NumPy array with the image. Then, we need to prepare our model to be able to process such tuples instead of a batch of NumPy arrays. This needs to be done in two places: in our agent (when we use the model to choose the action) and in the training code. To adapt the observation in a model-friendly way, we can use a special functionality of the PTAN library, called <span class="cmtt-10x-x-109">preprocessor</span>. The core idea is very simple: <span class="cmtt-10x-x-109">preprocessor</span> is a callable function that needs to convert the list of observations to a form that is ready to be passed to the model. By default, <span class="cmtt-10x-x-109">preprocessor </span>converts the list of NumPy arrays into a PyTorch tensor and, optionally, copies it into GPU memory. However, sometimes, more sophisticated transformations are required, like in our case, when we need to pack the images into the tensor, but text strings require special handling. In that case, you can redefine the default <span class="cmtt-10x-x-109">preprocessor </span>and pass it into the <span class="cmtt-10x-x-109">ptan.Agent</span> class.</p>
+<p>In theory, the <span id="dx1-263002"/>preprocessor functionality could be moved into the model itself, thanks to PyTorch’s flexibility, but the default preprocessor simplifies our lives in cases when observations are just NumPy arrays. The following is the preprocessor class source code taken from the <span class="cmtt-10x-x-109">lib/model.py </span>module:</p>
+<div class="tcolorbox" id="tcolobox-313">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-383"><code>MM_EMBEDDINGS_DIM = 50 
+MM_HIDDEN_SIZE = 128 
+MM_MAX_DICT_SIZE = 100 
+ 
+TOKEN_UNK = "#unk" 
+ 
+class MultimodalPreprocessor: 
+    log = logging.getLogger("MulitmodalPreprocessor") 
+ 
+    def __init__(self, max_dict_size: int = MM_MAX_DICT_SIZE, 
+                 device: torch.device = torch.device(’cpu’)): 
+        self.max_dict_size = max_dict_size 
+        self.token_to_id = {TOKEN_UNK: 0} 
+        self.next_id = 1 
+        self.tokenizer = TweetTokenizer(preserve_case=True) 
+        self.device = device 
+ 
+    def __len__(self): 
+        return len(self.token_to_id)</code></pre>
+</div>
+</div>
+<p>In the constructor in the preceding code, we create a mapping from the token to the identifier (which will be dynamically extended) and create the tokenizer from the <span class="cmtt-10x-x-109">nltk </span>package.</p>
+<p>Next, we have the <span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_call</span><span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_() </span>method, which transforms the batch:</p>
+<div class="tcolorbox" id="tcolobox-314">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-384"><code>    def __call__(self, batch: tt.Tuple[tt.Any, ...] | tt.List[tt.Tuple[tt.Any, ...]]): 
+        tokens_batch = [] 
+ 
+        if isinstance(batch, tuple): 
+            batch_iter = zip(*batch) 
+        else: 
+            batch_iter = batch 
+        for img_obs, txt_obs in batch_iter: 
+            tokens = self.tokenizer.tokenize(txt_obs) 
+            idx_obs = self.tokens_to_idx(tokens) 
+            tokens_batch.append((img_obs, idx_obs)) 
+        tokens_batch.sort(key=lambda p: len(p[1]), reverse=True) 
+        img_batch, seq_batch = zip(*tokens_batch) 
+        lens = list(map(len, seq_batch))</code></pre>
+</div>
+</div>
+<p>The goal of our <span id="dx1-263036"/>preprocessor is to convert a batch of (image, text) tuples into two objects: the first has to be a tensor with the image data of shape (<span class="cmtt-10x-x-109">batch</span><span class="cmtt-10x-x-109">_size,</span> <span class="cmtt-10x-x-109">3, 210, 160</span>), and the second has to contain the batch of tokens from text descriptions in the form of a packed sequence. The packed sequence is a PyTorch data structure suitable for efficient processing with an RNN. We discussed this in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch017.xhtml#x1-21900013"><span class="cmti-10x-x-109">13</span></a>.</p>
+<p>In fact, the batch could have two different forms: it could be a tuple with an image batch and a text batch, or it could be a list of tuples with individual (image, text tokens) samples. This happens because of the difference in <span class="cmtt-10x-x-109">VectorEnv </span>handling of <span class="cmtt-10x-x-109">gym.Tuple </span>observation space. But those details are not very relevant here; we just handle the difference by checking the type of the <span class="cmtt-10x-x-109">batch </span>variable and performing the necessary processing.</p>
+<p>As the first step of our transformation, we tokenize text strings and convert every token into the list of integer IDs. Then, we sort our batch by decreasing the token length, which is a requirement of the underlying cuDNN library for efficient RNN processing.</p>
+<p>Then, we convert the images into a tensor and the sequences into a padded sequence, which is a matrix of batch size <span class="cmsy-10x-x-109">× </span>the length of the longest sequence. We saw this in the previous chapter:</p>
+<div class="tcolorbox" id="tcolobox-315">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-385"><code>        img_v = torch.FloatTensor(np.asarray(img_batch)).to(self.device) 
+        seq_arr = np.zeros( 
+            shape=(len(seq_batch), max(len(seq_batch[0]), 1)), dtype=np.int64) 
+        for idx, seq in enumerate(seq_batch): 
+            seq_arr[idx, :len(seq)] = seq 
+            if len(seq) == 0: 
+                lens[idx] = 1 
+        seq_v = torch.LongTensor(seq_arr).to(self.device) 
+        seq_p = rnn_utils.pack_padded_sequence(seq_v, lens, batch_first=True) 
+        return img_v, seq_p</code></pre>
+</div>
+</div>
+<p>The following <span class="cmtt-10x-x-109">tokens</span><span class="cmtt-10x-x-109">_to</span><span class="cmtt-10x-x-109">_idx() </span>function converts the list of tokens into a list of IDs:</p>
+<div class="tcolorbox" id="tcolobox-316">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-386"><code>    def tokens_to_idx(self, tokens): 
+        res = [] 
+        for token in tokens: 
+            idx = self.token_to_id.get(token) 
+            if idx is None: 
+                if self.next_id == self.max_dict_size: 
+                    self.log.warning("Maximum size of dict reached, token " 
+                                     "’%s’ converted to #UNK token", token) 
+                    idx = 0 
+                else: 
+                    idx = self.next_id 
+                    self.next_id += 1 
+                    self.token_to_id[token] = idx 
+            res.append(idx) 
+        return res</code></pre>
+</div>
+</div>
+<p>The tricky <span id="dx1-263062"/>thing is that we don’t know in advance the size of the dictionary from the text descriptions. One approach would be to work on the character level and feed individual characters into the RNN, but it would result in sequences that are too long to process. The alternative solution is to hard-code a reasonable dictionary size, say 100 tokens, and dynamically assign token IDs to tokens that we have never seen before. In this implementation, the latter approach is used, but it might not be applicable to MiniWoB problems that contain randomly generated strings in the text description. As potential solutions for this issue, we can either use character-level tokenization or use a pre-defined dictionary.</p>
+<p>Now, let’s take a look at our model class:</p>
+<div class="tcolorbox" id="tcolobox-317">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-387"><code>class ModelMultimodal(nn.Module): 
+    def __init__(self, input_shape: tt.Tuple[int, ...], n_actions: int, 
+                 max_dict_size: int = MM_MAX_DICT_SIZE): 
+        super(ModelMultimodal, self).__init__() 
+ 
+        self.conv = nn.Sequential( 
+            nn.Conv2d(input_shape[0], 64, 5, stride=5), 
+            nn.ReLU(), 
+            nn.Conv2d(64, 64, 3, stride=2), 
+            nn.ReLU(), 
+            nn.Flatten(), 
+        ) 
+        size = self.conv(torch.zeros(1, *input_shape)).size()[-1] 
+ 
+        self.emb = nn.Embedding(max_dict_size, MM_EMBEDDINGS_DIM) 
+        self.rnn = nn.LSTM(MM_EMBEDDINGS_DIM, MM_HIDDEN_SIZE, batch_first=True) 
+        self.policy = nn.Linear(size + MM_HIDDEN_SIZE*2, n_actions) 
+        self.value = nn.Linear(size + MM_HIDDEN_SIZE*2, 1)</code></pre>
+</div>
+</div>
+<p>The difference is in a <span id="dx1-263081"/>new embedding layer, which converts integer token IDs into dense token vectors and a <span class="cmbx-10x-x-109">long short-term memory </span>(<span class="cmbx-10x-x-109">LSTM</span>) RNN. The outputs from the convolution and RNN layers are concatenated and fed into the policy and value heads, so the dimensionality of their input is the image and text features combined.</p>
+<p>This function performs the concatenation of the image and RNN features into a single tensor:</p>
+<div class="tcolorbox" id="tcolobox-318">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-388"><code>    def _concat_features(self, img_out: torch.Tensor, 
+                         rnn_hidden: torch.Tensor | tt.Tuple[torch.Tensor, ...]): 
+        batch_size = img_out.size()[0] 
+        if isinstance(rnn_hidden, tuple): 
+            flat_h = list(map(lambda t: t.view(batch_size, -1), rnn_hidden)) 
+            rnn_h = torch.cat(flat_h, dim=1) 
+        else: 
+            rnn_h = rnn_hidden.view(batch_size, -1) 
+        return torch.cat((img_out, rnn_h), dim=1)</code></pre>
+</div>
+</div>
+<p>Finally, in the <span class="cmtt-10x-x-109">forward() </span>function, we expect two objects prepared by the <span class="cmtt-10x-x-109">preprocessor</span>: a tensor with input images and packed sequences of the batch:</p>
+<div class="tcolorbox" id="tcolobox-319">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-389"><code>    def forward(self, x: tt.Tuple[torch.Tensor, rnn_utils.PackedSequence]): 
+        x_img, x_text = x 
+ 
+        emb_out = self.emb(x_text.data) 
+        emb_out_seq = rnn_utils.PackedSequence(emb_out, x_text.batch_sizes) 
+        rnn_out, rnn_h = self.rnn(emb_out_seq) 
+ 
+        xx = x_img / 255.0 
+        conv_out = self.conv(xx) 
+        feats = self._concat_features(conv_out, rnn_h) 
+        return self.policy(feats), self.value(feats)</code></pre>
+</div>
+</div>
+<p>Images are processed with convolutions and text <span id="dx1-263102"/>data is fed through the RNN; then, the results are concatenated, and the policy and value results are calculated.</p>
+<p>That’s most of the new code. The training Python script, <span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_mm</span><span class="cmtt-10x-x-109">_train.py</span>, is mostly a copy of <span class="cmtt-10x-x-109">wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_train.py</span>, with just the small modifications in the wrapper creation, a different model, and preprocessor.</p>
+</section>
+<section class="level4 subsectionHead" id="results-14">
+<h2 class="heading-2" id="sigil_toc_id_237"> <span id="x1-26400014.7.2"/>Results</h2>
+<p>I ran several <span id="dx1-264001"/>experiments in the <span class="cmtt-10x-x-109">click-button </span>environment ( <a class="url" href="https://miniwob.farama.org/environments/click-button/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/environments/click-button/</span></a>) that have the goal of making a selection between several random buttons. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-264002r8"><span class="cmti-10x-x-109">14.8</span></a>, several situations in this environment are shown:</p>
+<div class="minipage">
+<p><img alt="PIC" height="360" src="../Images/file185.png" width="360"/> <span id="x1-264002r8"/></p>
+<span class="id">Figure 14.8: Tasks in the <span class="cmtt-10x-x-109">click-button </span>environment </span>
+</div>
+<p>As shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-264003r9"><span class="cmti-10x-x-109">14.9</span></a>, after 3 hours of training, the model was able to learn how to click (the average count of steps in episodes was reduced to 5-7) and get to an average reward of 0.2. But subsequent training had no visible effect. It might be an indication that the hyperparameters have to be tuned, or of the ambiguity of the environment. In this case, I noticed that this environment sometimes shows several buttons with the same title, but only one of them gives a positive reward. An example of this is shown in the first section of <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-264002r8"><span class="cmti-10x-x-109">14.8</span></a>, where two identical <span class="cmbx-10x-x-109">Submit </span>buttons are present.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_14_09.png" width="600"/> <span id="x1-264003r9"/></p>
+<span class="id">Figure 14.9: Training reward (left) and count of steps in episodes (right) on <span class="cmtt-10x-x-109">click-button</span> </span>
+</div>
+<p>Another <span id="dx1-264004"/>environment in which the text description is important is <span class="cmtt-10x-x-109">click-tab</span>, which demands the agent to click on a specific tab, chosen randomly. Screenshots are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-264005r10"><span class="cmti-10x-x-109">14.10</span></a>.</p>
+<div class="minipage">
+<p><img alt="PIC" height="400" src="../Images/file188.png" width="500"/> <span id="x1-264005r10"/></p>
+<span class="id">Figure 14.10: Tasks in <span class="cmtt-10x-x-109">the click-tab </span>environment </span>
+</div>
+<p>In this environment, the training was not successful, which is a bit strange, as the task looks easier than click-button (the position of the place to click is fixed). Most likely, hyperparameter tuning is required. This is another interesting challenge that you can try to address through experimentation, using the knowledge you’ve gained so far.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="human-demonstrations">
+<h1 class="heading-1" id="sigil_toc_id_238"> <span id="x1-26500014.8"/>Human demonstrations</h1>
+<p>In order to <span id="dx1-265001"/>improve the training process, let’s try to incorporate human demonstrations. The idea behind demonstrations is simple: to help our agent to discover the best way to solve the task, we show it some examples of actions that we think are required for the problem. Those examples might not be the best solution or not 100% accurate, but they should be good enough to show the agent promising directions to explore.</p>
+<p>In fact, this is a very natural thing to do, as all human learning is based on some prior examples given by a teacher in class, parents, or other people. Those examples could be in a written form (for example, recipe books) or given as demonstrations that you need to repeat several times to get right (for example, dance classes). Such forms of training are much more effective than random searches. Just imagine how complicated and lengthy it would be to learn how to clean your teeth by trial and error alone. Of course, there is a danger from learning how to follow demonstrations, which could be wrong or not the most efficient way to solve the problem; but overall, it’s much more effective than a random search.</p>
+<p>All our previous examples followed this workflow:</p>
+<ol>
+<li>
+<div id="x1-265003x1">
+<p>They used zero prior knowledge and started with random weight initializations, which caused random actions to be performed at the beginning of the training.</p>
+</div>
+</li>
+<li>
+<div id="x1-265005x2">
+<p>After some iterations, the agent discovered that some actions in some states give more promising results (via the Q-value or policy with the higher advantage) and started to prefer those actions over the others.</p>
+</div>
+</li>
+<li>
+<div id="x1-265007x3">
+<p>Finally, this process led to a more or less optimal policy, which gave the agent a high reward at the end.</p>
+</div>
+</li>
+</ol>
+<p>This worked well when our action space dimensionality was low and the environment’s behavior wasn’t very complex, but just doubling the action count caused at least twice the observations needed. In the case of our clicker agent, we have 256 different actions corresponding to 10 <span class="cmsy-10x-x-109">× </span>10 grids in the active area, which is 128 times more actions than we had in the CartPole environment. It is not surprising that the training process is lengthy and may fail to converge at all.</p>
+<p>This issue of dimensionality can be addressed in various ways, like smarter exploration methods, training with better sampling efficiency (one-shot training), incorporating prior knowledge (transfer learning), and other means. There is a lot of research activity focused on making RL better and faster, and we can be sure that many breakthroughs are ahead. In this section, we will try the more traditional approach of incorporating the demonstration recorded by humans into the training process.</p>
+<p>You might remember our discussion about on-policy and off-policy methods (which were discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a> and <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>). This is very relevant to our human demonstrations because, strictly speaking, we can’t use off-policy data (human observation-action pairs) with an on-policy method (A3C in our case). That is due to the nature of on-policy methods: they estimate the policy gradients using the samples gathered from the current policy. If we just push human-recorded samples into the training process, the estimated <span id="dx1-265008"/>gradient will be relevant for a human policy, but not our current policy given by the <span class="cmbx-10x-x-109">neural</span> <span class="cmbx-10x-x-109">network </span>(<span class="cmbx-10x-x-109">NN</span>). To solve this issue, we need to cheat a bit and look at our problem from the supervised learning angle. To be concrete, we will use the log-likelihood objective to push our NN toward taking actions based on demonstrations.</p>
+<p>With this, we’re not replacing RL with supervised learning. Rather, we’re reusing supervised learning techniques to help our RL methods. Fundamentally, this isn’t the first time we’ve done something similar; for instance, the training of the value function in Q-learning is purely supervised learning.</p>
+<p>Before we can go into the implementation details, we need to address a very important question: how do we obtain the demonstrations in the most convenient form?</p>
+<section class="level4 subsectionHead" id="recording-the-demonstrations">
+<h2 class="heading-2" id="sigil_toc_id_239"> <span id="x1-26600014.8.1"/>Recording the demonstrations</h2>
+<p>Before MiniWoB++ and the <span id="dx1-266001"/>transition to Selenium, recording a demonstration was technically challenging. In particular, the VNC protocol has to be captured and decoded to be able to extract screenshots of the browser and the actions executed by the user. In the previous edition of the book, I provided my own version of the VNC protocol parser to record the demonstrations.</p>
+<p>Luckily, those challenges are mostly gone now. There is no VNC anymore and the browser has been started in the local process (before, it was inside the Docker container), so we can communicate with it almost directly.</p>
+<p>Farama MiniWoB++ is shipped with a Python script that can capture the demonstrations in a JSON file. This script can be started with the <span class="cmtt-10x-x-109">python -m miniwob.scripts.record </span>command and is documented at <a class="url" href="https://miniwob.farama.org/content/demonstrations/"><span class="cmtt-10x-x-109">https://miniwob.farama.org/content/demonstrations/</span></a>.</p>
+<p>Unfortunately, it has a limitation: in observations, it captures only the DOM structure of the webpage and has no pixel-level information. As examples in this chapter make heavy use of pixels, demonstrations recorded by this script are useless. To overcome this, I implemented my own version of a tool to record demonstrations that include pixels from the browser. It is called <span class="cmtt-10x-x-109">Chapter14/record</span><span class="cmtt-10x-x-109">_demo.py </span>and can be started as follows:</p>
+<pre class="lstlisting" id="listing-390"><code>$ ./record_demo.py -o demos/test -g tic-tac-toe-v1 -d 1 
+Bottle v0.12.25 server starting up (using WSGIRefServer())... 
+Listening on http://localhost:8032/ 
+Hit Ctrl-C to quit. 
+ 
+WARNING:root:Cannot call {’action_type’: 0} on instance 0, which is already done 
+127.0.0.1 - - [26/Apr/2024 12:19:49] "POST /record HTTP/1.1" 200 17 
+Saved in  demos/test/tic-tac-toe_0426101949.json 
+New episode starts in 1 seconds...</code></pre>
+<p>This command starts the <span id="dx1-266011"/>environment with <span class="cmtt-10x-x-109">render</span><span class="cmtt-10x-x-109">_mode=’human’</span>, which shows the browser window and allows you to communicate with the page. In the background, it records the observations (with screenshots) and, when the episode is done, it joins screenshots to your actions and stores everything in a JSON file in the directory given by the <span class="cmtt-10x-x-109">-o </span>command-line option. Using the <span class="cmtt-10x-x-109">-g</span> command-line option allows you to change the environment, and the <span class="cmtt-10x-x-109">-d </span>parameter sets the delay in seconds between the episodes. If the <span class="cmtt-10x-x-109">-d</span> option is not given, you need to press <span class="cmti-10x-x-109">Enter </span>in the console to start a new episode. The following screenshot shows the process of recording a demonstration:</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/B22150_14_11.png" width="500"/> <span id="x1-266012r11"/></p>
+<span class="id">Figure 14.11: Recording a human demonstration for <span class="cmtt-10x-x-109">tic-tac-toe</span> </span>
+</div>
+<p>In the <span class="cmtt-10x-x-109">Chapter14/demos </span>directory, I stored the demonstrations used for experiments, but you, of course, can record your own demonstrations using the provided script.</p>
+</section>
+<section class="level4 subsectionHead" id="training-with-demonstrations">
+<h2 class="heading-2" id="sigil_toc_id_240"> <span id="x1-26700014.8.2"/>Training with demonstrations</h2>
+<p>Now that we know <span id="dx1-267001"/>how to record the demonstration data, we have only one question unanswered: how does our training process need to be modified to incorporate human demonstrations? The simplest solution, which nevertheless works surprisingly well, is to use the log-likelihood objective that we used in training the cross-entropy method in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>. To do this, we need to look at our A3C model as a classification problem producing the classification of input observations in its policy head. In its simplest form, the value head will be left untouched, but, in fact, it won’t be hard to train it: we know the rewards obtained during the demonstrations, so what is needed is to calculate the discounted reward from every observation until the end of the episode.</p>
+<p>To check how it was implemented, let’s look at the relevant code pieces in <span class="cmtt-10x-x-109">Chapter16/wob</span><span class="cmtt-10x-x-109">_click</span><span class="cmtt-10x-x-109">_train.py</span>. First, we can pass the directory with the demonstration data by passing the <span class="cmtt-10x-x-109">demo &lt;DIR&gt; </span>option in the command line. This will enable the branch shown in the following code block, where we load the demonstration samples from the specified directory. The <span class="cmtt-10x-x-109">demos.load</span><span class="cmtt-10x-x-109">_demo</span><span class="cmtt-10x-x-109">_dir() </span>function automatically loads demonstrations from JSON files in the given directory and converts them into <span class="cmtt-10x-x-109">ExperienceFirstLast</span> instances:</p>
+<div class="tcolorbox" id="tcolobox-320">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-391"><code>    demo_samples = None 
+    if args.demo: 
+        demo_samples = demos.load_demo_dir(args.demo, gamma=GAMMA, steps=REWARD_STEPS) 
+        print(f"Loaded {len(demo_samples)} demo samples")</code></pre>
+</div>
+</div>
+<p>The second <span id="dx1-267006"/>piece of code relevant to demonstration training is inside the training loop and is executed before any normal batch. The training from demonstrations is performed with some probability (by default, it is 0.5) and specified by the <span class="cmtt-10x-x-109">DEMO</span><span class="cmtt-10x-x-109">_PROB </span>hyperparameter:</p>
+<div class="tcolorbox" id="tcolobox-321">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-392"><code>                if demo_samples and step_idx &lt; DEMO_FRAMES: 
+                    if random.random() &lt; DEMO_PROB: 
+                        random.shuffle(demo_samples) 
+                        demo_batch = demo_samples[:BATCH_SIZE] 
+                        model.train_demo(net, optimizer, demo_batch, writer, 
+                                         step_idx, device=device)</code></pre>
+</div>
+</div>
+<p>The logic is simple: with probability <span class="cmtt-10x-x-109">DEMO</span><span class="cmtt-10x-x-109">_PROB</span>, we sample <span class="cmtt-10x-x-109">BATCH</span><span class="cmtt-10x-x-109">_SIZE </span>samples from our demonstration data and perform a round of training of our network on the data in the batch.</p>
+<p>The actual training, which is very simple and straightforward, is performed by the <span class="cmtt-10x-x-109">model.train</span><span class="cmtt-10x-x-109">_demo() </span>function:</p>
+<div class="tcolorbox" id="tcolobox-322">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-393"><code>def train_demo(net: Model, optimizer: torch.optim.Optimizer, 
+               batch: tt.List[ptan.experience.ExperienceFirstLast], writer, step_idx: int, 
+               preprocessor=ptan.agent.default_states_preprocessor, 
+               device: torch.device = torch.device("cpu")): 
+    batch_obs, batch_act = [], [] 
+    for e in batch: 
+        batch_obs.append(e.state) 
+        batch_act.append(e.action) 
+    batch_v = preprocessor(batch_obs) 
+    if torch.is_tensor(batch_v): 
+        batch_v = batch_v.to(device) 
+    optimizer.zero_grad() 
+    ref_actions_v = torch.LongTensor(batch_act).to(device) 
+    policy_v = net(batch_v)[0] 
+    loss_v = F.cross_entropy(policy_v, ref_actions_v) 
+    loss_v.backward() 
+    optimizer.step() 
+    writer.add_scalar("demo_loss", loss_v.item(), step_idx)</code></pre>
+</div>
+</div>
+<p>We split our <span id="dx1-267031"/>batch on the observation and the actions list, preprocess the observations to convert them into a PyTorch tensor, and place them on the GPU. We then ask our A3C network to return the policy and calculate the cross-entropy loss between the result and the desired actions. From an optimization point of view, we’re pushing our network toward the actions taken in the demonstrations.</p>
+</section>
+<section class="level4 subsectionHead" id="results-15">
+<h2 class="heading-2" id="sigil_toc_id_241"> <span id="x1-26800014.8.3"/>Results</h2>
+<p>To check the <span id="dx1-268001"/>effect of demonstrations, I performed two sets of training on the count-sides problem with the same hyperparameters: one was done without demonstrations, and another used 25 demonstration episodes, which are available in the <span class="cmtt-10x-x-109">demos/count-sides </span>directory.</p>
+<p>The difference was dramatic. Training performed from scratch reached the best mean reward of -0.4 after 12 hours of training and 4 million frames without any significant improvement in the training dynamics. On the other hand, training with demonstrations was able to get to the average reward of 0.5 just after 30,000 training frames, which took 8 minutes. <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-268002r12"><span class="cmti-10x-x-109">14.12</span></a> shows the reward and the count of steps.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_14_12.png" width="600"/> <span id="x1-268002r12"/></p>
+<span class="id">Figure 14.12: Training reward (left) and count of steps in episodes (right) on <span class="cmtt-10x-x-109">count-sides </span>with demonstrations </span>
+</div>
+<p>A more challenging problem I experimented with is the Tic Tac Toe game, available as the <span class="cmtt-10x-x-109">tic-tac-toe </span>environment. <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-268003r13"><span class="cmti-10x-x-109">14.13</span></a> shows the process of one of the demo games I recorded (available in the <span class="cmtt-10x-x-109">demos/tic-tac-toe </span>directory). The dot shows where the click was performed:</p>
+<div class="minipage">
+<p><img alt="PIC" height="400" src="../Images/file192.png" width="500"/> <span id="x1-268003r13"/></p>
+<span class="id">Figure 14.13: Demonstration TicTacToe game </span>
+</div>
+<p>After two <span id="dx1-268004"/>hours of training, the best average reward reached was 0.05, which means that the agent can win some games, but some are lost or end up in a draw. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-268005r14"><span class="cmti-10x-x-109">14.14</span></a>, plots with reward dynamics and the count of episode steps are shown.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_14_14.png" width="600"/> <span id="x1-268005r14"/></p>
+<span class="id">Figure 14.14: Training reward (left) and count of steps in episodes (right) on <span class="cmtt-10x-x-109">tic-tac-toe </span>with demonstrations </span>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="things-to-try-2">
+<h1 class="heading-1" id="sigil_toc_id_242"> <span id="x1-26900014.9"/>Things to try</h1>
+<p>In this chapter, we only started playing with MiniWoB++ by looking at some of the easiest environments from the full set of over 100 problems, so there is plenty of uncharted territory ahead. If you want to practice, there are several items you can experiment with:</p>
+<ul>
+<li>
+<p>Testing the robustness of demonstrations to noisy clicks.</p>
+</li>
+<li>
+<p>The action space for the clicking approach could be improved by predicting the <span class="cmmi-10x-x-109">x </span>and <span class="cmmi-10x-x-109">y </span>coordinates of the place to click.</p>
+</li>
+<li>
+<p>DOM data could be used instead of (or in addition to) screen pixels. Then, the prediction will be the element of the tree to be clicked.</p>
+</li>
+<li>
+<p>Try other problems. There is a wide variety of them, requiring keyboard events to be generated, the sequence of actions planned, etc.</p>
+</li>
+<li>
+<p>Very recently, the LaVague project was published (<a class="url" href="https://github.com/lavague-ai/LaVague"><span class="cmtt-10x-x-109">https://github.com/lavague-ai/LaVague</span></a>), which uses LLMs for web automation. Their approach is to ask an LLM to generate Selenium Python code to perform specific tasks. It will be very interesting to check it against MiniWoB++ problems.</p>
+</li>
+</ul>
+</section>
+<section class="level3 sectionHead" id="summary-13">
+<h1 class="heading-1" id="sigil_toc_id_243"> <span id="x1-27000014.10"/>Summary</h1>
+<p>In this chapter, you saw the practical application of RL methods for browser automation and used the MiniWoB++ benchmark. I believe that browser automation (and communicating with software humans are using in general) is an important milestone in future AI development.</p>
+<p>This chapter concludes <span class="cmti-10x-x-109">Part 3 </span>of the book. The next part will be devoted to more complicated and recent methods related to continuous action spaces, non-gradient methods, and other more advanced methods of RL.</p>
+<p>In the next chapter, we will take a look at continuous control problems, which are an important subfield of RL, both theoretically and practically.</p>
+</section>
+<section class="level3 likesectionHead" id="leave-a-review-2">
+<h1 class="heading-1" id="sigil_toc_id_244"><span id="x1-271000"/>Leave a Review!</h1>
+<p>Thank you for purchasing this book from Packt Publishing—we hope you enjoy it! Your feedback is invaluable and helps us improve and grow. Once you’ve completed reading it, please take a moment to leave an Amazon review; it will only take a minute, but it makes a big difference for readers like you. Scan the QR code below to receive a free ebook of your choice. <a class="url" href="https://packt.link/NzOWQ"><span class="cmtt-10x-x-109">https://packt.link/NzOWQ</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file3.png" width="85"/></p>
+</section>
+</section>
+</div>
+
+<div id="sbo-rt-content"><h1 class="partNumber" style="padding-top:280px;">Part 4</h1>
+<h1 class="partTitle" id="sigil_toc_id_429">Advanced RL</h1>
+</div></body></html>

@@ -1,0 +1,647 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-2-openai-gym-api-and-gymnasium">
+<h1 class="chapterNumber">2</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_405">
+<span id="x1-380002"/>OpenAI Gym API and Gymnasium
+    </h1>
+<p>After talking so much about the theoretical concepts of <span class="cmbx-10x-x-109">reinforcement</span> <span class="cmbx-10x-x-109">learning </span>(<span class="cmbx-10x-x-109">RL</span>) in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, let’s start doing something practical. In this chapter, you will learn the <span id="dx1-38001"/>basics of Gymnasium, a library used to provide a uniform API for an RL agent and lots of RL environments. Originally, this API was implemented in the OpenAI Gym library, but it is no longer maintained. In this book, we’ll use Gymnasium—a fork of OpenAI Gym implementing the same API. In any case, having a uniform API for environments removes the need to write boilerplate code and allows you to implement an agent in a general way without worrying about environment details.</p>
+<p>You will also write your first randomly behaving agent and become more familiar with the basic concepts of RL that we have covered so far. By the end of the chapter, you will have an understanding of:</p>
+<ul>
+<li>
+<p>The high-level requirements that need to be implemented to plug the agent into the RL framework</p>
+</li>
+<li>
+<p>A basic, pure-Python implementation of the random RL agent</p>
+</li>
+<li>
+<p>The OpenAI Gym API and its implementation – the Gymnasium library</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="the-anatomy-of-the-agent">
+<h1 class="heading-1" id="sigil_toc_id_32"> <span id="x1-390002.1"/>The anatomy of the agent</h1>
+<p>As you learned in the previous chapter, there are several fundamental concepts in RL:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">The agent</span>: A thing, or person, that takes an active role. In practice, the agent is some piece of code that implements some policy. Basically, this policy decides what action is needed at every time step, given our observations.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">The environment</span>: Everything that is external to the agent and <span id="dx1-39001"/>has the responsibility of providing observations and giving rewards. The environment changes its state based on the agent’s actions.</p>
+</li>
+</ul>
+<p>Let’s explore how both can <span id="dx1-39002"/>be implemented in Python for a simple situation. We will define an environment that will give the agent random rewards for a limited number of steps, regardless of the agent’s actions. This scenario is not very useful in the real world, but it will allow us to focus on specific methods in both the environment and agent classes.</p>
+<div class="tcolorbox infobox" id="tcolobox-5">
+<div class="tcolorbox-content">
+<p>Please note that the code snippets shown in this book are not full examples. You <span id="dx1-39003"/>can find the full examples on the GitHub page: <a class="url" href="https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On-Third-Edition"><span class="cmtt-10x-x-109">https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On-Third-Edition</span></a> and run them.</p>
+</div>
+</div>
+<p>Let’s start with the environment:</p>
+<div class="tcolorbox" id="tcolobox-6">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-3"><code>class Environment: 
+    def __init__(self): 
+        self.steps_left = 10</code></pre>
+</div>
+</div>
+<p>In the preceding code, we <span id="dx1-39007"/>allowed the environment to initialize its internal state. In our case, the state is just a counter that limits the number of time steps that the agent is allowed to take to interact with the environment.</p>
+<p>The <span class="cmtt-10x-x-109">get</span><span class="cmtt-10x-x-109">_observation() </span>method is supposed to return the current environment’s observation to the agent. It is usually implemented as some function of the internal state of the environment:</p>
+<div class="tcolorbox" id="tcolobox-7">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-4"><code>    def get_observation(self) -&gt; List[float]: 
+        return [0.0, 0.0, 0.0]</code></pre>
+</div>
+</div>
+<p>If you’re curious about what is meant by <span class="cmtt-10x-x-109">-&gt; List[float]</span>, that’s an example of Python type annotations, which were introduced in Python 3.5. You can find out more in the documentation at <a class="url" href="https://docs.python.org/3/library/typing.xhtml"><span class="cmtt-10x-x-109">https://docs.python.org/3/library/typing.xhtml</span></a>. In our example, the observation vector is always zero, as the environment basically has no internal state. The <span class="cmtt-10x-x-109">get</span><span class="cmtt-10x-x-109">_actions() </span>method allows the agent to query the set of actions it can execute:</p>
+<div class="tcolorbox" id="tcolobox-8">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-5"><code>    def get_actions(self) -&gt; List[int]: 
+        return [0, 1]</code></pre>
+</div>
+</div>
+<p>Normally, the set <span id="dx1-39012"/>of actions does not change over time, but some actions can become impossible in <span id="dx1-39013"/>different states (for example, not every move is possible in any position of the tic-tac-toe game). In our simplistic example, there are only two actions that the agent can carry out, which are encoded with the integers 0 and 1.</p>
+<p>The following method signals the end of the episode to the agent:</p>
+<div class="tcolorbox" id="tcolobox-9">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-6"><code>    def is_done(self) -&gt; bool: 
+        return self.steps_left == 0</code></pre>
+</div>
+</div>
+<p>As you saw in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, the series of environment-agent interactions is divided into a sequence of steps called episodes. Episodes can be finite, like in a game of chess, or infinite, like the Voyager 2 mission (a famous space probe that was launched over 46 years ago and has traveled beyond our solar system). To cover both scenarios, the environment provides us with a way to detect when an episode is over and there is no way to communicate with it anymore.</p>
+<p>The <span class="cmtt-10x-x-109">action() </span>method is the central piece in the environment’s functionality:</p>
+<div class="tcolorbox" id="tcolobox-10">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-7"><code>    def action(self, action: int) -&gt; float: 
+        if self.is_done(): 
+            raise Exception("Game is over") 
+        self.steps_left -= 1 
+        return random.random()</code></pre>
+</div>
+</div>
+<p>It does two things – handles an agent’s action and returns the reward for this action. In our example, the reward is random and its action is discarded. Additionally, we update the count of steps and don’t continue the episodes that are over.</p>
+<p>Now, when looking at the agent’s part, it is much simpler and includes only two methods: the constructor and the method that performs one step in the environment:</p>
+<div class="tcolorbox" id="tcolobox-11">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-8"><code>class Agent: 
+    def __init__(self): 
+        self.total_reward = 0.0</code></pre>
+</div>
+</div>
+<p>In the constructor, we initialize the counter that will keep the total reward accumulated by the agent during the episode.</p>
+<p>The <span class="cmtt-10x-x-109">step() </span>function accepts the environment instance as an argument:</p>
+<div class="tcolorbox" id="tcolobox-12">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-9"><code>    def step(self, env: Environment): 
+        current_obs = env.get_observation() 
+        actions = env.get_actions() 
+        reward = env.action(random.choice(actions)) 
+        self.total_reward += reward</code></pre>
+</div>
+</div>
+<p>This function allows the agent to perform the following actions:</p>
+<ul>
+<li>
+<p>Observe the environment</p>
+</li>
+<li>
+<p>Make a decision about the action to take based on the observations</p>
+</li>
+<li>
+<p>Submit the action to the environment</p>
+</li>
+<li>
+<p>Get the reward for the current step</p>
+</li>
+</ul>
+<p>For our example, the agent is dull and ignores the observations obtained during <span id="dx1-39029"/>the decision-making process about which action to take. Instead, every <span id="dx1-39030"/>action is selected randomly. The final piece is the glue code, which creates both classes and runs one episode:</p>
+<div class="tcolorbox" id="tcolobox-13">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-10"><code>if __name__ == "__main__": 
+    env = Environment() 
+    agent = Agent() 
+    while not env.is_done(): 
+        agent.step(env) 
+    print("Total reward got: %.4f" % agent.total_reward)</code></pre>
+</div>
+</div>
+<p>You can find the full code in this book’s GitHub repository at <a class="url" href="https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On-Third-Edition"><span class="cmtt-10x-x-109">https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On-Third-Edition</span></a> in the <span class="cmtt-10x-x-109">Chapter02/01</span><span class="cmtt-10x-x-109">_agent</span><span class="cmtt-10x-x-109">_anatomy.py </span>file. It has no external dependencies and should work with any relatively modern Python version. By running it several times, you’ll get different amounts of reward gathered by the agent. The following is an output I got on my machine:</p>
+<pre class="lstlisting" id="listing-11"><code>Chapter02$ python 01_agent_anatomy.py 
+Total reward got: 5.8832</code></pre>
+<p>The simplicity of the preceding code illustrates the important basic concepts of the RL model. The environment could be an extremely complicated physics model, and an agent could easily be a large <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) that implements the latest RL algorithm, but the basic pattern will stay the same – at every step, the agent will take some observations from the environment, do its calculations, and select the action to take. The result of this action will be a reward and a new observation.</p>
+<p>You may ask, if the pattern is the same, why do we need to write it from scratch? What if it is already implemented by somebody and could be used as a library? Of course, such frameworks exist, but before we spend some time discussing them, let’s prepare your development environment.</p>
+</section>
+<section class="level3 sectionHead" id="hardware-and-software-requirements">
+<h1 class="heading-1" id="sigil_toc_id_33"> <span id="x1-400002.2"/>Hardware and software requirements</h1>
+<p>The examples in this book were implemented and tested using Python version 3.11. I assume that you’re already familiar with the language and common concepts such as virtual environments, so I won’t cover in detail how to install packages and how to do this in an isolated way. The examples will use the previously mentioned Python type annotations, which will allow us to provide type signatures for functions and class methods.</p>
+<p>Nowadays, there are lots of ML and RL libraries available, but in this book, I tried to keep the list of dependencies to a minimum, giving a preference to our own implementation of methods over the blind import of third-party libraries.</p>
+<p>The external libraries that we will use in this book are open source software, and they include the following:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">NumPy</span>: This is a <span id="dx1-40001"/>library for scientific computing and implementing matrix operations and common functions.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">OpenCV Python bindings</span>: This <span id="dx1-40002"/>is a computer vision library and provides many functions for image processing.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Gymnasium </span>from the Farama Foundation (<a class="url" href="https://farama.org"><span class="cmtt-10x-x-109">https://farama.org</span></a>): This <span id="dx1-40003"/>is a maintained fork of the OpenAI Gym library ( <a class="url" href="https://github.com/openai/gym"><span class="cmtt-10x-x-109">https://github.com/openai/gym</span></a>) and an RL framework that has various environments that can be communicated with in a unified way.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">PyTorch</span>: This is a <span id="dx1-40004"/>flexible and expressive <span class="cmbx-10x-x-109">deep learning (DL)</span> library. A short crash course on it will be given in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch007.xhtml#x1-530003"><span class="cmti-10x-x-109">3</span></a>.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">PyTorch Ignite</span>: This<span id="dx1-40005"/> is a set of high-level tools on top of PyTorch used to reduce boilerplate code. It will be covered briefly in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch007.xhtml#x1-530003"><span class="cmti-10x-x-109">3</span></a>. The full documentation is available here: <a class="url" href="https://pytorch-ignite.ai/"><span class="cmtt-10x-x-109">https://pytorch-ignite.ai/</span></a>.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">PTAN</span>: (<a class="url" href="https://github.com/Shmuma/ptan"><span class="cmtt-10x-x-109">https://github.com/Shmuma/ptan</span></a>): This is an open source extension to the OpenAI Gym API that I created to support modern deep RL methods<span id="dx1-40006"/> and building blocks. All classes used will be described in detail together with the source code.</p>
+</li>
+</ul>
+<p>Other libraries will be used for specific chapters; for example, we will use Microsoft TextWorld to play text-based games, PyBullet and MuJoCo for robotic simulations, Selenium for browser-based automation problems, and so on. Those specialized chapters will include installation instructions for those libraries.</p>
+<p>A significant portion of this book (Parts 2, 3, and 4) is focused on the modern deep RL methods that have been developed over the past few years. The word ”deep” in this context means that DL is heavily used. You may be aware that DL methods are computationally hungry. One modern <span class="cmbx-10x-x-109">graphics processing unit</span> (<span class="cmbx-10x-x-109">GPU</span>) can be 10 to 100 times faster than even the fastest multiple <span class="cmbx-10x-x-109">central processing unit </span>(<span class="cmbx-10x-x-109">CPU</span>) systems. In practice, this means that the same code that takes one hour to train on a system with a GPU could take from half a day to one week even on the fastest CPU system. It doesn’t mean that you can’t try the examples from this book without having access to a GPU, but it will take longer. To experiment with the code on your own (the most useful way to learn anything), it is better to get access to a machine with a GPU. This can be done in various ways:</p>
+<ul>
+<li>
+<p>Buying a modern GPU suitable for CUDA and supported by the PyTorch framework.</p>
+</li>
+<li>
+<p>Using cloud instances. Both Amazon Web Services and Google Cloud Platform can provide you with GPU-powered instances.</p>
+</li>
+<li>
+<p>Google Colab offers free GPU access to its Jupyter notebooks.</p>
+</li>
+</ul>
+<p>The instructions on how to set up the system are beyond the scope of this book, but there are plenty of manuals available on the Internet. In terms of an <span class="cmbx-10x-x-109">operating system </span>(<span class="cmbx-10x-x-109">OS</span>) , you should use Linux or macOS. Windows is supported by PyTorch and Gymnasium, but the examples in the book were not fully tested on the Windows OS.</p>
+<p>To give you the exact versions of the external dependencies that we will use throughout the book, here is a <span class="cmtt-10x-x-109">requirements.txt </span>file (please note that it was tested on Python 3.11; different versions might require you to tweak the dependencies or not work at all):</p>
+<div class="tcolorbox" id="tcolobox-14">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-12"><code>gymnasium[atari]==0.29.1 
+gymnasium[classic-control]==0.29.1 
+gymnasium[accept-rom-license]==0.29.1 
+moviepy==1.0.3 
+numpy&lt;2 
+opencv-python==4.10.0.84 
+torch==2.5.0 
+torchvision==0.20.0 
+pytorch-ignite==0.5.1 
+tensorboard==2.18.0 
+mypy==1.8.0 
+ptan==0.8.1 
+stable-baselines3==2.3.2 
+torchrl==0.6.0 
+ray[tune]==2.37.0 
+pytest</code></pre>
+</div>
+</div>
+<p>All the examples in the book were written and tested with PyTorch 2.5.0, which can be installed by following the instructions on the <a class="url" href="https://pytorch.org"><span class="cmtt-10x-x-109">https://pytorch.org</span></a> website (normally, that’s just the <span class="cmtt-10x-x-109">conda install pytorch torchvision -c</span> <span class="cmtt-10x-x-109">pytorch </span>or even just <span class="cmtt-10x-x-109">pip install torch </span>command, depending on your OS).</p>
+<p>Now, let’s go into the details of the OpenAI Gym API, which provides us with tons of environments, from trivial to challenging ones.</p>
+</section>
+<section class="level3 sectionHead" id="the-openai-gym-api-and-gymnasium">
+<h1 class="heading-1" id="sigil_toc_id_34"> <span id="x1-410002.3"/>The OpenAI Gym API and Gymnasium</h1>
+<p>The Python library called Gym was developed by OpenAI (<a class="url" href="https://www.openai.com"><span class="cmtt-10x-x-109">www.openai.com</span></a>). The <span id="dx1-41001"/>first version was released in 2017 and since then, lots of <span id="dx1-41002"/>environments were developed or adopted to this original API, which became a de facto standard for RL.</p>
+<p>In 2021, the team that developed OpenAI Gym moved the development to Gymnasium (<a class="url" href="https://github.com/Farama-Foundation/Gymnasium"><span class="cmtt-10x-x-109">github.com/Farama-Foundation/Gymnasium</span></a>) – the fork of the original Gym library. Gymnasium provides the same API and is supposed to be a “drop-in replacement” for Gym (you can write <span class="cmtt-10x-x-109">import gymnasium as gym </span>and most likely your code will work).</p>
+<div class="tcolorbox infobox" id="tcolobox-15">
+<div class="tcolorbox-content">
+<p>Examples in this book are using Gymnasium, but in the text, I’ll use ”Gym” for brevity. In rare cases when the difference does matter, I’ll use ”Gymnasium.”</p>
+</div>
+</div>
+<p>The main goal of Gym is to provide a rich collection of environments for RL experiments using a unified interface. So, it is not surprising that the central class in the library is an environment, which is called <span class="cmtt-10x-x-109">Env</span>. Instances of this class expose several methods and fields that provide the required information about its capabilities. At a high level, every environment provides these pieces of information and functionality:</p>
+<ul>
+<li>
+<p>A set of actions that is allowed to be executed in the environment. Gym supports both discrete and continuous actions, as well as their combination.</p>
+</li>
+<li>
+<p>The shape and boundaries of the observations that the environment provides the agent with.</p>
+</li>
+<li>
+<p>A method called <span class="cmtt-10x-x-109">step </span>to execute an action, which returns the current observation, the reward, and a flag indicating that the episode is over.</p>
+</li>
+<li>
+<p>A method called <span class="cmtt-10x-x-109">reset</span>, which returns the environment to its initial state and obtains the first observation.</p>
+</li>
+</ul>
+<p>Let’s now talk about these components of the environment in detail.</p>
+<section class="level4 subsectionHead" id="the-action-space">
+<h2 class="heading-2" id="sigil_toc_id_35"> <span id="x1-420002.3.1"/>The action space</h2>
+<p>As mentioned, the <span id="dx1-42001"/>actions that <span id="dx1-42002"/>an agent can execute can be discrete, continuous, or a combination of the two.</p>
+<p><span class="cmbx-10x-x-109">Discrete actions </span>are a fixed set of things <span id="dx1-42003"/>that an agent <span id="dx1-42004"/>can do, for example, directions in a grid like left, right, up, or down. Another example is a push button, which could be either pressed or released. Both states are mutually exclusive and this is the main characteristic of a discrete action space, where only one action from a finite set of actions is possible at a time.</p>
+<p>A <span class="cmbx-10x-x-109">continuous action </span>has a<span id="dx1-42005"/> value attached to it, for example, a steering wheel, which can <span id="dx1-42006"/>be turned at a specific angle, or an accelerator pedal, which can be pressed with different levels of force. A description of a continuous action includes the boundaries of the value that the action could have. In the case of a steering wheel, it could be from <span class="cmsy-10x-x-109">−</span>720 degrees to 720 degrees. For an accelerator pedal, it’s usually from 0 to 1.</p>
+<p>Of course, we are not limited to a single action; the environment could take multiple actions, such as pushing multiple buttons simultaneously or steering the wheel and pressing two pedals (the brake and the accelerator). To support such cases, Gym defines a special container class that allows the nesting of several action spaces into one unified action.</p>
+</section>
+<section class="level4 subsectionHead" id="the-observation-space">
+<h2 class="heading-2" id="sigil_toc_id_36"> <span id="x1-430002.3.2"/>The observation space</h2>
+<p>As discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, observations are pieces of information that an environment provides the agent with, on every timestamp, besides the reward. Observations<span id="dx1-43001"/> can be as simple as a bunch of numbers or as complex as several multidimensional tensors containing color images from several cameras. An observation can even be discrete, much like action spaces. An example of a discrete observation space is a lightbulb, which could be in two states – on or off – given to us as a Boolean value.</p>
+<p>So, you can see the similarity between actions and observations, and that is how they have been represented in Gym’s classes. Let’s look at a class diagram:</p>
+<div class="minipage">
+<p><img alt="tsuhpalpee::Dl TsaioSuSTmsnBwpppupc:o:alaplrxcecleeinfleeettos[S[(eapin)tatc,e .,..]...] cohnigtha:inflso(axt) seed () " height="300" src="../Images/B22150_02_01.png" width="600"/><span id="x1-43002r1"/></p>
+<span class="id">Figure 2.1: The hierarchy of the <span class="cmtt-10x-x-109">Space </span>class in Gym </span>
+</div>
+<p>The basic abstract <span class="cmtt-10x-x-109">Space </span>class<span id="dx1-43003"/> includes one property and three methods that are relevant to us:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">shape</span>: This property contain the shape of the space, identical to NumPy arrays.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">sample()</span>: This returns a random sample from the space.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">contains(x)</span>: This checks whether the argument, <span class="cmtt-10x-x-109">x</span>, belongs to the space’s domain.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">seed()</span>: This method allows us to initialize a random number generator for the space and all subspaces. This is useful if you want to get reproducible environment behavior across several runs.</p>
+</li>
+</ul>
+<p>All these methods are abstract and reimplemented in each of the <span class="cmtt-10x-x-109">Space</span> subclasses:</p>
+<ul>
+<li>
+<p>The <span class="cmtt-10x-x-109">Discrete </span>class represents a mutually exclusive set of items, numbered from 0 to n-1. If needed, you can redefine the starting index with the optional constructor argument <span class="cmtt-10x-x-109">start</span>. The value <span class="cmtt-10x-x-109">n </span>is a count of the items our <span class="cmtt-10x-x-109">Discrete </span>object describes. For example, <span class="cmtt-10x-x-109">Discrete(n=4) </span>can be used for an action space of four directions to move in [left, right, up, or down].</p>
+</li>
+<li>
+<p>The <span class="cmtt-10x-x-109">Box </span>class represents an n-dimensional tensor of rational numbers with intervals [low, high]. For instance, this could be an accelerator pedal with one single value between 0.0 and 1.0, which could be encoded by <span class="cmtt-10x-x-109">Box(low=0.0, high=1.0, shape=(1,),</span> <span class="cmtt-10x-x-109">dtype=np.float32)</span>. Here, the <span class="cmtt-10x-x-109">shape </span>argument is assigned a tuple of length 1 with a single value of 1, which gives us a one-dimensional tensor with a single value. The <span class="cmtt-10x-x-109">dtype </span>parameter specifies the space’s value type, and here, we specify it as a NumPy 32-bit float. Another example of <span class="cmtt-10x-x-109">Box </span>could be an Atari screen observation (we will cover lots of Atari environments later), which is an RGB (red, green, and blue) image of size 210 <span class="cmsy-10x-x-109">× </span>160: <span class="cmtt-10x-x-109">Box(low=0, high=255, shape=(210,</span> <span class="cmtt-10x-x-109">160, 3), dtype=np.uint8)</span>. In this case, the <span class="cmtt-10x-x-109">shape </span>argument is a tuple of three elements: the first dimension is the height of the image, the second is the width, and the third equals 3, which all correspond to three color planes for red, green, and blue, respectively. So, in total, every observation is a three-dimensional tensor with 100<span class="cmmi-10x-x-109">,</span>800 bytes.</p>
+</li>
+<li>
+<p>The final child of <span class="cmtt-10x-x-109">Space </span>is a <span class="cmtt-10x-x-109">Tuple </span>class, which allows us to combine several <span class="cmtt-10x-x-109">Space </span>class instances together. This enables us to create action and observation spaces of any complexity that we want. For example, imagine we want to create an action space specification for a car. The car has several controls that can be changed at every timestamp, including the steering wheel angle, brake pedal position, and accelerator pedal position. These three controls can be specified by three float values in one single <span class="cmtt-10x-x-109">Box </span>instance. Besides these essential controls, the car has extra discrete controls, like a turn signal (which could be off, right, or left) or horn (on or off). To combine all of this into one action space specification class, we can use the following code:</p>
+<div class="tcolorbox" id="tcolobox-16">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-13"><code>  Tuple(spaces=( 
+    Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32), 
+    Discrete(n=3), 
+    Discrete(n=2) 
+  ))</code></pre>
+</div>
+</div>
+<p>This flexibility is <span id="dx1-43009"/>rarely used; for example, in this book, you will see only the <span class="cmtt-10x-x-109">Box </span>and <span class="cmtt-10x-x-109">Discrete </span>actions and observation spaces, but the <span class="cmtt-10x-x-109">Tuple </span>class can be handy in some cases.</p>
+</li>
+</ul>
+<p>There are other <span class="cmtt-10x-x-109">Space </span>subclasses defined in Gym, for example, <span class="cmtt-10x-x-109">Sequence</span> (representing variable-length sequences), <span class="cmtt-10x-x-109">Text </span>(strings), and <span class="cmtt-10x-x-109">Graph </span>(where space is a set of nodes with connections between them). But the three that we have described are the most useful ones.</p>
+<p>Every environment has two members of type <span class="cmtt-10x-x-109">Space</span>: the <span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_space </span>and <span class="cmtt-10x-x-109">observation</span><span class="cmtt-10x-x-109">_space</span>. This allows us to create generic code that could work with any environment. Of course, dealing with the pixels of the screen is different from handling discrete observations (as in the former case, we may want to preprocess images with convolutional layers or with other methods from the computer vision toolbox); so, most of the time, this means optimizing the code for a particular environment or group of <span id="dx1-43010"/>environments, but Gym doesn’t prevent us from writing generic code.</p>
+</section>
+<section class="level4 subsectionHead" id="the-environment-1">
+<h2 class="heading-2" id="sigil_toc_id_37"> <span id="x1-440002.3.3"/>The environment</h2>
+<p>The environment is represented in Gym by the <span class="cmtt-10x-x-109">Env </span>class, which has the following members:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_space</span>: This is the field of the <span class="cmtt-10x-x-109">Space </span>class and provides a specification for allowed actions in the environment.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">observation</span><span class="cmtt-10x-x-109">_space</span>: This field has the same <span class="cmtt-10x-x-109">Space </span>class, but specifies the observations provided by the environment.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">reset()</span>: This resets the environment to its initial state, returning the initial observation vector and the dict with extra information from the environment.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">step()</span>: This method allows the agent to take the action and returns information about the outcome of the action:</p>
+<ul>
+<li>
+<p>The next observation</p>
+</li>
+<li>
+<p>The local reward</p>
+</li>
+<li>
+<p>The end-of-episode flag</p>
+</li>
+<li>
+<p>The flag indicating a truncated episode</p>
+</li>
+<li>
+<p>A dictionary with extra information from the environment</p>
+</li>
+</ul>
+<p>This method is a bit complicated; we will look at it in detail later in this section.</p>
+</li>
+</ul>
+<p>There are extra utility methods in the <span class="cmtt-10x-x-109">Env </span>class, such as <span class="cmtt-10x-x-109">render()</span>, which allows us to obtain the observation in a human-friendly form, but we won’t use them. You can find the full list in Gym’s documentation, but let’s focus on the core <span class="cmtt-10x-x-109">Env</span> methods: <span class="cmtt-10x-x-109">reset() </span>and <span class="cmtt-10x-x-109">step()</span>.</p>
+<p>As <span class="cmtt-10x-x-109">reset </span>is much simpler, we will start with it. The <span class="cmtt-10x-x-109">reset() </span>method has no arguments; it instructs an environment to reset into its initial state and obtain the initial observation. Note that you have to call <span class="cmtt-10x-x-109">reset() </span>after the creation of the environment. As you may remember from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, the agent’s communication with the environment may have an end (like a “Game Over” screen). Such sessions are called episodes, and after the end of the episode, an agent needs to start over. The value returned by this method is the first observation of the environment.</p>
+<p>Besides the observation, <span class="cmtt-10x-x-109">reset() </span>returns the second value – the dictionary <span id="dx1-44001"/>with extra environment-specific information. Most standard environments return nothing in this dictionary, but more complicated ones (like TextWorld, an emulator for interactive-fiction games; we’ll take a look at it later in the book) might return additional information that doesn’t fit into standard observation.</p>
+<p>The <span class="cmtt-10x-x-109">step() </span>method is the central piece in the environment’s functionality. It does several things in one call, which are as follows:</p>
+<ul>
+<li>
+<p>Telling the environment which action we will execute in the next step</p>
+</li>
+<li>
+<p>Getting the new observation from the environment after this action</p>
+</li>
+<li>
+<p>Getting the reward the agent gained with this step</p>
+</li>
+<li>
+<p>Getting the indication that the episode is over</p>
+</li>
+<li>
+<p>Getting the flag which signals an episode truncation (when time limit is enabled, for example)</p>
+</li>
+<li>
+<p>Getting the dict with extra environment-specific information</p>
+</li>
+</ul>
+<p>The first item in the preceding list (action) is passed as the only argument to the <span class="cmtt-10x-x-109">step() </span>method, and the rest are returned by this method. More precisely, this is a tuple (Python tuple and not the <span class="cmtt-10x-x-109">Tuple </span>class we discussed in the previous section) of five elements (<span class="cmtt-10x-x-109">observation</span>, <span class="cmtt-10x-x-109">reward</span>, <span class="cmtt-10x-x-109">done</span>, <span class="cmtt-10x-x-109">truncated</span>, and <span class="cmtt-10x-x-109">info</span>). They have these types and meanings:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">observation</span>: This is a NumPy vector or a matrix with observation data.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">reward</span>: This is the float value of the reward.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">done</span>: This is a Boolean indicator, which is <span class="cmtt-10x-x-109">True </span>when the episode is over. If this value is <span class="cmtt-10x-x-109">True</span>, we have to call <span class="cmtt-10x-x-109">reset() </span>in the environment, as no more actions are possible.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">truncated</span>: This is a Boolean indicator, which is <span class="cmtt-10x-x-109">True </span>when the episode is truncated. For most environments, this is a <span class="cmtt-10x-x-109">TimeLimit</span> (which is a way to limit length of episodes), but might have different meaning in some environments. This flag is separated from <span class="cmtt-10x-x-109">done</span>, because in some scenarios it might be useful to<span id="dx1-44002"/> distinguish situations ”agent reached the end of episode” and ”agent has reached the time limit of the environment.” If <span class="cmtt-10x-x-109">truncated </span>is <span class="cmtt-10x-x-109">True</span>, we also have to call <span class="cmtt-10x-x-109">reset() </span>in the environment, the same as with the <span class="cmtt-10x-x-109">done </span>flag.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">info</span>: This could be anything environment-specific with extra information about the environment. The usual practice is to ignore this value in general RL methods.</p>
+</li>
+</ul>
+<p>You may have already got the idea of environment usage in an agent’s code – in a loop, we call the <span class="cmtt-10x-x-109">step() </span>method with an action to perform until the <span class="cmtt-10x-x-109">done </span>or <span class="cmtt-10x-x-109">truncated </span>flags become <span class="cmtt-10x-x-109">True</span>. Then, we can call <span class="cmtt-10x-x-109">reset() </span>to start over. There is only one piece missing – how we create <span class="cmtt-10x-x-109">Env </span>objects in the first place.</p>
+</section>
+<section class="level4 subsectionHead" id="creating-an-environment">
+<h2 class="heading-2" id="sigil_toc_id_38"> <span id="x1-450002.3.4"/>Creating an environment</h2>
+<p>Every environment has an<span id="dx1-45001"/> unique name of the <span class="cmtt-10x-x-109">EnvironmentName-vN </span>form, where <span class="cmmi-10x-x-109">N </span>is the number used to distinguish between different versions of the same environment (when, for example, some bugs get fixed or some other major changes are made). To create an environment, the <span class="cmtt-10x-x-109">gymnasium </span>package provides the <span class="cmtt-10x-x-109">make(name) </span>function, whose only argument is the environment’s name in string form.</p>
+<p>At the time of writing, Gymnasium version 0.29.1 (being installed with the <span class="cmtt-10x-x-109">[atari] </span>extension) contains 1,003 environments with different names. Of course, all of these are not unique environments, as this list includes all versions of an environment. Additionally, the same environment can have different variations in the settings and observations spaces. For example, the Atari game Breakout has these environment names:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Breakout-v0</span>, <span class="cmbx-10x-x-109">Breakout-v4</span>: The original Breakout with a random initial position and direction of the ball.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">BreakoutDeterministic-v0</span>, <span class="cmbx-10x-x-109">BreakoutDeterministic-v4</span>: Breakout with the same initial placement and speed vector of the ball.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">BreakoutNoFrameskip-v0</span>, <span class="cmbx-10x-x-109">BreakoutNoFrameskip-v4</span>: Breakout with every frame displayed to the agent. Without this, every action is executed for several consecutive frames.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Breakout-ram-v0</span>, <span class="cmbx-10x-x-109">Breakout-ram-v4</span>: Breakout with the observation of the full Atari emulation memory (128 bytes) instead of screen pixels.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Breakout-ramDeterministic-v0</span>, <span class="cmbx-10x-x-109">Breakout-ramDeterministic-v4</span>: Memory observation with the same initial state.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Breakout-ramNoFrameskip-v0</span>, <span class="cmbx-10x-x-109">Breakout-ramNoFrameskip-v4</span>: Memory observation without frame skipping.</p>
+</li>
+</ul>
+<p>In total, there are 12 environments for a single game. In case you’ve never seen it before, here is a screenshot of its gameplay:</p>
+<div class="minipage">
+<p><img alt="PIC" height="199" src="../Images/file6.png" width="199"/> <span id="x1-45002r2"/></p>
+<span class="id">Figure 2.2: The gameplay of Breakout </span>
+</div>
+<p>Even after the removal of such duplicates, Gymnasium comes with an impressive list of 198 unique environments, which can be divided into several groups:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Classic control problems</span>: These are toy tasks that are used in optimal <span id="dx1-45003"/>control theory and RL papers as benchmarks or demonstrations. They are usually simple, with low-dimension observation and action spaces, but they are useful as quick checks when implementing algorithms. Think about them as the ”MNIST for RL” (MNIST is a handwriting digit recognition dataset from Yann LeCun, which you can find at <a class="url" href="http://yann.lecun.com/exdb/mnist/"><span class="cmtt-10x-x-109">http://yann.lecun.com/exdb/mnist/</span></a>).</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Atari 2600</span>: These are games from the classic game platform from the 1970s. There are 63 unique games.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Algorithmic</span>: These are problems that aim to perform small computation tasks, such as copying the observed sequence or adding numbers.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Box2D</span>: These are environments that use the Box2D physics simulator to learn walking or car control.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">MuJoCo</span>: This is another physics simulator used for several continuous control problems.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Parameter tuning</span>: This is RL being used to optimize NN parameters.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Toy text</span>: These are simple grid world text environments.</p>
+</li>
+</ul>
+<p>Of course, the total <span id="dx1-45004"/>number of RL environments supporting the Gym API is much larger. For example, The Farama Foundation maintains several repositories related to special RL topics like multi-agent RL, 3D navigation, robotics, and web automation. In addition, there are lots of third-party repositories. To get the idea, you can check out <a class="url" href="https://gymnasium.farama.org/environments/third_party_environments"><span class="cmtt-10x-x-109">https://gymnasium.farama.org/environments/third_party_environments</span></a> in the Gymnasium documentation.</p>
+<p>But enough theory! Let’s now look at a Python session working with one of Gym’s environments.</p>
+</section>
+<section class="level4 subsectionHead" id="the-cartpole-session">
+<h2 class="heading-2" id="sigil_toc_id_39"> <span id="x1-460002.3.5"/>The CartPole session</h2>
+<p>Let’s apply our knowledge and explore one of the simplest RL environments <span id="dx1-46001"/>that Gym provides.</p>
+<pre class="lstlisting" id="listing-14"><code>$ python 
+&gt;&gt;&gt; import gymnasium as gym 
+&gt;&gt;&gt; e = gym.make("CartPole-v1")</code></pre>
+<p>Here, we have imported the <span class="cmtt-10x-x-109">gymnasium </span>package and created an environment called <span class="cmtt-10x-x-109">CartPole</span>. This environment is from the classic control group and its gist is to control the platform with a stick attached to its bottom part (see the following figure).</p>
+<p>The trickiness is that this stick tends to fall right or left and you need to balance it by moving the platform to the right or left at every step.</p>
+<div class="minipage">
+<p><img alt="PIC" height="180" src="../Images/B22150_02_03.png" width="180"/> <span id="x1-46005r3"/></p>
+<span class="id">Figure 2.3: The CartPole environment </span>
+</div>
+<p>The observation of this environment is four floating-point numbers containing information about the x coordinate of the stick’s center of mass, its speed, its angle to the platform, and its angular speed. Of course, by applying some math and physics knowledge, it won’t be complicated to convert these numbers into actions when we need to balance the stick, but our problem is different – how do we learn how to balance this system <span class="cmti-10x-x-109">without</span> <span class="cmti-10x-x-109">knowing </span>the exact meaning of the observed numbers and only by getting the reward? The reward in this environment is 1, and it is given on every time step. The episode continues until the stick falls, so to get a more accumulated reward, we need to balance the platform in a way to avoid the stick falling.</p>
+<p>This problem may look difficult, but in just two chapters, we will write the algorithm <span id="dx1-46006"/>that will easily solve CartPole in minutes, without any idea about what the observed numbers mean. We will do it only by trial and error and using a bit of RL magic.</p>
+<p>But now, let’s continue with our session.</p>
+<pre class="lstlisting" id="listing-15"><code>&gt;&gt;&gt; obs, info = e.reset() 
+&gt;&gt;&gt; obs 
+array([ 0.02100407,  0.02762252, -0.01519943, -0.0103739 ], dtype=float32) 
+&gt;&gt;&gt; info 
+{}</code></pre>
+<p>Here, we reset the environment and obtained the first observation (we always need to reset the newly created environment). As I said, the observation is four numbers, so no surprises here. Let’s now examine the action and observation space of the environment:</p>
+<pre class="lstlisting" id="listing-16"><code>&gt;&gt;&gt; e.action_space 
+Discrete(2) 
+&gt;&gt;&gt; e.observation_space 
+Box([-4.8000002e+00 -3.4028235e+38 -4.1887903e-01 -3.4028235e+38], [4.8000002e+00 3.4028235e+38 4.1887903e-01 3.4028235e+38], (4,), float32)</code></pre>
+<p>The <span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_space </span>field is of the <span class="cmtt-10x-x-109">Discrete </span>type, so our actions will be just 0 or 1, where 0 means pushing the platform to the left and 1 is pushing to the right. The observation space is of <span class="cmtt-10x-x-109">Box(4,)</span>, which means a vector of four numbers. The first list shown in the <span class="cmtt-10x-x-109">observation</span><span class="cmtt-10x-x-109">_space </span>field is the low bound and the second is the high bound of parameters.</p>
+<p>If you’re curious, you can peek at the source code of the environment in the Gymnasium repository in the <span class="cmtt-10x-x-109">cartpole.py </span>file at <a class="url" href="https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/envs/classic_control/cartpole.py#L40"><span class="cmtt-10x-x-109">https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/envs/classic_control/cartpole.py#L40</span></a>. Documentation strings of the <span class="cmtt-10x-x-109">CartPole </span>class provide all the details, including semantics of observation:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Cart position</span>: Value in <span class="cmsy-10x-x-109">−</span>4<span class="cmmi-10x-x-109">.</span>8<span class="cmmi-10x-x-109">…</span>4<span class="cmmi-10x-x-109">.</span>8 range</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Cart velocity</span>: Value in <span class="cmsy-10x-x-109">−∞</span><span class="cmmi-10x-x-109">…</span><span class="cmsy-10x-x-109">∞ </span>range</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Pole angle</span>: Value in radians in <span class="cmsy-10x-x-109">−</span>0<span class="cmmi-10x-x-109">.</span>418<span class="cmmi-10x-x-109">…</span>0<span class="cmmi-10x-x-109">.</span>418 range</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Pole angular velocity</span>: Value in <span class="cmsy-10x-x-109">−∞</span><span class="cmmi-10x-x-109">…</span><span class="cmsy-10x-x-109">∞ </span>range</p>
+</li>
+</ul>
+<p>Python uses <span class="cmtt-10x-x-109">float32 </span>maximum and minimum values to represent infinity, which is why some <span id="dx1-46016"/>entries in boundary vectors have values of scale 10<sup><span class="cmr-8">38</span></sup>. All those internal details are interesting to know, but absolutely not needed to solve the environment using RL methods. Let’s go further and send an action to the environment:</p>
+<pre class="lstlisting" id="listing-17"><code>&gt;&gt;&gt; e.step(0) 
+(array([-0.01254663, -0.22985364, -0.01435183,  0.24902613], dtype=float32), 1.0, False, False, {})</code></pre>
+<p>Here, we pushed our platform to the left by executing the action 0 and got the tuple of five elements:</p>
+<ul>
+<li>
+<p>A new observation, which is a new vector of four numbers</p>
+</li>
+<li>
+<p>A reward of 1<span class="cmmi-10x-x-109">.</span>0</p>
+</li>
+<li>
+<p>The <span class="cmtt-10x-x-109">done </span>flag with value <span class="cmtt-10x-x-109">False</span>, which means that the episode is not over yet and we are more or less okay with balancing the pole</p>
+</li>
+<li>
+<p>The <span class="cmtt-10x-x-109">truncated </span>flag with value <span class="cmtt-10x-x-109">False</span>, meaning that the episode was not truncated</p>
+</li>
+<li>
+<p>Extra information about the environment, which is an empty dictionary</p>
+</li>
+</ul>
+<p>Next, we will use the <span class="cmtt-10x-x-109">sample() </span>method of the <span class="cmtt-10x-x-109">Space </span>class on the <span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_space</span> and <span class="cmtt-10x-x-109">observation</span><span class="cmtt-10x-x-109">_space</span>.</p>
+<pre class="lstlisting" id="listing-18"><code>&gt;&gt;&gt; e.action_space.sample() 
+0 
+&gt;&gt;&gt; e.action_space.sample() 
+1 
+&gt;&gt;&gt; e.observation_space.sample() 
+array([-4.05354548e+00, -1.13992760e+38, -1.21235274e-01,  2.89040989e+38], 
+     dtype=float32) 
+&gt;&gt;&gt; e.observation_space.sample() 
+array([-3.6149189e-01, -1.0301251e+38, -2.6193827e-01, -2.6395525e+36], 
+     dtype=float32)</code></pre>
+<p>This method returned a random sample from the underlying space, which in the case of our <span class="cmtt-10x-x-109">Discrete </span>action space means a random number of 0 or 1, and for the observation space means a random vector of four numbers. The random sample of the observation space is not very useful, but the sample from the action space could be used when we are not sure how to perform an action. This feature is especially handy because you don’t know any RL methods yet, but we still want to play around with the Gym environment. Now that you know enough to implement your first randomly behaving agent for CartPole, let’s do it.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-random-cartpole-agent">
+<h1 class="heading-1" id="sigil_toc_id_40"> <span id="x1-470002.4"/>The random CartPole agent</h1>
+<p>Although the <span id="dx1-47001"/>environment is much more complex than our first example in section <a href="#x1-390002.1">2.1</a>, the code of the agent is much shorter. This is <span id="dx1-47002"/>the power of reusability, abstractions, and third-party libraries!</p>
+<p>So, here is the code (you can find it in <span class="cmtt-10x-x-109">Chapter02/02</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_random.py</span>):</p>
+<div class="tcolorbox" id="tcolobox-17">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-19"><code>import gymnasium as gym 
+ 
+if __name__ == "__main__": 
+    env = gym.make("CartPole-v1") 
+    total_reward = 0.0 
+    total_steps = 0 
+    obs, _ = env.reset()</code></pre>
+</div>
+</div>
+<p>Here, we created the environment and initialized the counter of steps and the reward accumulator. On the last line, we reset the environment to obtain the first observation (which we will not use, as our agent is stochastic):</p>
+<div class="tcolorbox" id="tcolobox-18">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-20"><code>    while True: 
+        action = env.action_space.sample() 
+        obs, reward, is_done, is_trunc, _ = env.step(action) 
+        total_reward += reward 
+        total_steps += 1 
+        if is_done: 
+            break 
+ 
+    print("Episode done in %d steps, total reward %.2f" % (total_steps, total_reward))</code></pre>
+</div>
+</div>
+<p>In the preceding loop, after sampling a random action, we asked the environment to execute it and return to us the next observation (<span class="cmtt-10x-x-109">obs</span>), the <span class="cmtt-10x-x-109">reward</span>, the <span class="cmtt-10x-x-109">is</span><span class="cmtt-10x-x-109">_done</span>, and the <span class="cmtt-10x-x-109">is</span><span class="cmtt-10x-x-109">_trunc </span>flags. If the episode is over, we stop the loop and show how many steps we have taken and how much reward has been accumulated. If you start this example, you will see something like this (not exactly, though, due to the agent’s randomness):</p>
+<pre class="lstlisting" id="listing-21"><code>Chapter02$ python 02_cartpole_random.py 
+Episode done in 12 steps, total reward 12.00</code></pre>
+<p>On average, our random agent takes 12 to 15 steps before the pole falls and the <span id="dx1-47021"/>episode ends. Most of the environments in Gym have a ”reward boundary,” which is the average reward that the agent should gain during 100 consecutive episodes to ”solve” the environment. For CartPole, this boundary is 195, which means that, on average, the agent must hold the stick for 195 time steps or longer. Using this perspective, our random agent’s performance looks poor. However, don’t be disappointed; we are just at the beginning, and soon you will solve CartPole and many other much more interesting and challenging environments.</p>
+</section>
+<section class="level3 sectionHead" id="extra-gym-api-functionality">
+<h1 class="heading-1" id="sigil_toc_id_41"> <span id="x1-480002.5"/>Extra Gym API functionality</h1>
+<p>What we have discussed so far covers two-thirds of the Gym core API and the essential functions required to start writing agents. The rest of the API you can live without, but it will make your life easier and the code cleaner. So, let’s briefly cover the rest of the API.</p>
+<section class="level4 subsectionHead" id="wrappers">
+<h2 class="heading-2" id="sigil_toc_id_42"> <span id="x1-490002.5.1"/>Wrappers</h2>
+<p>Very frequently, you <span id="dx1-49001"/>will want to extend the environment’s functionality in some generic way. For example, imagine an environment gives you some observations, but you want to accumulate them in some buffer and provide to <span id="dx1-49002"/>the agent the <span class="cmmi-10x-x-109">N</span> last observations. This is a common scenario for dynamic computer games, when one single frame is just not enough to get the full information about the game state. Another example is when you want to be able to crop or preprocess an image’s pixels to make it more convenient for the agent to digest, or if you want to normalize reward scores somehow. There are many such situations that have the same structure – you want to ”wrap” the existing environment and add some extra logic for doing something. Gym provides a convenient framework for this – the <span class="cmtt-10x-x-109">Wrapper</span> class.</p>
+<p>The class structure is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-49003r4"><span class="cmti-10x-x-109">2.4</span></a>.</p>
+<div class="minipage">
+<p><img alt="ObAsRceoetrbwivsaWeoaaerrrnnctrdeEavWtivWwnp:rioaravpaontareEpnWiopdrnp(rnp(veaa(err)por)pbesr) unwrapped: Env " height="300" src="../Images/B22150_02_01.png" width="600"/><span id="x1-49003r4"/></p>
+<span class="id">Figure 2.4: The hierarchy of the <span class="cmtt-10x-x-109">Wrapper </span>classes in Gym </span>
+</div>
+<p>The <span class="cmtt-10x-x-109">Wrapper </span>class inherits the <span class="cmtt-10x-x-109">Env </span>class. Its constructor accepts the <span id="dx1-49004"/>only argument – the instance of the <span class="cmtt-10x-x-109">Env </span>class to be ”wrapped.” To add extra functionality, you need to redefine the methods you want to extend, such as <span class="cmtt-10x-x-109">step() </span>or <span class="cmtt-10x-x-109">reset()</span>. The only requirement is to call the original method of the superclass. To simplify accessing the environment being wrapped, <span class="cmtt-10x-x-109">Wrapper </span>has two properties: <span class="cmtt-10x-x-109">env</span>, of the immediate environment we’re wrapping (which could be another wrapper as well), and property <span class="cmtt-10x-x-109">unwrapped</span>, which is an <span class="cmtt-10x-x-109">Env </span>without any wrappers.</p>
+<p>To handle more specific requirements, such as a <span class="cmtt-10x-x-109">Wrapper </span>class that wants to process <span id="dx1-49005"/>only observations from the environment, or only actions, there are subclasses of <span class="cmtt-10x-x-109">Wrapper </span>that allow the filtering of only a specific portion of information. They are as follows:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">ObservationWrapper</span>: You need to redefine the <span class="cmtt-10x-x-109">observation(obs)</span> method of the parent. The <span class="cmtt-10x-x-109">obs </span>argument is an observation from the wrapped environment, and this method should return the observation that will be given to the agent.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">RewardWrapper</span>: This exposes the <span class="cmtt-10x-x-109">reward(rew) </span>method, which can modify the reward value given to the agent, for example, scale it to the needed range, add a discount based on some previous actions, or something like this.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">ActionWrapper</span>: You need to override the <span class="cmtt-10x-x-109">action(a) </span>method, which can tweak the action passed to the wrapped environment by the agent.</p>
+</li>
+</ul>
+<p>To make it slightly more practical, let’s imagine a situation where we want to intervene in the stream of actions sent by the agent and, with a probability of 10%, replace the current action with a random one. It might look like an unwise thing to do, but this simple trick is one of the most practical and powerful methods for solving the exploration/exploitation problem that we mentioned in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>. By issuing the random actions, we make our agent explore the environment and from time to time drift away from the beaten track of its policy. This is an easy thing to do using the <span class="cmtt-10x-x-109">ActionWrapper </span>class (a full example is in <span class="cmtt-10x-x-109">Chapter02/03</span><span class="cmtt-10x-x-109">_random</span><span class="cmtt-10x-x-109">_action</span><span class="cmtt-10x-x-109">_wrapper.py</span>):</p>
+<div class="tcolorbox" id="tcolobox-19">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-22"><code>import gymnasium as gym 
+import random 
+ 
+class RandomActionWrapper(gym.ActionWrapper): 
+    def __init__(self, env: gym.Env, epsilon: float = 0.1): 
+        super(RandomActionWrapper, self).__init__(env) 
+        self.epsilon = epsilon</code></pre>
+</div>
+</div>
+<p>Here, we initialized our wrapper by calling a parent’s <span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_init</span><span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_ </span>method and saving <span class="cmtt-10x-x-109">epsilon </span>(the probability of a random action).</p>
+<p>The following is a method that we need to override from a parent’s class to tweak the agent’s actions:</p>
+<div class="tcolorbox" id="tcolobox-20">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-23"><code>    def action(self, action: gym.core.WrapperActType) -&gt; gym.core.WrapperActType: 
+        if random.random() &lt; self.epsilon: 
+            action = self.env.action_space.sample() 
+            print(f"Random action {action}") 
+            return action 
+        return action</code></pre>
+</div>
+</div>
+<p>Every time we roll the die, and with the probability of <span class="cmtt-10x-x-109">epsilon</span>, we sample a random action from the action space and <span id="dx1-49019"/>return it instead of the action the agent has sent to us. Note that using <span class="cmtt-10x-x-109">action</span><span class="cmtt-10x-x-109">_space </span>and wrapper abstractions, we were able to write abstract code, which will work with any environment from Gym. We also print the message on the console, just to illustrate that our <span id="dx1-49020"/>wrapper is working. In the production code, this won’t be necessary, of course.</p>
+<p>Now it’s time to apply our wrapper. We will create a normal CartPole environment and pass it to our <span class="cmtt-10x-x-109">Wrapper </span>constructor:</p>
+<div class="tcolorbox" id="tcolobox-21">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-24"><code>if __name__ == "__main__": 
+    env = RandomActionWrapper(gym.make("CartPole-v1"))</code></pre>
+</div>
+</div>
+<p>From here on, we will use our wrapper as a normal <span class="cmtt-10x-x-109">Env </span>instance, instead of the original CartPole. As the <span class="cmtt-10x-x-109">Wrapper </span>class inherits the <span class="cmtt-10x-x-109">Env </span>class and exposes the same interface, we can nest our wrappers as deep as we want. This is a powerful, elegant, and generic solution.</p>
+<p>Here is almost the same code as in the random agent, except that every time, we issue the same action, 0, so our agent is dull and does the same thing:</p>
+<div class="tcolorbox" id="tcolobox-22">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-25"><code>    obs = env.reset() 
+    total_reward = 0.0 
+ 
+    while True: 
+        obs, reward, done, _, _ = env.step(0) 
+        total_reward += reward 
+        if done: 
+            break 
+ 
+    print(f"Reward got: {total_reward:.2f}")</code></pre>
+</div>
+</div>
+<p>By running the code, you should see that the wrapper is indeed working:</p>
+<pre class="lstlisting" id="listing-26"><code>Chapter02$ python 03_random_action_wrapper.py 
+Random action 0 
+Random action 0 
+Reward got: 9.00</code></pre>
+<p>We should move on now <span id="dx1-49037"/>and look at how you can render your environment during execution.</p>
+</section>
+<section class="level4 subsectionHead" id="rendering-the-environment">
+<h2 class="heading-2" id="sigil_toc_id_43"> <span id="x1-500002.5.2"/>Rendering the environment</h2>
+<p>Another possibility <span id="dx1-50001"/>that you should be aware of is rendering the environment. It is implemented with two wrappers: <span class="cmtt-10x-x-109">HumanRendering </span>and <span class="cmtt-10x-x-109">RecordVideo</span>.</p>
+<p>Those two classes replace the original <span class="cmtt-10x-x-109">Monitor </span>wrapper in the OpenAI Gym library, which was removed. This class was able to record the information about your agent’s performance in a file, with an optional video recording of your agent in action.</p>
+<p>With the Gymnasium library, you have two classes to check what’s going on inside the environment. The first one is <span class="cmtt-10x-x-109">HumanRendering</span>, which opens a separate graphical window in which the image from the environment is being shown interactively. To be able to render the environment (CartPole in our case), it has to be initialized with the <span class="cmtt-10x-x-109">render</span><span class="cmtt-10x-x-109">_mode="rgb</span><span class="cmtt-10x-x-109">_array" </span>argument. This argument tells the environment to return pixels from its <span class="cmtt-10x-x-109">render() </span>method, which is being called by the <span class="cmtt-10x-x-109">HumanRendering </span>wrapper.</p>
+<p>So, to use the <span class="cmtt-10x-x-109">HumanRenderer </span>wrapper, you need to change the random agent’s code (the full code is in <span class="cmtt-10x-x-109">Chapter02/04</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_random</span><span class="cmtt-10x-x-109">_monitor.py</span>):</p>
+<div class="tcolorbox" id="tcolobox-23">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-27"><code>if __name__ == "__main__": 
+    env = gym.make("CartPole-v1", render_mode="rgb_array") 
+    env = gym.wrappers.HumanRendering(env)</code></pre>
+</div>
+</div>
+<p>If you start the code, the window with environment rendering will appear. As our agent cannot balance the pole for too long (10-30 steps max), the window will disappear quite quickly, once the <span class="cmtt-10x-x-109">env.close() </span>method is called.</p>
+<div class="minipage">
+<p><img alt="PIC" height="227" src="../Images/file8.png" width="227"/> <span id="x1-50005r5"/></p>
+<span class="id">Figure 2.5: CartPole environment rendered by <span class="cmtt-10x-x-109">HumanRendering</span> </span>
+</div>
+<p>Another wrapper that might be useful is <span class="cmtt-10x-x-109">RecordVideo</span>, which captures the pixels from the environment and produces a video file of your agent in action. It is used in the same way as the human renderer, but requires an extra argument specifying the directory to store video files. If the directory doesn’t exist, it will be created:</p>
+<div class="tcolorbox" id="tcolobox-24">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-28"><code>if __name__ == "__main__": 
+    env = gym.make("CartPole-v1", render_mode="rgb_array") 
+    env = gym.wrappers.RecordVideo(env, video_folder="video")</code></pre>
+</div>
+</div>
+<p>After starting the code, it reports the name of the video produced:</p>
+<pre class="lstlisting" id="listing-29"><code>Chapter02$ python 04_cartpole_random_monitor.py 
+Moviepy - Building video Chapter02/video/rl-video-episode-0.mp4. 
+Moviepy - Writing video Chapter02/video/rl-video-episode-0.mp4 
+ 
+Moviepy - Done ! 
+Moviepy - video ready Chapter02/video/rl-video-episode-0.mp4 
+Episode done in 30 steps, total reward 30.00</code></pre>
+<p>This wrapper is especially useful in situations when you’re running your agent on a remote machine without the GUI.</p>
+</section>
+<section class="level4 subsectionHead" id="more-wrappers">
+<h2 class="heading-2" id="sigil_toc_id_44"> <span id="x1-510002.5.3"/>More wrappers</h2>
+<p>Gymnasium provides <span id="dx1-51001"/>lots of other wrappers, which we’ll use in the upcoming chapters. It can do standardized preprocessing of Atari game images, do reward normalization, stack observation frames, do vectorization of an environment, do time limiting and much more.</p>
+<p>The full list of available wrappers is available in the documentation, <a class="url" href="https://gymnasium.farama.org/api/wrappers/"><span class="cmtt-10x-x-109">https://gymnasium.farama.org/api/wrappers/</span></a>, and in the source code.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="summary-1">
+<h1 class="heading-1" id="sigil_toc_id_45"> <span id="x1-520002.6"/>Summary</h1>
+<p>You have started to learn about the practical side of RL! In this chapter, we experimented with Gymnasium, with its tons of environments to play with. We studied its basic API and created a randomly behaving agent.</p>
+<p>You also learned how to extend the functionality of existing environments in a modular way and became familiar with a way to render our agent’s activity using wrappers. This will be heavily used in the upcoming chapters.</p>
+<p>In the next chapter, we will do a quick DL recap using PyTorch, which is one of the most widely used DL toolkits.</p>
+</section>
+</section>
+</div></body></html>

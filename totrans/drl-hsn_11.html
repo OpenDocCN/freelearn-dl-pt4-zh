@@ -1,0 +1,586 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-11-policy-gradients">
+<h1 class="chapterNumber">11</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_414">
+<span id="x1-18200011"/>Policy Gradients
+    </h1>
+<p>In this first chapter of <span class="cmti-10x-x-109">Part 3 </span>of the book, we will consider an alternative way to handle <span class="cmbx-10x-x-109">Markov decision process (MDP) </span>problems, which form a<span id="dx1-182001"/> full family of methods called <span class="cmbx-10x-x-109">policy gradient </span>methods. In some <span id="dx1-182002"/>situations, these methods work better than value-based methods, so it is really important to be familiar with them.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Cover an overview of the methods, their motivations, and their strengths and weaknesses in comparison to the already familiar Q-learning</p>
+</li>
+<li>
+<p>Start with a<span id="dx1-182003"/> simple policy gradient method called <span class="cmbx-10x-x-109">REINFORCE </span>and try to apply it to our CartPole environment, comparing it with the <span class="cmbx-10x-x-109">deep Q-network </span>(<span class="cmbx-10x-x-109">DQN</span>) approach</p>
+</li>
+<li>
+<p>Discuss problems with the vanilla <span class="cmbx-10x-x-109">REINFORCE </span>method and ways to address them with the <span class="cmbx-10x-x-109">Policy Gradient </span>(<span class="cmbx-10x-x-109">PG</span>) method, which is a step toward a much more advanced method, A3C, that we’ll take a look at in the next chapter</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="values-and-policy">
+<h1 class="heading-1" id="sigil_toc_id_162"> <span id="x1-18300011.1"/>Values and policy</h1>
+<p>Before getting <span id="dx1-183001"/>to the main subject of this chapter, policy gradients, let’s refresh our minds with the common characteristics of the methods covered in <span class="cmti-10x-x-109">Part 2 </span>of this book. The central topic in <span class="cmti-10x-x-109">value iteration </span>and <span class="cmti-10x-x-109">Q-learning </span>is the value of the state (<span class="cmmi-10x-x-109">V</span> <sub><span class="cmmi-8">s</span></sub>) or value of the state and action (<span class="cmmi-10x-x-109">Q</span><sub><span class="cmmi-8">s,a</span></sub>). Value is defined as the discounted total reward that we can gather from this state or by issuing this particular action from the state. If we know this quantity, our decision on every step becomes simple and obvious: we just act greedily in terms of value, and that guarantees us a good total reward at the end of the episode. So, the values of states (in the case of the value iteration method) or state + action (in the case of Q-learning) stand between us and the best reward. To obtain these values, we have used the Bellman equation, which expresses the value in the current step via the value in the next step.</p>
+<p>In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>, we defined <span id="dx1-183002"/>the entity that tells us what to do in every state as the <span class="cmbx-10x-x-109">policy</span>. As in Q-learning methods, when values are dictating to us how to behave, they are actually defining our policy. Formally, this can be written as <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">s</span>) = arg max<sub><span class="cmmi-8">a</span></sub><span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>), which means that the result of our policy <span class="cmmi-10x-x-109">π</span>, at every state <span class="cmmi-10x-x-109">s</span>, is the action with the largest <span class="cmmi-10x-x-109">Q</span>.</p>
+<p>This policy-values connection is obvious, so I haven’t placed emphasis on the policy as a separate entity, and we have spent most of our time talking about values and how to approximate them correctly. Now it’s time to focus on this connection and the policy itself.</p>
+<section class="level4 subsectionHead" id="why-the-policy">
+<h2 class="heading-2" id="sigil_toc_id_163"> <span id="x1-18400011.1.1"/>Why the policy?</h2>
+<p>There are <span id="dx1-184001"/>several reasons why the policy is an interesting topic to explore. First of all, the policy is what we are looking for when we are dealing with a reinforcement learning problem. When the agent obtains the observation and needs to make a decision about what to do next, it needs the policy, not the value of the state or particular action. We do care about the total reward, but at every state, we may have little interest in the exact value of the state.</p>
+<p>Imagine this situation: you’re walking in the jungle and you suddenly realize that there is a hungry tiger hiding in the bushes. You have several alternatives, such as running, hiding, or trying to throw your backpack at it, but asking, ”What’s the exact value of the <span class="cmti-10x-x-109">run </span>action and is it larger than the value of the <span class="cmti-10x-x-109">do nothing </span>action?” is a bit silly. You don’t care much about the value, because you need to make the decision on what to do quickly and that’s it. Our Q-learning approach tried to answer the policy question indirectly by approximating the values of the states and trying to choose the best alternative, but if we are not interested in values, why do extra work?</p>
+<p>Another reason why policies may be preferred is related to situations when an environment has lots of actions or, in the extreme case, with <span class="cmbx-10x-x-109">continuous action</span> <span class="cmbx-10x-x-109">space </span>problems. To be able to decide on the best action to take with <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>), we need to solve a small optimization problem, finding <span class="cmmi-10x-x-109">a</span>, which maximizes <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>). In the case of an Atari game with several discrete actions, this wasn’t a problem: we just approximated the values of all actions and took the action with the largest <span class="cmmi-10x-x-109">Q</span>. If our action is not a small discrete set but has a scalar value attached to it, such as a steering wheel angle or the speed at which we want to run from the tiger, this optimization problem becomes hard because <span class="cmmi-10x-x-109">Q</span> is usually represented by a highly nonlinear <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>), so finding the argument that maximizes the function’s values can be tricky. In such cases, it’s much more feasible to avoid values and work with the policy directly.</p>
+<p>An extra benefit of policy learning is an environment with <span class="cmbx-10x-x-109">stochasticity</span>. As you saw in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, in a categorical DQN, our agent<span id="dx1-184002"/> can benefit a lot from working with the distribution of Q-values, instead of expected mean values, as our network can more precisely capture the underlying probability distribution. As you will see in the next section, the policy is naturally represented as the probability of actions, which is a step in the same direction as the categorical DQN method.</p>
+</section>
+<section class="level4 subsectionHead" id="policy-representation">
+<h2 class="heading-2" id="sigil_toc_id_164"> <span id="x1-18500011.1.2"/>Policy representation</h2>
+<p>Now that you<span id="dx1-185001"/> know the benefits of the policy, let’s give it a try. So, how do we represent the policy? In the case of Q-values, they were parametrized by the NN that returns values of actions as scalars. If we want our network to parametrize the actions, we have several options. The first and the simplest way could be just returning the identifier of the action (in the case of a discrete set of actions). However, this is not the best way to deal with a discrete set. A much more common solution, which is heavily used in classification tasks, is<span id="dx1-185002"/> to return the <span class="cmbx-10x-x-109">probability distribution </span>of our actions. In other words, for <span class="cmmi-10x-x-109">N </span>mutually exclusive actions, we return <span class="cmmi-10x-x-109">N </span>numbers representing the probability of taking each action in the given state (which we pass as an input to the network). This representation is shown in the following illustration:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_01.png" width="600"/></p>
+<span id="x1-185003r1"/>
+<span class="id">Figure 11.1: Policy approximation with an NN for a discrete set of actions</span>
+</div>
+<p>Such a representation of actions as probabilities has the additional advantage of <span class="cmti-10x-x-109">smooth representation</span>: if we change our network weights a bit, the output of the network will also change slightly. In the case of a discrete numbers output, even a small adjustment of the weights can lead to a jump to a different action. However, if our output is the probability distribution, a small change of weights will usually lead to a small change in output distribution, such as slightly increasing the probability of one action versus the others. This is a very nice property to have, as gradient optimization methods are all about tweaking the parameters of a model a bit to improve the results.</p>
+</section>
+<section class="level4 subsectionHead" id="policy-gradients">
+<h2 class="heading-2" id="sigil_toc_id_165"> <span id="x1-18600011.1.3"/>Policy gradients</h2>
+<p>We have<span id="dx1-186001"/> decided on our policy representation, but what we haven’t seen so far is how we are going to change our network’s parameters to improve the policy. If you remember <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>, we solved a very similar problem using the cross-entropy method: our network took observations as inputs and returned the probability distribution of the actions. In fact, the cross-entropy method is a younger brother of the methods that we will discuss in this part of the book. To start, we will get acquainted with the method called <span class="cmbx-10x-x-109">REINFORCE</span>, which differs only slightly from the cross-entropy method, but first, we need to look at some mathematical notation that we will use in this and the following chapters.</p>
+<p>We define the <span class="cmbx-10x-x-109">policy gradient </span>as <span class="cmsy-10x-x-109">∇</span><span class="cmmi-10x-x-109">J </span><span class="cmsy-10x-x-109">≈</span><span class="msbm-10x-x-109">𝔼</span>[<span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>)<span class="cmsy-10x-x-109">∇</span>log <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>)]. Of course, there is strong proof of this, but it’s not that important. What interests us much more is the meaning of this expression.</p>
+<p>The policy gradient defines the direction in which we need to change our network’s parameters to improve the policy in terms of the accumulated total reward. The scale of the gradient is proportional to the value of the action taken, which is <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) in the formula, and the gradient is equal to the gradient of the log probability of the action taken. This means that we are trying to increase the probability of actions that have given us good total rewards and decrease the probability of actions with bad final outcomes. Expectation, <span class="msbm-10x-x-109">𝔼</span> in the formula, just means that we average the gradient of several steps that we have taken in the environment.</p>
+<p>From a practical point of view, policy gradient methods could be implemented by performing optimization of this loss function: <span class="cmsy-10x-x-109">ℒ </span>= <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>)log <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>). The minus sign is important, as the loss function is <span class="cmbx-10x-x-109">minimized </span>during <span class="cmbx-10x-x-109">stochastic</span> <span class="cmbx-10x-x-109">gradient descent </span>(<span class="cmbx-10x-x-109">SGD</span>), but we want to <span class="cmbx-10x-x-109">maximize </span>our policy gradient. You will see code examples of policy gradient methods later in this and the following chapters.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-reinforce-method">
+<h1 class="heading-1" id="sigil_toc_id_166"> <span id="x1-18700011.2"/>The REINFORCE method</h1>
+<p>The formula<span id="dx1-187001"/> of <span id="dx1-187002"/>policy gradient that you have just seen is used by most policy-based methods, but the details can vary. One very important point is how exactly gradient scales, <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>), are calculated. In the cross-entropy method from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>, we played several episodes, calculated the total reward for each of them, and trained on transitions from episodes with a better-than-average reward. This training procedure is a policy gradient method with <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) = 1 for state and action pairs from good episodes (with a large total reward) and <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) = 0 for state and action pairs from worse episodes.</p>
+<p>The cross-entropy method worked even with those simple assumptions, but the obvious improvement will be to use <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) for training instead of just 0 and 1. Why should it help? The answer is a more fine-grained separation of episodes. For example, transitions from the episode with a total reward of 10 should contribute to the gradient more than transitions from the episode with the reward of 1. Another reason to use <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) instead of just 0 or 1 constants is to increase the probabilities of good actions at the beginning of the episode and decrease the probability of actions closer to the end of the episode. In the cross-entropy method, we take ”elite” episodes and train on their actions regardless of the actions’ offset in the episode. By using <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) (which includes discount factor <span class="cmmi-10x-x-109">γ</span>), we put more emphasis on good actions in the beginning of the episode than on the actions at the end of the episode. That’s exactly the idea of the method called <span class="cmbx-10x-x-109">REINFORCE</span>. Its steps are as follows:</p>
+<ol>
+<li>
+<div id="x1-187004x1">
+<p>Initialize the network with random weights.</p>
+</div>
+</li>
+<li>
+<div id="x1-187006x2">
+<p>Play <span class="cmmi-10x-x-109">N </span>full episodes, saving their (<span class="cmmi-10x-x-109">s,a,r,s</span><span class="cmsy-10x-x-109">′</span>) transitions.</p>
+</div>
+</li>
+<li>
+<div id="x1-187008x3">
+<p>For every step, <span class="cmmi-10x-x-109">t</span>, of every episode, <span class="cmmi-10x-x-109">k</span>, calculate the discounted total reward for the subsequent steps:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="64" src="../Images/eq40.png" width="145"/>
+</div>
+</div>
+</li>
+<li>
+<div id="x1-187010x4">
+<p>Calculate the loss function for all transitions:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="53" src="../Images/eq41.png" width="300"/>
+</div>
+</div>
+</li>
+<li>
+<div id="x1-187012x5">
+<p>Perform an SGD update of weights, minimizing the loss.</p>
+</div>
+</li>
+<li>
+<div id="x1-187014x6">
+<p>Repeat from step 2 until convergence is achieved.</p>
+</div>
+</li>
+</ol>
+<p>This<span id="dx1-187015"/> algorithm is <span id="dx1-187016"/>different from Q-learning in several important ways:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">No explicit exploration is needed</span>: In Q-learning, we used an epsilon-greedy strategy to explore the environment and prevent our agent from getting stuck with a non-optimal policy. Now, with the probabilities returned by the network, the exploration is performed automatically. At the beginning, the network is initialized with random weights, and it returns a uniform probability distribution. This distribution corresponds to random agent behavior.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">No replay buffer is used</span>: Policy gradient methods belong to the on-policy methods class, which means that we can’t train on data obtained from the old policy. This is both good and bad. The good part is that such methods usually converge faster. The bad side is that they usually require much more interaction with the environment than off-policy methods such as DQN.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">No target network is needed</span>: Here, we use Q-values, but they are obtained from our experience in the environment. In DQN, we used the target network to break the correlation in Q-value approximation, but we are not approximating anymore. In the next chapter, you will see that the target network trick can still be useful in policy gradient methods.</p>
+</li>
+</ul>
+<section class="level4 subsectionHead" id="the-cartpole-example">
+<h2 class="heading-2" id="sigil_toc_id_167"> <span id="x1-18800011.2.1"/>The CartPole example</h2>
+<p>To see the <span id="dx1-188001"/>method in<span id="dx1-188002"/> action, let’s check the implementation of the <span class="cmbx-10x-x-109">REINFORCE</span> method on the familiar CartPole environment. The full code of the example is in <span class="cmtt-10x-x-109">Chapter11/02</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_reinforce.py</span>.</p>
+<p>In the beginning, we define hyperparameters (imports are omitted):</p>
+<div class="tcolorbox" id="tcolobox-228">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-283"><code>GAMMA = 0.99 
+LEARNING_RATE = 0.01 
+EPISODES_TO_TRAIN = 4</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">EPISODES</span><span class="cmtt-10x-x-109">_TO</span><span class="cmtt-10x-x-109">_TRAIN </span>value specifies how many complete episodes we will use for training.</p>
+<p>The following network should also be familiar to you:</p>
+<div class="tcolorbox" id="tcolobox-229">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-284"><code>class PGN(nn.Module): 
+    def __init__(self, input_size: int, n_actions: int): 
+        super(PGN, self).__init__() 
+ 
+        self.net = nn.Sequential( 
+            nn.Linear(input_size, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, n_actions) 
+        ) 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        return self.net(x)</code></pre>
+</div>
+</div>
+<p>Note that despite the fact our network returns probabilities, we are not applying <span class="cmtt-10x-x-109">softmax </span>nonlinearity to the output. The reason behind this is that we will use the PyTorch <span class="cmtt-10x-x-109">log</span><span class="cmtt-10x-x-109">_softmax </span>function to calculate the logarithm of the softmax output at once. This method of calculation is much more numerically stable; however, we need to remember that output from the network is not probability, but raw scores (usually called logits).</p>
+<p>This next function is a bit tricky:</p>
+<div class="tcolorbox" id="tcolobox-230">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-285"><code>def calc_qvals(rewards: tt.List[float]) -&gt; tt.List[float]: 
+    res = [] 
+    sum_r = 0.0 
+    for r in reversed(rewards): 
+        sum_r *= GAMMA 
+        sum_r += r 
+        res.append(sum_r) 
+    return list(reversed(res))</code></pre>
+</div>
+</div>
+<p>It accepts a list of rewards for the whole episode and needs to calculate the discounted total reward for every step. To do this efficiently, we calculate the reward from the end of the local reward list. Indeed, the last step of the episode will have a total reward equal to its local reward. The step before the last will have the total reward of <span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">t</span><span class="cmsy-8">−</span><span class="cmr-8">1</span></sub> + <span class="cmmi-10x-x-109">γ </span><span class="cmsy-10x-x-109">⋅</span><span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">t</span></sub> (if <span class="cmmi-10x-x-109">t </span>is an index of the last step).</p>
+<p>Our <span class="cmtt-10x-x-109">sum</span><span class="cmtt-10x-x-109">_r </span>variable contains the total reward for the previous steps, so to get the total reward for the current step, we need to multiply <span class="cmtt-10x-x-109">sum</span><span class="cmtt-10x-x-109">_r </span>by <span class="cmmi-10x-x-109">γ </span>and add the local reward from that step.</p>
+<p>The preparation steps before the training loop should also be familiar to you:</p>
+<div class="tcolorbox" id="tcolobox-231">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-286"><code>if __name__ == "__main__": 
+    env = gym.make("CartPole-v1") 
+    writer = SummaryWriter(comment="-cartpole-reinforce") 
+ 
+    net = PGN(env.observation_space.shape[0], env.action_space.n) 
+    print(net) 
+ 
+    agent = ptan.agent.PolicyAgent( 
+        net, preprocessor=ptan.agent.float32_preprocessor, apply_softmax=True) 
+    exp_source = ExperienceSourceFirstLast(env, agent, gamma=GAMMA) 
+ 
+    optimizer = optim.Adam(net.parameters(), lr=LEARNING_RATE)</code></pre>
+</div>
+</div>
+<p>The only<span id="dx1-188038"/> new <span id="dx1-188039"/>element is the agent class from the PTAN library. Here, we are using <span class="cmtt-10x-x-109">ptan.agent.PolicyAgent</span>, which needs to make a decision about actions for every observation. As our network now returns the policy as the probabilities of the actions, in order to select the action to take, we need to obtain the probabilities from the network and then perform random sampling from this probability distribution.</p>
+<p>When we worked with DQN, the output of the network was Q-values, so if one action had a value of 0.4 and another action had a value of 0.5, the second action was preferred 100% of the time. In the case of the probability distribution, if the first action has a probability of 0.4 and the second 0.5, our agent should take the first action with a 40% chance and the second with a 50% chance. Of course, our network can decide to take the second action 100% of the time, and in this case, it returns a probability of 0 for the first action and a probability of 1 for the second action.</p>
+<p>This difference is important to understand, but the change in the implementation is not large. Our <span class="cmtt-10x-x-109">PolicyAgent </span>internally calls the NumPy <span class="cmtt-10x-x-109">random.choice()</span> function with probabilities from the network. The <span class="cmtt-10x-x-109">apply</span><span class="cmtt-10x-x-109">_softmax </span>argument instructs it to convert the network output to probabilities by calling softmax first. The third argument, <span class="cmtt-10x-x-109">preprocessor</span>, is a way to get around the fact that the CartPole environment in Gymnasium returns the observation as a <span class="cmtt-10x-x-109">float64</span> instead of the <span class="cmtt-10x-x-109">float32 </span>required by PyTorch.</p>
+<p>Before we can start the training loop, we need several variables:</p>
+<div class="tcolorbox" id="tcolobox-232">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-287"><code>    total_rewards = [] 
+    done_episodes = 0 
+ 
+    batch_episodes = 0 
+    batch_states, batch_actions, batch_qvals = [], [], [] 
+    cur_rewards = []</code></pre>
+</div>
+</div>
+<p>The first two variables, <span class="cmtt-10x-x-109">total</span><span class="cmtt-10x-x-109">_rewards </span>and <span class="cmtt-10x-x-109">done</span><span class="cmtt-10x-x-109">_episodes</span>, are used for reporting and contain the total rewards for the episodes and the count of completed episodes. The next few variables are used to gather the training data. The <span class="cmtt-10x-x-109">cur</span><span class="cmtt-10x-x-109">_rewards </span>list contains local rewards for the episode being currently played. As this episode reaches the end, we calculate the discounted total rewards from local rewards using the <span class="cmtt-10x-x-109">calc</span><span class="cmtt-10x-x-109">_qvals()</span> function and append them to the <span class="cmtt-10x-x-109">batch</span><span class="cmtt-10x-x-109">_qvals </span>list. The <span class="cmtt-10x-x-109">batch</span><span class="cmtt-10x-x-109">_states </span>and <span class="cmtt-10x-x-109">batch</span><span class="cmtt-10x-x-109">_actions </span>lists contain states and actions that we saw in the last training.</p>
+<p>The following code snippet is the beginning of the training loop:</p>
+<div class="tcolorbox" id="tcolobox-233">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-288"><code>    for step_idx, exp in enumerate(exp_source): 
+        batch_states.append(exp.state) 
+        batch_actions.append(int(exp.action)) 
+        cur_rewards.append(exp.reward) 
+ 
+        if exp.last_state is None: 
+            batch_qvals.extend(calc_qvals(cur_rewards)) 
+            cur_rewards.clear() 
+            batch_episodes += 1</code></pre>
+</div>
+</div>
+<p>Every experience that we get from the experience<span id="dx1-188055"/> source <span id="dx1-188056"/>contains the state, action, local reward, and next state. If the end of the episode has been reached, the next state will be <span class="cmtt-10x-x-109">None</span>. For non-terminal experience entries, we just save the state, action, and local reward in our lists. At the end of the episode, we convert the local rewards into Q-values and increment the episodes counter.</p>
+<p>This part of the training loop is performed at the end of the episode and is responsible for reporting the current progress and writing metrics to TensorBoard:</p>
+<div class="tcolorbox" id="tcolobox-234">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-289"><code>        new_rewards = exp_source.pop_total_rewards() 
+        if new_rewards: 
+            done_episodes += 1 
+            reward = new_rewards[0] 
+            total_rewards.append(reward) 
+            mean_rewards = float(np.mean(total_rewards[-100:])) 
+            print(f"{step_idx}: reward: {reward:6.2f}, mean_100: {mean_rewards:6.2f}, " 
+                  f"episodes: {done_episodes}") 
+            writer.add_scalar("reward", reward, step_idx) 
+            writer.add_scalar("reward_100", mean_rewards, step_idx) 
+            writer.add_scalar("episodes", done_episodes, step_idx) 
+            if mean_rewards &gt; 450: 
+                print(f"Solved in {step_idx} steps and {done_episodes} episodes!") 
+                break</code></pre>
+</div>
+</div>
+<p>When enough episodes have passed since the last training step, we can optimize the gathered examples. As a first step, we convert states, actions, and Q-values into the appropriate PyTorch form:</p>
+<div class="tcolorbox" id="tcolobox-235">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-290"><code>        if batch_episodes &lt; EPISODES_TO_TRAIN: 
+            continue 
+ 
+        optimizer.zero_grad() 
+        states_t = torch.as_tensor(np.asarray(batch_states)) 
+        batch_actions_t = torch.as_tensor(np.asarray(batch_actions)) 
+        batch_qvals_t = torch.as_tensor(np.asarray(batch_qvals))</code></pre>
+</div>
+</div>
+<p>Then, we <span id="dx1-188078"/>calculate<span id="dx1-188079"/> the loss from the steps:</p>
+<div class="tcolorbox" id="tcolobox-236">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-291"><code>        logits_t = net(states_t) 
+        log_prob_t = F.log_softmax(logits_t, dim=1) 
+        batch_idx = range(len(batch_states)) 
+        act_probs_t = log_prob_t[batch_idx, batch_actions_t] 
+        log_prob_actions_v = batch_qvals_t * act_probs_t 
+        loss_t = -log_prob_actions_v.mean()</code></pre>
+</div>
+</div>
+<p>Here, we ask our network to calculate states into logits and calculate the logarithm and softmax of them. On the third line, we select log probabilities from the actions taken and scale them with Q-values. On the last line, we average those scaled values and do negation to obtain the loss to minimize. To reiterate, this minus sign is very important because our policy gradient needs to be maximized to improve the policy. As the optimizer in PyTorch minimizes the loss function, we need to negate the policy gradient.</p>
+<p>The rest of the code is clear:</p>
+<div class="tcolorbox" id="tcolobox-237">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-292"><code>        loss_t.backward() 
+        optimizer.step() 
+ 
+        batch_episodes = 0 
+        batch_states.clear() 
+        batch_actions.clear() 
+        batch_qvals.clear() 
+ 
+    writer.close()</code></pre>
+</div>
+</div>
+<p>Here, we perform backpropagation to gather gradients in our variables and ask the optimizer to perform an SGD update. At <span id="dx1-188095"/>the end of the training loop, we reset the <span id="dx1-188096"/>episodes counter and clear our lists for fresh data to gather.</p>
+</section>
+<section class="level4 subsectionHead" id="results-8">
+<h2 class="heading-2" id="sigil_toc_id_168"> <span id="x1-18900011.2.2"/>Results</h2>
+<p>For <span id="dx1-189001"/>reference, I’ve implemented DQN in the CartPole environment with almost the same hyperparameters as our <span class="cmbx-10x-x-109">REINFORCE </span>example. You’ll find it in <span class="cmtt-10x-x-109">Chapter11/01</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_dqn.py</span>. Neither example requires any command-line arguments, and they should converge in less than a minute:</p>
+<pre class="lstlisting" id="listing-293"><code>Chapter11$ ./02_cartpole_reinforce.py 
+PGN( 
+  (net): Sequential( 
+   (0): Linear(in_features=4, out_features=128, bias=True) 
+   (1): ReLU() 
+   (2): Linear(in_features=128, out_features=2, bias=True) 
+  ) 
+) 
+31: reward:  31.00, mean_100:  31.00, episodes: 1 
+42: reward:  11.00, mean_100:  21.00, episodes: 2 
+54: reward:  12.00, mean_100:  18.00, episodes: 3 
+94: reward:  40.00, mean_100:  23.50, episodes: 4 
+159: reward:  65.00, mean_100:  31.80, episodes: 5 
+... 
+65857: reward: 500.00, mean_100: 440.60, episodes: 380 
+66357: reward: 500.00, mean_100: 442.42, episodes: 381 
+66857: reward: 500.00, mean_100: 445.59, episodes: 382 
+67357: reward: 500.00, mean_100: 448.24, episodes: 383 
+67857: reward: 500.00, mean_100: 451.31, episodes: 384 
+Solved in 67857 steps and 384 episodes!</code></pre>
+<p>The convergence dynamics for both DQN and <span class="cmbx-10x-x-109">REINFORCE </span>are shown in the following charts. Your training dynamics may vary due to the randomness of the training.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_02.png" width="600"/> <span id="x1-189022r2"/></p>
+<span class="id">Figure 11.2: Count of episodes played over time (left) and training steps (right) </span>
+</div>
+<p>These two <span id="dx1-189023"/>charts compare the count of episodes played over time and over the training steps.</p>
+<p>The next chart compares the smoothed reward for episodes played:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_03.png" width="500"/> <span id="x1-189024r3"/></p>
+<span class="id">Figure 11.3: Reward dynamics for two methods </span>
+</div>
+<p>As you can see, the methods converged almost identically (with <span class="cmbx-10x-x-109">REINFORCE</span> being slightly faster), but then DQN had problems when the mean reward climbed above 400 and had to start almost from scratch.</p>
+<p>If you remember from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>, the cross-entropy method required about 40 batches of 16 episodes each to solve the CartPole environment, which is 640 episodes in total. The <span class="cmbx-10x-x-109">REINFORCE </span>method was able to do<span id="dx1-189025"/> the same in fewer than 400 episodes, which is a nice improvement.</p>
+</section>
+<section class="level4 subsectionHead" id="policy-based-versus-value-based-methods">
+<h2 class="heading-2" id="sigil_toc_id_169"> <span id="x1-19000011.2.3"/>Policy-based versus value-based methods</h2>
+<p>Let’s now<span id="dx1-190001"/> step back<span id="dx1-190002"/> from <span id="dx1-190003"/>the code that we have just seen and check the differences between these families of methods:</p>
+<ul>
+<li>
+<p>Policy methods directly optimize what we care about: our behavior. Value methods, such as DQN, do the same indirectly, learning the value first and providing us with the policy based on this value.</p>
+</li>
+<li>
+<p>Policy methods are on-policy and require fresh samples from the environment. Value methods can benefit from old data, obtained from the old policy, human demonstration, and other sources.</p>
+</li>
+<li>
+<p>Policy methods are usually less sample-efficient, which means they require more interaction with the environment. Value methods can benefit from large replay buffers. However, sample efficiency doesn’t mean that value methods are more computationally efficient, and very often, it’s the opposite.</p>
+</li>
+<li>
+<p>In the preceding example, during the training, we needed to access our NN only once, to get the probabilities of actions. In DQN, we need to process two batches of states: one for the current state and another for the next state in the Bellman update.</p>
+</li>
+</ul>
+<p>As you can see, there is no strong preference for one family or another. In some situations, policy methods will be the more natural choice, like in continuous control problems or cases when access to the environment is cheap and fast. However, there are many situations when value methods will shine, for example, the recent state-of-the-art results on Atari games achieved by DQN variants. Ideally, you should be familiar with both families and understand the strong and weak sides of both camps.</p>
+<p>In the next section, we will talk about the <span class="cmbx-10x-x-109">REINFORCE </span>method’s limitations, ways to improve it, and how to apply a policy gradient method to our favorite Pong game.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="reinforce-issues">
+<h1 class="heading-1" id="sigil_toc_id_170"> <span id="x1-19100011.3"/>REINFORCE issues</h1>
+<p>In the <span id="dx1-191001"/>previous section, we discussed<span id="dx1-191002"/> the <span class="cmbx-10x-x-109">REINFORCE </span>method, which is a natural extension of the cross-entropy method. Unfortunately, both <span class="cmbx-10x-x-109">REINFORCE </span>and the cross-entropy method still suffer from several problems, which make both of them limited to simple environments.</p>
+<section class="level4 subsectionHead" id="full-episodes-are-required">
+<h2 class="heading-2" id="sigil_toc_id_171"> <span id="x1-19200011.3.1"/>Full episodes are required</h2>
+<p>First of all, we still need to wait for the full episode to complete before we can start training. Even worse, both <span class="cmbx-10x-x-109">REINFORCE </span>and the cross-entropy method behave better with more episodes used for training (just because more episodes means more training data, which means more accurate policy gradients). This situation is fine for short episodes in the CartPole, when in the beginning, we can barely handle the bar for more than 10 steps; but in Pong, it is completely different: every episode can last for hundreds or even thousands of frames. It’s equally bad from the training perspective, as our training batch becomes very large, and from the sample efficiency perspective, as we need to communicate with the environment a lot just to perform a single training step.</p>
+<p>The purpose of the complete episode requirement is to get as accurate a Q-estimation as possible. When we talked about DQN, you saw that, in practice, it’s fine to replace the exact value for a discounted reward with our estimation using the one-step Bellman equation: <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) = <span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">a</span></sub> + <span class="cmmi-10x-x-109">γV </span>(<span class="cmmi-10x-x-109">s</span><span class="cmsy-10x-x-109">′</span>). To estimate <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>), we used our own Q-estimation, but in the case of the policy gradient, we don’t have <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>) or <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) anymore.</p>
+<p>To overcome this, two approaches exist:</p>
+<ul>
+<li>
+<p>We can ask our network to estimate <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>) and use this estimation to obtain Q. This approach will be discussed in the next chapter and is called the <span class="cmti-10x-x-109">actor-critic method</span>, which is the most popular method from the policy gradient family.</p>
+</li>
+<li>
+<p>Alternatively, we can do the Bellman equation, unrolling <span class="cmmi-10x-x-109">N </span>steps ahead, which will effectively<span id="dx1-192001"/> exploit the fact that the value contribution decreases when gamma is less than 1. Indeed, with <span class="cmmi-10x-x-109">γ </span>= 0<span class="cmmi-10x-x-109">.</span>9, the value coefficient at the 10th step will be 0<span class="cmmi-10x-x-109">.</span>9<sup><span class="cmr-8">10</span></sup> <span class="cmsy-10x-x-109">≈ </span>0<span class="cmmi-10x-x-109">.</span>35. At step 50, this coefficient will be 0<span class="cmmi-10x-x-109">.</span>9<sup><span class="cmr-8">50</span></sup> <span class="cmsy-10x-x-109">≈ </span>0<span class="cmmi-10x-x-109">.</span>00515, which is a really small contribution to the total reward. With <span class="cmmi-10x-x-109">γ </span>= 0<span class="cmmi-10x-x-109">.</span>99, the required count of steps will become larger, but we can still do this.</p>
+</li>
+</ul>
+</section>
+<section class="level4 subsectionHead" id="high-gradient-variance">
+<h2 class="heading-2" id="sigil_toc_id_172"> <span id="x1-19300011.3.2"/>High gradient variance</h2>
+<p>In the policy gradient formula, <span class="cmsy-10x-x-109">∇</span><span class="cmmi-10x-x-109">J </span><span class="cmsy-10x-x-109">≈</span><span class="msbm-10x-x-109">𝔼</span>[<span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>)<span class="cmsy-10x-x-109">∇</span>log <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>)], we have a gradient proportional to the discounted reward from the given state. However, the range of this reward is heavily environment-dependent. For example, in the CartPole environment, we get a reward of 1 for every timestamp that we are holding the pole vertically. If we can do this for five steps, we get a total (undiscounted) reward of 5. If our agent is smart and can hold the pole for, say, 100 steps, the total reward will be 100. The difference in value between those two scenarios is 20 times, which means that the scale between the gradients of unsuccessful samples will be 20 times lower than for more successful ones. Such a large difference can seriously affect our training dynamics, as one lucky episode will dominate in the final gradient.</p>
+<p>In mathematical terms, the policy gradient has high variance, and we need to do something about this in complex environments; otherwise, the training process can become unstable. The usual approach to handling this is subtracting a value called the baseline from the Q. The possible choices for the baseline are as follows:</p>
+<ul>
+<li>
+<p>Some constant value, which is normally the mean of the discounted rewards</p>
+</li>
+<li>
+<p>The moving average of the discounted rewards</p>
+</li>
+<li>
+<p>The value of the state, <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>)</p>
+</li>
+</ul>
+<p>To illustrate the baseline effect on the training, in <span class="cmtt-10x-x-109">Chapter11/03</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_reinforce</span><span class="cmtt-10x-x-109">_baseline.py </span>I implemented the second way of calculating the baseline (the average of rewards). The only difference with the version you’ve already seen is in the <span class="cmtt-10x-x-109">calc</span><span class="cmtt-10x-x-109">_qvals()</span> function. I’m not going to discuss the results here; you can experiment yourself.</p>
+</section>
+<section class="level4 subsectionHead" id="exploration-problems">
+<h2 class="heading-2" id="sigil_toc_id_173"> <span id="x1-19400011.3.3"/>Exploration problems</h2>
+<p>Even with the policy represented as the probability distribution, there is a high chance that the agent will converge to some locally optimal policy and stop exploring the environment. In DQN, we solved this using epsilon-greedy action selection: with the probability epsilon, the agent took a random action instead of the action dictated by the current policy. We can use the same approach, of course, but policy gradient methods allow us to follow a better path, called the <span class="cmti-10x-x-109">entropy bonus</span>.</p>
+<p>In information theory, entropy is a measure of uncertainty in a system. Being applied to the agent’s policy, entropy shows how uncertain the agent is about which action to take. In math notation, the entropy of the policy is defined as <span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">π</span>) = <span class="cmsy-10x-x-109">−</span><span class="cmex-10x-x-109">∑</span> <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>)log <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>). The value of entropy is always greater <span id="dx1-194001"/>than zero and has a single maximum when the policy is uniform; in other words, all actions have the same probability. Entropy becomes minimal when our policy has 1 for one action and 0 for all others, which means that the agent is absolutely sure what to do. To prevent our agent from being stuck in the local minimum, we subtract the entropy from the loss function, punishing the agent for being too certain about the action to take.</p>
+</section>
+<section class="level4 subsectionHead" id="high-correlation-of-samples">
+<h2 class="heading-2" id="sigil_toc_id_174"> <span id="x1-19500011.3.4"/>High correlation of samples</h2>
+<p>As we discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>, training samples in a single episode are usually heavily correlated, which is bad for SGD training. In the case of DQN, we solved this issue by having a large replay buffer with a size from 100,000 to several million observations. This solution is not applicable to the policy gradient family anymore because those methods belong to the on-policy class. The implication is simple: using old samples generated by the old policy, we will get policy gradients for that old policy, not for our current one.</p>
+<p>The obvious, but unfortunately wrong, solution would be to reduce the replay buffer size. It might work in some simple cases but, in general, we <span id="dx1-195001"/>need fresh training data generated by our current policy. To solve this, parallel environments are normally used. The idea is simple: instead of communicating with one environment, we use several and use their transitions as training data.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="policy-gradient-methods-on-cartpole">
+<h1 class="heading-1" id="sigil_toc_id_175"> <span id="x1-19600011.4"/>Policy gradient methods on CartPole</h1>
+<p>Nowadays, almost<span id="dx1-196001"/> nobody uses the vanilla <span id="dx1-196002"/>policy gradient method, as the much more stable actor-critic method exists. However, I still want to show the policy gradient implementation, as it establishes very important concepts and metrics to check the policy gradient method’s performance.</p>
+<section class="level4 subsectionHead" id="implementation-7">
+<h2 class="heading-2" id="sigil_toc_id_176"> <span id="x1-19700011.4.1"/>Implementation</h2>
+<p>We will start <span id="dx1-197001"/>with a much simpler environment of CartPole, and in the next section, we will check its performance in our favorite Pong environment. The complete code for the following example is available in <span class="cmtt-10x-x-109">Chapter11/04</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_pg.py</span>.</p>
+<p>Besides the already familiar hyperparameters, we have two new ones:</p>
+<div class="tcolorbox" id="tcolobox-238">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-294"><code>GAMMA = 0.99 
+LEARNING_RATE = 0.001 
+ENTROPY_BETA = 0.01 
+BATCH_SIZE = 8 
+ 
+REWARD_STEPS = 10</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">ENTROPY</span><span class="cmtt-10x-x-109">_BETA </span>value is the scale of the entropy bonus and the <span class="cmtt-10x-x-109">REWARD</span><span class="cmtt-10x-x-109">_STEPS</span> value specifies how many steps ahead the Bellman equation is unrolled to estimate the discounted total reward of every transition.</p>
+<p>The following is the network architecture:</p>
+<div class="tcolorbox" id="tcolobox-239">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-295"><code>class PGN(nn.Module): 
+    def __init__(self, input_size: int, n_actions: int): 
+        super(PGN, self).__init__() 
+ 
+        self.net = nn.Sequential( 
+            nn.Linear(input_size, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, n_actions) 
+        ) 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        return self.net(x)</code></pre>
+</div>
+</div>
+<p>This is exactly the same as in the previous examples for CartPole: a two-layer network with 128 neurons in the hidden layer. The preparation code is also the same as before, except the experience source is asked to unroll the Bellman equation for 10 steps.</p>
+<p>The following is the part that differs from <span class="cmtt-10x-x-109">04</span><span class="cmtt-10x-x-109">_cartpole</span><span class="cmtt-10x-x-109">_pg.py</span>:</p>
+<div class="tcolorbox" id="tcolobox-240">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-296"><code>    exp_source = ptan.experience.ExperienceSourceFirstLast( 
+        env, agent, gamma=GAMMA, steps_count=REWARD_STEPS)</code></pre>
+</div>
+</div>
+<p>In the training loop, we maintain the sum of the discounted reward for every transition and use it to calculate the baseline for the policy scale:</p>
+<div class="tcolorbox" id="tcolobox-241">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-297"><code>    for step_idx, exp in enumerate(exp_source): 
+        reward_sum += exp.reward 
+        baseline = reward_sum / (step_idx + 1) 
+        writer.add_scalar("baseline", baseline, step_idx) 
+        batch_states.append(exp.state) 
+        batch_actions.append(int(exp.action)) 
+        batch_scales.append(exp.reward - baseline)</code></pre>
+</div>
+</div>
+<p>In the loss calculation, we use the same code as before to calculate the policy loss (which is the negated policy gradient):</p>
+<div class="tcolorbox" id="tcolobox-242">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-298"><code>        optimizer.zero_grad() 
+        logits_t = net(states_t) 
+        log_prob_t = F.log_softmax(logits_t, dim=1) 
+        act_probs_t = log_prob_t[range(BATCH_SIZE), batch_actions_t] 
+        log_prob_actions_t = batch_scale_t * act_probs_t 
+        loss_policy_t = -log_prob_actions_t.mean()</code></pre>
+</div>
+</div>
+<p>Then we add the <span id="dx1-197035"/>entropy bonus to the loss by calculating the entropy of the batch and subtracting it from the loss. As entropy has a maximum for uniform probability distribution and we want to push the training toward this maximum, we need to subtract from the loss.</p>
+<div class="tcolorbox" id="tcolobox-243">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-299"><code>        prob_t = F.softmax(logits_t, dim=1) 
+        entropy_t = -(prob_t * log_prob_t).sum(dim=1).mean() 
+        entropy_loss_t = -ENTROPY_BETA * entropy_t 
+        loss_t = loss_policy_t + entropy_loss_t 
+ 
+        loss_t.backward() 
+        optimizer.step()</code></pre>
+</div>
+</div>
+<p>Then, we calculate the <span class="cmbx-10x-x-109">Kullback-Leibler </span>(<span class="cmbx-10x-x-109">KL</span>) divergence between the new policy and the old policy. KL divergence in information theory measures how one probability distribution diverges from another expected probability distribution, as we saw in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>. In our example, it is being used to compare the policy returned by the model before and after the optimization step:</p>
+<div class="tcolorbox" id="tcolobox-244">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-300"><code>        new_logits_t = net(states_t) 
+        new_prob_t = F.softmax(new_logits_t, dim=1) 
+        kl_div_t = -((new_prob_t / prob_t).log() * prob_t).\ 
+            sum(dim=1).mean() 
+        writer.add_scalar("kl", kl_div_t.item(), step_idx)</code></pre>
+</div>
+</div>
+<p>High spikes in KL are usually a bad sign since it means that our policy was pushed too far from the previous policy, which is a bad idea most of the time (as our NN is a very nonlinear function in a high-dimensional space, such large changes in the model weight could have a very strong influence on the policy).</p>
+<p>Finally, we calculate the statistics about the gradients on this training step. It’s usually good practice to show the graph of the maximum and L2 norm (which is the length of the vector) of gradients to get an idea about the training dynamics.</p>
+<div class="tcolorbox" id="tcolobox-245">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-301"><code>        grad_max = 0.0 
+        grad_means = 0.0 
+        grad_count = 0 
+        for p in net.parameters(): 
+            grad_max = max(grad_max, p.grad.abs().max().item()) 
+            grad_means += (p.grad ** 2).mean().sqrt().item() 
+            grad_count += 1</code></pre>
+</div>
+</div>
+<p>At the end <span id="dx1-197055"/>of the training loop, we dump all the values that we want to monitor in TensorBoard:</p>
+<div class="tcolorbox" id="tcolobox-246">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-302"><code>        writer.add_scalar("baseline", baseline, step_idx) 
+        writer.add_scalar("entropy", entropy, step_idx) 
+        writer.add_scalar("loss_entropy", l_entropy, step_idx) 
+        writer.add_scalar("loss_policy", l_policy, step_idx) 
+        writer.add_scalar("loss_total", l_total, step_idx) 
+        writer.add_scalar("grad_l2", grad_means / grad_count, step_idx) 
+        writer.add_scalar("grad_max", grad_max, step_idx) 
+        writer.add_scalar("batch_scales", bs_smoothed, step_idx) 
+ 
+        batch_states.clear() 
+        batch_actions.clear() 
+        batch_scales.clear()</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="results-9">
+<h2 class="heading-2" id="sigil_toc_id_177"> <span id="x1-19800011.4.2"/>Results</h2>
+<p>In this<span id="dx1-198001"/> example, we will plot a lot of charts in TensorBoard. Let’s start with the familiar one: reward. As you can see in the following chart, the dynamics and performance are not very different from the REINFORCE method:</p>
+<div class="minipage">
+<p><img alt="PIC" height="200" src="../Images/B22150_11_04.png" width="300"/> <span id="x1-198002r4"/></p>
+<span class="id">Figure 11.4: The reward dynamics of the policy gradient method </span>
+</div>
+<p>The next<span id="dx1-198003"/> two charts are related to our baseline and scales of policy gradients. We expect the baseline to converge to 1 + 0<span class="cmmi-10x-x-109">.</span>99 + 0<span class="cmmi-10x-x-109">.</span>99<sup><span class="cmr-8">2</span></sup> + <span class="cmmi-10x-x-109">…</span> + 0<span class="cmmi-10x-x-109">.</span>99<sup><span class="cmr-8">9</span></sup>, which is approximately 9.56. Scales of policy gradients should oscillate around zero. That’s exactly what we can see in the following graph:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_05.png" width="500"/> <span id="x1-198004r5"/></p>
+<span class="id">Figure 11.5: Baseline value (left) and batch scales (right) </span>
+</div>
+<p>The entropy is decreasing over time from 0.69 to 0.52 (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-198005r6"><span class="cmti-10x-x-109">11.6</span></a>). The starting value corresponds to the maximum entropy with two actions, which is approximately 0.69:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="48" src="../Images/eq42.png" width="322"/>
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq43.png" width="374"/>
+</div>
+<p>The fact that the entropy is decreasing during the training, as indicated by the following chart, shows that our policy is moving from uniform distribution to more deterministic actions:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_06.png" width="500"/> <span id="x1-198005r6"/></p>
+<span class="id">Figure 11.6: Entropy during the training </span>
+</div>
+<p>The next group of plots (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-198007r7"><span class="cmti-10x-x-109">11.7</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-198008r8"><span class="cmti-10x-x-109">11.8</span></a>) is related to loss, which <span id="dx1-198006"/>includes policy loss, entropy loss, and their sum. The entropy loss is scaled and is a mirrored version of the preceding entropy chart. The policy loss shows the mean scale and direction of the policy gradient computed on the batch. Here, we should check the relative size of both of them to prevent entropy loss from dominating too much.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_07.png" width="600"/> <span id="x1-198007r7"/></p>
+<span class="id">Figure 11.7: Entropy loss (left) and policy loss (right) </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_08.png" width="500"/> <span id="x1-198008r8"/></p>
+<span class="id">Figure 11.8: Total loss </span>
+</div>
+<p>The final set of charts (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-198010r9"><span class="cmti-10x-x-109">11.9</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-198011r10"><span class="cmti-10x-x-109">11.10</span></a>) shows the gradient’s L2 values, the maximum of L2, and KL. Our<span id="dx1-198009"/> gradients look healthy during the whole training: they are not too large and not too small, and there are no huge spikes. The KL charts also look normal as there are some spikes, but they are not very large and don’t exceed 10<sup><span class="cmsy-8">−</span><span class="cmr-8">3</span></sup>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_09.png" width="600"/> <span id="x1-198010r9"/></p>
+<span class="id">Figure 11.9: Gradients L2 (left) and maximum value (right) </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_11_10.png" width="500"/> <span id="x1-198011r10"/></p>
+<span class="id">Figure 11.10: KL divergence </span>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="policy-gradient-methods-on-pong">
+<h1 class="heading-1" id="sigil_toc_id_178"> <span id="x1-19900011.5"/>Policy gradient methods on Pong</h1>
+<p>As we’ve seen<span id="dx1-199001"/> in<span id="dx1-199002"/> the previous section, the vanilla policy gradient method works well on a simple CartPole environment, but it works surprisingly badly in more complicated environments.</p>
+<p>For the relatively simple Atari game Pong, our DQN was able to completely solve it in 1 million frames and showed positive reward dynamics in just 100,000 frames, whereas the policy gradient method failed to converge. Due to the instability of policy gradient training, it became very hard to find good hyperparameters and was still very sensitive to initialization. This doesn’t mean that the policy gradient method is bad, because, as you will see in the next chapter, just one tweak of the network architecture to get a better baseline in the gradients will turn the policy gradient method into one of the best methods (the asynchronous advantage actor-critic method). Of course, there is a good chance that my hyperparameters are completely wrong or the code has some hidden bugs, or there could be other unforeseen problems. Regardless, unsuccessful results still <span id="dx1-199003"/>have <span id="dx1-199004"/>value, at least as a demonstration of bad convergence dynamics.</p>
+<section class="level4 subsectionHead" id="implementation-8">
+<h2 class="heading-2" id="sigil_toc_id_179"> <span id="x1-20000011.5.1"/>Implementation</h2>
+<p>You can find <span id="dx1-200001"/>the complete code for the example in <span class="cmtt-10x-x-109">Chapter11/05</span><span class="cmtt-10x-x-109">_pong</span><span class="cmtt-10x-x-109">_pg.py</span>.</p>
+<p>The three main differences from the previous example’s code are as follows:</p>
+<ul>
+<li>
+<p>The baseline is estimated with a moving average for 1 million past transitions, instead of all examples. To make moving average calculations faster, a <span class="cmtt-10x-x-109">deque</span>-backed buffer is created:</p>
+<div class="tcolorbox" id="tcolobox-247">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-303"><code>class MeanBuffer: 
+    def __init__(self, capacity: int): 
+        self.capacity = capacity 
+        self.deque = collections.deque(maxlen=capacity) 
+        self.sum = 0.0 
+ 
+    def add(self, val: float): 
+        if len(self.deque) == self.capacity: 
+            self.sum -= self.deque[0] 
+        self.deque.append(val) 
+        self.sum += val 
+ 
+    def mean(self) -&gt; float: 
+        if not self.deque: 
+            return 0.0 
+        return self.sum / len(self.deque)</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Several concurrent environments are used. The second difference in this example is working with multiple environments, and this functionality is supported by the PTAN library. The only action we have to take is to pass the array of <span class="cmtt-10x-x-109">Env </span>objects to the <span class="cmtt-10x-x-109">ExperienceSource </span>class. All the rest is done automatically. In the case of several environments, the experience source asks them for transitions in round-robin fashion, providing us with less-correlated training samples.</p>
+</li>
+<li>
+<p>Gradients are clipped to improve training stability. The last difference from the CartPole example is gradient clipping, which is performed using the PyTorch <span class="cmtt-10x-x-109">clip</span><span class="cmtt-10x-x-109">_grad</span><span class="cmtt-10x-x-109">_norm </span>function from the <span class="cmtt-10x-x-109">torch.nn.utils</span> package.</p>
+</li>
+</ul>
+<p>The hyperparameters for<span id="dx1-200018"/> the best variant are the following:</p>
+<div class="tcolorbox" id="tcolobox-248">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-304"><code>GAMMA = 0.99 
+LEARNING_RATE = 0.0001 
+ENTROPY_BETA = 0.01 
+BATCH_SIZE = 128 
+ 
+REWARD_STEPS = 10 
+BASELINE_STEPS = 1000000 
+GRAD_L2_CLIP = 0.1 
+ 
+ENV_COUNT = 32</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="results-10">
+<h2 class="heading-2" id="sigil_toc_id_180"> <span id="x1-20100011.5.2"/>Results</h2>
+<p>Despite<span id="dx1-201001"/> all my efforts to make the example converge, it wasn’t very successful. Even after hyperparameter tuning (<span class="cmsy-10x-x-109">≈ </span>400 samples of hyperparameters), the best result has the average reward around <span class="cmsy-10x-x-109">−</span>19<span class="cmmi-10x-x-109">.</span>7 after 1 million training steps.</p>
+<p>You can try it yourself, the code is in <span class="cmtt-10x-x-109">Chapter11/05</span><span class="cmtt-10x-x-109">_pong</span><span class="cmtt-10x-x-109">_pg.py </span>and <span class="cmtt-10x-x-109">Chapter11/05</span><span class="cmtt-10x-x-109">_pong</span><span class="cmtt-10x-x-109">_pg</span><span class="cmtt-10x-x-109">_tune.py</span>. But I can only conclude that Pong turned out to be too complex for the vanilla PG method.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="summary-10">
+<h1 class="heading-1" id="sigil_toc_id_181"> <span id="x1-20200011.6"/>Summary</h1>
+<p>In this chapter, you saw an alternative way of solving RL problems: policy gradient methods, which are different in many ways from the familiar DQN method. We explored a basic method called REINFORCE, which is a generalization of our first method in RL-domain cross-entropy. This policy gradient method is simple, but when applied to the Pong environment, it didn’t produce good results.</p>
+<p>In the next chapter, we will consider ways to improve the stability of policy gradient methods by combining the families of value-based and policy-based methods.</p>
+</section>
+</section>
+</div></body></html>

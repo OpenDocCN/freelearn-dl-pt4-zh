@@ -1,0 +1,540 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-1-what-is-reinforcement-learning">
+<h1 class="chapterNumber">1</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_404">
+<span id="x1-190001"/>What Is Reinforcement Learning?
+    </h1>
+<p>The automatic learning of optimal decisions over time is a general and common problem that has been studied in many scientific and engineering fields. In our changing world, even problems that look like static input-output problems can become dynamic if time is taken into account. For example, imagine that you want to solve the simple supervised learning problem of pet image classification with two target classes—dog and cat. You gather the training dataset and implement the classifier using your <span id="dx1-19001"/>favorite deep learning toolkit. After the training and validation, the model demonstrates excellent performance. Great! You deploy it and leave it running for a while. However, after a vacation at some seaside resort, you return to discover that dog grooming fashions have changed and a significant portion of your queries are now misclassified, so you need to update your training images and repeat the process again. Not so great!</p>
+<p>This example is intended to show that<span id="dx1-19002"/> even simple <span class="cmbx-10x-x-109">machine learning </span>(<span class="cmbx-10x-x-109">ML</span>) problems often have a hidden time dimension. This is frequently overlooked and might become an issue in a production system. This can<span id="dx1-19003"/> be addressed by <span class="cmbx-10x-x-109">reinforcement learning </span>(<span class="cmbx-10x-x-109">RL)</span>, a subfield of ML, which is an approach that natively incorporates an extra dimension (which is usually time, but not necessarily) into learning equations. This places RL much closer to how people<span id="dx1-19004"/> understand <span class="cmbx-10x-x-109">artificial intelligence (AI)</span>. In this chapter, we will discuss RL in more detail and you will become familiar with the following:</p>
+<ul>
+<li>
+<p>How RL is related to and differs from other ML disciplines: <span class="cmbx-10x-x-109">supervised and unsupervised learning</span></p>
+</li>
+<li>
+<p>What the main RL formalisms are and how they are related to each other</p>
+</li>
+<li>
+<p>Theoretical foundations of RL: <span class="cmbx-10x-x-109">Markov processes </span>(<span class="cmbx-10x-x-109">MPs</span>), <span class="cmbx-10x-x-109">Markov</span> <span class="cmbx-10x-x-109">reward processes </span>(<span class="cmbx-10x-x-109">MRPs</span>), and <span class="cmbx-10x-x-109">Markov decision processes</span> (<span class="cmbx-10x-x-109">MDPs</span>)</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="supervised-learning">
+<h1 class="heading-1" id="sigil_toc_id_17"> <span id="x1-200001.1"/>Supervised learning</h1>
+<p>You may be <span id="dx1-20001"/>familiar with the notion of supervised learning, which is the most studied and well-known ML problem. Its basic question is, how do you automatically build a function that maps some input into some output when given a set of example pairs? It sounds simple in those terms, but the problem includes many tricky questions that computers have only recently started to address with some success. There are lots of examples of supervised learning problems, including the following:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Text classification</span>: Is this email message spam or not?</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Image classification and object location</span>: Does this image contain a picture of a cat, dog, or something else?</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Regression problems</span>: Given the information from weather sensors, what will be the weather tomorrow?</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Sentiment analysis</span>: What is the customer satisfaction level of this review?</p>
+</li>
+</ul>
+<p>These questions may look different, but they share the same idea — we have many examples of input and desired output, and we want to learn how to generate the output for some future, currently unseen input. The name <span class="cmti-10x-x-109">supervised</span> comes from the fact that we learn from known answers provided by a “ground truth” data source.</p>
+</section>
+<section class="level3 sectionHead" id="unsupervised-learning">
+<h1 class="heading-1" id="sigil_toc_id_18"> <span id="x1-210001.2"/>Unsupervised learning</h1>
+<p>At the<span id="dx1-21001"/> other extreme, we have the so-called unsupervised learning, which assumes no supervision and has no known labels assigned to our data. The main objective is to learn some hidden structure of the dataset at hand. One common example of such an approach to learning is the clustering of data. This happens when our algorithm tries to combine data items into a set of clusters, which can reveal relationships in data. For instance, you might want to find similar images or clients with common behavior patterns.</p>
+<p>Another unsupervised<span id="dx1-21002"/> learning method that is becoming more and more popular is <span class="cmbx-10x-x-109">generative adversarial networks </span>(<span class="cmbx-10x-x-109">GANs</span>). When we have two competing <span class="cmbx-10x-x-109">neural networks </span>(<span class="cmbx-10x-x-109">NNs</span>), the first network tries to generate fake data to fool the second network, while the second network tries to discriminate artificially generated data from data sampled from our dataset. Over time, both networks become more and more skillful in their tasks by capturing subtle specific patterns in the dataset.</p>
+</section>
+<section class="level3 sectionHead" id="reinforcement-learning">
+<h1 class="heading-1" id="sigil_toc_id_19"> <span id="x1-220001.3"/>Reinforcement learning</h1>
+<p>RL is the <span id="dx1-22001"/>third camp and lies somewhere in between full supervision and a complete<span id="dx1-22002"/> lack of predefined labels. On the one hand, it uses many well-established methods of supervised learning, such as <span class="cmbx-10x-x-109">deep neural networks</span> for function approximation, stochastic gradient descent, and backpropagation, to learn data representation. On the other hand, it usually applies them in a different way.</p>
+<p>In the next two sections of the chapter, we will explore specific details of the RL approach, including assumptions and abstractions in its strict mathematical form. For now, to compare RL with supervised and unsupervised learning, we will take a less formal, but more easily understood, path.</p>
+<p>Imagine that you have an <span class="cmbx-10x-x-109">agent </span>that needs to take actions in some <span class="cmbx-10x-x-109">environment</span>. Both “agent” and “environment” will be defined in detail later in this chapter. A robot mouse in a maze is a good example, but you can also imagine an automatic helicopter trying to perform a roll, or a chess program learning how to beat a grandmaster. Let’s go with the robot mouse for simplicity.</p>
+<div class="minipage">
+<p><img alt=" " height="300" src="../Images/B22150_01.png" width="300"/> <span id="x1-22003r1"/></p>
+<span class="id">Figure 1.1: The robot mouse maze world </span>
+</div>
+<p>In this case, the <span class="cmti-10x-x-109">environment </span>is a maze with food at some points and electricity at others. The robot mouse is the <span class="cmti-10x-x-109">agent </span>that can take actions, such as turn left/right and move forward. At each moment, it can observe the full state of the maze to make a decision about the actions to take. The robot mouse tries to find as much food as possible while avoiding getting an electric shock whenever possible. These food and electricity signals stand as the reward that is given to the agent (robot mouse) by the environment as additional feedback about the agent’s actions. The <span class="cmbx-10x-x-109">reward </span>is a very important concept in RL, and we will talk about it later in the chapter. For now, it is enough for you to know that the final goal of the agent is to maximize its reward as much as possible. In our particular example, the robot mouse could suffer a slight electric shock as a short-term setback to get to a place with plenty of food in the long term — this would be a better result for the robot mouse than just standing still and gaining nothing.</p>
+<p>We don’t want to hard-code knowledge about the environment and the best actions to take in every specific situation into the robot mouse — it will take too much effort and may become useless even with a slight maze change. What we want is to have some magic set of methods that will allow our robot mouse to learn on its own how to avoid electricity and gather as much food as possible. RL is exactly this magic toolbox and it behaves differently from supervised and unsupervised learning methods; it doesn’t work with predefined labels in the way that supervised learning does. Nobody labels all the images that the robot sees as <span class="cmti-10x-x-109">good </span>or <span class="cmti-10x-x-109">bad</span>, or gives it the best direction to turn in.</p>
+<p>However, we’re not completely blind as in an unsupervised learning setup — we have a reward system. The reward can be positive from gathering the food, negative from electric shocks, or neutral when nothing special happens. By observing the reward and relating it to the actions <span id="dx1-22004"/>taken, our agent learns how to perform an action better, gather more food, and get fewer electric shocks. Of course, RL generality and flexibility comes with a price. RL is considered to be a much more challenging area than supervised or unsupervised learning. Let’s quickly discuss what makes RL tricky.</p>
+</section>
+<section class="level3 sectionHead" id="complications-in-rl">
+<h1 class="heading-1" id="sigil_toc_id_20"> <span id="x1-230001.4"/>Complications in RL</h1>
+<p>The first<span id="dx1-23001"/> thing to note is that observations in RL depend on an agent’s behavior and, to some extent, it is the result of this behavior. If your agent decides to do inefficient things, then the observations will tell you nothing about what it has done wrong and what should be done to improve the outcome (the agent will just get negative feedback all the time). If the agent is stubborn and keeps making mistakes, then the observations will give the false impression that there is no way to get a larger reward — <span class="cmti-10x-x-109">life is suffering </span>— which could be totally wrong.</p>
+<p>In ML terms, this <span id="dx1-23002"/>can be rephrased as <span class="cmti-10x-x-109">having non-IID data</span>. The abbreviation <span class="cmbx-10x-x-109">iid</span> stands for <span class="cmbx-10x-x-109">independent and identically distributed</span>, a requirement for most supervised learning methods.</p>
+<p>The second thing that complicates our agent’s life is that it needs to not only <span class="cmti-10x-x-109">exploit </span>the knowledge it has learned, but actively <span class="cmti-10x-x-109">explore </span>the environment, because maybe doing things differently will significantly improve the outcome. The problem is that too much exploration may also seriously decrease the reward (not to mention the agent can actually <span class="cmti-10x-x-109">forget </span>what it has learned before), so we need to find a balance between these two activities somehow. This exploration/exploitation dilemma is one of the open fundamental questions in RL. People face this choice all the time — should I go to an already known place for dinner or try this fancy new restaurant? How frequently should I change jobs? Should I study a new field or keep working in my area? There are no universal answers to these questions.</p>
+<p>The third complication lies in the fact that reward can be seriously delayed after actions. In chess, for example, one single strong move in the middle of the game can shift the balance. During learning, we need to discover such causalities, which can be tricky to discern during the flow of time and our actions.</p>
+<p>However, despite <span id="dx1-23003"/>all these obstacles and complications, RL has seen huge improvements in recent years and is becoming more and more active as a field of research and practical application.</p>
+<p>Interested in learning more? Let’s dive into the details and look at RL formalisms and play rules.</p>
+</section>
+<section class="level3 sectionHead" id="rl-formalisms">
+<h1 class="heading-1" id="sigil_toc_id_21"> <span id="x1-240001.5"/>RL formalisms</h1>
+<p>Every scientific and engineering field has its own assumptions and limitations. Earlier in this chapter, we discussed supervised learning, in which such assumptions are the knowledge of input-output pairs. You have no labels for your data? You need to figure out how to obtain labels or try to use some other theory. This doesn’t make supervised learning <span class="cmti-10x-x-109">good </span>or <span class="cmti-10x-x-109">bad</span>; it just makes it inapplicable to your problem.</p>
+<p>There are many historical examples of practical and theoretical breakthroughs that have occurred when somebody tried to challenge rules in a creative way. However, we also must understand our limitations. It’s important to know and understand game rules for various methods, as it can save you tons of time in advance. Of course, such formalisms exist for RL, and we will spend the rest of this book analyzing them from various angles.</p>
+<p>The following diagram shows two major RL entities — <span class="cmbx-10x-x-109">agent </span>and <span class="cmbx-10x-x-109">environment</span> — and their communication channels — <span class="cmbx-10x-x-109">actions</span>, <span class="cmbx-10x-x-109">reward</span>, and <span class="cmbx-10x-x-109">observations</span>:</p>
+<div class="minipage">
+<p><img alt="AERAOgnecbevwtsniaietrrorodnvnsamteionnts " height="150" src="../Images/B22150_02.png" width="300"/> <span id="x1-24001r2"/></p>
+<span class="id">Figure 1.2: RL entities and their communication channels </span>
+</div>
+<p>We will discuss them in detail in the next few sections.</p>
+<section class="level4 subsectionHead" id="reward">
+<h2 class="heading-2" id="sigil_toc_id_22"> <span id="x1-250001.5.1"/>Reward</h2>
+<p>First, let’s<span id="dx1-25001"/> return to the notion of reward. In RL, it’s just a scalar value we obtain periodically from the environment. As mentioned, reward can be positive or negative, large or small, but it’s just a number. The purpose of reward is to tell our agent how well it has behaved. We don’t define how frequently the agent receives this reward; it can be every second or once in an agent’s lifetime, although it’s common practice to receive rewards every fixed timestamp or at every environment interaction, just for convenience. In the case of once-in-a-lifetime reward systems, all rewards except the last one will be zero.</p>
+<p>As I stated, the purpose of reward is to give an agent feedback about its success, and it’s a central thing in RL. Basically, the term <span class="cmti-10x-x-109">reinforcement </span>comes from the fact that reward obtained by an agent should reinforce its behavior in a positive or negative way. Reward is local, meaning that it reflects the benefits and losses achieved by the agent so far. Of course, getting a large reward for some action doesn’t mean that, a second later, you won’t face dramatic consequences as a result of your previous decisions. It’s like robbing a bank — it could look like a good idea until you think about the consequences.</p>
+<p>What an agent is trying to achieve is the largest accumulated reward over its sequence of actions. To give you a better understanding of reward, here is a list of some concrete examples with their rewards:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Financial trading</span>: An amount of profit is a reward for a trader buying and selling stocks.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chess</span>: Reward is obtained at the end of the game as a win, lose, or draw. Of course, it’s up to interpretation. For me, for example, achieving a draw in a match against a chess grandmaster would be a huge reward. In practice, we need to specify the exact reward value, but it could be a fairly complicated expression. For instance, in the case of chess, the reward could be proportional to the opponent’s strength.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dopamine system in the brain</span>: There is a part of the brain (limbic system) that produces dopamine every time it needs to send a positive signal to the rest of the brain. High concentrations of dopamine lead to a sense of pleasure, which reinforces activities considered by this system to be <span class="cmti-10x-x-109">good</span>. Unfortunately, the limbic system is ancient in terms of the things it considers <span class="cmti-10x-x-109">good </span>— food, reproduction, and safety — but that is a totally different story!</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer games</span>: They usually give obvious feedback to the player, which is either the number of enemies killed or a score gathered. Note in this example that reward is already accumulated, so the RL reward for arcade games should be the derivative of the score, that is, +1 every time a new enemy is killed, <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">N </span>if the player was killed by the enemy, and 0 at all other time steps.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Web navigation</span>: There are problems, with high practical value, that require the automated extraction of information available on the web. Search engines are trying to solve this task in general, but sometimes, to get to the data you’re looking for, you need to fill in some forms or navigate through a series of links, or complete CAPTCHAs, which can be difficult for search engines to do. There is an RL-based approach to those tasks in which the reward is the information or the outcome that you need to get.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">NN architecture search</span>: RL can be used for NN architecture optimization where the quality of models is crucial and people work hard to gain an extra 1% on target metrics. In this use case, the aim is to get the best performance metric on some dataset by tweaking the number of layers or their parameters, adding extra bypass connections, or making other changes to the NN architecture. The reward in this case is the performance (accuracy or another measure showing how accurate the NN predictions are).</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dog training</span>: If you have ever tried to <span id="dx1-25002"/>train a dog, you know that you need to give it something tasty (but not too much) every time it does the thing you’ve asked. It’s also common to reprimand your pet a bit (negative reward) when it doesn’t follow your orders, although recent studies have shown that this isn’t as effective as a positive reward.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">School marks</span>: We all have experience here! School marks are a reward system designed to give pupils feedback about their studying.</p>
+</li>
+</ul>
+<p>As you can see from the preceding examples, the notion of reward is a very general indication of the agent’s performance, and it can be found or artificially injected into lots of practical problems around us.</p>
+</section>
+<section class="level4 subsectionHead" id="the-agent">
+<h2 class="heading-2" id="sigil_toc_id_23"> <span id="x1-260001.5.2"/>The agent</h2>
+<p>An agent is<span id="dx1-26001"/> somebody or something who/that interacts with the environment by executing certain actions, making observations, and receiving eventual rewards for this. In most practical RL scenarios, the agent is our piece of software that is supposed to solve some problem in a more-or-less efficient way. For our initial set of six examples, the agents will be as follows:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Financial trading</span>: A trading system or a trader making decisions about order execution (buying, selling, or doing nothing).</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chess</span>: A player or a computer program.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dopamine system</span>: The brain itself, which, according to sensory data, decides whether it was a good experience.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer games</span>: The player who enjoys the game or the computer program. (Andrej Karpathy once tweeted that “we were supposed to make AI do all the work and we play games but we do all the work and the AI is playing games!”).</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Web navigation</span>: The software that tells the browser which links to click on, where to move the mouse, or which text to enter.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">NN architecture search</span>: The software that controls the concrete architecture of the NN being evaluated.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dog training</span>: You make decisions about the actions (feeding/reprimand), so, the agent is you. But in principle, your dog also could be seen as the agent — the dog is trying to maximize the reward (food and/or attention) by behaving properly. Strictly speaking, here we have a “multi-agent RL” setup, which is briefly discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch026.xhtml#x1-41100022"><span class="cmti-10x-x-109">22</span></a>.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">School</span>: Student/pupil.</p>
+</li>
+</ul>
+</section>
+<section class="level4 subsectionHead" id="the-environment">
+<h2 class="heading-2" id="sigil_toc_id_24"> <span id="x1-270001.5.3"/>The environment</h2>
+<p>The <span id="dx1-27001"/>environment is everything outside of an agent. In the most general sense, it’s the rest of the universe, but this goes slightly overboard and exceeds the capacity of even tomorrow’s computers, so we usually follow the general sense here.</p>
+<p>The agent’s communication with the environment is limited to reward (obtained from the environment), actions (executed by the agent and sent to the environment), and observations (some information besides the reward that the agent receives from the environment). We have discussed rewards already, so let’s talk about actions and observations next. We will identify the environment for each of our examples when we discuss the observations.</p>
+</section>
+<section class="level4 subsectionHead" id="actions">
+<h2 class="heading-2" id="sigil_toc_id_25"> <span id="x1-280001.5.4"/>Actions</h2>
+<p>Actions are <span id="dx1-28001"/>things that an agent can do in the environment. Actions can, for example, be piece moves on the board (if it’s a board game), or doing homework (in the case of school). They can be as simple as <span class="cmti-10x-x-109">move</span> <span class="cmti-10x-x-109">pawn one space forward </span>or as complicated as <span class="cmti-10x-x-109">build a profitable startup</span> <span class="cmti-10x-x-109">company</span>.</p>
+<p>In RL, we distinguish between two types of actions — discrete or continuous. Discrete actions form the finite set of mutually exclusive things an agent can do, such as move left or right. Continuous actions have some value attached to them, such as a car’s <span class="cmti-10x-x-109">turn the wheel </span>action having an angle and direction of steering. Different angles could lead to a different scenario a second later, so just <span class="cmti-10x-x-109">turn the</span> <span class="cmti-10x-x-109">wheel </span>is definitely not enough.</p>
+<p>Giving concrete examples, let’s look at the actions in our six scenarios:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Financial trading</span>: Actions are decisions to buy or sell stock. “Do nothing and wait” also is an action.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chess</span>: Actions are valid piece moves according to the current board’s position.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dopamine system</span>: Actions are the things that you are doing.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer games</span>: Actions are pushing buttons. They could be also continuous, such as turning the steering wheel in an auto simulator.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Web navigation</span>: Actions could be mouse clicks, scrolling, and text typing.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">NN architecture search</span>: Actions are changes in NN architecture, which could be discrete (count of layers in the network) or continuous (probability in the dropout layer).</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dog training</span>: Actions are everything you can do with your dog — giving a piece of tasty food, petting, even <span id="dx1-28002"/>saying “good dog!” in a kind voice.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">School</span>: Actions are marks and lots of more informal signals, like praising the successes or giving extra homework.</p>
+</li>
+</ul>
+</section>
+<section class="level4 subsectionHead" id="observations">
+<h2 class="heading-2" id="sigil_toc_id_26"> <span id="x1-290001.5.5"/>Observations</h2>
+<p>Observations of the environment form <span id="dx1-29001"/>the second information channel for an agent, with the first being the <span class="cmti-10x-x-109">reward</span>. You may be wondering why we need a separate data source. The answer is convenience. Observations are pieces of information that the environment provides the agent with that indicate what’s going on around the agent.</p>
+<p>Observations may be relevant to the upcoming reward (such as seeing a bank notification about being paid) or may not be. Observations can even include reward information in some vague or obfuscated form, such as score numbers on a computer game’s screen. Score numbers are just pixels, but potentially, we could convert them into reward values; it’s not a very complex task for a modern computer vision techniques.</p>
+<p>On the other hand, reward shouldn’t be seen as a secondary or unimportant thing — reward is the main force that drives the agent’s learning process. If a reward is wrong, noisy, or just slightly off course from the primary objective, then there is a chance that training will go in the wrong direction.</p>
+<p>It’s also important to distinguish between an environment’s state and observations. The state of an environment most of the time is <span class="cmti-10x-x-109">internal </span>to the environment and potentially includes every atom in the universe, which makes it impossible to measure everything about the environment. Even if we limit the environment’s state to be small enough, most of the time, it will be either not possible to get full information about it or our measurements will contain noise. This is completely fine, though, and RL was created to support such cases natively. To illustrate the difference, let’s return to our set of examples:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Financial trading</span>: Here, the environment is the whole financial market and everything that influences it. This is a huge list of things, such as the latest news, economic and political conditions, weather, food supplies, and Twitter/X trends. Even your decision to stay home today can potentially indirectly influence the world’s financial system (if you believe in the “butterfly effect”). However, our observations are limited to stock prices, news, and so on. We don’t have access to most of the environment’s state, which makes financial forecasting such a nontrivial thing.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chess</span>: The environment here is your board <span class="cmti-10x-x-109">plus </span>your opponent, which includes their chess skills, mood, brain state, chosen tactics, and so on. Observations are what you see (your current chess position), but, at some levels of play, knowledge of psychology and the ability to read an opponent’s mood could increase your chances.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dopamine system</span>: The environment here is your brain <span class="cmti-10x-x-109">plus </span>your nervous system and your organs’ states <span class="cmti-10x-x-109">plus </span>the whole world you can perceive. Observations are the inner brain state and signals coming from your senses.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer game</span>: Here, the environment is your computer’s state, including all memory and disk data. For networked games, you need to include other computers <span class="cmti-10x-x-109">plus </span>all Internet infrastructure between them and your machine. Observations are a screen’s pixels and sound only. These pixels are not a tiny amount of information (it has been estimated that the total number of possible moderate-size images (1024<span class="cmsy-10x-x-109">×</span>768) is significantly larger than the number of atoms in our galaxy), but the whole environment state is definitely larger.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Web navigation</span>: The environment here is the Internet, including all the network infrastructure between the computer on which our agent works and the web server, which is a really huge system that includes millions and millions of different components. The observation is normally the web page that is loaded in the browser.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">NN architecture search</span>: In this example, the environment is fairly simple and includes the NN toolkit that performs the particular NN evaluation and the dataset that is used to obtain the performance metric. In comparison to the Internet, this looks like a tiny toy environment. Observations might be different and include some information about testing, such as loss convergence dynamics or other metrics obtained from the evaluation step.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Dog training</span>: Here, the environment is your dog (including its hardly observable inner reactions, mood, and life experiences) and everything around it, including other dogs and even a cat hiding in a bush. Observations are signals from your senses and memory.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">School</span>: The environment here is the school itself, the education system of the country, society, and the cultural legacy. Observations are the same as for the dog training example — the student’s senses and memory.</p>
+</li>
+</ul>
+<p>This is <span id="dx1-29002"/>our “mise en scène” and we will play around with it in the rest of this book. You will have already noticed that the RL model is extremely flexible and general, and it can be applied to a variety of scenarios. Let’s now look at how RL is related to other disciplines, before diving into the details of the RL model.</p>
+<p>There are many other areas that contribute or relate to RL. The most significant are shown in the following diagram, which includes six large domains heavily overlapping each other on the methods and specific topics related to decision-making (shown inside the inner circle).</p>
+<div class="minipage">
+<p><img alt="PIC" height="360" src="../Images/file5.png" width="360"/> <span id="x1-29003r3"/></p>
+<span class="id">Figure 1.3: Various domains in RL </span>
+</div>
+<p>At the intersection of all those related, but still<span id="dx1-29004"/> different, scientific areas sits RL, which is so general and flexible that it can take the best available information from these varying domains:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">ML</span>: RL, being a subfield of ML, borrows lots of its machinery, tricks, and techniques from ML. Basically, the goal of RL is to learn how an agent should behave when it is given imperfect observational data.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Engineering (especially optimal control)</span>: This helps with taking a sequence of optimal actions to get the best result.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Neuroscience</span>: We used the dopamine system as our example, and it has been shown that the human brain acts similarly to the RL model.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Psychology</span>: This studies behavior in various conditions, such as how people react and adapt, which is close to the RL topic.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Economics</span>: One of the important topics in economics is how to maximize reward in terms of imperfect knowledge and the changing conditions of the real world.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Mathematics</span>: This works with idealized systems and also devotes significant attention to finding and reaching the optimal conditions in the field of operations research.</p>
+</li>
+</ul>
+<p>In the next part of the chapter, you will become familiar with the theoretical foundations of RL, which will make it <span id="dx1-29005"/>possible to start moving toward the methods used to solve the RL problem. The upcoming section is important for understanding the rest of the book.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-theoretical-foundations-of-rl">
+<h1 class="heading-1" id="sigil_toc_id_27"> <span id="x1-300001.6"/>The theoretical foundations of RL</h1>
+<p>In this <span id="dx1-30001"/>section, I will introduce you to the mathematical representation and notation of the formalisms (reward, agent, actions, observations, and environment) that we just discussed. Then, using this as a knowledge base, we will explore the second-order notions of the RL language, including state, episode, history, value, and gain, which will be used repeatedly to describe different methods later in the book.</p>
+<section class="level4 subsectionHead" id="markov-decision-processes">
+<h2 class="heading-2" id="sigil_toc_id_28"> <span id="x1-310001.6.1"/>Markov decision processes</h2>
+<p>Before that, we will cover <span class="cmbx-10x-x-109">Markov decision processes </span>(<span class="cmbx-10x-x-109">MDPs</span>), which <span id="dx1-31001"/>will be<span id="dx1-31002"/>described like a Russian matryoshka doll: we will start from the simplest case of a <span class="cmbx-10x-x-109">Markov process </span>(<span class="cmbx-10x-x-109">MP</span>), then extend that with rewards, which will turn it into a <span class="cmbx-10x-x-109">Markov reward process </span>(<span class="cmbx-10x-x-109">MRP</span>). Then, we will put this idea into an extra envelope by adding actions, which will lead us to an MDP.</p>
+<p>MPs and MDPs are widely used in computer science and other engineering fields. So, reading this chapter will be useful for you not only for RL contexts but also for a much wider range of topics. If you’re already familiar with MDPs, then you can quickly skim this chapter, paying attention only to the terminology definitions, as we will use them later on.</p>
+<section class="level5 subsubsectionHead" id="the-markov-process">
+<h3 class="heading-3" id="sigil_toc_id_389"><span id="x1-32000"/>The Markov process</h3>
+<p>Let’s start <span id="dx1-32001"/>with <span id="dx1-32002"/>the simplest concept in the Markov family: the MP, which is also known as the <span class="cmbx-10x-x-109">Markov chain</span>. Imagine that you have some system in front of you that you can only observe. What you observe is called states, and the system can switch between states according to<span id="dx1-32003"/> some laws of dynamics (most of the time unknown to you). Again, you cannot influence the system, but can only watch the states changing. All possible states for a system form a set called the <span class="cmbx-10x-x-109">state</span> <span class="cmbx-10x-x-109">space</span>. For MPs, we require this set of states to be finite (but it can be extremely large to compensate for this limitation). Your observations form a sequence of states or a <span class="cmbx-10x-x-109">chain </span>(that’s why MPs are also called Markov chains).</p>
+<p>For example, looking at the simplest model of the weather in some city, we can observe the current day as sunny <span id="dx1-32004"/>or rainy, which is our state space. A sequence of observations over time forms a chain of states, such as [<span class="cmti-10x-x-109">sunny</span>, <span class="cmti-10x-x-109">sunny</span>, <span class="cmti-10x-x-109">rainy</span>, <span class="cmti-10x-x-109">sunny</span>, ...], and this is called <span class="cmbx-10x-x-109">history</span>. To call such a system an MP, it needs to fulfill the <span class="cmbx-10x-x-109">Markov property</span>, which means that the future system dynamics from any state have to depend on this state only. The main point of the Markov property is to make every observable state self-contained to describe the future of the system. In other words, the Markov property requires the states of the system to be distinguishable from each other and unique. In this case, only one state is required to model the future dynamics of the system and not the whole history or, say, the last <span class="cmmi-10x-x-109">N </span>states.</p>
+<p>In the case of our toy weather example, the Markov property limits our model to represent only the cases when a sunny day can be followed by a rainy one with the same probability, regardless of the number of sunny days we’ve seen in the past. It’s not a very realistic model as, from common sense, we know that the chance of rain tomorrow depends not only on the current conditions but on a large number of other factors, such as the season, our latitude, and the presence of mountains and sea nearby. It was recently proven that even solar activity has a major influence on the weather. So, our example is really naïve, but it’s important to understand the limitations and make conscious decisions <span id="dx1-32005"/>about them.</p>
+<p>Of course, if we want to make our model more complex, we can always do this by extending our state space, which will allow us to capture more dependencies in the model at the cost of a larger state space. For example, if you want to capture separately the probability of rainy days during summer and winter, then you can include the season in your state.</p>
+<p>In this case, your state space will be [<span class="cmti-10x-x-109">sunny+summer</span>, <span class="cmti-10x-x-109">sunny+winter</span>, <span class="cmti-10x-x-109">rainy+summer</span>, <span class="cmti-10x-x-109">rainy+winter</span>] and<span id="dx1-32006"/> so on.</p>
+<p>As your system model complies with the Markov property, you can capture transition probabilities with a <span class="cmbx-10x-x-109">transition matrix</span>, which is a square matrix of the size <span class="cmmi-10x-x-109">N </span><span class="cmsy-10x-x-109">×</span><span class="cmmi-10x-x-109">N</span>, where <span class="cmmi-10x-x-109">N </span>is the number of states in our model. Every cell in a row, <span class="cmmi-10x-x-109">i</span>, and a column, <span class="cmmi-10x-x-109">j</span>, in the matrix contains the probability of the system to transition from state <span class="cmmi-10x-x-109">i </span>to state <span class="cmmi-10x-x-109">j</span>.</p>
+<p>For example, in our sunny/rainy example, the transition matrix could be as follows:</p>
+<div class="center">
+<div class="tabular">
+<table class="table-container" id="TBL-1">
+<tbody>
+<tr id="TBL-1-1-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-1-1-1"/>
+<td class="table-cell" id="TBL-1-1-2"><span class="cmbx-10x-x-109">Sunny </span></td>
+<td class="table-cell" id="TBL-1-1-3"><span class="cmbx-10x-x-109">Rainy </span></td>
+</tr>
+<tr id="TBL-1-2-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-1-2-1"><span class="cmbx-10x-x-109">Sunny </span></td>
+<td class="table-cell" id="TBL-1-2-2">0.8</td>
+<td class="table-cell" id="TBL-1-2-3">0.2</td>
+</tr>
+<tr id="TBL-1-3-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-1-3-1"><span class="cmbx-10x-x-109">Rainy </span></td>
+<td class="table-cell" id="TBL-1-3-2">0.1</td>
+<td class="table-cell" id="TBL-1-3-3">0.9</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>In this case, if we have a sunny day, then there is an 80% chance that the next day will be sunny and a 20% chance that the next day will be rainy. If we observe a rainy day, then there is a 10% probability that the weather will become better and a 90% probability of the next day being rainy.</p>
+<p>So, that’s it. The formal definition of an MP is as follows:</p>
+<ul>
+<li>
+<p>A set of states (<span class="cmmi-10x-x-109">S</span>) that a system can be in</p>
+</li>
+<li>
+<p>A transition matrix (<span class="cmmi-10x-x-109">T</span>), with transition probabilities, which defines the system dynamics</p>
+</li>
+</ul>
+<p>A useful visual representation of an MP is a graph with nodes corresponding to system states and edges, labeled with probabilities representing a possible transition from state to state. If the probability of a transition is 0, we don’t draw an edge (there is no way to go from one state to another). This kind of representation is also widely used in finite state machine representation, which is studied in automata theory. For our sunny/rainy weather model, the graph is as shown here:</p>
+<div class="minipage">
+<p><img alt="SRppppuani====nnyy0000....2189 " height="300" src="../Images/B22150_04.png" width="600"/> <span id="x1-32007r4"/></p>
+<span class="id">Figure 1.4: The sunny/rainy weather model </span>
+</div>
+<p>Again, we’re<span id="dx1-32008"/> talking about observation only. There is no way for us to influence the weather, so we just observe it and record our observations.</p>
+<p>To give you a more complicated example, let’s consider another model called <span class="cmti-10x-x-109">Office Worker </span>(Dilbert, the main character in Scott Adams’ famous cartoons, is a good example). His state space in our example has the following states:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Home</span>: He’s not at the office</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer</span>: He’s working on his computer at the office</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Coffee</span>: He’s drinking coffee at the office</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chat</span>: He’s discussing something with colleagues at the office</p>
+</li>
+</ul>
+<p>The state transition graph is shown in the following figure:</p>
+<div class="minipage">
+<p><img alt="CCCHhoooaffmmtepeeuter " height="300" src="../Images/B22150_05.png" width="400"/> <span id="x1-32009r5"/></p>
+<span class="id">Figure 1.5: The state transition graph for our office worker </span>
+</div>
+<p>We assume that <span id="dx1-32010"/>our office worker’s weekday usually starts from the <span class="cmbx-10x-x-109">Home </span>state and that he starts his day with <span class="cmbx-10x-x-109">Coffee </span>without exception (no <span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer</span> edge and no <span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Chat </span>edge). The preceding diagram also shows that workdays always end (that is, going to the <span class="cmbx-10x-x-109">Home </span>state) from the <span class="cmbx-10x-x-109">Computer</span> state.</p>
+<p>The transition matrix for the diagram above is as follows:</p>
+<div class="center">
+<div class="tabular">
+<table class="table-container" id="TBL-2">
+<tbody>
+<tr id="TBL-2-1-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-2-1-1"/>
+<td class="table-cell" id="TBL-2-1-2"><span class="cmbx-10x-x-109">Home </span></td>
+<td class="table-cell" id="TBL-2-1-3"><span class="cmbx-10x-x-109">Coffee </span></td>
+<td class="table-cell" id="TBL-2-1-4"><span class="cmbx-10x-x-109">Chat </span></td>
+<td class="table-cell" id="TBL-2-1-5"><span class="cmbx-10x-x-109">Computer </span></td>
+</tr>
+<tr id="TBL-2-2-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-2-2-1"><span class="cmbx-10x-x-109">Home </span></td>
+<td class="table-cell" id="TBL-2-2-2">60%</td>
+<td class="table-cell" id="TBL-2-2-3">40%</td>
+<td class="table-cell" id="TBL-2-2-4">0%</td>
+<td class="table-cell" id="TBL-2-2-5">0%</td>
+</tr>
+<tr id="TBL-2-3-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-2-3-1"><span class="cmbx-10x-x-109">Coffee </span></td>
+<td class="table-cell" id="TBL-2-3-2">0%</td>
+<td class="table-cell" id="TBL-2-3-3">10%</td>
+<td class="table-cell" id="TBL-2-3-4">70%</td>
+<td class="table-cell" id="TBL-2-3-5">20%</td>
+</tr>
+<tr id="TBL-2-4-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-2-4-1"><span class="cmbx-10x-x-109">Chat </span></td>
+<td class="table-cell" id="TBL-2-4-2">0%</td>
+<td class="table-cell" id="TBL-2-4-3">20%</td>
+<td class="table-cell" id="TBL-2-4-4">50%</td>
+<td class="table-cell" id="TBL-2-4-5">30%</td>
+</tr>
+<tr id="TBL-2-5-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-2-5-1"><span class="cmbx-10x-x-109">Computer </span></td>
+<td class="table-cell" id="TBL-2-5-2">20%</td>
+<td class="table-cell" id="TBL-2-5-3">20%</td>
+<td class="table-cell" id="TBL-2-5-4">10%</td>
+<td class="table-cell" id="TBL-2-5-5">50%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>The transition probabilities could be placed directly on the state transition graph, as shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-32011r6"><span class="cmti-10x-x-109">1.6</span></a>.</p>
+<div class="minipage">
+<p><img alt="CCCHpppppppppppphooo = = = = = = = = = = = =affmmtepeeu000000000000t.5.3.1.1.2.7.5.2.2.6.2.4er " height="300" src="../Images/B22150_06.png" width="400"/> <span id="x1-32011r6"/></p>
+<span class="id">Figure 1.6: The state transition graph with transition probabilities </span>
+</div>
+<p>In practice, we rarely have the luxury of knowing the exact transition matrix. A much more real-world situation is when we only have observations of our system’s states, which are also called <span class="cmbx-10x-x-109">episodes</span>:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span> <span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Home</span></p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span> <span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer</span></p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→ </span><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span> <span class="cmbx-10x-x-109">Coffee</span></p>
+</li>
+</ul>
+<p>It’s not complicated to estimate the transition matrix from our observations — we just count all the transitions from every state and normalize them to a sum of 1. The more observation data we have, the closer our<span id="dx1-32012"/> estimation will be to the true underlying model.</p>
+<p>It’s also <span id="dx1-32013"/>worth noting<span id="dx1-32014"/> that the Markov property implies <span class="cmbx-10x-x-109">stationarity </span>(which means, the underlying transition distribution for any state does not change over time). <span class="cmbx-10x-x-109">Non-stationarity </span>means that there is some hidden factor that influences our system dynamics, and this factor is not included in observations. However, this contradicts the Markov property, which requires the underlying probability distribution to be the same for the same state regardless of the transition history.</p>
+<p>It’s important to understand the difference between the actual transitions observed in an episode and the underlying distribution given in the transition matrix. Concrete episodes that we observe are randomly sampled from the distribution of the model, so they can differ from episode to episode. However, the probability of the concrete <span id="dx1-32015"/>transition to be sampled remains the same. If this is not the case, Markov chain formalism becomes non-applicable.</p>
+<p>Now we can go further and extend the MP model to make it closer to our RL problems. Let’s add rewards to the picture!</p>
+</section>
+<section class="level5 subsubsectionHead" id="markov-reward-processes">
+<h3 class="heading-3" id="sigil_toc_id_390"><span id="x1-33000"/>Markov reward processes</h3>
+<p>To introduce<span id="dx1-33001"/> reward, we need to extend our MP model a bit. First, we need to add value to our transition from state to state. We already have probability, but probability is being used to capture the dynamics of the system, so now we have an extra scalar number without extra burden.</p>
+<p>Rewards can be represented in various forms. The most general way is to have another square matrix, similar to the transition matrix, with a reward given for transitioning from state <span class="cmmi-10x-x-109">i </span>to state <span class="cmmi-10x-x-109">j</span>, which reside in row <span class="cmmi-10x-x-109">i </span>and column <span class="cmmi-10x-x-109">j</span>.</p>
+<p>As mentioned, rewards can be positive or negative, large or small. In some cases, this representation is redundant and can be simplified. For example, if a reward is given for reaching the state regardless of the origin state, we can keep only (<span class="cmbx-10x-x-109">state</span>, <span class="cmbx-10x-x-109">reward</span>) pairs, which is a more compact representation. However, this is applicable only if the reward value depends solely on the target state, which is not always the case.</p>
+<p>The second thing we’re adding to the model is the discount factor <span class="cmmi-10x-x-109">γ </span>(Greek letter “gamma”), which is a single number from 0 to 1 (inclusive). The meaning of this will be explained after the extra characteristics of our MRP have been defined.</p>
+<p>As you will remember, we observe a chain of state transitions in an MP. This is still the case for a MRP, but for every transition, we have our extra quantity — reward. So now, all our observations have a reward value attached to every transition of the system.</p>
+<p>For every episode, we define <span class="cmbx-10x-x-109">return </span>at the time <span class="cmmi-10x-x-109">t </span>as <span class="cmmi-10x-x-109">G</span><sub><span class="cmmi-8">t</span></sub>:</p>
+<div class="math-display">
+<img alt=" ∞∑ Gt = Rt+1 + γRt+2 + ⋅⋅⋅ = γkRt+k+1 k=0 " class="math-display" height="51" src="../Images/equation1.png" width="317"/>
+</div>
+<p>The <span class="cmmi-10x-x-109">γ </span>in the preceding formula is very important in RL, and we will meet it a lot in the subsequent chapters. For now, think about it as a measure of how far into the future we look to estimate the future return. The closer its value is to 1, the more steps ahead of us we will take into account.</p>
+<p>Now let’s try to understand what the formula for <span class="cmbx-10x-x-109">return </span>means. For every time point, we calculate return as a sum of subsequent rewards, but more distant rewards are multiplied by the discount factor raised to the power of the number of steps we are away from the starting point at <span class="cmmi-10x-x-109">t</span>. The discount factor stands for the foresightedness of the agent. If <span class="cmmi-10x-x-109">γ </span>= 1, then return, <span class="cmmi-10x-x-109">G</span><sub><span class="cmmi-8">t</span></sub>, just equals a sum of all subsequent rewards and corresponds to the agent that has perfect visibility of any subsequent rewards. If <span class="cmmi-10x-x-109">γ </span>= 0, <span class="cmmi-10x-x-109">G</span><sub><span class="cmmi-8">t</span></sub> will be just immediate reward without any subsequent state and will correspond to absolute short-sightedness.</p>
+<p>These extreme values are useful only in corner cases, and most of the time, <span class="cmmi-10x-x-109">γ </span>is set to something in between, such as 0<span class="cmmi-10x-x-109">.</span>9 or 0<span class="cmmi-10x-x-109">.</span>99. In this case, we will look into future rewards, but not too far. The value of <span class="cmmi-10x-x-109">γ </span>= 1 might be applicable in situations of short finite episodes.</p>
+<p>This return quantity is not very useful in practice, as it was defined for every<span id="dx1-33002"/> specific chain we observed from our MRP, so it can vary <span id="dx1-33003"/>widely, even for the same state. However, if we go to the extreme and calculate the mathematical expectation of return for any state (by averaging a large number of chains), we will get a much more practical quantity, which is called the <span class="cmbx-10x-x-109">value of the</span> <span class="cmbx-10x-x-109">state</span>:</p>
+<div class="math-display">
+<img alt=" ∞∑ Gt = Rt+1 + γRt+2 + ⋅⋅⋅ = γkRt+k+1 k=0 " class="math-display" height="18" src="../Images/eq2.png" width="152"/>
+</div>
+<p>This interpretation is simple—for every state, <span class="cmmi-10x-x-109">s</span>, the value, <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>), is the average (or expected) return we get by following the <span id="dx1-33004"/>Markov reward process.</p>
+<p>To represent this theoretical knowledge practically, let’s extend our office worker (Dilbert) process with a reward and turn it into a <span class="cmbx-10x-x-109">Dilbert reward process</span> <span class="cmbx-10x-x-109">(DRP)</span>. Our reward values will be as follows:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Home</span>: 1 (as it’s good to be home)</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Home </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Coffee</span>: 1</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer</span>: 5 (working hard is a good thing)</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Chat</span>: <span class="cmsy-10x-x-109">−</span>3 (it’s not good to be distracted)</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer</span>: 2</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Coffee</span>: 1</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer</span>: 3</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Cofee</span>: 1</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Coffee </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Chat</span>: 2</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Coffee</span>: 1</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Chat </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Chat</span>: -1 (long conversations become boring)</p>
+</li>
+</ul>
+<p>A diagram of this is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-33005r7"><span class="cmti-10x-x-109">1.7</span></a>.</p>
+<div class="minipage">
+<p><img alt="pppppppppppp = = = = = = = = = = = = 000000000000.5.3.1.1.2.7.5.2.2.6.2.4 CCCHrrhooo =r =rrrrrrrrraffmm = = = = = = = = = =tepeeu−2−112531121t 1 3er " height="300" src="../Images/B22150_07.png" width="500"/> <span id="x1-33005r7"/></p>
+<span class="id">Figure 1.7: The state transition graph with transition probabilities and rewards </span>
+</div>
+<p>Let’s return to our <span class="cmmi-10x-x-109">γ </span>parameter and think about the values of states with different values of <span class="cmmi-10x-x-109">γ</span>. We will start with a simple case: <span class="cmmi-10x-x-109">γ </span>= 0. How do you calculate the values of states here? To answer this question, let’s fix our state to <span class="cmbx-10x-x-109">Chat</span>. What could the subsequent <span id="dx1-33006"/>transition be? The answer is that it depends on chance. According to our transition matrix for the Dilbert process, there is a 50% probability that the next state will be <span class="cmbx-10x-x-109">Chat </span>again, 20% that it will be <span class="cmbx-10x-x-109">Coffee</span>, and 30% that it will be <span class="cmbx-10x-x-109">Computer</span>. When <span class="cmmi-10x-x-109">γ </span>= 0, our return is equal only to a value of the next immediate state. So, if we want to calculate the value of the <span class="cmbx-10x-x-109">Chat </span>state in the preceding diagram, then we need to sum all transition values and multiply that by their probabilities:</p>
+<table class="table-container">
+<tbody>
+<tr>
+<td class="table-cell"><span class="cmmi-10x-x-109">V </span>(chat)</td>
+<td class="table-cell">=</td>
+<td class="table-cell"><span class="cmsy-10x-x-109">− </span>1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>5 + 2 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>3 + 1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>2 = 0<span class="cmmi-10x-x-109">.</span>3</td>
+</tr>
+<tr>
+<td class="table-cell"><span class="cmmi-10x-x-109">V </span>(coffee)</td>
+<td class="table-cell">=</td>
+<td class="table-cell">2 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>7 + 1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>1 + 3 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>2 = 2<span class="cmmi-10x-x-109">.</span>1</td>
+</tr>
+<tr>
+<td class="table-cell"><span class="cmmi-10x-x-109">V </span>(home)</td>
+<td class="table-cell">=</td>
+<td class="table-cell">1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>6 + 1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>4 = 1<span class="cmmi-10x-x-109">.</span>0</td>
+</tr>
+<tr>
+<td class="table-cell"><span class="cmmi-10x-x-109">V </span>(computer)</td>
+<td class="table-cell">=</td>
+<td class="table-cell">5 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>5 + (<span class="cmsy-10x-x-109">−</span>3) <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>1 + 1 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>2 + 2 <span class="cmsy-10x-x-109">⋅ </span>0<span class="cmmi-10x-x-109">.</span>2 = 2<span class="cmmi-10x-x-109">.</span>8</td>
+</tr>
+</tbody>
+</table>
+<p>So, <span class="cmbx-10x-x-109">Computer </span>is the most valuable state to be in (if we care only about immediate reward), which is not surprising as <span class="cmbx-10x-x-109">Computer </span><span class="cmsy-10x-x-109">→</span><span class="cmbx-10x-x-109">Computer </span>is frequent, has a large reward, and the ratio of interruptions is not too high.</p>
+<p>Now a trickier question — what’s the value when <span class="cmmi-10x-x-109">γ </span>= 1? Think about this carefully. The answer is that the value is infinite for all states. Our diagram doesn’t contain <span class="cmbx-10x-x-109">sink states </span>(states without outgoing transitions), and when our discount equals 1, we care about a potentially infinite number of transitions in the future. As you’ve seen in the case of <span class="cmmi-10x-x-109">γ </span>= 0, all our values are positive in the short term, so the sum of the infinite number of positive values will give us an infinite value, regardless of the starting state.</p>
+<p>This infinite result shows us one of the reasons to introduce <span class="cmmi-10x-x-109">γ </span>into a MRP instead of just summing all future rewards. In most cases, the process can have an infinite (or large) amount of transitions. As it is not very practical to deal with infinite values, we would like to limit the horizon we calculate values for. Gamma with a value less than 1 provides such a limitation, and we will discuss this later in this book. On the other hand, if you’re dealing with finite-horizon environments (for example, the tic-tac-toe game, which is limited by at most nine steps), then it will be fine to use <span class="cmmi-10x-x-109">γ </span>= 1.</p>
+<div class="tcolorbox infobox" id="tcolobox-4">
+<div class="tcolorbox-content">
+<p>As another example, there is an important class of environments with only one step called <span class="cmbx-10x-x-109">the multi-armed bandit MDP</span>. This means that on every step, you need to make a selection of one alternative action, which provides you with some reward and the episode ends.</p>
+<p>You can learn more about bandit methods in the book Bandit Algorithms by Tor Lattimore and Csaba Szepesvari ( <a class="url" href="https://tor-lattimore.com/downloads/book/book.pdf"><span class="cmtt-10x-x-109">https://tor-lattimore.com/downloads/book/book.pdf</span></a>).</p>
+</div>
+</div>
+<p>As I already mentioned about the MRP, <span class="cmmi-10x-x-109">γ </span>is usually set to a value between 0 and 1. However, with such values, it becomes almost impossible to calculate them accurately by hand, even for MRPs as small as our Dilbert example, because it will require<span id="dx1-33007"/> summing hundreds of values. Computers are good at tedious tasks such as this, and there are several simple methods that can quickly calculate values for MRPs for given transition and reward matrices. We will see and even implement one such method in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch009.xhtml#x1-820005"><span class="cmti-10x-x-109">5</span></a>, when we will start looking at Q-learning methods.</p>
+<p>For now, let’s put another layer of complexity around our Markov reward processes and introduce the final missing piece: <span class="cmbx-10x-x-109">actions</span>.</p>
+</section>
+<section class="level5 subsubsectionHead" id="adding-actions-to-mdp">
+<h3 class="heading-3" id="sigil_toc_id_391"><span id="x1-34000"/>Adding actions to MDP</h3>
+<p>You may already<span id="dx1-34001"/> have ideas about how to extend our MDP to include actions. Firstly, we must add a set of actions (<span class="cmmi-10x-x-109">A</span>), which has to be finite. This is our agent’s <span class="cmbx-10x-x-109">action space</span>. Secondly, we need to condition our transition matrix with actions, which basically means that our matrix needs an extra action dimension, which turns it into a cuboid of shape <span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">S</span><span class="cmsy-10x-x-109">|×|</span><span class="cmmi-10x-x-109">S</span><span class="cmsy-10x-x-109">|×|</span><span class="cmmi-10x-x-109">A</span><span class="cmsy-10x-x-109">|</span>, where <span class="cmmi-10x-x-109">S </span>is an our state space and <span class="cmmi-10x-x-109">A </span>is an action space.</p>
+<p>If you remember, in the case of MPs and MRPs, the transition matrix had a square form, with the source state in rows and target state in columns. So, every row, <span class="cmmi-10x-x-109">i</span>, contained a list of probabilities to jump to every state, as shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-34002r8"><span class="cmti-10x-x-109">1.8</span></a>.</p>
+<div class="minipage">
+<p><img alt="Probability for i → j pSTioa,jurrgceettrststaaanttseeitiijon " height="300" src="../Images/B22150_08.png" width="500"/> <span id="x1-34002r8"/></p>
+<span class="id">Figure 1.8: The transition matrix for the Markov process </span>
+</div>
+<p>In case of an <span id="dx1-34003"/>MDP, the agent no longer passively observes state transitions, but can actively choose an action to take at every state transition. So, for every source state, we don’t have a list of numbers, but we have a matrix, where the <span class="cmbx-10x-x-109">depth </span>dimension contains actions that the agent can take, and the other dimension is what the target state system will jump to after actions are performed by the agent. The following diagram shows our new transition table, which became a cuboid with the source state as the <span class="cmti-10x-x-109">height </span>dimension (indexed by <span class="cmmi-10x-x-109">i</span>), the target state as the <span class="cmti-10x-x-109">width</span> (<span class="cmmi-10x-x-109">j</span>), and the action the agent can take as the <span class="cmti-10x-x-109">depth </span>(<span class="cmmi-10x-x-109">k</span>) of the transition table:</p>
+<div class="minipage">
+<p><img alt="Probability for i → j STAoacurtrgigceoietnveststknaa attceetiijon k " height="300" src="../Images/B22150_09.png" width="500"/> <span id="x1-34004r9"/></p>
+<span class="id">Figure 1.9: The transition probabilities for the MDP </span>
+</div>
+<p>So, in general, by choosing an action, the agent can affect the probabilities of the target states, which is a useful ability.</p>
+<p>To give you an idea of why we need so many complications, let’s imagine a small robot that lives in a 3 <span class="cmsy-10x-x-109">× </span>3 grid and can execute the actions <span class="cmti-10x-x-109">turn left</span>, <span class="cmti-10x-x-109">turn right</span>, and <span class="cmti-10x-x-109">go forward</span>. The state of the world is the robot’s position plus orientation (up, down, left, and right), which gives us 3 <span class="cmsy-10x-x-109">× </span>3 <span class="cmsy-10x-x-109">× </span>4 = 36 states (the robot can be at any location in any orientation).</p>
+<p>Also, imagine that the robot has imperfect motors (which is frequently the case in the real world), and when it executes <span class="cmti-10x-x-109">turn left </span>or <span class="cmti-10x-x-109">turn right</span>, there is a 90% chance that the desired turn happens, but sometimes, with a 10% probability, the wheel slips and the robot’s position stays the same. The same happens with <span class="cmti-10x-x-109">go</span> <span class="cmti-10x-x-109">forward </span>— in 90% of cases it works, but for the <span id="dx1-34005"/>rest (10%) the robot stays at the same position.</p>
+<p>In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-34006r10"><span class="cmti-10x-x-109">1.10</span></a>, a small part of a transition diagram is shown, displaying the possible transitions from the state <span class="cmtt-10x-x-109">(1, 1), up</span>, when the robot is in the center of the grid and facing up. If the robot tries to move forward, there is a 90% chance that it will end up in the state <span class="cmtt-10x-x-109">(0, 1), up</span>, but there is a 10% probability that the wheels will slip and the target position will remain <span class="cmtt-10x-x-109">(1, 1),</span> <span class="cmtt-10x-x-109">up</span>.</p>
+<div class="minipage">
+<p><img alt="Robot at cell (1,1) 012012 facing up " height="300" src="../Images/B22150_08.png" width="500"/> <span id="x1-34006r10"/></p>
+<span class="id">Figure 1.10: A grid world environment </span>
+</div>
+<p>To properly capture all these details about the environment and possible reactions to the agent’s actions, the general MDP has a 3D transition matrix with the dimensions source state, action, and target state.</p>
+<p>Finally, to turn our MRP into an MDP, we need to add actions to our reward matrix in the same way that we did with the transition matrix. Our reward matrix will depend not only on the state but also on the action. In other words, the reward the agent obtains will now <span id="dx1-34007"/>depend not only on the state it ends up in but also on the action that leads to this state. Now, with a formally defined MDP, we’re finally ready to cover the most important thing for MDPs and RL: <span class="cmbx-10x-x-109">policy</span>.</p>
+</section>
+</section>
+<section class="level4 subsectionHead" id="policy">
+<h2 class="heading-2" id="sigil_toc_id_29"> <span id="x1-350001.6.2"/>Policy</h2>
+<p>The simple <span id="dx1-35001"/>definition of policy is that it is some set of rules that defines the agent’s behavior. Even for fairly simple environments, we can have a variety of policies. For example, in the preceding example with the robot in the grid world, the agent can have different policies, which will lead to different sets of visited states. For example, the robot can perform the following actions:</p>
+<ul>
+<li>
+<p>Blindly move forward regardless of anything</p>
+</li>
+<li>
+<p>Try to go around obstacles by checking whether that previous <span class="cmti-10x-x-109">forward</span> action failed</p>
+</li>
+<li>
+<p>Funnily spin around by always turning right to entertain its creator</p>
+</li>
+<li>
+<p>Choose an action randomly regardless of position and orientation, modeling a drunk robot in the grid world scenario</p>
+</li>
+</ul>
+<p>You may remember that the main objective of the agent in RL is to gather as much return as possible. So, again, different policies can give us different amounts of return, which makes it important to find a good policy. This is why the notion of policy is important.</p>
+<p>Formally, policy is defined as the probability distribution over actions for every possible state:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="18" src="../Images/eq3.png" width="204"/>
+</div>
+<p>This is defined as probability and not as a concrete action to introduce randomness into an agent’s behavior. In section 3 of the book, we will talk about why this is important and useful. Deterministic policy is a special case of probabilistics with the needed action having 1 as its probability.</p>
+<p>Another useful notion is that if our policy is fixed and not changing during training (i.e., when the policy always returns the same actions for the same states), then our MDP becomes a MRP, as we can reduce the transition and reward matrices with a policy’s probabilities and get rid of the action dimensions.</p>
+<p>Congratulations<span id="dx1-35002"/> on getting to this stage! This chapter was challenging, but it was important for understanding subsequent practical material. After two more introductory chapters about OpenAI Gym and deep learning, we will finally start tackling this question — how do we teach agents to solve practical tasks?</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="summary">
+<h1 class="heading-1" id="sigil_toc_id_30"> <span id="x1-360001.7"/>Summary</h1>
+<p>In this chapter, you started your journey into the RL world by learning what makes RL special and how it relates to the supervised and unsupervised learning paradigms. We then learned about the basic RL formalisms and how they interact with each other, after which we covered MPs, MRPs, and MDPs. This knowledge will be the foundation for the material that we will cover in the rest of the book.</p>
+<p>In the next chapter, we will move away from the formal theory to the practice of RL. We will cover the setup required and libraries, and then you will write your first agent.</p>
+</section>
+<section class="level3 likesectionHead" id="join-our-community-on-discord-1">
+<h1 class="heading-1" id="sigil_toc_id_31"><span id="x1-37000"/>Join our community on Discord</h1>
+<p>Read this book alongside other users, Deep Learning experts, and the author himself. Ask questions, provide solutions to other readers, chat with the author via Ask Me Anything sessions, and much more. Scan the QR code or visit the link to join the community. <a class="url" href="https://packt.link/rl"><span class="cmtt-10x-x-109">https://packt.link/rl</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file1.png" width="85"/></p>
+</section>
+</section>
+</div></body></html>

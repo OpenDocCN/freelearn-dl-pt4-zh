@@ -1,0 +1,419 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer753">
+<h1 class="chapter-number" id="_idParaDest-190"><a id="_idTextAnchor195"/>17</h1>
+<h1 id="_idParaDest-191"><a id="_idTextAnchor196"/>Building a Recommender System Using LightGCN</h1>
+<p>Recommender systems have become an integral part of modern online platforms, with the goal of providing personalized recommendations to users based on their interests and past interactions. These systems can be found in a variety of applications, including suggesting products to purchase on e-commerce websites, recommending content to watch on streaming services, and suggesting connections to make on social <span class="No-Break">media platforms.</span></p>
+<p>Recommendation systems are one of the main applications of GNNs. Indeed, they can effectively incorporate the complex relationships between users, items, and their interactions into a unified model. In addition, the graph structure allows for the incorporation of side information, such as user and item metadata, into the <span class="No-Break">recommendation process.</span></p>
+<p>In this chapter, we will introduce a new GNN architecture<a id="_idIndexMarker907"/> called <strong class="bold">LightGCN</strong>, specifically designed for recommender systems. We will also introduce a new dataset, the <strong class="source-inline">Book-Crossing</strong> dataset, which contains users, books, and over a million ratings. Using this dataset, we will build a book recommender system with collaborative filtering and apply it to get recommendations for a specific user. Through this process, we will demonstrate how to use the LightGCN architecture to build a practical <span class="No-Break">recommendation system.</span></p>
+<p>By the end of this chapter, you will be able to create your own recommender system using LightGCN. You will learn how to process any dataset with users, items, and scores for a collaborative filtering approach. Finally, you will learn how to implement and evaluate this architecture and get recommendations for <span class="No-Break">individual users.</span></p>
+<p>In this chapter, we will cover the following <span class="No-Break">main topics:</span></p>
+<ul>
+<li>Exploring the <span class="No-Break">Book-Crossing dataset</span></li>
+<li>Preprocessing the <span class="No-Break">Book-Crossing dataset</span></li>
+<li>Implementing the <span class="No-Break">LightGCN architecture</span></li>
+</ul>
+<h1 id="_idParaDest-192"><a id="_idTextAnchor197"/>Technical requirements</h1>
+<p>All the code examples from this chapter can be found on GitHub at <a href="https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter17">https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter17</a>. The installation steps required to run the code on your local machine can be found in the <em class="italic">Preface</em> of <span class="No-Break">this book.</span></p>
+<p>This chapter requires a large amount of GPU. You can lower it by decreasing the size of the training set in <span class="No-Break">the code.</span></p>
+<h1 id="_idParaDest-193"><a id="_idTextAnchor198"/>Exploring the Book-Crossing dataset</h1>
+<p>In this section, we <a id="_idIndexMarker908"/>will perform exploratory data analysis on a new dataset and visualize its <span class="No-Break">main characteristics.</span></p>
+<p>The <strong class="source-inline">Book-Crossing</strong> dataset [1] is a collection of book ratings provided by 278,858 users in <a id="_idIndexMarker909"/>the <em class="italic">BookCrossing community</em> (<a href="http://www.bookcrossing.com">www.bookcrossing.com</a>). The ratings, which are both explicit (rating between 1 and 10) and implicit (users interacted with the book), total 1,149,780 and pertain to 271,379 books. The dataset was collected by Cai-Nicolas Ziegler during a four-week crawl in August and September 2004. We will use the <strong class="source-inline">Book-Crossing</strong> dataset to build a book recommender system in <span class="No-Break">this chapter.</span></p>
+<p>Let’s download the dataset and unzip it with the <span class="No-Break">following commands:</span></p>
+<pre class="source-code">
+from io import BytesIO
+from urllib.request import urlopen
+from zipfile import ZipFile
+url = 'http://www2.informatik.uni-freiburg.de/~cziegler/BX/BX-CSV-Dump.zip'
+with urlopen(url) as zurl:
+    with ZipFile(BytesIO(zurl.read())) as zfile:
+        zfile.extractall('.')</pre>
+<p>This will unzip <span class="No-Break">three files:</span></p>
+<ul>
+<li>The <strong class="source-inline">BX-Users.csv</strong> file <a id="_idIndexMarker910"/>contains data on individual BookCrossing users. User IDs have been anonymized and are represented as integers. Demographic information, such as location and age, is also included for some users. If this information is not available, the corresponding fields contain <span class="No-Break"><strong class="source-inline">NULL</strong></span><span class="No-Break"> values.</span></li>
+<li>The <strong class="source-inline">BX-Books.csv</strong> file <a id="_idIndexMarker911"/>contains data on the books included in the dataset, identified by their ISBN. Invalid ISBNs have been removed from the dataset. In addition to content-based information, such as the book title, author, year of publication, and publisher. This file also includes URLs linking to cover images of the books of three <span class="No-Break">different sizes.</span></li>
+<li>The <strong class="source-inline">BX-Book-Ratings.csv</strong> file includes <a id="_idIndexMarker912"/>information on the ratings given to books <a id="_idIndexMarker913"/>in the dataset. Ratings are either explicit, given on a scale from 1-10 with higher values indicating a greater appreciation, or implicit, indicated by a rating <span class="No-Break">of 0.</span></li>
+</ul>
+<p>The following figure is a graph representation made with Gephi using a subsample of <span class="No-Break">this dataset.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer716">
+<img alt="Figure 17.1 – Graph representation of the Book-Crossing dataset, with books represented as blue nodes and users represented as red nodes" height="1075" src="image/B19153_17_001.jpg" width="1225"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.1 – Graph representation of the Book-Crossing dataset, with books represented as blue nodes and users represented as red nodes</p>
+<p>The size of the<a id="_idIndexMarker914"/> nodes is proportional to the number of connections (degree) in the graph. We can see popular books such as <strong class="bold">The Da Vinci Code</strong> that act like hubs thanks to their high number <span class="No-Break">of connections.</span></p>
+<p>Now, let’s explore the dataset to get <span class="No-Break">more insight:</span></p>
+<ol>
+<li>We import <strong class="source-inline">pandas</strong> and load every file with the <strong class="source-inline">;</strong> separator and the <strong class="source-inline">latin-1</strong> encoding for compatibility issues. <strong class="source-inline">BX-Books.csv</strong> also requires the <span class="No-Break"><strong class="source-inline">error_bad_lines</strong></span><span class="No-Break"> parameter:</span><pre class="source-code">
+import pandas as pd
+ratings = pd.read_csv('BX-Book-Ratings.csv', sep=';', encoding='latin-1')
+users = pd.read_csv('BX-Users.csv', sep=';', encoding='latin-1')
+books = pd.read_csv('BX-Books.csv', sep=';', encoding='latin-1', error_bad_lines=False)</pre></li>
+<li>Let’s<a id="_idIndexMarker915"/> print these DataFrames to see the columns and the number <span class="No-Break">of rows:</span><pre class="source-code">
+ratings
+           User-ID    ISBN            Book-Rating
+0          276725     034545104X      0
+1          276726     0155061224      5
+...        ...        ...             ...
+1149777    276709     0515107662      10
+1149778    276721     0590442449      10
+1149779    276723     05162443314     8
+1149780 rows × 3 columns</pre></li>
+<li>Let’s repeat the process with the <span class="No-Break"><strong class="source-inline">users</strong></span><span class="No-Break"> DataFrame:</span><pre class="source-code">
+users
+<strong class="bold">User-ID         Location                         Age</strong>
+<strong class="bold">0       1       nyc, new york, usa               NaN</strong>
+<strong class="bold">1       2       stockton, california, usa        18.0</strong>
+<strong class="bold">2       3       moscow, yukon territory, russia  NaN</strong>
+<strong class="bold">...     ...     ...                              ...</strong>
+<strong class="bold">278855  278856  brampton, ontario, canada        NaN</strong>
+<strong class="bold">278856  278857  knoxville, tennessee, usa  NaN</strong>
+<strong class="bold">278857  278858  dublin, n/a, ireland  NaN</strong>
+<strong class="bold">278858 rows × 3 columns</strong></pre></li>
+<li>Finally, the <strong class="source-inline">books</strong> DataFrame has too many columns to be printed like the two others. Let’s print the column <span class="No-Break">names instead:</span><pre class="source-code">
+list(books.columns)
+<strong class="bold">['ISBN', 'Book-Title', 'Book-Author', 'Year-Of-Publication', 'Publisher', 'Image-URL-S', 'Image-URL-M', 'Image-URL-L']</strong></pre></li>
+</ol>
+<p>The <strong class="source-inline">ratings</strong> DataFrame links the <strong class="source-inline">users</strong> and <strong class="source-inline">books</strong> DataFrames using <strong class="source-inline">User-ID</strong> and <strong class="source-inline">ISBN</strong> information and includes a rating, which could be considered a weight. The <strong class="source-inline">users</strong> DataFrame includes demographic information, such as<a id="_idIndexMarker916"/> location and age, for each user when available. The <strong class="source-inline">books</strong> DataFrame includes content-related information about the books, such as the title, author, year of publication, publisher, and URLs linking to cover images of three <span class="No-Break">different sizes.</span></p>
+<ol>
+<li value="5">Let’s visualize the rating distribution to see whether we can use this information. We can plot it using <strong class="source-inline">matplotlib</strong> and <strong class="source-inline">seaborn</strong> <span class="No-Break">as follows:</span><pre class="source-code">
+import matplotlib.pyplot as plt
+import seaborn as sns
+sns.countplot(x=ratings['Book-Rating'])</pre></li>
+<li>This gives us the <span class="No-Break">following plot:</span></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer717">
+<img alt="Figure 17.2 – Rating distribution (interaction with a book is represented as a rating of zero, while ratings between 1 and 10 are real ratings)" height="863" src="image/B19153_17_002.jpg" width="1341"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.2 – Rating distribution (interaction with a book is represented as a rating of zero, while ratings between 1 and 10 are real ratings)</p>
+<ol>
+<li value="7">Do these<a id="_idIndexMarker917"/> ratings correspond to the data we have in the <strong class="source-inline">books</strong> and <strong class="source-inline">users</strong> DataFrames? We can compare the number of unique <strong class="source-inline">User-ID</strong> and <strong class="source-inline">ISBN</strong> entries in <strong class="source-inline">ratings</strong> to the number of rows in these DataFrames as a <span class="No-Break">quick check:</span><pre class="source-code">
+print(len(ratings['User-ID'].unique()))
+print(len(ratings['ISBN'].unique()))
+<strong class="bold">105283</strong>
+<strong class="bold">340556</strong></pre></li>
+</ol>
+<p>Interestingly, there are fewer unique users in <strong class="source-inline">ratings</strong> compared to <strong class="source-inline">users</strong> (105,283 versus 278,858) but more unique ISBNs compared to <strong class="source-inline">books</strong> (340,556 versus 271,379). This means that our database is missing a lot of values, so we will need to be careful when <span class="No-Break">joining tables.</span></p>
+<ol>
+<li value="8">Let’s finish<a id="_idIndexMarker918"/> by plotting the number of books that have been rated only once, twice, and so on. First, we calculate the number of times each ISBN appears in the <strong class="source-inline">ratings</strong> DataFrame using the <strong class="source-inline">groupby()</strong> and <span class="No-Break"><strong class="source-inline">size()</strong></span><span class="No-Break"> functions:</span><pre class="source-code">
+isbn_counts = ratings.groupby('ISBN').size()</pre></li>
+</ol>
+<p>This creates a new DataFrame, <strong class="source-inline">isbn_counts</strong>, which contains the count of each unique ISBN in the <span class="No-Break"><strong class="source-inline">ratings</strong></span><span class="No-Break"> DataFrame.</span></p>
+<ol>
+<li value="9">We calculate the number of occurrences of each count value using the <strong class="source-inline">value_counts()</strong> function. This new DataFrame will contain the count of occurrences of each count value <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">isbn_counts</strong></span><span class="No-Break">:</span><pre class="source-code">
+count_occurrences = isbn_counts.value_counts()</pre></li>
+<li>Finally, we can plot the distribution using <strong class="source-inline">pandas</strong>’ <strong class="source-inline">.plot()</strong> method. In this case, we will only plot the first <span class="No-Break">15 values:</span><pre class="source-code">
+count_occurrences[:15].plot(kind='bar')
+plt.xlabel("Number of occurrences of an ISBN number")
+plt.ylabel("Count")</pre></li>
+<li>We obtain the <span class="No-Break">following plot:</span></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer718">
+<img alt="Figure 17.3 – Distribution of the number of times each book (ISBN) appears in ratings (15 first values)" height="1141" src="image/B19153_17_003.jpg" width="1564"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.3 – Distribution of the number of times each book (ISBN) appears in ratings (15 first values)</p>
+<p>We<a id="_idIndexMarker919"/> see that a lot of books have only been rated once or twice. It is very rare to see books with a lot of ratings, which makes things more difficult for us since we rely on <span class="No-Break">these connections.</span></p>
+<ol>
+<li value="12">We repeat the same process to obtain the distribution of the number of times each user (<strong class="source-inline">User-ID</strong>) appears <span class="No-Break">in </span><span class="No-Break"><strong class="source-inline">ratings</strong></span><span class="No-Break">:</span><pre class="source-code">
+userid_counts = ratings.groupby('User-ID').size()
+count_occurrences = userid_counts.value_counts()
+count_occurrences[:15].plot(kind='bar')
+plt.xlabel("Number of occurrences of a User-ID")
+plt.ylabel("Count")</pre></li>
+<li>We obtain a <span class="No-Break">similar distribution:</span></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer719">
+<img alt="Figure 17.4 – Distribution of the number of times each user (User-ID) appears in ratings (15 first values)" height="1013" src="image/B19153_17_004.jpg" width="1532"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.4 – Distribution of the number of times each user (User-ID) appears in ratings (15 first values)</p>
+<p>This also <a id="_idIndexMarker920"/>means that most users only rate one or two books, but a few of them rate a lot <span class="No-Break">of books.</span></p>
+<p>There are different issues with this dataset, such as mistakes in the year of publication or the name of the publishers, and other missing or incorrect values. However, we will not directly use metadata from the <strong class="source-inline">books</strong> and <strong class="source-inline">users</strong> DataFrames in this chapter. We will rely on the connections between <strong class="source-inline">User-ID</strong> and <strong class="source-inline">ISBN</strong> values, which is why we don’t need to clean the <span class="No-Break">dataset here.</span></p>
+<p>In the next section, we will see how to process the dataset to prepare it before feeding it to <span class="No-Break">the LightGCN.</span></p>
+<h1 id="_idParaDest-194"><a id="_idTextAnchor199"/>Preprocessing the Book-Crossing dataset</h1>
+<p>We <a id="_idIndexMarker921"/>want to process the dataset for a particular task: recommending items, and more <a id="_idIndexMarker922"/>specifically using a <strong class="bold">collaborative filtering</strong> approach. Collaborative filtering is a technique used to make personalized recommendations to users. It is based on the idea that users who have similar preferences or behaviors are more likely to have similar interests. Collaborative filtering algorithms use this information to identify patterns and make recommendations to users based on the preferences of <span class="No-Break">similar users.</span></p>
+<p>This is<a id="_idIndexMarker923"/> different from content-based filtering, which is a recommendation approach that relies on the features of the items being recommended. It generates recommendations by identifying the characteristics of an item and matching them to the characteristics of other items that have been liked by the user in the<a id="_idIndexMarker924"/> past. <strong class="bold">Content-based filtering</strong> approaches are typically based on the idea that if a user likes an item with certain characteristics, they will also like items with <span class="No-Break">similar characteristics.</span></p>
+<p>In this chapter, we will focus on collaborative filtering. Our objective is to determine which book to recommend to a user based on the preferences of other users. This problem can be represented as a bipartite graph as in the <span class="No-Break">following figure.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer720">
+<img alt="Figure 17.5 – Example of a user-item bipartite graph" height="694" src="image/B19153_17_005.jpg" width="417"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.5 – Example of a user-item bipartite graph</p>
+<p>Knowing that user <strong class="bold">1</strong> liked items <strong class="bold">A</strong> and <strong class="bold">B</strong>, and user <strong class="bold">3</strong> liked items <strong class="bold">B</strong> and <strong class="bold">D</strong>, we should probably recommend item <strong class="bold">B</strong> to user <strong class="bold">2</strong>, who also enjoyed items <strong class="bold">A</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="bold">D</strong></span><span class="No-Break">.</span></p>
+<p>This is the type of graph we want to build from the <strong class="source-inline">Book-Crossing</strong> dataset. More precisely, we also want to include negative samples. In this context, negative samples refer to items that have not been rated by a given user. Items that have been rated by a particular user are also referred to as positive items. We will explain why we use this negative sampling technique when we implement the <span class="No-Break"><strong class="source-inline">loss</strong></span><span class="No-Break"> function.</span></p>
+<p>In the rest <a id="_idIndexMarker925"/>of the chapter, the <strong class="source-inline">LightGCN</strong> code is mostly based on the official implementation and the excellent work of Hotta and Zhou [2] and Li et al. [3] on a <span class="No-Break">different dataset:</span></p>
+<ol>
+<li>We import the <span class="No-Break">following libraries:</span><pre class="source-code">
+import numpy as np
+from sklearn.model_selection import train_test_split
+import torch
+import torch.nn.functional as F
+from torch import nn, optim, Tensor
+from torch_geometric.utils import structured_negative_sampling
+from torch_geometric.nn.conv.gcn_conv import gcn_norm
+from torch_geometric.nn import LGConv</pre></li>
+<li>We re-load <span class="No-Break">the datasets:</span><pre class="source-code">
+df = pd.read_csv('BX-Book-Ratings.csv', sep=';', encoding='latin-1')
+users = pd.read_csv('BX-Users.csv', sep=';', encoding='latin-1')
+books = pd.read_csv('BX-Books.csv', sep=';', encoding='latin-1', error_bad_lines=False)</pre></li>
+<li>We only keep rows where <strong class="source-inline">ISBN</strong> information can be found in the <strong class="source-inline">books</strong> DataFrame and <strong class="source-inline">User-ID</strong> information can be found in the <span class="No-Break"><strong class="source-inline">users</strong></span><span class="No-Break"> DataFrame:</span><pre class="source-code">
+df = df.loc[df['ISBN'].isin(books['ISBN'].unique()) &amp; df['User-ID'].isin(users['User-ID'].unique())]</pre></li>
+<li>We only keep high ratings (&gt;= 8/10) so the connections we create correspond to books that were liked by users. Then, we filter out even more samples and keep a limited number of rows (100,000) to speed <span class="No-Break">up training:</span><pre class="source-code">
+df = df[df['Book-Rating'] &gt;= 8].iloc[:100000]</pre></li>
+<li>We <a id="_idIndexMarker926"/>create mappings from <strong class="source-inline">user</strong> and <strong class="source-inline">item</strong> identifiers to <span class="No-Break">integer indices:</span><pre class="source-code">
+user_mapping = {userid: i for i, userid in enumerate(df['User-ID'].unique())}
+item_mapping = {isbn: i for i, isbn in enumerate(df['ISBN'].unique())}</pre></li>
+<li>We count the number of users, items, and total entities in <span class="No-Break">the dataset:</span><pre class="source-code">
+num_users = len(user_mapping)
+num_items = len(item_mapping)
+num_total = num_users + num_items</pre></li>
+<li>We create a tensor of <strong class="source-inline">user</strong> and <strong class="source-inline">item</strong> indices based on the user ratings in the dataset. The <strong class="source-inline">edge_index</strong> tensor is created by stacking these <span class="No-Break">two tensors:</span><pre class="source-code">
+user_ids = torch.LongTensor([user_mapping[i] for i in df['User-ID']])
+item_ids = torch.LongTensor([item_mapping[i] for i in df['ISBN']])
+edge_index = torch.stack((user_ids, item_ids))</pre></li>
+<li>We split <strong class="source-inline">edge_index</strong> into training, validation, and test sets using the <strong class="source-inline">train_test_split()</strong> function <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">scikit-learn</strong></span><span class="No-Break">:</span><pre class="source-code">
+train_index, test_index = train_test_split(range(len(df)), test_size=0.2, random_state=0)
+val_index, test_index = train_test_split(test_index, test_size=0.5, random_state=0)</pre></li>
+<li>We generate a batch of random indices using the <strong class="source-inline">np.random.choice()</strong> function. This generates <strong class="source-inline">BATCH_SIZE</strong> random indices from a range of <strong class="source-inline">0</strong> to <strong class="source-inline">edge_index.shape[1]-1</strong>. These indices will be used to select rows from the <span class="No-Break"><strong class="source-inline">edge_index</strong></span><span class="No-Break"> tensor:</span><pre class="source-code">
+def sample_mini_batch(edge_index):
+    index = np.random.choice(range(edge_index.shape[1]), size=BATCH_SIZE)</pre></li>
+<li>We<a id="_idIndexMarker927"/> generate negative samples using the <strong class="source-inline">structured_negative_sampling()</strong> function from PyTorch Geometric. Negative samples are items with which the corresponding user has not interacted. We use the <strong class="source-inline">torch.stack()</strong> function to add a dimension at <span class="No-Break">the beginning:</span><pre class="source-code">
+    edge_index = structured_negative_sampling(edge_index)
+    edge_index = torch.stack(edge_index, dim=0)</pre></li>
+<li>We select the user, positive item, and negative item indices for the batch using the <strong class="source-inline">index</strong> array and the <span class="No-Break"><strong class="source-inline">edge_index</strong></span><span class="No-Break"> tensor:</span><pre class="source-code">
+    user_index = edge_index[0, index]
+    pos_item_index = edge_index[1, index]
+    neg_item_index = edge_index[2, index]
+    return user_index, pos_item_index, neg_item_index</pre></li>
+</ol>
+<p>The <strong class="source-inline">user_index</strong> tensor contains the user indices for the batch, the <strong class="source-inline">pos_item_index</strong> tensor contains the positive item indices for the batch, and the <strong class="source-inline">neg_item_index</strong> tensor contains the negative item indices for <span class="No-Break">the batch.</span></p>
+<p>We now have three sets and a function to return mini-batches. The next step is to understand and implement the <span class="No-Break">LightGCN architecture.</span></p>
+<h1 id="_idParaDest-195"><a id="_idTextAnchor200"/>Implementing the LightGCN architecture</h1>
+<p>The<a id="_idIndexMarker928"/> LightGCN [4] architecture aims to learn representations for nodes by smoothing features over the graph. It iteratively performs graph convolution, where neighboring nodes’ features are aggregated as the new representation of a target node. The entire architecture is summarized in <span class="No-Break"><em class="italic">Figure 17</em></span><span class="No-Break"><em class="italic">.6</em></span><span class="No-Break">.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer721">
+<img alt="Figure 17.6 – LightGCN model architecture with convolution and layer combination" height="897" src="image/B19153_17_006.jpg" width="1205"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 17.6 – LightGCN model architecture with convolution and layer combination</p>
+<p>However, <strong class="source-inline">LightGCN</strong> adopts a simple weighted sum aggregator rather than using feature transformation or nonlinear activation as seen in other models such as the GCN or GAT. The light graph convolution operation calculates the <img alt="" height="34" src="image/Formula_B19153_17_001.png" width="96"/>-th user and item embedding <img alt="" height="54" src="image/Formula_B19153_17_002.png" width="97"/> and <img alt="" height="55" src="image/Formula_B19153_17_003.png" width="94"/> <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer725">
+<img alt="" height="172" src="image/Formula_B19153_17_004.jpg" width="619"/>
+</div>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer726">
+<img alt="" height="164" src="image/Formula_B19153_17_005.jpg" width="600"/>
+</div>
+</div>
+<p>The <a id="_idIndexMarker929"/>symmetric normalization term ensures that the scale of embeddings does not increase with graph convolution operations. In contrast to other models, <strong class="source-inline">LightGCN</strong> only aggregates the connected neighbors and does not <span class="No-Break">include self-connections.</span></p>
+<p>Indeed, it achieves the same effect by using a layer combination operation. This mechanism consists of a weighted sum using user and item embeddings at each layer. It produces the final embeddings <img alt="" height="28" src="image/Formula_B19153_17_006.png" width="36"/> and <img alt="" height="28" src="image/Formula_B19153_17_007.png" width="29"/> with the <span class="No-Break">following equations:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer729">
+<img alt="" height="179" src="image/Formula_B19153_17_008.jpg" width="349"/>
+</div>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer730">
+<img alt="" height="170" src="image/Formula_B19153_17_009.jpg" width="358"/>
+</div>
+</div>
+<p>Here, the contribution of <img alt="" height="32" src="image/Formula_B19153_17_010.png" width="23"/>-th layer is weighted by the variable <img alt="" height="39" src="image/Formula_B19153_17_011.png" width="117"/>. The authors of <strong class="source-inline">LightGCN</strong> recommend setting it <span class="No-Break">to <img alt="" height="37" src="image/Formula_B19153_17_012.png" width="156"/></span><span class="No-Break">.</span></p>
+<p>The<a id="_idIndexMarker930"/> prediction shown in <span class="No-Break"><em class="italic">Figure 17</em></span><em class="italic">.6</em> corresponds to ratings or ranking scores. It is obtained using the inner product of user and item <span class="No-Break">final representations:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer734">
+<img alt="" height="54" src="image/Formula_B19153_17_013.jpg" width="230"/>
+</div>
+</div>
+<p>Let’s now implement this<a id="_idIndexMarker931"/> architecture in <span class="No-Break">PyTorch Geometric:</span></p>
+<ol>
+<li>We create a <strong class="source-inline">LightGCN</strong> class with four arguments: <strong class="source-inline">num_users</strong>, <strong class="source-inline">num_items</strong>, <strong class="source-inline">num_layers</strong>, and <strong class="source-inline">dim_h</strong>. The <strong class="source-inline">num_users</strong> and <strong class="source-inline">num_items</strong> arguments specify the number of users and items in the dataset, respectively.  <strong class="source-inline">num_layers</strong> indicates the number of <strong class="source-inline">LightGCN</strong> layers that will be used, and the <strong class="source-inline">dim_h</strong> argument specifies the size of the embedding vectors (for the users <span class="No-Break">and items):</span><pre class="source-code">
+class LightGCN(nn.Module):
+    def __init__(self, num_users, num_items, num_layers=4, dim_h=64):
+        super().__init__()</pre></li>
+<li>We store the number of users and items and create user and item embedding layers. The shape of the <strong class="source-inline">emb_users</strong> or <img alt="" height="55" src="image/Formula_B19153_17_014.png" width="60"/> is <img alt="" height="41" src="image/Formula_B19153_17_015.png" width="330"/> and the shape of the <strong class="source-inline">emb_items</strong> or <img alt="" height="57" src="image/Formula_B19153_17_016.png" width="60"/> <span class="No-Break">is <img alt="" height="43" src="image/Formula_B19153_17_017.png" width="348"/>:</span><pre class="source-code">
+        self.num_users = num_users
+        self.num_items = num_items
+        self.emb_users = nn.Embedding(num_embeddings=self.num_users, embedding_dim=dim_h)
+        self.emb_items = nn.Embedding(num_embeddings=self.num_items, embedding_dim=dim_h)</pre></li>
+<li>We<a id="_idIndexMarker932"/> create a list of <strong class="source-inline">num_layers</strong> (previously called <img alt="" height="34" src="image/Formula_B19153_17_018.png" width="33"/>) <strong class="source-inline">LightGCN</strong> layers using PyTorch Geometric’s <strong class="source-inline">LGConv()</strong>. This will be used to perform the light graph <span class="No-Break">convolution operations:</span><pre class="source-code">
+        self.convs = nn.ModuleList(LGConv() for _ in range(num_layers))</pre></li>
+<li>We initialize the user and item embedding layers with normal distributions with a standard deviation of <strong class="source-inline">0.01</strong>. This helps to prevent the model from getting stuck in poor local optima when it <span class="No-Break">is trained:</span><pre class="source-code">
+        nn.init.normal_(self.emb_users.weight, std=0.01)
+        nn.init.normal_(self.emb_items.weight, std=0.01)</pre></li>
+<li>The <strong class="source-inline">forward()</strong> method takes in an edge index tensor and returns the final user and item embedding vectors, <img alt="" height="55" src="image/Formula_B19153_17_019.png" width="65"/> and <img alt="" height="59" src="image/Formula_B19153_17_020.png" width="68"/>. It starts by concatenating the user <a id="_idIndexMarker933"/>and item embedding layers and storing the result in the <strong class="source-inline">emb</strong> tensor. It then creates a list, <strong class="source-inline">embs</strong>, with <strong class="source-inline">emb</strong> as its <span class="No-Break">first element:</span><pre class="source-code">
+    def forward(self, edge_index):
+        emb = torch.cat([self.emb_users.weight, self.emb_items.weight])
+        embs = [emb]</pre></li>
+<li>We then apply the <strong class="source-inline">LightGCN</strong> layers in a loop and store the output of each layer in the <span class="No-Break"><strong class="source-inline">embs</strong></span><span class="No-Break"> list:</span><pre class="source-code">
+        for conv in self.convs:
+            emb = conv(x=emb, edge_index=edge_index)
+            embs.append(emb)</pre></li>
+<li>We perform layer combination by calculating the final embedding vectors by taking the mean of the tensors in the <strong class="source-inline">embs</strong> list along the <span class="No-Break">second dimension:</span><pre class="source-code">
+emb_final = torch.mean(torch.stack(embs, dim=1), dim=1)</pre></li>
+<li>We split <strong class="source-inline">emb_final</strong> into user and item embedding vectors (<img alt="" height="34" src="image/Formula_B19153_17_021.png" width="43"/> and <img alt="" height="34" src="image/Formula_B19153_17_022.png" width="34"/>) and return them along with <img alt="" height="59" src="image/Formula_B19153_17_023.png" width="63"/> <span class="No-Break">and <img alt="" height="65" src="image/Formula_B19153_17_024.png" width="69"/>:</span><pre class="source-code">
+        emb_users_final, emb_items_final = torch.split(emb_final, [self.num_users, self.num_items])
+        return emb_users_final, self.emb_users.weight, emb_items_final, self.emb_items.weight</pre></li>
+<li>Finally, the<a id="_idIndexMarker934"/> model is created by calling the <strong class="source-inline">LightGCN()</strong> class with the <span class="No-Break">appropriate arguments:</span><pre class="source-code">
+model = LightGCN(num_users, num_items)</pre></li>
+</ol>
+<p>Before <a id="_idIndexMarker935"/>we can train the model, we need a loss function. The <strong class="source-inline">LightGCN</strong> architecture employs <strong class="bold">Bayesian Personalized Ranking</strong> (<strong class="bold">BPR</strong>) loss, which optimizes the model’s ability to rank positive items higher than negative items for a given user. It is implemented <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer746">
+<img alt="" height="146" src="image/Formula_B19153_17_025.jpg" width="873"/>
+</div>
+</div>
+<p>Here, <img alt="" height="43" src="image/Formula_B19153_17_026.png" width="67"/> is the <img alt="" height="35" src="image/Formula_B19153_17_027.png" width="24"/>th-layer embedding matrix (concatenation of the initial user and item embeddings), <img alt="" height="41" src="image/Formula_B19153_17_030.png" width="32"/> weighs the regularization strength, <img alt="" height="51" src="image/Formula_B19153_17_028.png" width="60"/> corresponds to the predicted rating of a positive item, and <img alt="" height="59" src="image/Formula_B19153_17_029.png" width="65"/> represents the predicted rating of a <span class="No-Break">negative item.</span></p>
+<p>We implement it in PyTorch with the <span class="No-Break">following function:</span></p>
+<ol>
+<li>We calculate the regularization loss based on the embeddings that are stored in the <span class="No-Break"><strong class="source-inline">LightGCN</strong></span><span class="No-Break"> model:</span><pre class="source-code">
+def bpr_loss(emb_users_final, emb_users, emb_pos_items_final, emb_pos_items, emb_neg_items_final, emb_neg_items):
+    reg_loss = LAMBDA * (emb_users.norm().pow(2) +
+                        emb_pos_items.norm().pow(2) +
+                        emb_neg_items.norm().pow(2))</pre></li>
+<li>We <a id="_idIndexMarker936"/>calculate the ratings for the positive and negative items as the dot product between the user and <span class="No-Break">item embeddings:</span><pre class="source-code">
+    pos_ratings = torch.mul(emb_users_final, emb_pos_items_final).sum(dim=-1)
+    neg_ratings = torch.mul(emb_users_final, emb_neg_items_final).sum(dim=-1)</pre></li>
+<li>Unlike the log sigmoid in the previous equation, we calculate the BPR loss as the mean of the <strong class="source-inline">softplus</strong> function applied to the difference between the positive and negative scores. This variant was chosen because it gave better <span class="No-Break">experimental results:</span><pre class="source-code">
+    bpr_loss = torch.mean(torch.nn.functional.softplus(pos_ratings - neg_ratings))</pre></li>
+<li>We return the BPR loss and the regularization loss <span class="No-Break">as follows:</span><pre class="source-code">
+    return -bpr_loss + reg_loss</pre></li>
+</ol>
+<p>On top of the BPR loss, we use two metrics to evaluate the performance of <span class="No-Break">our model:</span></p>
+<ul>
+<li><strong class="bold">Recall@k</strong> is the<a id="_idIndexMarker937"/> proportion of relevant recommended items in top <em class="italic">k</em> among all possible relevant items. However, this metric does not consider the order of relevant items in <span class="No-Break">top </span><span class="No-Break"><em class="italic">k</em></span><span class="No-Break">:</span></li>
+</ul>
+<div>
+<div class="IMG---Figure" id="_idContainer752">
+<img alt="" height="111" src="image/Formula_B19153_17_031.jpg" width="1003"/>
+</div>
+</div>
+<ul>
+<li><strong class="bold">Normalized Discounted Cumulative Gain</strong> (<strong class="bold">NDGC</strong>) measures the effectiveness <a id="_idIndexMarker938"/>of the system’s ranking of the recommendations, taking into account the relevance of the items, where relevance is usually represented by a score or a binary relevance (relevant <span class="No-Break">or not).</span></li>
+</ul>
+<p>The <a id="_idIndexMarker939"/>implementation is not included in this chapter for improved readability. However, it can be found in the GitHub repository along with the rest of <span class="No-Break">the code.</span></p>
+<p>We can now create a training loop and start training the <span class="No-Break"><strong class="source-inline">LightGCN</strong></span><span class="No-Break"> model:</span></p>
+<ol>
+<li>We define the following constants. They can be tuned as hyperparameters to improve the performance of <span class="No-Break">the model:</span><pre class="source-code">
+K = 20
+LAMBDA = 1e-6
+BATCH_SIZE = 1024</pre></li>
+<li>We try to select a GPU if one is available. Otherwise, we use a CPU instead. The model and data are moved to <span class="No-Break">this device:</span><pre class="source-code">
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = model.to(device)
+edge_index = edge_index.to(device)
+train_edge_index = train_edge_index.to(device)
+val_edge_index = val_edge_index.to(device)</pre></li>
+<li>We create an <strong class="source-inline">Adam</strong> optimizer with a learning rate <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">0.001</strong></span><span class="No-Break">:</span><pre class="source-code">
+optimizer = optim.Adam(model.parameters(), lr=0.001)</pre></li>
+<li>Let’s start the training loop. First, we calculate <strong class="source-inline">num_batch</strong>, the number of <strong class="source-inline">BATCH_SIZE</strong> batches in an epoch. Then, we create two loops: one of 31 epochs, and a second one the length <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">num_batch</strong></span><span class="No-Break">:</span><pre class="source-code">
+num_batch = int(len(train_index)/BATCH_SIZE)
+for epoch in range(31):
+    model.train()
+    for _ in range(num_batch):</pre></li>
+<li>The<a id="_idIndexMarker940"/> model is run on the training data and returns the initial and final user and <span class="No-Break">item embeddings:</span><pre class="source-code">
+        optimizer.zero_grad()
+        emb_users_final, emb_users, emb_items_final, emb_items = model.forward(train_edge_index)</pre></li>
+<li>The training data is then sampled in mini-batches using the <strong class="source-inline">sample_mini_batch()</strong> function, which returns the indices of the sampled user, positive item, and negative <span class="No-Break">item embeddings:</span><pre class="source-code">
+        user_indices, pos_item_indices, neg_item_indices = sample_mini_batch(train_edge_index)</pre></li>
+<li>The embeddings for the sampled users, positive items, and negative items are <span class="No-Break">then retrieved:</span><pre class="source-code">
+    emb_users_final, emb_users = emb_users_final[user_indices], emb_users[user_indices]
+    emb_pos_items_final, emb_pos_items = emb_items_final[pos_item_indices], emb_items[pos_item_indices]
+    emb_neg_items_final, emb_neg_items = emb_items_final[neg_item_indices], emb_items[neg_item_indices]</pre></li>
+<li>The loss is then computed using the <span class="No-Break"><strong class="source-inline">bpr_loss()</strong></span><span class="No-Break"> function:</span><pre class="source-code">
+    train_loss = bpr_loss(emb_users_final, emb_users, emb_pos_items_final, emb_pos_items, emb_neg_items_final, emb_neg_items)</pre></li>
+<li>The optimizer is then used to perform the backward pass and update the <span class="No-Break">model parameters:</span><pre class="source-code">
+    train_loss.backward()
+    optimizer.step()</pre></li>
+<li>The<a id="_idIndexMarker941"/> model’s performance is evaluated every 250 epochs on the validation set using the <strong class="source-inline">test()</strong> function. The evaluation metrics <span class="No-Break">are printed:</span><pre class="source-code">
+    if epoch % 5 == 0:
+        model.eval()
+        val_loss, recall, ndcg = test(model, val_edge_index, [train_edge_index])
+        print(f"Epoch {epoch} | Train loss: {train_loss.item():.5f} | Val loss: {val_loss:.5f} | Val recall@{K}: {recall:.5f} | Val ndcg@{K}: {ndcg:.5f}")</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">Epoch 0 | Train loss: -0.69320 | Val loss: -0.69302 | Val recall@20: 0.00700 | Val ndcg@20: 0.00388</strong>
+<strong class="bold">Epoch 5 | Train loss: -0.70283 | Val loss: -0.68329 | Val recall@20: 0.01159 | Val ndcg@20: 0.00631</strong>
+<strong class="bold">Epoch 10 | Train loss: -0.73299 | Val loss: -0.64598 | Val recall@20: 0.01341 | Val ndcg@20: 0.00999</strong>
+<strong class="bold">...</strong>
+<strong class="bold">Epoch 25 | Train loss: -1.53056 | Val loss: -0.19498 | Val recall@20: 0.01507 | Val ndcg@20: 0.01016</strong>
+<strong class="bold">Epoch 30 | Train loss: -1.95703 | Val loss: 0.06340 | Val recall@20: 0.01410 | Val ndcg@20: 0.00950</strong></pre></li>
+<li>We <a id="_idIndexMarker942"/>evaluate the model’s performance on the test set <span class="No-Break">as follows:</span><pre class="source-code">
+test_loss, test_recall, test_ndcg = test(model, test_edge_index.to(device), [train_edge_index, val_edge_index])
+print(f"Test loss: {test_loss:.5f} | Test recall@{K}: {test_recall:.5f} | Test ndcg@{K}: {test_ndcg:.5f}")
+<strong class="bold">Test loss: 0.06827 | Test recall@20: 0.01936 | Test ndcg@20: 0.01119</strong></pre></li>
+</ol>
+<p>We obtain a <strong class="source-inline">recall@20</strong> value of <strong class="source-inline">0.01936</strong> and an <strong class="source-inline">ndcg@20</strong> value of <strong class="source-inline">0.01119</strong>, which is close to the results obtained by the authors of <strong class="source-inline">LightGCN</strong> on <span class="No-Break">other datasets.</span></p>
+<p>Now that the model is trained, we want to get recommendations for a given user. The recommendation function we want to create has <span class="No-Break">two components:</span></p>
+<ol>
+<li>First, we want to retrieve a list of books the user liked. This will help us to contextualize the recommendations for our <span class="No-Break">own understanding.</span></li>
+<li>Secondly, we want to generate a list of recommendations. These recommendations cannot be books the user has already rated (it cannot be a <span class="No-Break">positive item).</span></li>
+</ol>
+<p>Let’s write this function step <span class="No-Break">by step:</span></p>
+<ol>
+<li>We create a function called <strong class="source-inline">recommend</strong> that takes in two arguments: <strong class="source-inline">user_id</strong> (the identifier for a user), and <strong class="source-inline">num_recs</strong> (the number of recommendations we want <span class="No-Break">to generate):</span><pre class="source-code">
+def recommend(user_id, num_recs):</pre></li>
+<li>We create the <strong class="source-inline">user</strong> variable by looking up the user’s identifier in the <strong class="source-inline">user_mapping</strong> dictionary, which maps user IDs to <span class="No-Break">integer indices:</span><pre class="source-code">
+    user = user_mapping[user_id]</pre></li>
+<li>We retrieve the <strong class="source-inline">dim_h</strong> dim vector learned by the <strong class="source-inline">LightGCN</strong> model for this <span class="No-Break">particular user:</span><pre class="source-code">
+    emb_user = model.emb_users.weight[user]</pre></li>
+<li>We<a id="_idIndexMarker943"/> can use it to calculate the corresponding ratings. As seen previously, we use the dot product of the embeddings for all items stored in the <strong class="source-inline">LightGCN</strong>’s <strong class="source-inline">emb_items</strong> attribute and the <span class="No-Break"><strong class="source-inline">emb_user</strong></span><span class="No-Break"> variable:</span><pre class="source-code">
+    ratings = model.emb_items.weight @ emb_user</pre></li>
+<li>We apply the <strong class="source-inline">topk()</strong> function to the <strong class="source-inline">ratings</strong> tensor, which returns the top 100 values (scores calculated by the model) and their <span class="No-Break">corresponding indices:</span><pre class="source-code">
+    values, indices = torch.topk(ratings, k=100)</pre></li>
+<li>Let’s get a list of this user’s favorite books. We create a new list of indices by filtering the <strong class="source-inline">indices</strong> list to only include those that are present in the <strong class="source-inline">user_items</strong> dictionary for the given user. In other words, we only keep books that this user rated. This list is then sliced to keep the first <span class="No-Break"><strong class="source-inline">num_recs</strong></span><span class="No-Break"> items:</span><pre class="source-code">
+    ids = [index.cpu().item() for index in indices if index in user_items[user]][:num_recs]</pre></li>
+<li>We convert these book IDs <span class="No-Break">into ISBNs:</span><pre class="source-code">
+    item_isbns = [list(item_mapping.keys())[list(item_mapping.values()).index(book)] for book in ids]</pre></li>
+<li>We can now use these ISBNs to retrieve more information about the books. Here, we want to obtain the titles and the authors so that we can <span class="No-Break">print them:</span><pre class="source-code">
+    titles = [bookid_title[id] for id in item_isbns]
+    authors = [bookid_author[id] for id in item_isbns]</pre></li>
+<li>We print this information <span class="No-Break">as follows:</span><pre class="source-code">
+    print(f'Favorite books from user n°{user_id}:')
+    for i in range(len(item_isbns)):
+        print(f'- {titles[i]}, by {authors[i]}')</pre></li>
+<li>We<a id="_idIndexMarker944"/> repeat this process, but with IDs of books that were not rated by the user (<strong class="source-inline">not </strong><span class="No-Break"><strong class="source-inline">in user_pos_items[user]</strong></span><span class="No-Break">):</span><pre class="source-code">
+    ids = [index.cpu().item() for index in indices if index not in user_pos_items[user]][:num_recs]
+    item_isbns = [list(item_mapping.keys())[list(item_mapping.values()).index(book)] for book in ids]
+    titles = [bookid_title[id] for id in item_isbns]
+    authors = [bookid_author[id] for id in item_isbns]
+    print(f'\nRecommended books for user n°{user_id}')
+    for i in range(num_recs):
+        print(f'- {titles[i]}, by {authors[i]}')</pre></li>
+<li>Let’s get <strong class="source-inline">5</strong> recommendations for a user in our database. Let’s <span class="No-Break">use </span><span class="No-Break"><strong class="source-inline">277427</strong></span><span class="No-Break">:</span><pre class="source-code">
+recommend(277427, 5)</pre></li>
+<li>This is the output <span class="No-Break">we obtain:</span><pre class="source-code">
+<strong class="bold">Favorite books from user n°277427:</strong>
+<strong class="bold">- The Da Vinci Code, by Dan Brown</strong>
+<strong class="bold">- Lord of the Flies, by William Gerald Golding</strong>
+<strong class="bold">- The Cardinal of the Kremlin (Jack Ryan Novels), by Tom Clancy</strong>
+<strong class="bold">- Into the Wild, by Jon Krakauer</strong>
+<strong class="bold">Recommended books for user n°277427</strong>
+<strong class="bold">- The Lovely Bones: A Novel, by Alice Sebold</strong>
+<strong class="bold">- The Secret Life of Bees, by Sue Monk Kidd</strong>
+<strong class="bold">- The Red Tent (Bestselling Backlist), by Anita Diamant</strong>
+<strong class="bold">- Harry Potter and the Sorcerer's Stone (Harry Potter (Paperback)), by J. K. Rowling</strong>
+<strong class="bold">- To Kill a Mockingbird, by Harper Lee</strong></pre></li>
+</ol>
+<p>We can<a id="_idIndexMarker945"/> now generate recommendations for any user from the original <strong class="source-inline">df</strong> DataFrame. You can test other IDs and explore how that changes <span class="No-Break">the recommendations.</span></p>
+<h1 id="_idParaDest-196"><a id="_idTextAnchor201"/>Summary</h1>
+<p>This chapter presented a detailed exploration of using <strong class="source-inline">LightGCN</strong> for book recommendation tasks. We used the <strong class="source-inline">Book-Crossing</strong> dataset, preprocessed it to form a bipartite graph, and implemented a <strong class="source-inline">LightGCN</strong> model with BPR loss. We trained the model and evaluated it using the <strong class="source-inline">recall@20</strong> and <strong class="source-inline">ndcg@20</strong> metrics. We demonstrated the effectiveness of the model by generating recommendations for a <span class="No-Break">given user.</span></p>
+<p>Overall, this chapter has provided valuable insight into the usage of <strong class="source-inline">LightGCN</strong> models in recommendation tasks. It is a state-of-the-art architecture that performs better than more complex models. You can expand this project by trying other techniques we discussed in previous chapters, such as matrix factorization <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">node2vec</strong></span><span class="No-Break">.</span></p>
+<h1 id="_idParaDest-197"><a id="_idTextAnchor202"/>Further reading</h1>
+<ul>
+<li>[1] C.-N. Ziegler, S. M. McNee, J. A. Konstan, and G. Lausen, <em class="italic">Improving Recommendation Lists through Topic Diversification</em>, in <em class="italic">Proceedings of the 14th International Conference on World Wide Web</em>, 2005, pp. 22–32. doi: 10.1145/1060745.1060754. <span class="No-Break">Available: </span><a href="https://dl.acm.org/doi/10.1145/1060745.1060754"><span class="No-Break">https://dl.acm.org/doi/10.1145/1060745.1060754</span></a></li>
+<li>[2] D. Li, P. Maldonado, A. Sbaih, <em class="italic">Recommender Systems with GNNs in PyG</em>, <em class="italic">Stanford CS224W GraphML Tutorials</em>, 2022. <span class="No-Break">Available: </span><a href="https://medium.com/stanford-cs224w/recommender-systems-with-gnns-in-pyg-d8301178e377"><span class="No-Break">https://medium.com/stanford-cs224w/recommender-systems-with-gnns-in-pyg-d8301178e377</span></a></li>
+<li>[3] X. He, K. Deng, X. Wang, Y. Li, Y. Zhang, and M. Wang, <em class="italic">LightGCN: Simplifying and Powering Graph Convolution Network for Recommendation</em>. arXiv, 2020. doi: 10.48550/ARXIV.2002.02126. <span class="No-Break">Available: </span><a href="https://arxiv.org/abs/2002.02126"><span class="No-Break">https://arxiv.org/abs/2002.02126</span></a></li>
+<li>[4] H. Hotta and A. Zhou, <em class="italic">LightGCN with PyTorch Geometric</em>. <em class="italic">Stanford CS224W GraphML Tutorials</em>, 2022. <span class="No-Break">Available: </span><a href="https://medium.com/stanford-cs224w/lightgcn-with-pytorch-geometric-91bab836471e"><span class="No-Break">https://medium.com/stanford-cs224w/lightgcn-with-pytorch-geometric-91bab836471e</span></a></li>
+</ul>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer754">
+</div>
+</div>
+</div></body></html>

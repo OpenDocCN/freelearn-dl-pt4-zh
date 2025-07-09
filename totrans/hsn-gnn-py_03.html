@@ -1,0 +1,400 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div class="IMG---Figure" id="_idContainer118">
+<h1 class="chapter-number" id="_idParaDest-39"><a id="_idTextAnchor041"/>3</h1>
+<h1 id="_idParaDest-40"><a id="_idTextAnchor042"/>Creating Node Representations with DeepWalk</h1>
+<p><strong class="bold">DeepWalk</strong> is one of the first major<a id="_idIndexMarker147"/> successful applications of <strong class="bold">machine learning</strong> (<strong class="bold">ML</strong>) techniques<a id="_idIndexMarker148"/> to graph data. It introduces important concepts such as embeddings that are at the core of GNNs. Unlike traditional neural <a id="_idIndexMarker149"/>networks, the goal of this architecture is to produce <strong class="bold">representations</strong> that are then fed to other models, which perform downstream tasks (for example, <span class="No-Break">node classification).</span></p>
+<p>In this chapter, we will learn about the DeepWalk architecture and its two major components: <strong class="bold">Word2Vec</strong> and <strong class="bold">random walks</strong>. We’ll explain<a id="_idIndexMarker150"/> how the Word2Vec architecture works, with <a id="_idIndexMarker151"/>a particular focus on the skip-gram model. We will implement this model with the popular <strong class="source-inline">gensim</strong> library on a <strong class="bold">natural language processing</strong> (<strong class="bold">NLP</strong>) example<a id="_idIndexMarker152"/> to understand how it is supposed to <span class="No-Break">be used.</span></p>
+<p>Then, we will focus on the DeepWalk algorithm and see how performance can be improved using <strong class="bold">hierarchical softmax</strong> (<strong class="bold">H-Softmax</strong>). This<a id="_idIndexMarker153"/> powerful optimization of the softmax function can be found in many fields: it is incredibly useful when you have a lot of possible classes in your classification task. We will also implement random walks on a graph before wrapping things up with an end-to-end supervised classification exercise on Zachary’s <span class="No-Break">Karate Club.</span></p>
+<p>By the end of this chapter, you will master Word2Vec in the context of NLP and beyond. You will be able to create node embeddings using the topological information of the graphs and solve classification tasks on <span class="No-Break">graph data.</span></p>
+<p>In this chapter, we will cover the following <span class="No-Break">main topics:</span></p>
+<ul>
+<li><span class="No-Break">Introducing Word2Vec</span></li>
+<li>DeepWalk and <span class="No-Break">random walks</span></li>
+<li><span class="No-Break">Implementing DeepWalk</span></li>
+</ul>
+<h1 id="_idParaDest-41"><a id="_idTextAnchor043"/>Technical requirements</h1>
+<p>All the code examples from this chapter can be found on GitHub at <a href="https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter03">https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter03</a>. Installation steps required to run the code on your local machine can be found in the <em class="italic">Preface</em> section of <span class="No-Break">this book.</span></p>
+<h1 id="_idParaDest-42"><a id="_idTextAnchor044"/>Introducing Word2Vec</h1>
+<p>The first step to comprehending the <a id="_idIndexMarker154"/>DeepWalk algorithm is to understand its major <span class="No-Break">component: Word2Vec.</span></p>
+<p>Word2Vec has been one of the most influential deep-learning techniques in NLP. Published in 2013 by Tomas Mikolov et al. (Google) in two different papers, it proposed a new technique to translate words into<a id="_idIndexMarker155"/> vectors (also known as <strong class="bold">embeddings</strong>) using large datasets of text. These representations can then be used in downstream tasks, such as sentiment classification. It is also one of the rare examples of patented and popular <span class="No-Break">ML architecture.</span></p>
+<p>Here are a few examples of how Word2Vec can transform words <span class="No-Break">into vectors:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer079">
+<img alt="" height="48" src="image/Formula_B19153_03_001.jpg" width="510"/>
+</div>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer080">
+<img alt="" height="48" src="image/Formula_B19153_03_002.jpg" width="531"/>
+</div>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer081">
+<img alt="" height="47" src="image/Formula_B19153_03_003.jpg" width="480"/>
+</div>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer082">
+<img alt="" height="47" src="image/Formula_B19153_03_004.jpg" width="552"/>
+</div>
+</div>
+<p>We can see in this example that, in terms of the Euclidian distance, the word vectors for <em class="italic">king</em> and <em class="italic">queen<a id="_idTextAnchor045"/></em> are closer than the ones for <em class="italic">king</em> and <em class="italic">woman</em> (4.37 versus 8.47). In general, other metrics, such as the <a id="_idIndexMarker156"/>popular <strong class="bold">cosine similarity</strong>, are used to measure the likeness of these words. Cosine similarity focuses on the angle between vectors and does not consider their magnitude (length), which is more helpful in comparing them. Here is how it <span class="No-Break">is defined:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer083">
+<img alt="" height="121" src="image/Formula_B19153_03_005.jpg" width="822"/>
+</div>
+</div>
+<p>One of the most surprising results of Word2Vec is its ability to solve analogies. A popular example is how it can answer the question “<em class="italic">man is to woman, what king is to ___?</em>” It can be calculated <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer084">
+<img alt="" height="45" src="image/Formula_B19153_03_006.jpg" width="908"/>
+</div>
+</div>
+<p>This is not true with any<a id="_idIndexMarker157"/> analogy, but this property can bring interesting applications to perform arithmetic operations <span class="No-Break">with embeddings.</span></p>
+<h2 id="_idParaDest-43"><a id="_idTextAnchor046"/>CBOW versus skip-gram</h2>
+<p>A model must be trained on a pretext task to <a id="_idIndexMarker158"/>produce these vectors. The task itself does not need to be meaningful: its only goal is to produce high-quality <a id="_idIndexMarker159"/>embeddings. In practice, this<a id="_idIndexMarker160"/> task is always related to predicting words given a <span class="No-Break">certain context.</span></p>
+<p>The authors proposed two architectures with <span class="No-Break">similar tasks:</span></p>
+<ul>
+<li><strong class="bold">The continuous bag-of-words (CBOW) model</strong>: This is trained to predict a word using its surrounding context (words coming before and after the target word). The order of <a id="_idIndexMarker161"/>context words does not matter since their embeddings are summed in the model. The authors claim to obtain better results using four words before and after the one that <span class="No-Break">is predicted.</span></li>
+<li><strong class="bold">The continuous skip-gram model</strong>: Here, we feed a single word to the model and try to predict the words around it. Increasing the range of context words leads to <a id="_idIndexMarker162"/>better embeddings<a id="_idIndexMarker163"/> but also increases the <span class="No-Break">training time.</span></li>
+</ul>
+<p>In summary, here are the<a id="_idIndexMarker164"/> inputs and outputs of <span class="No-Break">both models:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer085">
+<img alt="Figure 3.1 – CBOW and skip-gram architectures" height="867" src="image/B19153_03_001.jpg" width="1650"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.1 – CBOW and skip-gram architectures</p>
+<p>In general, the CBOW model is considered faster to train, but the skip-gram model is more accurate thanks to its ability to learn infrequent words. This topic is still debated in the NLP community: a different implementation could fix issues related to CBOW in <span class="No-Break">some contexts.</span></p>
+<h2 id="_idParaDest-44"><a id="_idTextAnchor047"/>Creating skip-grams</h2>
+<p>For now, we will focus on<a id="_idIndexMarker165"/> the skip-gram model since it is the architecture used by DeepWalk. Skip-grams<a id="_idIndexMarker166"/> are implemented as pairs of words with the following structure: <img alt="" height="43" src="image/Formula_B19153_03_007.png" width="478"/>, where <img alt="" height="39" src="image/Formula_B19153_03_008.png" width="219"/> is the input and <img alt="" height="31" src="image/Formula_B19153_03_009.png" width="225"/> is the word to predict. The number of skip grams for the same target word depends on a parameter called <strong class="bold">context size</strong>, as <a id="_idIndexMarker167"/>shown in <span class="No-Break"><em class="italic">Figure 3</em></span><span class="No-Break"><em class="italic">.2</em></span><span class="No-Break">:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer089">
+<img alt="Figure 3.2 – Text to skip-grams" height="916" src="image/B19153_03_002.jpg" width="1171"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.2 – Text to skip-grams</p>
+<p>The same idea can be applied to a corpus of text instead of a <span class="No-Break">single sentence.</span></p>
+<p>In practice, we store all the context words for the same target word in a list to save memory. Let’s see <a id="_idIndexMarker168"/>how it’s done with an example on an <span class="No-Break">entire paragraph.</span></p>
+<p>In the following example, we create skip-grams for an entire paragraph stored in the <strong class="source-inline">text</strong> variable. We set the <strong class="source-inline">CONTEXT_SIZE</strong> variable to <strong class="source-inline">2</strong>, which means we will look at the two words before and after our <span class="No-Break">target word:</span></p>
+<ol>
+<li>Let’s start by importing the <span class="No-Break">necessary libraries:</span><pre class="source-code">
+import numpy as np</pre></li>
+<li>Then, we need to set the <strong class="source-inline">CONTEXT_SIZE</strong> variable to <strong class="source-inline">2</strong> and bring in the text we want <span class="No-Break">to</span><span class="No-Break"><a id="_idIndexMarker169"/></span><span class="No-Break"> analyze:</span><pre class="source-code">
+CONTEXT_SIZE = 2
+text = """Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc eu sem scelerisque, dictum eros aliquam, accumsan quam. Pellentesque tempus, lorem ut semper fermentum, ante turpis accumsan ex, sit amet ultricies tortor erat quis nulla. Nunc consectetur ligula sit amet purus porttitor, vel tempus tortor scelerisque. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Quisque suscipit ligula nec faucibus accumsan. Duis vulputate massa sit amet viverra hendrerit. Integer maximus quis sapien id convallis. Donec elementum placerat ex laoreet gravida. Praesent quis enim facilisis, bibendum est nec, pharetra ex. Etiam pharetra congue justo, eget imperdiet diam varius non. Mauris dolor lectus, interdum in laoreet quis, faucibus vitae velit. Donec lacinia dui eget maximus cursus. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Vivamus tincidunt velit eget nisi ornare convallis. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Donec tristique ultrices tortor at accumsan.
+""".split()</pre></li>
+<li>Next, we create the skip-grams thanks to a simple <strong class="source-inline">for</strong> loop to consider every word in <strong class="source-inline">text</strong>. A list comprehension generates the context words, stored in the <span class="No-Break"><strong class="source-inline">skipgrams</strong></span><span class="No-Break"> list:</span><pre class="source-code">
+skipgrams = []
+for i in range(CONTEXT_SIZE, len(text) - CONTEXT_SIZE):
+    array = [text[j] for j in np.arange(i - CONTEXT_SIZE, i + CONTEXT_SIZE + 1) if j != i]
+    skipgrams.append((text[i], array))</pre></li>
+<li>Finally, use the <strong class="source-inline">print()</strong> function to see the skip-grams <span class="No-Break">we generated:</span><pre class="source-code">
+print(skipgrams[0:2])</pre></li>
+<li>This produces<a id="_idIndexMarker170"/> the <span class="No-Break">following output:</span><pre class="source-code">
+[('dolor', ['Lorem', 'ipsum', 'sit', 'amet,']), ('sit', ['ipsum', 'dolor', 'amet,', 'consectetur'])]</pre></li>
+</ol>
+<p>These two target words, with<a id="_idIndexMarker171"/> their corresponding context, work to show what the inputs to Word2Vec <span class="No-Break">look like.</span></p>
+<h2 id="_idParaDest-45"><a id="_idTextAnchor048"/>The skip-gram model</h2>
+<p>The goal of Word2Vec is to produce<a id="_idIndexMarker172"/> high-quality word embeddings. To learn these embeddings, the training task of the skip-gram model consists of predicting the correct context words given a <span class="No-Break">target word.</span></p>
+<p>Imagine that we have a sequence of <img alt="" height="31" src="image/Formula_B19153_03_010.png" width="30"/> words <img alt="" height="33" src="image/Formula_B19153_03_011.png" width="236"/>. The probability of seeing the word <img alt="" height="31" src="image/Formula_B19153_03_012.png" width="45"/> given the word <img alt="" height="29" src="image/Formula_B19153_03_0121.png" width="43"/> is written <img alt="" height="40" src="image/Formula_B19153_03_014.png" width="152"/>. Our goal is to maximize the sum of every probability of seeing a context word given a target word in an <span class="No-Break">entire text:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer095">
+<img alt="" height="139" src="image/Formula_B19153_03_015.jpg" width="510"/>
+</div>
+</div>
+<p>Where <img alt="" height="27" src="image/Formula_B19153_03_016.png" width="23"/> is the size<a id="_idIndexMarker173"/> of the <span class="No-Break">context vector.</span></p>
+<p class="callout-heading">Note</p>
+<p class="callout">Why do we use a log probability in the previous equation? Transforming probabilities into log probabilities is a common technique in ML (and computer science in general) for two <span class="No-Break">main reasons.</span></p>
+<p class="callout">Products become additions (and divisions become subtractions). Multiplications are more computationally expensive than additions, so it’s faster to compute the <span class="No-Break">log probability:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer097">
+<img alt="" height="45" src="image/Formula_B19153_03_017.jpg" width="500"/>
+</div>
+</div>
+<p class="callout">The way computers store very small numbers (such as 3.14e-128) is not perfectly accurate, unlike the log of the same numbers (-127.5 in this case). These small errors can add up and bias the final results when events are <span class="No-Break">extremely unlikely.</span></p>
+<p class="callout">On the whole, this simple transformation allows us to gain speed and accuracy without changing our <span class="No-Break">initial objective.</span></p>
+<p>The basic skip-gram model <a id="_idIndexMarker174"/>uses the softmax function to calculate the probability of a context word embedding <img alt="" height="44" src="image/Formula_B19153_03_018.png" width="41"/> given a target word <span class="No-Break">embedding <img alt="" height="44" src="image/Formula_B19153_03_019.png" width="40"/>:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer100">
+<img alt="" height="136" src="image/Formula_B19153_03_020.jpg" width="552"/>
+</div>
+</div>
+<p>Where <img alt="" height="30" src="image/Formula_B19153_03_021.png" width="26"/> is the vocabulary of size <img alt="" height="39" src="image/Formula_B19153_03_022.png" width="45"/>. This vocabulary corresponds to the list of unique words the model tries to predict. We can obtain this list using the <strong class="source-inline">set</strong> data structure to remove <span class="No-Break">duplicate words:</span></p>
+<pre class="source-code">
+vocab = set(text)
+VOCAB_SIZE = len(vocab)
+print(f"Length of vocabulary = {VOCAB_SIZE}")</pre>
+<p>This gives us the <span class="No-Break">following output:</span></p>
+<pre class="source-code">
+Length of vocabulary = 121</pre>
+<p>Now that we have the size of our vocabulary, there is one more parameter we need to define: <img alt="" height="29" src="image/Formula_B19153_03_023.png" width="30"/>, the dimensionality of the word vectors. Typically, this value is set between 100 and 1,000. In this example, we will set it to 10 because of the limited size of <span class="No-Break">our dataset.</span></p>
+<p>The skip-gram model is composed of only <span class="No-Break">two layers:</span></p>
+<ul>
+<li>A <strong class="bold">projection layer</strong> with a weight matrix <img alt="" height="37" src="image/Formula_B19153_03_024.png" width="123"/>, which takes a one-hot encoded-word vector as an input<a id="_idIndexMarker175"/> and returns the corresponding <img alt="" height="29" src="image/Formula_B19153_03_025.png" width="30"/>-dim word embedding. It acts as a simple lookup table that stores embeddings of a <span class="No-Break">predefined dimensionality.</span></li>
+<li>A <strong class="bold">fully connected layer</strong> with a <a id="_idIndexMarker176"/>weight matrix <img alt="" height="50" src="image/Formula_B19153_03_026.png" width="147"/>, which takes a word embedding as input and outputs <img alt="" height="39" src="image/Formula_B19153_03_027.png" width="45"/>-dim logits. A softmax <a id="_idIndexMarker177"/>function is applied to these predictions to transform logits <span class="No-Break">into probabilities.</span></li>
+</ul>
+<p class="callout-heading">Note</p>
+<p class="callout">There is no activation function: Word2Vec is a linear classifier that models a linear relationship <span class="No-Break">between words.</span></p>
+<p>Let’s call <img alt="" height="25" src="image/Formula_B19153_03_028.png" width="27"/> the one-hot encoded-word vector the <em class="italic">input</em>. The corresponding word embedding can be calculated as a <span class="No-Break">simple projection:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer109">
+<img alt="" height="53" src="image/Formula_B19153_03_029.jpg" width="275"/>
+</div>
+</div>
+<p>Using the skip-gram model, we can rewrite the previous probability <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer110">
+<img alt="" height="131" src="image/Formula_B19153_03_030.jpg" width="674"/>
+</div>
+</div>
+<p>The skip-gram<a id="_idIndexMarker178"/> model outputs a <img alt="" height="42" src="image/Formula_B19153_03_031.png" width="48"/>-dim vector, which is the conditional probability of every word in <span class="No-Break">the vocabulary:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer112">
+<img alt="" height="218" src="image/Formula_B19153_03_032.jpg" width="622"/>
+</div>
+</div>
+<p>During training, these probabilities are compared to the correct one-hot encoded-target word vectors. The difference between these values (calculated by a loss function such as the cross-entropy loss) is backpropagated through the network to update the weights and obtain <span class="No-Break">better predictions.</span></p>
+<p>The entire Word2Vec architecture is summarized in the following diagram, with both matrices and the final <span class="No-Break">softmax layer:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer113">
+<img alt="Figure 3.3 – The Word2Vec architecture" height="577" src="image/B19153_03_003.jpg" width="1127"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.3 – The Word2Vec architecture</p>
+<p>We can implement this model using the <strong class="source-inline">gensim</strong> library, which is also used in the official implementation of DeepWalk. We can then build the vocabulary and train our model based on the<a id="_idIndexMarker179"/> <span class="No-Break">previous text:</span></p>
+<ol>
+<li>Let’s begin by installing <strong class="source-inline">gensim</strong> and importing the <span class="No-Break"><strong class="source-inline">Word2Vec</strong></span><span class="No-Break"> class:</span><pre class="source-code">
+!pip install -qU gensim
+from gensim.models.word2vec import Word2Vec</pre></li>
+<li>We initialize a skip-gram model with a <strong class="source-inline">Word2Vec</strong> object and an <strong class="source-inline">sg=1</strong> parameter (skip-gram = <span class="No-Break">1):</span><pre class="source-code">
+model = Word2Vec([text],
+                 sg=1,   # Skip-gram
+                 vector_size=10,
+                 min_count=0,
+                 window=2,
+                 workers=2,
+                 seed=0)</pre></li>
+<li>It’s a good idea to check the shape of our first weight matrix. It should correspond to the vocabulary size and the word <span class="No-Break">embeddings’ dimensionality:</span><pre class="source-code">
+print(f'Shape of W_embed: {model.wv.vectors.shape}')</pre></li>
+<li>This produces the <span class="No-Break">following output:</span><pre class="source-code">
+Shape of W_embed = (121, 10)</pre></li>
+<li>Next, we train the model for <span class="No-Break"><strong class="source-inline">10</strong></span><span class="No-Break"> epochs:</span><pre class="source-code">
+model.train([text], total_examples=model.corpus_count, epochs=10)</pre></li>
+<li>Finally, we can print a word embedding to see what the result of this training <span class="No-Break">looks like:</span><pre class="source-code">
+print('Word embedding =')
+print(model.wv[0])</pre></li>
+<li>This gives us <a id="_idIndexMarker180"/>the <span class="No-Break">following output:</span><pre class="source-code">
+Word embedding =
+[ 0.06947816 -0.06254371 -0.08287395  0.07274164 -0.09449387  0.01215031  -0.08728203 -0.04045384 -0.00368091 -0.0141237 ]</pre></li>
+</ol>
+<p>While this approach works well with small vocabularies, the computational cost of applying a full softmax function to millions of words (the vocabulary size ) is too costly in most cases. This has been a limiting factor in developing accurate language models for a long time. Fortunately for us, other approaches have been designed to solve <span class="No-Break">this issue.</span></p>
+<p>Word2Vec (and DeepWalk) implements one of <a id="_idIndexMarker181"/>these techniques, called H-Softmax. Instead of a flat softmax that directly calculates the probability of every word, this technique uses a binary tree structure where leaves are words. Even more interestingly, a Huffman tree can be used, where infrequent words are stored at deeper levels than common words. In most cases, this dramatically speeds up the word prediction by a factor of at <span class="No-Break">least 50.</span></p>
+<p>H-Softmax can be activated in <strong class="source-inline">gensim</strong> <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">hs=1</strong></span><span class="No-Break">.</span></p>
+<p>This was the most difficult part of the DeepWalk architecture. But before we can implement it, we need one more component: how to create our <span class="No-Break">training data.</span></p>
+<h1 id="_idParaDest-46"><a id="_idTextAnchor049"/>DeepWalk and random walks</h1>
+<p>Proposed in 2014 by Perozzi et al., DeepWalk quickly <a id="_idIndexMarker182"/>became extremely popular among graph researchers. Inspired by recent advances in NLP, it consistently outperformed other methods on several datasets. While more performant architectures have been proposed since then, DeepWalk is a simple and reliable baseline that can be quickly implemented to solve a lot <span class="No-Break">of problems.</span></p>
+<p>The goal of DeepWalk is<a id="_idIndexMarker183"/> to produce high-quality feature representations of nodes in an unsupervised way. This architecture is heavily inspired by Word2Vec in NLP. However, instead of words, our dataset is composed of nodes. This is why we use random walks to generate meaningful sequences of nodes that act like sentences. The following diagram illustrates the connection between sentences <span class="No-Break">and graphs:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer114">
+<img alt="Figure 3.4 – Sentences can be represented as graphs" height="421" src="image/B19153_03_004.jpg" width="1215"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.4 – Sentences can be represented as graphs</p>
+<p>Random walks are sequences of nodes <a id="_idIndexMarker184"/>produced by randomly choosing a neighboring node at every step. Thus, nodes can appear several times in the <span class="No-Break">same sequence.</span></p>
+<p>Why are random walks important? Even if nodes are randomly selected, the fact that they often appear together in a sequence means that they are close to each other. Under the <strong class="bold">network homophily</strong> hypothesis, nodes<a id="_idIndexMarker185"/> that are close to each other are similar. This is particularly the case in social networks, where people are connected to friends <span class="No-Break">and family.</span></p>
+<p>This idea is at the core of the DeepWalk algorithm: when nodes are close to each other, we want to obtain high similarity scores. On the contrary, we want low scores when they are <span class="No-Break">farther apart.</span></p>
+<p>Let’s implement a<a id="_idIndexMarker186"/> random walk function using a <span class="No-Break"><strong class="source-inline">networkx</strong></span><span class="No-Break"> graph:</span></p>
+<ol>
+<li>Let’s import the required libraries and initialize the random number generator <span class="No-Break">for reproducibility:</span><pre class="source-code">
+import networkx as nx
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+random.seed(0)</pre></li>
+<li>We generate a random graph thanks to the <strong class="source-inline">erdos_renyi_graph</strong> function with a fixed number of nodes (<strong class="source-inline">10</strong>) and a predefined probability of creating an edge between two <span class="No-Break">nodes (</span><span class="No-Break"><strong class="source-inline">0.3</strong></span><span class="No-Break">):</span><pre class="source-code">
+G = nx.erdos_renyi_graph(10, 0.3, seed=1, directed=False)</pre></li>
+<li>We plot this random graph to see what it <span class="No-Break">looks like:</span><pre class="source-code">
+plt.figure(dpi=300)
+plt.axis('off')
+nx.draw_networkx(G,
+                 pos=nx.spring_layout(G, seed=0),
+                 node_size=600,
+                 cmap='coolwarm',
+                 font_size=14,
+                 font_color='white'
+                 )</pre></li>
+</ol>
+<p>This produces the <span class="No-Break">following graph:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer115">
+<img alt="Figure 3.5 – Random graph" height="580" src="image/B19153_03_005.jpg" width="845"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.5 – Random graph</p>
+<ol>
+<li value="4">Let’s implement<a id="_idIndexMarker187"/> random walks with a simple function. This function takes two parameters: the starting node (<strong class="source-inline">start</strong>) and the length of the walk (<strong class="source-inline">length</strong>). At every step, we randomly select a neighboring node (using <strong class="source-inline">np.random.choice</strong>) until the walk <span class="No-Break">is complete:</span><pre class="source-code">
+def random_walk(start, length):
+    walk = [str(start)]  # starting node
+    for i in range(length):
+        neighbors = [node for node in G.neighbors(start)]
+        next_node = np.random.choice(neighbors, 1)[0]
+        walk.append(str(next_node))
+        start = next_node
+    return walk</pre></li>
+<li>Next, we print the result of this function with the starting node as <strong class="source-inline">0</strong> and a length <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">10</strong></span><span class="No-Break">:</span><pre class="source-code">
+print(random_walk(0, 10))</pre></li>
+<li>This produces the <span class="No-Break">following list:</span><pre class="source-code">
+['0', '4', '3', '6', '3', '4', '7', '8', '7', '4', '9']</pre></li>
+</ol>
+<p>We can see that certain nodes, such as <strong class="source-inline">0</strong> and <strong class="source-inline">9</strong>, are often found together. Considering that it is a homophilic graph, it means that they are similar. It is precisely the type of relationship we’re<a id="_idIndexMarker188"/> trying to capture <span class="No-Break">with DeepWalk.</span></p>
+<p>Now that we have implemented Word2Vec and random walks separately, let’s combine them to <span class="No-Break">create DeepWalk.</span></p>
+<h1 id="_idParaDest-47"><a id="_idTextAnchor050"/>Implementing DeepWalk</h1>
+<p>Now that we have a good understanding of every component in this architecture, let’s use it to solve an <span class="No-Break">ML problem.</span></p>
+<p>The dataset we will use is<a id="_idIndexMarker189"/> Zachary’s Karate Club. It simply represents the relationships within a karate club studied by Wayne W. Zachary in the 1970s. It is a kind of social network where every node is a member, and members who interact outside the club <span class="No-Break">are connected.</span></p>
+<p>In this example, the club is divided into two groups: we would like to assign the right group to every member (node classification) just by looking at <span class="No-Break">their connections:</span></p>
+<ol>
+<li>Let’s import the dataset <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">nx.karate_club_graph()</strong></span><span class="No-Break">:</span><pre class="source-code">
+G = nx.karate_club_graph()</pre></li>
+<li>Next, we need to convert string class labels into numerical values (Mr. Hi = <strong class="source-inline">0</strong>, <strong class="source-inline">Officer</strong> = <span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">):</span><pre class="source-code">
+labels = []
+for node in G.nodes:
+    label = G.nodes[node]['club']
+    labels.append(1 if label == 'Officer' else 0)</pre></li>
+<li>Let’s plot this graph using our <span class="No-Break">new labels:</span><pre class="source-code">
+plt.figure(figsize=(12,12), dpi=300)
+plt.axis('off')
+nx.draw_networkx(G,
+                 pos=nx.spring_layout(G, seed=0),
+                 node_color=labels,
+                 node_size=800,
+                 cmap='coolwarm',
+                 font_size=14,
+                 font_color='white'
+                 )</pre></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer116">
+<img alt="Figure 3.6 – Zachary’s Karate Club" height="1311" src="image/B19153_03_006.jpg" width="1343"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.6 – Zachary’s Karate Club</p>
+<ol>
+<li value="4">The next step is to generate our dataset, the random walks. We want to be as exhaustive<a id="_idIndexMarker190"/> as possible, which is why we will create <strong class="source-inline">80</strong> random walks of a length of <strong class="source-inline">10</strong> for every node in <span class="No-Break">the graph:</span><pre class="source-code">
+walks = []
+for node in G.nodes:
+    for _ in range(80):
+        walks.append(random_walk(node, 10))</pre></li>
+<li>Let’s print a walk to verify that it <span class="No-Break">is correct:</span><pre class="source-code">
+print(walks[0])</pre></li>
+<li>This is the first walk that <span class="No-Break">was generated:</span><pre class="source-code">
+['0', '19', '1', '2', '0', '3', '2', '8', '33', '14', '33']</pre></li>
+<li>The final step consists of implementing Word2Vec. Here, we use the skip-gram model previously seen with H-Softmax. You can play with the other parameters to improve the quality of <span class="No-Break">the embeddings:</span><pre class="source-code">
+model = Word2Vec(walks,
+                 hs=1,   # Hierarchical softmax
+                 sg=1,   # Skip-gram
+                 vector_size=100,
+                 window=10,
+                 workers=2,
+                 seed=0)</pre></li>
+<li>The model is<a id="_idIndexMarker191"/> then simply trained on the random walks <span class="No-Break">we generated.</span><pre class="source-code">
+model.train(walks, total_examples=model.corpus_count, epochs=30, report_delay=1)</pre></li>
+<li>Now that our model is trained, let’s see its different applications. The first one allows us to find the most similar nodes to a given one (in terms of <span class="No-Break">cosine similarity):</span><pre class="source-code">
+print('Nodes that are the most similar to node 0:')
+for similarity in model.wv.most_similar(positive=['0']):
+    print(f'   {similarity}')</pre></li>
+</ol>
+<p>This produces the following output for <strong class="source-inline">Nodes that are the most similar to </strong><span class="No-Break"><strong class="source-inline">node 0</strong></span><span class="No-Break">:</span></p>
+<pre class="source-code">
+   ('4', 0.6825815439224243)
+   ('11', 0.6330500245094299)
+   ('5', 0.6324777603149414)
+   ('10', 0.6097837090492249)
+   ('6', 0.6096848249435425)
+   ('21', 0.5936519503593445)
+   ('12', 0.5906376242637634)
+   ('3', 0.5797219276428223)
+   ('16', 0.5388344526290894)
+   ('13', 0.534131646156311)</pre>
+<p>Another important application is calculating the similarity score between two nodes. It can be performed <span class="No-Break">as follows:</span></p>
+<pre class="source-code">
+# Similarity between two nodes
+print(f"Similarity between node 0 and 4: {model.wv.similarity('0', '4')}")</pre>
+<p>This code directly gives us the cosine similarity between <span class="No-Break">two nodes:</span></p>
+<pre class="source-code">
+Similarity between node 0 and 4: 0.6825816631317139</pre>
+<p>We can plot the resulting<a id="_idIndexMarker192"/> embeddings using <strong class="bold">t-distributed stochastic neighbor embedding</strong> (<strong class="bold">t-SNE</strong>) to visualize <a id="_idIndexMarker193"/>these high-dimensional vectors <span class="No-Break">in 2D:</span></p>
+<ol>
+<li>We import the <strong class="source-inline">TSNE</strong> class <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">sklearn</strong></span><span class="No-Break">:</span><pre class="source-code">
+from sklearn.manifold import TSNE</pre></li>
+<li>We create two arrays: one to store the word embeddings and the other one to store <span class="No-Break">the labels:</span><pre class="source-code">
+nodes_wv = np.array([model.wv.get_vector(str(i)) for i in range(len(model.wv))])
+labels = np.array(labels)</pre></li>
+<li>Next, we train the t-SNE model with two dimensions (<strong class="source-inline">n_components=2</strong>) on <span class="No-Break">the embeddings:</span><pre class="source-code">
+tsne = TSNE(n_components=2,
+            learning_rate='auto',
+            init='pca',
+            random_state=0).fit_transform(nodes_wv)</pre></li>
+<li>Finally, let’s plot the<a id="_idIndexMarker194"/> 2D vectors produced by the trained t-SNE model with the <span class="No-Break">corresponding labels:</span><pre class="source-code">
+plt.figure(figsize=(6, 6), dpi=300)
+plt.scatter(tsne[:, 0], tsne[:, 1], s=100, c=labels, cmap="coolwarm")
+plt.show()</pre></li>
+</ol>
+<div>
+<div class="IMG---Figure" id="_idContainer117">
+<img alt="Figure 3.7 – A t-SNE plot of the nodes" height="973" src="image/B19153_03_007.jpg" width="1057"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 3.7 – A t-SNE plot of the nodes</p>
+<p>This plot is quite encouraging since we can see a clear line that separates the two classes. It should be<a id="_idIndexMarker195"/> possible for a simple ML algorithm to classify these nodes with enough examples (training data). Let’s implement a classifier and train it on our <span class="No-Break">node embeddings:</span></p>
+<ol>
+<li>We import a Random Forest model from <strong class="source-inline">sklearn</strong>, which is a popular choice when it comes to classification. The accuracy score is the metric we’ll use to evaluate <span class="No-Break">this model:</span><pre class="source-code">
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score</pre></li>
+<li>We need to split the embeddings into two groups: training and test data. A simple way of doing it is to create masks <span class="No-Break">as follows:</span><pre class="source-code">
+train_mask = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28]
+test_mask = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 30, 31, 32, 33]</pre></li>
+<li>Next, we train <a id="_idIndexMarker196"/>the Random Forest classifier on the training data with the <span class="No-Break">appropriate labels:</span><pre class="source-code">
+clf = RandomForestClassifier(random_state=0)
+clf.fit(nodes_wv[train_mask], labels[train_mask])</pre></li>
+<li>Finally, we evaluate the trained model on the test data based on its <span class="No-Break">accuracy score:</span><pre class="source-code">
+y_pred = clf.predict(nodes_wv[test_mask])
+accuracy_score(y_pred, labels[test_mask])</pre></li>
+<li>This is the final result of <span class="No-Break">our classifier:</span><pre class="source-code">
+0.9545454545454546</pre></li>
+</ol>
+<p>Our model obtains an accuracy score of 95.45%, which is pretty good considering the unfavorable train/test split we gave it. There is still room for improvement, but this example showed two <a id="_idIndexMarker197"/>useful applications <span class="No-Break">of DeepWalk:</span></p>
+<ul>
+<li><em class="italic">Discovering similarities between nodes</em> using embeddings and cosine similarity (<span class="No-Break">unsupervised learning)</span></li>
+<li><em class="italic">Using these embeddings as a dataset</em> for a supervised task such as <span class="No-Break">node classification</span></li>
+</ul>
+<p>As we are going to see in the following chapters, the ability to learn node representations offers a lot of flexibility to design deeper and more <span class="No-Break">complex architectures.</span></p>
+<h1 id="_idParaDest-48"><a id="_idTextAnchor051"/>Summary</h1>
+<p>In this chapter, we learned about DeepWalk architecture and its major components. Then, we transformed graph data into sequences using random walks to apply the powerful Word2Vec algorithm. The resulting embeddings can be used to find similarities between nodes or as input to other algorithms. In particular, we solved a node classification problem using a <span class="No-Break">supervised approach.</span></p>
+<p>In <a href="B19153_04.xhtml#_idTextAnchor054"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, <em class="italic">Improving Embeddings with Biased Random Walks in Node2Vec</em>, we will introduce a second algorithm based on Word2Vec. The difference with DeepWalk is that the random walks can be biased towards more or less exploration, which directly impacts the embeddings that are produced. We will implement this algorithm on a new example and compare its representations with those obtained <span class="No-Break">using DeepWalk.</span></p>
+<h1 id="_idParaDest-49"><a id="_idTextAnchor052"/>Further reading</h1>
+<ul>
+<li>[1] B. Perozzi, R. Al-Rfou, and S. Skiena, <em class="italic">DeepWalk</em>, Aug. 2014. DOI: 10.1145/2623330.2623732. Available <span class="No-Break">at </span><a href="B19153_03.xhtml#_idTextAnchor052"><span class="No-Break">https://arxiv.org/abs/1403.6652</span></a><span class="No-Break">.</span></li>
+</ul>
+</div>
+</div>
+
+<div id="sbo-rt-content"><div class="Content" id="_idContainer119">
+<h1 id="_idParaDest-50"><a id="_idTextAnchor053"/>Part 2: Fundamentals</h1>
+<p>In this second part of the book, we will delve into the process of constructing node representations using graph learning. We will start by exploring traditional graph learning techniques, drawing on the advancements made in natural language processing. Our aim is to understand how these techniques can be applied to graphs and how they can be used to build <span class="No-Break">node representations.</span></p>
+<p>We will then move on to incorporating node features into our models and explore how they can be used to build even more accurate representations. Finally, we will introduce two of the most fundamental GNN architectures, the <strong class="bold">Graph Convolutional Network</strong> (<strong class="bold">GCN</strong>) and the <strong class="bold">Graph Attention Network</strong> (<strong class="bold">GAT</strong>). These two architectures are the building blocks of many state-of-the-art graph learning methods and will provide a solid foundation for the <span class="No-Break">next part.</span></p>
+<p>By the end of this part, you will have a deeper understanding of how traditional graph learning techniques, such as random walks, can be used to create node representations and develop graph applications. Additionally, you will learn how to build even more powerful representations using GNNs. You will be introduced to two key GNN architectures and learn how they can be used to tackle various <span class="No-Break">graph-based tasks.</span></p>
+<p>This part comprises the <span class="No-Break">following chapters:</span></p>
+<ul>
+<li><a href="B19153_03.xhtml#_idTextAnchor041"><em class="italic">Chapter 3</em></a><em class="italic">, Creating Node Representations with DeepWalk</em></li>
+<li><a href="B19153_04.xhtml#_idTextAnchor054"><em class="italic">Chapter 4</em></a><em class="italic">, Improving Embeddings with Biased Random Walks in Node2Vec</em></li>
+<li><a href="B19153_05.xhtml#_idTextAnchor064"><em class="italic">Chapter 5</em></a><em class="italic">, Including Node Features with Vanilla Neural Networks</em></li>
+<li><a href="B19153_06.xhtml#_idTextAnchor074"><em class="italic">Chapter 6</em></a><em class="italic">, Introducing Graph Convolutional Networks</em></li>
+<li><a href="B19153_07.xhtml#_idTextAnchor082"><em class="italic">Chapter 7</em></a><em class="italic">, Graph Attention Networks</em></li>
+</ul>
+</div>
+<div>
+<div id="_idContainer120">
+</div>
+</div>
+</div></body></html>

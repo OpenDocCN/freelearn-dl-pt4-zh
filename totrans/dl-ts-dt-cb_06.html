@@ -1,0 +1,585 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer032">
+			<h1 id="_idParaDest-246" class="chapter-number"><a id="_idTextAnchor339"/>6</h1>
+			<h1 id="_idParaDest-247"><a id="_idTextAnchor340"/>Advanced Deep Learning Architectures for Time Series Forecasting</h1>
+			<p><a id="_idTextAnchor341"/><a id="_idTextAnchor342"/>In previous chapters, we’ve learned how to create forecasting models using different types of neural networks but, so far, we’ve worked with basic architectures such as feedforward neural networks or LSTMs. This chapter describes how to build forecasting models with state-of-the-art approaches such as DeepAR or Temporal Fusion Transformers. These have been developed by tech giants such as Google and Amazon and are available in different Python libraries. These advanced deep learning architectures are designed to tackle different types of <span class="No-Break">forecasting problems.</span></p>
+			<p>We’ll cover the <span class="No-Break">following recipes:</span></p>
+			<ul>
+				<li>Interpretable forecasting <span class="No-Break">with N-BEATS</span></li>
+				<li>Optimizing the learning rate with <span class="No-Break">PyTorch Forecasting</span></li>
+				<li>Getting started <span class="No-Break">with GluonTS</span></li>
+				<li>Training a DeepAR model <span class="No-Break">with GluonTS</span></li>
+				<li>Training a Transformer <span class="No-Break">with NeuralForecast</span></li>
+				<li>Training a Temporal Fusion Transformer <span class="No-Break">with GluonTS</span></li>
+				<li>Training an Informer model <span class="No-Break">with NeuralForecast</span></li>
+				<li>Comparing different Transformers <span class="No-Break">with NeuralForecast</span></li>
+			</ul>
+			<p>By the end of this chapter, you’ll be able to train state-of-the-art deep learning <span class="No-Break">forecasting models.</span></p>
+			<h1 id="_idParaDest-248"><a id="_idTextAnchor343"/>Technical requirements</h1>
+			<p>This chapter requires the following <span class="No-Break">Python libraries:</span></p>
+			<ul>
+				<li><span class="No-Break"><strong class="source-inline">numpy</strong></span><span class="No-Break"> (1.23.5)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">pandas</strong></span><span class="No-Break"> (1.5.3)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">scikit-learn</strong></span><span class="No-Break"> (1.2.1)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">sktime</strong></span><span class="No-Break"> (0.24.0)</span></li>
+				<li><strong class="source-inline">torch</strong>  (<span class="No-Break">2.0.1)</span></li>
+				<li><strong class="source-inline">pytorch-forecasting</strong>  (<span class="No-Break">1.0.0)</span></li>
+				<li><strong class="source-inline">pytorch-lightning</strong>  (<span class="No-Break">2.1.0)</span></li>
+				<li><span class="No-Break"><strong class="source-inline">gluonts</strong></span><span class="No-Break"> (0.13.5)</span></li>
+				<li><strong class="source-inline">neuralforecast</strong>  (<span class="No-Break">1.6.0)</span></li>
+			</ul>
+			<p>You can install these libraries in one go <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pip</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+pip install -U pandas numpy scikit-learn sktime torch pytorch-forecasting pytorch-lightning gluonts neuralforecast</pre>			<p>The code for this chapter can be found at the following GitHub <span class="No-Break">URL: </span><a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook"><span class="No-Break">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-249"><a id="_idTextAnchor344"/><a id="_idTextAnchor345"/><a id="_idTextAnchor346"/><a id="_idTextAnchor347"/><a id="_idTextAnchor348"/><a id="_idTextAnchor349"/>Interpretable forecasting with N-BEATS</h1>
+			<p>This <a id="_idIndexMarker341"/>recipe introduces <strong class="bold">Neural Basis Expansion Analysis for Interpretable Time Series Forecasting</strong> (<strong class="bold">N-BEATS</strong>), a deep learning method for forecasting <a id="_idIndexMarker342"/>problems. We’ll show you how <a id="_idIndexMarker343"/>to train N-BEATS using PyTorch Forecasting and interpret <span class="No-Break">its outp<a id="_idTextAnchor350"/>ut.</span></p>
+			<h2 id="_idParaDest-250"><a id="_idTextAnchor351"/>Getting ready</h2>
+			<p>N-BEATS is particularly designed for problems involving several univariate time series. So, we’ll use the dataset introduced in the previous chapter (check, for example, the <em class="italic">Preparing multiple time series for a global </em><span class="No-Break"><em class="italic">model</em></span><span class="No-Break"> recipe):</span></p>
+			<pre class="source-code">
+import numpy as np
+import pandas as pd
+from gluonts.dataset.repository.datasets import get_dataset
+from pytorch_forecasting import TimeSeriesDataSet
+import lightning.pytorch as pl
+from sklearn.model_selection import train_test_split
+dataset = get_dataset('nn5_daily_without_missing', regenerate=False)
+N_LAGS = 7
+HORIZON = 7
+datamodule = GlobalDataModule(data=dataset,
+    n_lags=N_LAGS,
+    horizon=HORIZON)</pre>			<p>Our <a id="_idIndexMarker344"/>goal is to forecast the next seven values (<strong class="source-inline">HORIZON</strong>) of a time series based on <a id="_idIndexMarker345"/>the past seven <span class="No-Break">lags (</span><span class="No-Break"><strong class="source-inline">N_LA<a id="_idTextAnchor352"/>GS</strong></span><span class="No-Break">).</span></p>
+			<h2 id="_idParaDest-251"><a id="_idTextAnchor353"/>How to do it…</h2>
+			<p>Let’s create the training, validation, and <span class="No-Break">testing datasets:</span></p>
+			<ol>
+				<li>We start by calling the <strong class="source-inline">setup()</strong> method in the <span class="No-Break"><strong class="source-inline">GlobalDataModule</strong></span><span class="No-Break"> class:</span><pre class="source-code">
+datamodule.setup()</pre></li>				<li>N-BEATS is available off-the-shelf in PyTorch Forecasting. You can define a model <span class="No-Break">as follows:</span><pre class="source-code">
+from pytorch_forecasting import NBeats
+model = NBeats.from_dataset(
+    dataset=datamodule.training,
+    stack_types=['trend', 'seasonality'],
+    num_blocks=[3, 3],
+    num_block_layers=[4, 4],
+    widths=[256, 2048],
+    sharing=[True],
+    backcast_loss_ratio=1.0,
+)</pre><p class="list-inset">We <a id="_idIndexMarker346"/>create an <strong class="source-inline">NBeats</strong> instance using the <strong class="source-inline">from_dataset()</strong> method in the preceding code. The following parameters <a id="_idIndexMarker347"/>need to <span class="No-Break">be defined:</span></p><ul><li><strong class="source-inline">dataset</strong>: The <strong class="source-inline">TimeSeriesDataSet</strong> instance that contains the <span class="No-Break">training set.</span></li><li><strong class="source-inline">stack_types</strong>: The mode you want to run N-BEATS on. A <strong class="source-inline">trend</strong> and <strong class="source-inline">seasonality</strong> type of stack enables the model to be interpretable, while a <strong class="source-inline">['generic']</strong> setup is usually <span class="No-Break">more accurate.</span></li><li><strong class="source-inline">num_blocks</strong>: A block is the cornerstone of the N-BEATS model. It contains a set of fully connected layers that model the <span class="No-Break">time series.</span></li><li><strong class="source-inline">num_block_layers</strong>: The number of fully connected layers in <span class="No-Break">each block.</span></li><li><strong class="source-inline">widths</strong>: The width of the fully connected layers in <span class="No-Break">each block.</span></li><li><strong class="source-inline">sharing</strong>: A Boolean parameter that denotes whether the weights are shared blocks per stack. In the interpretable mode, this parameter should be set <span class="No-Break">to </span><span class="No-Break"><strong class="source-inline">True</strong></span><span class="No-Break">.</span></li><li><strong class="source-inline">backcast_loss_ratio</strong>: The relevance of the backcast loss in the model. Backcasting (predicting the input sample) is an important mechanism in the training <a id="_idIndexMarker348"/>of N-BEATS. This parameter balances the loss of the backcast with the loss of <span class="No-Break">the forecast.</span></li></ul></li>				<li>After <a id="_idIndexMarker349"/>creating the model, you can pass it on to a PyTorch Lightning <strong class="source-inline">Trainer</strong> to <span class="No-Break">train it:</span><pre class="source-code">
+import lightning.pytorch as pl
+from lightning.pytorch.callbacks import EarlyStopping
+early_stop_callback = EarlyStopping(monitor="val_loss",
+    min_delta=1e-4,
+    patience=10,
+    verbose=False,
+    mode="min")
+trainer = pl.Trainer(
+    max_epochs=30,
+    accelerator="auto",
+    enable_model_summary=True,
+    gradient_clip_val=0.01,
+    callbacks=[early_stop_callback],
+)</pre></li>				<li>We also include an early stopping callback to guide the training process. The model is trained using the <span class="No-Break"><strong class="source-inline">fit()</strong></span><span class="No-Break"> method:</span><pre class="source-code">
+trainer.fit(
+    model,
+    train_dataloaders=datamodule.train_dataloader(),
+    val_dataloaders=datamodule.val_dataloader(),
+)</pre><p class="list-inset">We <a id="_idIndexMarker350"/>pass the training data loader <a id="_idIndexMarker351"/>to train the model, and the validation data loader for <span class="No-Break">early stopping.</span></p></li>				<li>After fitting a model, we can evaluate its testing performance and use it to make predictions. Before that, we need to load the model from the <span class="No-Break">saved checkpoint:</span><pre class="source-code">
+best_model_path = trainer.checkpoint_callback.best_model_path
+best_model = NBeats.load_from_checkpoint(best_model_path)</pre></li>				<li>You can get the forecasts and respective true values from the test set <span class="No-Break">as follows:</span><pre class="source-code">
+predictions = best_model.predict(datamodule.test.to_dataloader(batch_size=1, shuffle=False))
+actuals = torch.cat(
+    [y[0] for x, y in iter(
+        datamodule.test.to_dataloader(batch_size=1, 
+            shuffle=False))])</pre></li>				<li>We estimate the forecasting performance as the average absolute difference between these two quantities (that is, the mean <span class="No-Break">absolute error):</span><pre class="source-code">
+(actuals - predictions).abs().mean()</pre><p class="list-inset">Depending <a id="_idIndexMarker352"/>on your device, you may need to convert the <strong class="source-inline">predictions</strong> object to a PyTorch <strong class="source-inline">tensor</strong> object using <strong class="source-inline">predictions.cpu()</strong> before computing the difference specified in the <span class="No-Break">preceding code.</span></p></li>				<li>The <a id="_idIndexMarker353"/>workflow for forecasting new instances is also made quite simple by the <span class="No-Break">data module:</span><pre class="source-code">
+forecasts = best_model.predict(datamodule.predict_dataloader())</pre><p class="list-inset">Essentially, the data module gets the latest observations and passes them to the model, which makes <span class="No-Break">the forecasts.</span></p><p class="list-inset">One of the most interesting aspects of N-BEATS is its interpretability components. These can be valuable for inspecting the forecasts, and the driver <span class="No-Break">behind them</span><span class="No-Break">:</span></p></li>				<li>We can break down the forecasts into different components and plot them using the <strong class="source-inline">plot_interpretation()</strong> method. To do that, we need to get the raw forecasts beforehand <span class="No-Break">as follows:</span><pre class="source-code">
+raw_predictions = best_model.predict
+    (datamodule.val_dataloader(),
+    mode="raw",
+    return_x=True)
+best_model.plot_interpretation(x=raw_predictions[1],
+    output=raw_predictions[0],
+    idx=0)</pre></li>			</ol>
+			<p>In the <a id="_idIndexMarker354"/>preceding code, we call the plot for the <a id="_idIndexMarker355"/>first instance of the test set (<strong class="source-inline">idx=0</strong>). Here’s what the plot <span class="No-Break">looks like:</span></p>
+			<div>
+				<div id="_idContainer025" class="IMG---Figure">
+					<img src="image/B21145_06_001.jpg" alt="Figure 6.1: Breaking down the N-BEATS forecasts into different parts" width="1650" height="1495"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.1: Breaking down the N-BEATS forecasts into different parts</p>
+			<p>The <a id="_idIndexMarker356"/>preceding figure shows the <strong class="source-inline">trend</strong> and <strong class="source-inline">seasonality</strong> components <a id="_idIndexMarker357"/>of <a id="_idTextAnchor354"/><span class="No-Break">the prediction.</span></p>
+			<h2 id="_idParaDest-252"><a id="_idTextAnchor355"/>How it works…</h2>
+			<p>N-BEATS is based on two <span class="No-Break">main components:</span></p>
+			<ul>
+				<li>A double stack of residual connections that involve forecasting and backcasting. Backcasting, in the context of N-BEATS, refers to reconstructing a time series’s past values. It helps the model learn better data representations by forcing it to understand the time series structure in <span class="No-Break">both directions.</span></li>
+				<li>A deep stack of densely <span class="No-Break">connected layers.</span></li>
+			</ul>
+			<p>This combination leads to a model with both high forecasting accuracy and <span class="No-Break">interpretability capabilities.</span></p>
+			<p>The workflow for training, evaluating, and using the model follows the framework provided <a id="_idIndexMarker358"/>by PyTorch Lightning. The data preparation <a id="_idIndexMarker359"/>logic is developed in the data module component, specifically within the <strong class="source-inline">setup()</strong> function. The modeling stage is created in <span class="No-Break">two parts:</span></p>
+			<ol>
+				<li>First, you define the N-BEATS model architecture. In this example, we use the <strong class="source-inline">from_dataset()</strong> method to create an <strong class="source-inline">NBeats</strong> instance based on the input <span class="No-Break">data directly.</span></li>
+				<li>Then, the training process logic is defined in the <strong class="source-inline">Trainer</strong> instance, including any callback you <span class="No-Break">might need.</span></li>
+			</ol>
+			<p>Some callbacks, such as early stopping, save the best version of the model in a local file, which you can load <span class="No-Break">after training.</span></p>
+			<p>It’s important to note that the interpretation step, carried out with the <strong class="source-inline">plot_interpretation</strong> part, is a special feature of N-BEATS that helps practitioners understand the predictions made by the forecasting model. This can also aid in understanding the conditions in which the model is not applicable <span class="No-Break">in practice.</span></p>
+			<p>N-BEATS is an important model to have in your forecasting arsenal. For example, in the M5 forecasting competition, which featured a set of demand time series, this model was used in many of the best solutions. You can see more details <span class="No-Break">here: </span><a href="https://www.sciencedirect.com/science/article/pii/S0169207021001874"><span class="No-Break">https://www.sciencedirect.com/science/article/pii/S0169207021001874</span></a><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-253"><a id="_idTextAnchor356"/>There’s more…</h2>
+			<p>There are a few things you can do to maximize the potential <span class="No-Break">of N-BEATS:</span></p>
+			<ul>
+				<li>You can check the PyTorch Forecasting library documentation to get a better sense of how to select the values of each <span class="No-Break">parameter: </span><a href="https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.nbeats.NBeats.html"><span class="No-Break">https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.nbeats.NBeats.html</span></a><span class="No-Break">.</span></li>
+				<li>Another interesting method is NHiTS, which you can read about at the following link: <a href="https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.nhits.NHiTS.html#pytorch_forecasting.models.nhits.NHiTS">https://pytorch-forecasting.readthedocs.io/en/stable/api/pytorch_forecasting.models.nhits.NHiTS.html#pytorch_forecasting.models.nhits.NHiTS</a>. Its implementation from the PyTorch Forecasting library follows a similar logic <span class="No-Break">to N-BEATS.</span></li>
+				<li>As mentioned before, N-BEATS was developed to handle datasets involving several univariate time series. Yet, it was extended to handle exogenous variables by the N-BEATSx method, which is available in the <strong class="source-inline">neuralforecast</strong> <span class="No-Break">library: </span><a href="https://nixtla.github.io/neuralforecast/models.nbeatsx.html"><span class="No-Break">https://nixtla.github.io/neuralforecast/models.nbeatsx.html</span></a><span class="No-Break">.</span></li>
+			</ul>
+			<p>Regarding <a id="_idIndexMarker360"/>interpretability, there are two other <a id="_idIndexMarker361"/>approaches you can take <span class="No-Break">besides N-BEATS:</span></p>
+			<ul>
+				<li>Use model-agnostic explainers such as <span class="No-Break">TimeShap: </span><a href="https://github.com/feedzai/timeshap"><span class="No-Break">https://github.com/feedzai/timeshap</span></a><span class="No-Break">.</span></li>
+				<li>Use a <strong class="bold">Temporal Fusion Transformer</strong> (<strong class="bold">TFT</strong>) deep learning model, which also <a id="_idIndexMarker362"/>contains special interpretability operations. You can check an example at the following <span class="No-Break">link: </span><a href="https://pytorch-forecasting.readthedocs.io/en/stable/tutorials/stallion.html#Interpret-model"><span class="No-Break">https://pytorch-forecasting.readthedocs.io/en/stable/tutorials/stallion.html#Interpret-model</span></a><span class="No-Break">.</span></li>
+			</ul>
+			<h1 id="_idParaDest-254"><a id="_idTextAnchor357"/>Optimizing the learning rate with PyTorch Forecasting</h1>
+			<p>In this <a id="_idIndexMarker363"/>recipe, we show <a id="_idIndexMarker364"/>how to optimize the learning rate of a model based on <span class="No-Break">PyTorch Forecasting.</span></p>
+			<h2 id="_idParaDest-255"><a id="_idTextAnchor358"/>Getting ready</h2>
+			<p>The learning rate is a cornerstone parameter of all deep learning methods. As the name implies, it controls how quickly the learning process of the network is. In this recipe, we’ll use the same setup as the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+datamodule = GlobalDataModule(data=dataset,
+    n_lags=N_LAGS,
+    horizon=HORIZON,
+    batch_size=32,
+    test_size=0.2)
+datamodule.setup()</pre>			<p>We’ll also use N-BEATS as an example. However, the process is identical for all models based on <span class="No-Break">PyTorch Forecasting.</span></p>
+			<h2 id="_idParaDest-256"><a id="_idTextAnchor359"/>How to do it…</h2>
+			<p>The optimization of the learning rate can be carried out using the <strong class="source-inline">Tuner</strong> class from PyTorch Lightning. Here is an example <span class="No-Break">with N-BEATS:</span></p>
+			<pre class="source-code">
+from lightning.pytorch.tuner import Tuner
+import lightning.pytorch as pl
+from pytorch_forecasting import NBeats
+trainer = pl.Trainer(accelerator="auto", gradient_clip_val=0.01)
+tuner = Tuner(trainer)
+model = NBeats.from_dataset(
+    dataset=datamodule.training,
+    stack_types=['trend', 'seasonality'],
+    num_blocks=[3, 3],
+    num_block_layers=[4, 4],
+    widths=[256, 2048],
+    sharing=[True],
+    backcast_loss_ratio=1.0,
+)</pre>			<p>In the <a id="_idIndexMarker365"/>preceding code, we <a id="_idIndexMarker366"/>define a <strong class="source-inline">Tuner</strong> instance as a wrapper of a <strong class="source-inline">Trainer</strong> object. We also define an <strong class="source-inline">NBeats</strong> model as in the previous section. Then, we use the <strong class="source-inline">lr_optim()</strong> method to optimize the <span class="No-Break">learning rate:</span></p>
+			<pre class="source-code">
+lr_optim = tuner.lr_find(model,
+    train_dataloaders=datamodule.train_dataloader(),
+    val_dataloaders=datamodule.val_dataloader(),
+    min_lr=1e-5)</pre>			<p>After this process, we can check which learning rate value is recommended and also inspect the results across the different <span class="No-Break">tested values:</span></p>
+			<pre class="source-code">
+lr_optim.suggestion()
+fig = lr_optim.plot(show=True, suggest=True)
+fig.show()</pre>			<p>We can visualize the results in the <span class="No-Break">following figure:</span></p>
+			<div>
+				<div id="_idContainer026" class="IMG---Figure">
+					<img src="image/B21145_06_002.jpg" alt="Figure 6.2: Learning rate optimization with PyTorch Forecasting" width="1650" height="679"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.2: Learning rate optimization with PyTorch Forecasting</p>
+			<p>In <a id="_idIndexMarker367"/>this example, the suggested <a id="_idIndexMarker368"/>learning rate is <span class="No-Break">about </span><span class="No-Break"><strong class="bold">0.05</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-257"><a id="_idTextAnchor360"/>How it works…</h2>
+			<p>The <strong class="source-inline">lr_find()</strong> method from <a id="_idIndexMarker369"/>PyTorch Lightning works by testing different learning rate values and selecting one that minimizes the loss of the model. This method uses the training and validation data loaders to <span class="No-Break">this effect.</span></p>
+			<p>It’s important to select a sensible value for the learning rate because different values can lead to models with different performances. A large learning rate converges faster but to a sub-optimal solution. However, a small learning rate can take a prohibitively long time <span class="No-Break">to converge.</span></p>
+			<p>After the optimization is done, you can create a model using the selected learning rate as we did in the <span class="No-Break">previous recipe.</span></p>
+			<h2 id="_idParaDest-258"><a id="_idTextAnchor361"/>There’s more…</h2>
+			<p>You can learn more about how to get the most out of models such as N-BEATS in the <em class="italic">Tutorials</em> section of PyTorch Forecasting, which is available at the following <span class="No-Break">link: </span><a href="https://pytorch-forecasting.readthedocs.io/en/stable/tutorials.html"><span class="No-Break">https://pytorch-forecasting.readthedocs.io/en/stable/tutorials.html</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-259"><a id="_idTextAnchor362"/>Getting started with GluonTS</h1>
+			<p>GluonTS is a <a id="_idIndexMarker370"/>flexible and extensible toolkit for probabilistic time series modeling using PyTorch. The toolkit provides state-of-the-art deep learning architectures specifically designed for time series tasks and an array of utilities for time series data processing, model evaluation, <span class="No-Break">and experimentation.</span></p>
+			<p>The main objective of this section is to introduce the essential components of the <strong class="source-inline">gluonts</strong> library, emphasizing its core functionalities, adaptability, <span class="No-Break">and user-friendliness.</span></p>
+			<h2 id="_idParaDest-260"><a id="_idTextAnchor363"/>Getting ready</h2>
+			<p>To begin our journey, ensure that <strong class="source-inline">gluonts</strong> is installed as well as its backend <span class="No-Break">dependency, </span><span class="No-Break"><strong class="source-inline">pytorch</strong></span><span class="No-Break">:</span></p>
+			<pre class="console">
+pip install gluonts pytorch</pre>			<p>With the installations complete, we can now dive into the capabilities <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">gluonts</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-261"><a id="_idTextAnchor364"/>How to do it…</h2>
+			<p>We start by accessing a sample dataset provided by <span class="No-Break">the library:</span></p>
+			<pre class="source-code">
+from gluonts.dataset.repository.datasets import get_dataset
+dataset = get_dataset("nn5_daily_without_missing", regenerate=False)</pre>			<p>This will load the <strong class="source-inline">nn5_daily_without_missing</strong> dataset, one of the datasets that <strong class="source-inline">gluonts</strong> offers <span class="No-Break">for experimentation.</span></p>
+			<p>Its characteristics can be inspected after loading a dataset using the <strong class="source-inline">get_dataset()</strong> function. Each <strong class="source-inline">dataset</strong> object contains metadata that offers insights into the time series frequency, associated features, and other relevant attributes. You can learn a bit more about the dataset by checking the metadata <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+print(dataset.metadata)</pre>			<p>To enhance <a id="_idIndexMarker371"/>time series data, <strong class="source-inline">gluonts</strong> provides a list of transformers. For instance, the <strong class="source-inline">AddAgeFeature</strong> data transformer adds an <strong class="source-inline">age</strong> feature to the dataset, representing the lifespan of each <span class="No-Break">time series:</span></p>
+			<pre class="source-code">
+from gluonts.transform import AddAgeFeature
+transformation_with_age = Chain([
+    AddAgeFeature(output_field="age",
+    target_field="target",
+    pred_length=dataset.metadata.prediction_length)
+])
+transformed_train_with_age = TransformedDataset(dataset.train, 
+    transformation_with_age)</pre>			<p>Data intended for training in <strong class="source-inline">gluonts</strong> is commonly denoted as a collection of dictionaries, each representing a time series accompanied by <span class="No-Break">potential features:</span></p>
+			<pre class="source-code">
+training_data = list(dataset.train)
+print(training_data[0])</pre>			<p>One of the fundamental models in <strong class="source-inline">gluonts</strong> is the <strong class="source-inline">SimpleFeedForwardEstimator</strong> model. Here’s <span class="No-Break">its setup:</span></p>
+			<p>First, the estimator is initialized by determining the prediction length, context length (indicating the number of preceding time steps to consider), and the data frequency, among <span class="No-Break">other parameters:</span></p>
+			<pre class="source-code">
+from gluonts.torch.model.simple_feedforward import SimpleFeedForwardEstimator
+estimator_with_age = SimpleFeedForwardEstimator(
+    hidden_dimensions=[10],
+    prediction_length=dataset.metadata.prediction_length,
+    context_length=100,
+    trainer_kwargs={'max_epochs': 100}
+)</pre>			<p>To train the <a id="_idIndexMarker372"/>model, simply invoke the <strong class="source-inline">train()</strong> method on the estimator supplying the <span class="No-Break">training data:</span></p>
+			<pre class="source-code">
+predictor_with_age = estimator_with_age.train
+    (transformed_train_with_age)</pre>			<p>This process trains the model using the provided data, resulting in a predictor prepared for forecasting. Here’s how we can get the prediction from <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+forecast_it_with_age, ts_it_with_age = make_evaluation_predictions(
+    dataset=dataset.test,
+    predictor=predictor_with_age,
+    num_samples=100,
+)
+forecasts_with_age = list(forecast_it_with_age)
+tss_with_age = list(ts_it_with_age)
+fig, ax = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+ts_entry_with_age = tss_with_age[0]
+ax[0].plot(ts_entry_with_age[-150:].to_timestamp())
+forecasts_with_age[0].plot(show_label=True, ax=ax[0])
+ax[0].set_title("Forecast with AddAgeFeature")
+ax[0].legend()</pre>			<p>In the <a id="_idIndexMarker373"/>preceding code, predictions can be generated with the <strong class="source-inline">make_evaluation_predictions()</strong> method, which can then be plotted against the actual values. Here’s the plot with the forecasts and <span class="No-Break">actual values:</span></p>
+			<div>
+				<div id="_idContainer027" class="IMG---Figure">
+					<img src="image/B21145_06_003.jpg" alt="Figure 6.3: Comparative analysis of forecasts with and without AddAgeFeature" width="660" height="525"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.3: Comparative analysis of forecasts with and without AddAgeFeature</p>
+			<p>In the preceding figure, we show a comparative analysis of the forecasts with and without <strong class="source-inline">AddAgeFeature</strong>. The use of this feature improves forecasting accuracy, which indicates that it’s an important variable in <span class="No-Break">this dataset.</span></p>
+			<h2 id="_idParaDest-262"><a id="_idTextAnchor365"/>How it works…</h2>
+			<p>GluonTS provides a series of built-in features that are useful for time series analysis and forecasting. For example, data transformers allow you to quickly build new features based <a id="_idIndexMarker374"/>on the raw dataset. As utilized in our experiment, the <strong class="source-inline">AddAgeFeature</strong> transformer appends an <strong class="source-inline">age</strong> attribute to each time series. The age of a time series can often provide relevant contextual information to the model. A good example where we can find it useful is when working with stocks, where older stocks might exhibit different volatility patterns than <span class="No-Break">newer ones.</span></p>
+			<p>Training in GluonTS adopts a dictionary-based structure, where each dictionary corresponds to a time series and includes additional associated features. This structure makes it easier to append, modify, or <span class="No-Break">remove features.</span></p>
+			<p>We tested a simple model in our experiment by using the <strong class="source-inline">SimpleFeedForwardEstimator</strong> model. We defined two instances of the model, one that was trained with the <strong class="source-inline">AddAgeFeature</strong> and one without. The model trained with the <strong class="source-inline">age</strong> feature showed better forecasting accuracy, as we can see in <span class="No-Break"><em class="italic">Figure 6</em></span><em class="italic">.3</em>. This improvement highlights the importance of feature engineering in time <span class="No-Break">series analysis.</span></p>
+			<h1 id="_idParaDest-263"><a id="_idTextAnchor366"/>Training a DeepAR model with GluonTS</h1>
+			<p>DeepAR is <a id="_idIndexMarker375"/>a state-of-the-art forecasting method that utilizes autoregressive recurrent networks to predict future values of <a id="_idIndexMarker376"/>time series data. Amazon introduced it; it was designed for forecasting tasks that can benefit from longer horizons, such as demand forecasting. The method is particularly powerful when there’s a need to generate forecasts for multiple related <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-264"><a id="_idTextAnchor367"/>Getting ready</h2>
+			<p>We’ll use the same dataset as in the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+from gluonts.dataset.repository.datasets import get_dataset
+dataset = get_dataset("nn5_daily_without_missing", regenerate=False)</pre>			<p>Now, let’s <a id="_idIndexMarker377"/>see how to build a DeepAR model with <span class="No-Break">this data.</span></p>
+			<h2 id="_idParaDest-265"><a id="_idTextAnchor368"/>How to do it…</h2>
+			<p>We start <a id="_idIndexMarker378"/>by formatting the data <span class="No-Break">for training:</span></p>
+			<ol>
+				<li>Let’s do this by using the <strong class="source-inline">ListDataset</strong> <span class="No-Break">data structure:</span><pre class="source-code">
+from gluonts.dataset.common import ListDataset
+from gluonts.dataset.common import FieldName
+train_ds = ListDataset(
+    [
+        {FieldName.TARGET: entry["target"], 
+            FieldName.START: entry["start"]}
+        for entry in dataset.train
+    ],
+    freq=dataset.metadata.freq,
+)</pre></li>				<li>Next, define the DeepAR estimator with the <strong class="source-inline">DeepAREstimator</strong> class, specifying parameters such as <strong class="source-inline">prediction_length</strong> (forecasting horizon), <strong class="source-inline">context_length</strong> (number of lags), and <strong class="source-inline">freq</strong> (<span class="No-Break">sampling frequency):</span><pre class="source-code">
+from gluonts.torch.model.deepar import DeepAREstimator
+N_LAGS=7
+HORIZON=7
+estimator = DeepAREstimator(
+    prediction_length=HORIZON,
+    context_length=N_LAGS,
+    freq=dataset.metadata.freq,
+    trainer_kwargs={"max_epochs": 100},
+)</pre></li>				<li>After <a id="_idIndexMarker379"/>defining the estimator, train the DeepAR model using the <span class="No-Break"><strong class="source-inline">train()</strong></span><span class="No-Break"> method:</span><pre class="source-code">
+predictor = estimator.train(train_ds)</pre></li>				<li>With the <a id="_idIndexMarker380"/>trained model, make predictions on your test data and visualize <span class="No-Break">the results:</span><pre class="source-code">
+forecast_it, ts_it = make_evaluation_predictions(
+    dataset=dataset.test,
+    predictor=predictor,
+    num_samples=100,
+)
+forecasts = list(forecast_it)
+tss = list(ts_it)
+fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+ts_entry = tss[0]
+ax.plot(ts_entry[-150:].to_timestamp())
+forecasts[0].plot(show_label=True, ax=ax, intervals=())
+ax.set_title("Forecast with DeepAR")
+ax.legend()
+plt.tight_layout()
+plt.show()</pre></li>			</ol>
+			<p>Here’s <a id="_idIndexMarker381"/>the plot <a id="_idIndexMarker382"/>of <span class="No-Break">the predictions:</span></p>
+			<div>
+				<div id="_idContainer028" class="IMG---Figure">
+					<img src="image/B21145_06_004.jpg" alt="Figure 6.4: Comparison of predictions from DeepAR and the true values from our dataset" width="721" height="433"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.4: Comparison of predictions from DeepAR and the true values from our dataset</p>
+			<p>The model is able to match the true <span class="No-Break">values closely.</span></p>
+			<h2 id="_idParaDest-266"><a id="_idTextAnchor369"/>How it works…</h2>
+			<p>DeepAR uses an RNN architecture, often leveraging LSTM units or GRUs to model time <span class="No-Break">series data.</span></p>
+			<p>The <strong class="source-inline">context_length</strong> parameter is crucial as it determines how many past observations <a id="_idIndexMarker383"/>the model will consider as its <a id="_idIndexMarker384"/>context when making a prediction. For instance, if you set <strong class="source-inline">context_length</strong> to <strong class="source-inline">7</strong>, the model will use the last week’s data to forecast <span class="No-Break">future values.</span></p>
+			<p>Conversely, the <strong class="source-inline">prediction_length</strong> parameter defines the horizon, (i.e., how many steps the model should predict into the future). In the given code, we’ve used a horizon of <span class="No-Break">one week.</span></p>
+			<p>DeepAR also stands out because of its ability to generate probabilistic forecasts. Instead of giving a single-point estimate, it provides a distribution over possible future values, allowing us to understand the uncertainty associated with <span class="No-Break">our predictions.</span></p>
+			<p>Finally, when working with multiple related time series, DeepAR exploits the commonalities between the series to make more <span class="No-Break">accurate predictions.</span></p>
+			<h2 id="_idParaDest-267"><a id="_idTextAnchor370"/>There’s more…</h2>
+			<p>DeepAR shines when the following conditions <span class="No-Break">are met:</span></p>
+			<ul>
+				<li>You have multiple related time series; DeepAR can use information from all series to <span class="No-Break">improve forecasts.</span></li>
+				<li>Your data has seasonality or <span class="No-Break">recurring patterns.</span></li>
+				<li>You want to generate probabilistic forecasts, which predict a point estimate and provide uncertainty intervals. We will discuss uncertainty estimation in the <span class="No-Break">next chapter.</span></li>
+			</ul>
+			<p>You can train a single DeepAR model for a global dataset and generate forecasts for all time series in the dataset. On the other hand, for individual time series, DeepAR can be trained on each series separately, although this might be <span class="No-Break">less efficient.</span></p>
+			<p>This model could be particularly useful for demand forecasting in retail, stock price prediction, and predicting web traffic, among <span class="No-Break">other applications.</span></p>
+			<h1 id="_idParaDest-268"><a id="_idTextAnchor371"/>Training a Transformer model with NeuralForecast</h1>
+			<p>Now, we turn <a id="_idIndexMarker385"/>our attention <a id="_idIndexMarker386"/>to Transformer architectures that have been driving recent advances in various fields of artificial intelligence. In this recipe, we will show you how to train a vanilla Transformer using the NeuralForecast <span class="No-Break">Python library.</span></p>
+			<h2 id="_idParaDest-269"><a id="_idTextAnchor372"/>Getting ready</h2>
+			<p>Transformers have become a dominant architecture in the deep learning community, especially for <strong class="bold">natural language processing</strong> (<strong class="bold">NLP</strong>) tasks. Transformers <a id="_idIndexMarker387"/>have been adopted for various tasks beyond NLP, including time <span class="No-Break">series forecasting.</span></p>
+			<p>Unlike traditional models that analyze time series data point by point in sequence, Transformers evaluate all time steps simultaneously. This approach is similar to observing an entire timeline at once, determining the significance of each moment in relation to others for a specific point <span class="No-Break">in time.</span></p>
+			<p>At the core <a id="_idIndexMarker388"/>of the Transformer architecture is the <strong class="bold">attention mechanism</strong>. This mechanism calculates a weighted sum of input values, or values from previous layers, according to their relevance to a specific input. Unlike RNNs, which process inputs step by step, this allows Transformers to consider all parts of an input <span class="No-Break">sequence simultaneously.</span></p>
+			<p>Key components <a id="_idIndexMarker389"/>of the Transformer include <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><strong class="bold">Self-attention mechanism</strong>: Computes the attention scores for all pairs of input values and then creates a weighted combination of these values based on <span class="No-Break">these scores</span></li>
+				<li><strong class="bold">Multi-head attention</strong>: The model can focus on different input parts for different tasks or reasons by running multiple attention mechanisms <span class="No-Break">in parallel</span></li>
+				<li><strong class="bold">Position-wise feedforward networks</strong>: These apply linear transformations to the <a id="_idIndexMarker390"/>output of the <span class="No-Break">attention layer</span></li>
+				<li><strong class="bold">Positional encoding</strong>: Since the Transformer doesn’t have any inherent sense of order, positional encodings are added to the input embeddings to provide the model with information about the position of each element in <span class="No-Break">the sequence</span></li>
+			</ul>
+			<p>Let’s see how to train a Transformer model. In this recipe, we’ll resort again to the dataset provided in the <strong class="source-inline">gluonts</strong> library. We’ll use the Transformer implementation available in the NeuralForecast library.  NeuralForecast is a Python library that contains the implementation of several neural networks that are focused on forecasting problems, including several <span class="No-Break">Transformer architectures.</span></p>
+			<h2 id="_idParaDest-270"><a id="_idTextAnchor373"/>How to do it…</h2>
+			<p>First, let’s prepare the dataset for the Transformer model. Unlike sequence-to-sequence <a id="_idIndexMarker391"/>models such as RNNs, LSTMs, or GRUs, which process input sequences step by step, Transformers process <a id="_idIndexMarker392"/>entire sequences at once. Therefore, how we format and feed data into them can be <span class="No-Break">slightly different:</span></p>
+			<ol>
+				<li>Let’s start by loading the dataset and the <span class="No-Break">necessary libraries:</span><pre class="source-code">
+from gluonts.dataset.repository.datasets import get_dataset
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from neuralforecast.core import NeuralForecast
+from neuralforecast.models import VanillaTransformer
+dataset = get_dataset("nn5_daily_without_missing", regenerate=False)
+N_LAGS = 7
+HORIZON = 7</pre></li>				<li>Next, convert <a id="_idIndexMarker393"/>the dataset <a id="_idIndexMarker394"/>into a pandas DataFrame and standardize it. Recall that standardization is key for any deep learning <span class="No-Break">model fitting:</span><pre class="source-code">
+data_list = list(dataset.train)
+data_list = [
+    pd.Series(
+        ds["target"],
+        index=pd.date_range(
+            start=ds["start"].to_timestamp(),
+            freq=ds["start"].freq,
+            periods=len(ds["target"]),
+        ),
+    )
+    for ds in data_list
+]
+tseries_df = pd.concat(data_list, axis=1)
+tseries_df[tseries_df.columns] = 
+    \StandardScaler().fit_transform(tseries_df)
+tseries_df = tseries_df.reset_index()
+df = tseries_df.melt("index")
+df.columns = ["ds", "unique_id", "y"]
+df["ds"] = pd.to_datetime(df["ds"])</pre></li>				<li>With the <a id="_idIndexMarker395"/>data ready, we’ll train a Transformer model. Unlike the DeepAR model, which uses <a id="_idIndexMarker396"/>recurrent architectures, the Transformer will rely on its attention mechanisms to consider various parts of the time series when <span class="No-Break">making predictions:</span><pre class="source-code">
+model = [
+    VanillaTransformer(
+        h=HORIZON,
+        input_size=N_LAGS,
+        max_steps=100,
+        val_check_steps=5,
+        early_stop_patience_steps=3,
+    ),
+]
+nf = NeuralForecast(models=model, freq="D")
+Y_df = df[df["unique_id"] == 0]
+Y_train_df = Y_df.iloc[:-2*HORIZON]
+Y_val_df = Y_df.iloc[-2*HORIZON:-HORIZON]
+training_df = pd.concat([Y_train_df, Y_val_df])
+nf.fit(df=training_df, val_size=HORIZON)</pre></li>				<li>Finally, visualize <a id="_idIndexMarker397"/>the <span class="No-Break">forecast </span><span class="No-Break"><a id="_idIndexMarker398"/></span><span class="No-Break">results:</span><pre class="source-code">
+forecasts = nf.predict()
+Y_df = df[df["unique_id"] == 0]
+Y_hat_df = forecasts[forecasts.index == 0].reset_index()
+Y_hat_df = Y_test_df.merge(Y_hat_df, how="outer", 
+    on=["unique_id", "ds"])
+plot_df = pd.
+    concat([Y_train_df, Y_val_df, Y_hat_df]).set_index("ds")
+plot_df = plot_df.iloc[-150:]
+fig, ax = plt.subplots(1, 1, figsize=(20, 7))
+plot_df[["y", "VanillaTransformer"]].plot(ax=ax, linewidth=2)
+ax.set_title("First Time Series Forecast with Transformer", fontsize=22)
+ax.set_ylabel("Value", fontsize=20)
+ax.set_xlabel("Timestamp [t]", fontsize=20)
+ax.legend(prop={"size": 15})
+ax.grid()
+plt.show()</pre></li>			</ol>
+			<p>The <a id="_idIndexMarker399"/>following figure includes <a id="_idIndexMarker400"/>the Transformer forecasts and actual values of the <span class="No-Break">time series:</span></p>
+			<div>
+				<div id="_idContainer029" class="IMG---Figure">
+					<img src="image/B21145_06_005.jpg" alt="Figure 6.5: Comparison of Transformer predictions and our dataset’s true values" width="972" height="392"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.5: Comparison of Transformer predictions and our dataset’s true values</p>
+			<h2 id="_idParaDest-271"><a id="_idTextAnchor374"/>How it works…</h2>
+			<p>The <strong class="source-inline">neuralforecast</strong> library requires the data in a specific format. Each observation consists of three pieces of information: the timestamp, the time series identifier, and the corresponding value. We started this recipe by preparing the data in this format. The Transformer is implemented in the <strong class="source-inline">VanillaTransformer</strong> class. We set a few parameters, such as the forecasting horizon, number of training steps, or early stopping related inputs. You can check the complete list of the parameters at the following link: <a href="https://nixtla.github.io/neuralforecast/models.vanillatransformer.html">https://nixtla.github.io/neuralforecast/models.vanillatransformer.html</a>. The training process is carried out by the <strong class="source-inline">fit()</strong> method in the <strong class="source-inline">NeuralForecast</strong> <span class="No-Break">class instance.</span></p>
+			<p>Transformers process time series data by encoding the entire sequence using self-attention mechanisms, capturing dependencies without regard for their distance in the input sequence. This global perspective is particularly valuable when patterns or dependencies exist over long horizons or when the relevance of past data <span class="No-Break">changes dynamically.</span></p>
+			<p>Positional <a id="_idIndexMarker401"/>encodings are used to <a id="_idIndexMarker402"/>ensure that the Transformer recognizes the order of data points. Without them, the model would treat the time series as a bag of values without any <span class="No-Break">inherent order.</span></p>
+			<p>The multi-head attention mechanism allows the Transformer to focus on different time steps and features concurrently, making it especially powerful for complex time series with multiple interacting patterns <span class="No-Break">and seasonality.</span></p>
+			<h2 id="_idParaDest-272"><a id="_idTextAnchor375"/>There’s more…</h2>
+			<p>Transformers can be highly effective for time series forecasting due to the <span class="No-Break">following reasons:</span></p>
+			<ul>
+				<li>Their ability to capture long-term dependencies in <span class="No-Break">the data</span></li>
+				<li>Scalability with <span class="No-Break">large datasets</span></li>
+				<li>Flexibility in modeling both univariate and multivariate <span class="No-Break">time series</span></li>
+			</ul>
+			<p>Like other models, Transformers benefit from hyperparameter tuning, such as adjusting the number of attention heads, the size of the model (i.e., the number of layers and the dimension of the embeddings), and the <span class="No-Break">learning rate.</span></p>
+			<h1 id="_idParaDest-273"><a id="_idTextAnchor376"/>Training a Temporal Fusion Transformer with GluonTS</h1>
+			<p>The TFT is an attention-based architecture developed at Google. It has recurrent layers to <a id="_idIndexMarker403"/>learn temporal <a id="_idIndexMarker404"/>relationships at different scales combined with self-attention layers for interpretability. TFTs also use variable selection networks for feature selection, gating layers to suppress unnecessary components, and quantile loss as their loss function to produce <span class="No-Break">forecasting intervals.</span></p>
+			<p>In this section, we delve into training and performing inference with a TFT model using the <span class="No-Break">GluonTS framework.</span></p>
+			<h2 id="_idParaDest-274"><a id="_idTextAnchor377"/>Getting ready</h2>
+			<p>Ensure <a id="_idIndexMarker405"/>you have the <a id="_idIndexMarker406"/>GluonTS library and PyTorch backend installed in your environment. We’ll use the <strong class="source-inline">nn5_daily_without_missing</strong> dataset from the GluonTS repository as a <span class="No-Break">working example:</span></p>
+			<pre class="source-code">
+from gluonts.dataset.common import ListDataset, FieldName
+from gluonts.dataset.repository.datasets import get_dataset
+dataset = get_dataset("nn5_daily_without_missing", regenerate=False)
+train_ds = ListDataset(
+    [
+        {FieldName.TARGET: entry["target"], FieldName.START: entry["start"]}
+        for entry in dataset.train
+    ],
+    freq=dataset.metadata.freq,
+)</pre>			<p>In the following section, we’ll train a TFT model with <span class="No-Break">this dataset.</span></p>
+			<h2 id="_idParaDest-275"><a id="_idTextAnchor378"/>How to do it…</h2>
+			<p>With the dataset in place, let’s define the <span class="No-Break">TFT estimator:</span></p>
+			<ol>
+				<li>We’ll begin with specifying hyperparameters such as the prediction length, context length, and <span class="No-Break">training frequency:</span><pre class="source-code">
+from gluonts.torch.model.tft import TemporalFusionTransformerEstimator
+N_LAGS = 7
+HORIZON = 7
+estimator = TemporalFusionTransformerEstimator(
+    prediction_length=HORIZON,
+    context_length=N_LAGS,
+    freq=dataset.metadata.freq,
+    trainer_kwargs={"max_epochs": 100},
+)</pre></li>				<li>After <a id="_idIndexMarker407"/>defining the estimator, proceed to train the TFT model using the <span class="No-Break">training dataset:</span><pre class="source-code">
+predictor = estimator.train(train_ds)</pre></li>				<li>Once <a id="_idIndexMarker408"/>trained, we can make predictions using the model. Utilize the <strong class="source-inline">make_evaluation_predictions</strong><strong class="source-inline">()</strong> function to <span class="No-Break">accomplish this:</span><pre class="source-code">
+from gluonts.evaluation import make_evaluation_predictions
+forecast_it, ts_it = make_evaluation_predictions(
+    dataset=dataset.test,
+    predictor=predictor,
+    num_samples=100,
+)</pre></li>				<li>Lastly, we <a id="_idIndexMarker409"/>can visualize <a id="_idIndexMarker410"/>our forecasts to understand the <span class="No-Break">model’s performance:</span><pre class="source-code">
+import matplotlib.pyplot as plt
+ts_entry = tss[0]
+ax.plot(ts_entry[-150:].to_timestamp())
+forecasts[0].plot(show_label=True, ax=ax, intervals=())
+ax.set_title("Forecast with Temporal Fusion Transformer")
+ax.legend()
+plt.tight_layout()
+plt.show()</pre></li>			</ol>
+			<p>The following is a comparison of the predictions of the model with the actual values of <span class="No-Break">the dataset.</span></p>
+			<div>
+				<div id="_idContainer030" class="IMG---Figure">
+					<img src="image/B21145_06_006.jpg" alt="Figure 6.6: Comparison of predictions from a TFT and the true values from our dataset" width="722" height="432"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.6: Comparison of predictions from a TFT and the true values from our dataset</p>
+			<h2 id="_idParaDest-276"><a id="_idTextAnchor379"/>How it works…</h2>
+			<p>We use the implementation of TFT that is available in <strong class="source-inline">gluonts</strong>. The main parameters <a id="_idIndexMarker411"/>are the <a id="_idIndexMarker412"/>number of lags (context length) and forecasting horizon. You can also test different values for some of the parameters of the model, such as the number of attention heads (<strong class="source-inline">num_heads</strong>) or the size of the Transformer hidden states (<strong class="source-inline">hidden_dim</strong>). The full list of parameters can be found at the following <span class="No-Break">link: </span><a href="https://ts.gluon.ai/stable/api/gluonts/gluonts.torch.model.tft.estimator.html"><span class="No-Break">https://ts.gluon.ai/stable/api/gluonts/gluonts.torch.model.tft.estimator.html</span></a><span class="No-Break">.</span></p>
+			<p>TFT fits several use cases due to its complete <span class="No-Break">feature set:</span></p>
+			<ul>
+				<li><strong class="bold">Temporal processing</strong>: TFT addresses the challenge of integrating past observations <a id="_idIndexMarker413"/>and known future inputs through a sequence-to-sequence model, leveraging <span class="No-Break">LSTM Encoder-Decoders.</span></li>
+				<li><strong class="bold">Attention mechanism</strong>: The model employs attention mechanisms, enabling it to dynamically assign importance to different time steps. This ensures that the model remains focused only on relevant <span class="No-Break">historical data.</span></li>
+				<li><strong class="bold">Gating mechanisms</strong>: TFT architectures leverage gated residual networks that provide flexibility in the modeling process, adapting to the complexity of the data. This adaptability is important for handling diverse datasets, especially smaller or <span class="No-Break">noisier ones.</span></li>
+				<li><strong class="bold">Variable selection networks</strong>: This component is used to determine the relevance <a id="_idIndexMarker414"/>of each covariate to the forecast. By weighting the input features’ importance, it filters out noise and relies only on <span class="No-Break">significant predictors.</span></li>
+				<li><strong class="bold">Static covariate encoders</strong>: TFT encodes static information into multiple context vectors, enriching the <span class="No-Break">model’s input.</span></li>
+				<li><strong class="bold">Quantile prediction</strong>: By forecasting various percentiles at each time step, TFT provides a range of <span class="No-Break">possible outcomes.</span></li>
+				<li><strong class="bold">Interpretable outputs</strong>: Even though TFT is a deep learning model, it provides insights into feature importance, ensuring transparency <span class="No-Break">in predictions.</span></li>
+			</ul>
+			<h2 id="_idParaDest-277"><a id="_idTextAnchor380"/>There’s more…</h2>
+			<p>Beyond its architectural innovations, TFT’s interpretability makes it a good choice when there is a need to explain how the predictions were produced. Components such as variable network selection and the temporal multi-head attention layer shed light on the importance of different inputs and temporal dynamics, making TFT not just a forecasting tool but also an <span class="No-Break">analytical one.</span></p>
+			<h1 id="_idParaDest-278"><a id="_idTextAnchor381"/>Training an Informer model with NeuralForecast</h1>
+			<p>In this <a id="_idIndexMarker415"/>recipe, we’ll <a id="_idIndexMarker416"/>explore the <strong class="source-inline">neuralforecast</strong> Python library to train an Informer model, another Transformer-based deep learning approach <span class="No-Break">for forecasting.</span></p>
+			<h2 id="_idParaDest-279"><a id="_idTextAnchor382"/>Getting ready</h2>
+			<p>Informer is a Transformer method tailored for long-term forecasting – that is, predicting with a large forecasting horizon. The main difference relative to a vanilla Transformer is that Informer provides an improved self-attention mechanism, which significantly reduces the computational requirements to run the model and generate <span class="No-Break">long-sequence predictions.</span></p>
+			<p>In this <a id="_idIndexMarker417"/>recipe, we’ll show you how <a id="_idIndexMarker418"/>to train Informer using <strong class="source-inline">neuralforecast</strong>. We’ll use the same dataset as in the <span class="No-Break">previous recipes:</span></p>
+			<pre class="source-code">
+from gluonts.dataset.repository.datasets import get_dataset
+dataset = get_dataset('nn5_daily_without_missing')</pre>			<h2 id="_idParaDest-280"><a id="_idTextAnchor383"/>How to do it…</h2>
+			<p>This time, instead of creating <strong class="source-inline">DataModule</strong> to handle the data preprocessing, we’ll use the typical workflow of the <span class="No-Break"><strong class="source-inline">neuralforecast</strong></span><span class="No-Break">-based models:</span></p>
+			<ol>
+				<li>We start by preparing the time series dataset in the specific format expected by the <span class="No-Break"><strong class="source-inline">neuralforecast</strong></span><span class="No-Break"> methods:</span><pre class="source-code">
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+data_list = list(dataset.train)
+data_list = [pd.Series(ds['target'],
+    index=pd.date_range(start=ds['start'].to_timestamp(),
+        freq=ds['start'].freq,
+        periods=len(ds['target'])))
+    for ds in data_list]
+tseries_df = pd.concat(data_list, axis=1)
+tseries_df[tseries_df.columns] = \
+    StandardScaler().fit_transform(tseries_df)
+tseries_df = tseries_df.reset_index()
+df = tseries_df.melt('index')
+df.columns = ['ds', 'unique_id', 'y']
+df['ds'] = pd.to_datetime(df['ds'])
+n_time = len(df.ds.unique())
+val_size = int(.2 * n_time)</pre></li>				<li>We <a id="_idIndexMarker419"/>transformed the <a id="_idIndexMarker420"/>dataset into a pandas DataFrame with three columns: <strong class="source-inline">ds</strong>, <strong class="source-inline">unique_id</strong>, and <strong class="source-inline">y</strong>. These represent the timestamp, the ID of the time series, and the value of the corresponding time series, respectively. In the preceding code, we transformed all the time series into a common value range using a standard scaler from <strong class="source-inline">scikit-learn</strong>. We also set the validation set size to 20% of the size of the time series. Now, we can set up the Informer model <span class="No-Break">as follows:</span><pre class="source-code">
+from neuralforecast.core import NeuralForecast
+from neuralforecast.models import Informer
+N_LAGS = 7
+HORIZON = 7
+model = [Informer(h=HORIZON,
+    input_size=N_LAGS,
+    max_steps=1000,
+    val_check_steps=25,
+    early_stop_patience_steps=10)]
+nf = NeuralForecast(models=model, freq='D')</pre></li>				<li>We set <a id="_idIndexMarker421"/>Informer with <a id="_idIndexMarker422"/>a context length (number of lags) of <strong class="source-inline">7</strong> to forecast the next 7 values at each time step. The number of training steps was set to <strong class="source-inline">1000</strong>, and we also set up an early stopping mechanism to help the fitting process. These are only a subset of the parameters you can use to set up Informer. You can check out the following link for the complete list of parameters: <a href="https://nixtla.github.io/neuralforecast/models.informer.html">https://nixtla.github.io/neuralforecast/models.informer.html</a>. The model is passed on to a <strong class="source-inline">NeuralForecast</strong> class instance, where we also set the frequency of the time series to daily (the <strong class="source-inline">D</strong> keyword). Then, the training process is done <span class="No-Break">as follows:</span><pre class="source-code">
+nf.fit(df=df, val_size=val_size)</pre></li>				<li>The <strong class="source-inline">nf</strong> object is used to fit the model and can then be used to <span class="No-Break">make predictions:</span><pre class="source-code">
+forecasts = nf.predict()
+forecasts.head()</pre></li>			</ol>
+			<p>The forecasts are structured as a pandas DataFrame, so you can check a sample of the forecasts by using the <span class="No-Break"><strong class="source-inline">head()</strong></span><span class="No-Break"> method.</span></p>
+			<h2 id="_idParaDest-281"><a id="_idTextAnchor384"/>How it works…</h2>
+			<p>The <strong class="source-inline">neuralforecast</strong> library provides yet another simple framework to train powerful <a id="_idIndexMarker423"/>models for time series <a id="_idIndexMarker424"/>problems. In this case, we handle the data logic outside of the framework because it handles the passing of the data to <span class="No-Break">models internally.</span></p>
+			<p>The <strong class="source-inline">NeuralForecast</strong> class instance takes a list of models as input (in this case, with a single <strong class="source-inline">Informer</strong> instance) and takes care of the training process. This library can be a good solution if you want to use state-of-the-art models off the shelf. The limitation is that it is not as flexible as the base <span class="No-Break">PyTorch ecosystem.</span></p>
+			<h2 id="_idParaDest-282"><a id="_idTextAnchor385"/>There’s more…</h2>
+			<p>In this recipe, we described how to train a particular Transformer model using <strong class="source-inline">neuralforecast</strong>. But, this library contains other Transformers that you can try, including <span class="No-Break">the following:</span></p>
+			<ul>
+				<li><span class="No-Break">Vanilla Transformer</span></li>
+				<li><span class="No-Break">TFT</span></li>
+				<li><span class="No-Break">Autoformer</span></li>
+				<li><span class="No-Break">PatchTST</span></li>
+			</ul>
+			<p>You can check the complete list of models at the following <span class="No-Break">link: </span><a href="https://nixtla.github.io/neuralforecast/core.html"><span class="No-Break">https://nixtla.github.io/neuralforecast/core.html</span></a><span class="No-Break">.</span></p>
+			<h1 id="_idParaDest-283"><a id="_idTextAnchor386"/>Comparing different Transformers with NeuralForecast</h1>
+			<p>NeuralForecast <a id="_idIndexMarker425"/>contains several deep <a id="_idIndexMarker426"/>learning methods that you can use to tackle time series problems. In this recipe, we’ll walk you through the process of comparing different Transformer-based models <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">neuralforecast</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-284"><a id="_idTextAnchor387"/>Getting ready</h2>
+			<p>We’ll use the same dataset as in the previous recipe (the <strong class="source-inline">df</strong> object). We set the validation and test size to 10% of the data <span class="No-Break">size each:</span></p>
+			<pre class="source-code">
+val_size = int(.1 * n_time)
+test_size = int(.1 * n_time)</pre>			<p>Now, let’s see how to compare different models <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">neuralforecast</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-285"><a id="_idTextAnchor388"/>How to do it…</h2>
+			<p>We start <a id="_idIndexMarker427"/>by defining the models we want <a id="_idIndexMarker428"/>to compare. In this case, we’ll compare an Informer model with a vanilla Transformer, which we set up <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+from neuralforecast.models import Informer, VanillaTransformer
+models = [
+    Informer(h=HORIZON,
+        input_size=N_LAGS,
+        max_steps=1000,
+        val_check_steps=10,
+        early_stop_patience_steps=15),
+    VanillaTransformer(h=HORIZON,
+        input_size=N_LAGS,
+        max_steps=1000,
+        val_check_steps=10,
+        early_stop_patience_steps=15),
+]</pre>			<p>The <a id="_idIndexMarker429"/>training parameters are set equally <a id="_idIndexMarker430"/>for each model. We can use the <strong class="source-inline">NeuralForecast</strong> class to compare different models using the <strong class="source-inline">cross_validation()</strong> method <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+from neuralforecast.core import NeuralForecast
+nf = NeuralForecast(
+    models=models,
+    freq='D')
+cv = nf.cross_validation(df=df,
+    val_size=val_size,
+    test_size=test_size,
+    n_windows=None)</pre>			<p>The <strong class="source-inline">cv</strong> object is the result of the comparison. Here’s a sample of the forecasts of each model in a particular <span class="No-Break">time series:</span></p>
+			<div>
+				<div id="_idContainer031" class="IMG---Figure">
+					<img src="image/B21145_06_007.jpg" alt="Figure 6.7: Forecasts of two Transformer models in an example time series" width="1650" height="782"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 6.7: Forecasts of two Transformer models in an example time series</p>
+			<p>The Informer <a id="_idIndexMarker431"/>model seems to produce <a id="_idIndexMarker432"/>better forecasts, which we can check by computing the mean <span class="No-Break">absolute error:</span></p>
+			<pre class="source-code">
+from neuralforecast.losses.numpy import mae
+mae_informer = mae(cv['y'], cv['Informer'])
+mae_transformer = mae(cv['y'], cv['VanillaTransformer'])</pre>			<p>The error of Informer is 0.42, which is better than the 0.53 score obtained <span class="No-Break">by </span><span class="No-Break"><strong class="source-inline">VanillaTransformer</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-286"><a id="_idTextAnchor389"/>How it works…</h2>
+			<p>Under the <a id="_idIndexMarker433"/>hood, the <strong class="source-inline">cross_validation()</strong> method works as follows. Each model is trained using the training and validation sets. Then, they are evaluated on testing instances. The forecasting performance on the test set provides a reliable estimate for the performance we expect the models to have when applied in practice. So, you should select the model that maximizes forecasting performance, and retrain it using the <span class="No-Break">whole dataset.</span></p>
+			<p>The <strong class="source-inline">neuralforecast</strong> library contains other models that you can compare. You can also <a id="_idIndexMarker434"/>compare different configurations of the same method and see which one works best for <span class="No-Break">your data.</span></p>
+		</div>
+	</div>
+</div>
+</body></html>

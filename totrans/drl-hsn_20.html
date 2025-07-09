@@ -1,0 +1,1279 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-20-alphago-zero-and-muzero">
+<h1 class="chapterNumber">20</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_423">
+<span id="x1-36400020"/>AlphaGo Zero and MuZero
+    </h1>
+<p>Model-based methods allow us to decrease the amount of communication with the environment by building a model of the environment and using it during training. In this chapter, we take a look at model-based methods by exploring cases where we have a model of the environment, but this environment is being used by two competing parties. This situation is very common in board games, where the rules of the game are fixed and the full position is observable, but we have an opponent who has the primary goal of preventing us from winning the game.</p>
+<p>A few years ago, DeepMind proposed a very elegant approach to solving such problems. No prior domain knowledge is required, but the agent improves its policy only via self-play. This method is called <span class="cmbx-10x-x-109">AlphaGo Zero </span>and <span id="dx1-364001"/>was introduced in 2017. Later, in 2020, they extended this method by removing the requirement for an environment model, which allowed it to apply to a much wider range of RL problems (including Atari games). The method is called MuZero and we will also look at this in detail. As you’ll see in this chapter, MuZero is more general than AlphaGo Zero, which comes with the price of more networks to be trained and might lead to longer training times and worse results. From that perspective, we’ll discuss both methods in detail, as AlphaGo Zero may be more applicable in some situations.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Discuss the structure of the AlphaGo Zero method</p>
+</li>
+<li>
+<p>Implement the method for playing Connect 4</p>
+</li>
+<li>
+<p>Implement MuZero and compare it to AlphaGo Zero</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="comparing-model-based-and-model-free-methods">
+<h1 class="heading-1" id="sigil_toc_id_328"> <span id="x1-36500020.1"/>Comparing model-based and model-free methods</h1>
+<p>In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>, we saw several different ways in which we can classify RL methods. We distinguished three main categories:</p>
+<ul>
+<li>
+<p>Value-based and policy-based</p>
+</li>
+<li>
+<p>On-policy and off-policy</p>
+</li>
+<li>
+<p>Model-free and model-based</p>
+</li>
+</ul>
+<p>So far, we have <span id="dx1-365001"/>covered enough examples of methods of both types in the first and second categories, but all the methods that we have covered so far have been 100% model-free. However, this doesn’t mean that model-free methods are more important or better than their model-based counterparts. Historically, due to their <span class="cmbx-10x-x-109">sample efficiency</span>, model-based methods have been used in the robotics field and for other industrial controls. This has also happened because of the cost of the hardware and the physical limitations of samples that can be obtained from a real robot. Robots with a large degree of freedom are not widely accessible, so RL researchers are more focused on computer games and other environments where samples are relatively cheap. However, ideas from robotics are infiltrating RL, so, who knows, maybe the model-based methods will become more of a focus quite soon. To begin, let’s discuss the difference between the model-free approach that we have used in the book and model-based methods, including their strong and weak points and where they might be applicable.</p>
+<p>In the names of both classes, “model” means the model of the environment, which could have various forms, for example, providing us with a new state and reward from the current state and action. All the methods covered so far put zero effort into predicting, understanding, or simulating the environment. What we were interested in was proper behavior (in terms of the final reward), specified directly (a policy) or indirectly (a value) given the observation. The source of the observations and reward was the environment itself, which in some cases could be very slow and inefficient.</p>
+<p>In a model-based approach, we’re trying to learn the model of the environment to reduce this “real environment” dependency. At a high level, the model is some kind of black box that approximates the real environment that we talked about in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>. If we have an accurate environment model, our agent can produce any number of trajectories that it needs simply by using this model instead of executing the actions in the real world.</p>
+<p>To some degree, the common playground of RL research is also just models of the real world; for example, MuJoCo and PyBullet are simulators of physics used so we don’t need to build real robots with real actuators, sensors, and cameras to train our agents. The story is the same with Atari games or TORCS (The Open Racing Car Simulator): we use computer programs that model some processes, and these models can be executed quickly and cheaply. Even our CartPole example is a simplified approximation of a real cart with a stick attached. (By the way, in PyBullet and MuJoCo, there are more realistic CartPole versions with 3D actions and more accurate simulation.)</p>
+<p>There are two motivations for using the model-based approach as opposed to model-free:</p>
+<ul>
+<li>
+<p>The first and the most important one is sample efficiency <span id="dx1-365002"/>caused by less dependency on the real environment. Ideally, by having an accurate model, we can avoid touching the real world and use only the trained model. In real applications, it is almost never possible to have a precise model of the environment, but even an imperfect model can significantly reduce the number of samples needed.</p>
+<p>For example, in real life, you don’t need an absolutely precise mental picture of some action (such as tying shoelaces or crossing the road), but this picture helps you plan and predict the outcome.</p>
+</li>
+<li>
+<p>The second reason for a model-based approach is the <span class="cmbx-10x-x-109">transferability</span> of the environment model across goals. If you have a good model for a robot manipulator, you can use it for a wide variety of goals without retraining everything from scratch.</p>
+</li>
+</ul>
+<p>There are a lot of details in this class of methods, but the aim of this chapter is to give you an overview and take a closer look at the model-based approach applied to board games.</p>
+</section>
+<section class="level3 sectionHead" id="model-based-methods-for-board-games">
+<h1 class="heading-1" id="sigil_toc_id_329"> <span id="x1-36600020.2"/>Model-based methods for board games</h1>
+<p>Most board games <span id="dx1-366001"/>provide a setup that is different from an arcade scenario. The Atari game suite assumes that one player is making decisions in some environment with complex dynamics. By generalizing and learning from the outcome of their actions, the player improves their skills, increasing their final score. In a board game setup, however, the rules of the game are usually quite simple and compact. What makes the game complicated is the number of different positions on the board and the presence of an opponent with an unknown strategy who tries to win the game.</p>
+<p>With board games, the ability to observe the game state and the presence of explicit rules opens up the possibility of analyzing the current position, which isn’t the case for Atari. This analysis means taking the current state of the game, evaluating all the possible moves that we can make, and then choosing the best move as our action. To be able to evaluate all the moves, we need some kind of model of the game, capturing the game rules.</p>
+<p>The simplest approach to evaluation is to iterate over the possible actions and recursively evaluate the position after the action has been taken. Eventually, this process will lead us to the final position, when no more moves are possible. By propagating the game result back, we can estimate the expected value of any action in any position. One possible variation of this method is called <span class="cmbx-10x-x-109">minimax</span>, which is when <span id="dx1-366002"/>we are trying to make the strongest move, but our opponent is trying to make the worst move for us, so we are iteratively minimizing and maximizing the final game objective of walking down the tree of game states (which will be described in detail later).</p>
+<p>If the number of different positions is small enough to be analyzed entirely, like in the tic-tac-toe game (which has only 138 terminal states), it’s <span id="dx1-366003"/>not a problem to walk down this game tree from any state that we have and figure out the best move to make. Unfortunately, this brute-force approach doesn’t work even for medium-complexity games, as the number of configurations grows exponentially. For example, in the game of draughts (also known as checkers), the total game tree has 5 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">20</span></sup> nodes, which is quite a challenge even for modern hardware. In the case of more complex games, like Chess or Go, this number is much larger, so it’s just not possible to analyze all the positions reachable from every state. To handle this, usually some kind of approximation is used, where we analyze the tree up to some depth. With a combination of careful search and stop criteria, called <span class="cmbx-10x-x-109">tree pruning</span>, and the smart predefined evaluation of positions, we can make a computer program that plays complex games at a fairly good level.</p>
+</section>
+<section class="level3 sectionHead" id="the-alphago-zero-method">
+<h1 class="heading-1" id="sigil_toc_id_330"> <span id="x1-36700020.3"/>The AlphaGo Zero method</h1>
+<p>In late 2017, DeepMind published an article titled <span class="cmti-10x-x-109">Mastering the game of Go</span> <span class="cmti-10x-x-109">without human knowledge </span>in the journal <span class="cmti-10x-x-109">Nature </span>by Silver et al. [<span id="x1-367001"/><a href="#">SSa17</a>] presenting a novel approach called AlphaGo Zero, which <span id="dx1-367002"/>was able to achieve a superhuman level of playing complex games, like Go and chess, without any prior knowledge except the rules. The agent was able to improve its policy by constantly playing against itself and reflecting on the outcomes. No large game databases, handmade features, or pretrained models were needed. Another nice property of the method is its simplicity and elegance.</p>
+<p>In the example of this chapter, we will try to understand and implement this approach for the game Connect 4 (also known as “four in a row” or “four in a line”) to evaluate it ourselves.</p>
+<p>First, we will discuss the structure of the method. The whole system contains several parts that need to be understood before we can implement them.</p>
+<section class="level4 subsectionHead" id="overview">
+<h2 class="heading-2" id="sigil_toc_id_331"> <span id="x1-36800020.3.1"/>Overview</h2>
+<p>At a high level, the <span id="dx1-368001"/>method consists of three components, all of which will be explained in detail later, so don’t worry if something is not completely clear from this section:</p>
+<ul>
+<li>
+<p>We constantly <span id="dx1-368002"/>traverse the game tree using the <span class="cmbx-10x-x-109">Monte Carlo</span> <span class="cmbx-10x-x-109">tree search (MCTS) </span>algorithm, the core idea of which is to semi-randomly walk down the game states, expanding them and gathering statistics about the frequency of moves and underlying game outcomes. As the game tree is huge, both in terms of the depth and width, we don’t try to build the full tree; we just randomly sample its most promising paths (that’s the source of the method’s name).</p>
+</li>
+<li>
+<p>At every moment, we have the current <span class="cmti-10x-x-109">best player</span>, which is the model used to generate the data via <span class="cmbx-10x-x-109">self-play </span>(this concept will be discussed in detail later, but for now it is enough for you to know that it refers to the usage of the same model against itself). Initially, this model has random weights, so it makes moves randomly, like a four-year-old learning how chess pieces move. However, over time, we replace this best player with better variations of it, which generate more and more meaningful and sophisticated game scenarios. Self-play means that the same <span class="cmti-10x-x-109">current best </span>model is used on both sides of the board. This might not look very useful, as having the same model play against itself has an approximately 50% chance outcome, but that’s actually what we need: samples of the games where our best model can demonstrate its best skills. The analogy is simple: it’s usually not very interesting to watch a match between the outsider and the leader; the leader will win easily. What is much more fun and intriguing to see is when players of roughly equal skill compete. That’s why the final in any championship attracts much more attention than the preceding matches: both teams or players in the final usually excel in the game, so they will need to play their best game to win.</p>
+</li>
+<li>
+<p>The third component in the method is the <span class="cmbx-10x-x-109">training </span>process of the <span class="cmti-10x-x-109">apprentice </span>model, which is trained on the data gathered by the best model during self-play. This model can be likened to a kid sitting and constantly analyzing the chess games played by two adults. Periodically, we play several matches between this trained model and our current best model. When the trainee is able to beat the best model in the majority of games, we announce the trained model as the new best model and the process continues.</p>
+</li>
+</ul>
+<p>Despite the <span id="dx1-368003"/>simplicity and even naïvety of this, AlphaGo Zero was able to beat all the previous AlphaGo versions and became the best Go player in the world, without any prior knowledge except the rules. After the paper by Silver et al. [<span id="x1-368004"/><a href="#">SSa17</a>] was published, DeepMind adapted the method for chess and published the paper called <span class="cmti-10x-x-109">Mastering chess and shogi by</span> <span class="cmti-10x-x-109">self-play with a general reinforcement learning algorithm </span>[<span id="x1-368005"/><a href="#">Sil+17</a>], where the model trained from scratch beat Stockfish, which was the best chess program at the time and took more than a decade for human experts to develop.</p>
+<p>Now, let’s take a look at all three components of the method in detail.</p>
+</section>
+<section class="level4 subsectionHead" id="mcts">
+<h2 class="heading-2" id="sigil_toc_id_332"> <span id="x1-36900020.3.2"/>MCTS</h2>
+<p>To understand what <span id="dx1-369001"/>MCTS does, let’s consider a simple subtree of the tic-tac-toe game, as shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-369002r1"><span class="cmti-10x-x-109">20.1</span></a>. At the beginning, the game field is empty and the cross player (X) needs to choose where to move. There are nine different options for the first move, so our root state has nine different branches leading to the corresponding states.</p>
+<div class="minipage">
+<p><img alt="u×p-left ×up-mid ⋅⋅⋅ ×down-mid d×own -right " height="300" src="../Images/B22150_20_01.png" width="600"/> <span id="x1-369002r1"/></p>
+<span class="id">Figure 20.1: The game tree of tic-tac-toe </span>
+</div>
+<p>The number <span id="dx1-369003"/>of possible actions at any game state is called the <span class="cmbx-10x-x-109">branching</span> <span class="cmbx-10x-x-109">factor</span>, and it <span id="dx1-369004"/>shows the bushiness of the game tree. In general, this is not constant and may vary, as some moves are not always doable. In the case of tic-tac-toe, the number of available actions could vary from nine at the beginning of the game to zero at the leaf nodes. The branching factor allows us to estimate how quickly the game tree grows, as every available action leads to another set of actions that could be taken.</p>
+<p>For our example, after the cross player has made their move, the nought (0) has eight alternatives at every nine positions, which makes 9 <span class="cmsy-10x-x-109">× </span>8 total positions at the second level of the tree. The total number of nodes in the tree can be up to 9! = 362880, but the actual number is less, as not all the games could be played to the maximum depth.</p>
+<p>Tic-tac-toe is tiny, but if we consider larger games and, for example, think about the number of first moves that white could make at the beginning of a chess game (which is 20) or the number of spots that the white stone could be placed at in Go (361 in total for a 19 <span class="cmsy-10x-x-109">× </span>19 game field), the number of game positions in the complete tree quickly becomes enormous. With every new level, the number of states is multiplied by the average number of actions that we can perform on the previous level.</p>
+<p>To deal with this combinatorial explosion, random sampling comes into play. In a general MCTS, we perform many iterations of depth-first search, starting at the current game state and either selecting the actions randomly or with some strategy, which should include enough randomness in its decisions. Every search is continued until the end state of the game, and then it is followed by updating the weights of the visited tree branches according to the game’s outcome. This process is similar to the value iteration method, when we played the episodes and the final step of the episode influenced the value estimation of all the previous steps. This is a general MCTS, and there are many variants of this method related to expansion strategy, branch selection policy, and other details. In AlphaGo Zero, a variant of MCTS is used. For every edge (representing the move from some position), this set of statistics is stored:</p>
+<ul>
+<li>
+<p>A prior probability, <span class="cmmi-10x-x-109">P</span>(<span class="cmmi-10x-x-109">s,a</span>), of the edge</p>
+</li>
+<li>
+<p>A visit count, <span class="cmmi-10x-x-109">N</span>(<span class="cmmi-10x-x-109">s,a</span>)</p>
+</li>
+<li>
+<p>An action value, <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>)</p>
+</li>
+</ul>
+<p>Each search starts from the root state following the most promising actions, selected using the utility value, <span class="cmmi-10x-x-109">U</span>(<span class="cmmi-10x-x-109">s,a</span>), proportional to</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq73.png" width="218"/>
+</div>
+<p>Randomness is<span id="dx1-369005"/> added to the selection process to ensure enough exploration of the game tree. Every search could end up with two outcomes: the end state of the game is reached, or we face a state that hasn’t been explored yet (in other words, has no known values). In the latter case, the policy <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) is used to obtain the prior probabilities and the value of the state estimation, and the new tree node with <span class="cmmi-10x-x-109">N</span>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">← </span>0, <span class="cmmi-10x-x-109">P</span>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">←</span><span class="cmmi-10x-x-109">p</span><sub>net</sub> (which is a probability of the move returned by the network) and <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">← </span>0 is created. Besides the prior probability of the actions, the network returns the estimation of the game’s outcome (or the value of the state) as seen from the current player.</p>
+<p>Once we have obtained the value (by reaching the final game state or by expanding the node using the NN), a process called the backup of value is performed. During the process, we traverse the game path and update statistics for every visited intermediate node; in particular, the visit count, <span class="cmmi-10x-x-109">N</span>(<span class="cmmi-10x-x-109">s,a</span>), is incremented by one and <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) is updated to include the game’s outcome from the perspective of the current state. As two players are exchanging moves, the final game outcome changes the sign in every backup step.</p>
+<p>This search process is performed several times (in AlphaGo Zero’s case, 1,000-2,000 searches are performed), gathering enough statistics about the action to use the <span class="cmmi-10x-x-109">N</span>(<span class="cmmi-10x-x-109">s,a</span>) counter as an action probability to be taken in the root node.</p>
+</section>
+<section class="level4 subsectionHead" id="self-play">
+<h2 class="heading-2" id="sigil_toc_id_333"> <span id="x1-37000020.3.3"/>Self-play</h2>
+<p>In AlphaGo Zero, the NN is <span id="dx1-370001"/>used to approximate the prior probabilities of the actions and<span id="dx1-370002"/> evaluate the position, which is very similar to the <span class="cmbx-10x-x-109">advantage</span> <span class="cmbx-10x-x-109">actor-critic (A2C) </span>two-headed setup. In<span id="dx1-370003"/> the input of the network, we pass the current game position (augmented with several previous positions) and return two values:</p>
+<ul>
+<li>
+<p>The policy head returns the probability distribution over the actions.</p>
+</li>
+<li>
+<p>The value head estimates the game outcome as seen from the player’s perspective. This value is undiscounted, as moves in Go are deterministic. Of course, if you have stochasticity in a game, like in backgammon, some discounting should be used.</p>
+</li>
+</ul>
+<p>As has already been described, we’re maintaining the current best network, which constantly self-plays to gather the training data for our apprentice network. Every step in each self-play game starts with several MCTSs from the current position to gather enough statistics about the game subtree to select the best action. The selection depends on the move and our settings. For self-play games, which are supposed to produce enough variance in the training data, the first moves are selected in a stochastic way. However, after some number of steps (which is a hyperparameter in the method), action selection becomes deterministic, and we select the action with the largest visit counter, <span class="cmmi-10x-x-109">N</span>(<span class="cmmi-10x-x-109">s,a</span>). In evaluation games (when we check the network being trained versus the current best model), all the steps are deterministic and selected solely on the largest visit counter.</p>
+<p>Once the self-play game <span id="dx1-370004"/>has been finished and the final outcome has become known, every step of the game is added to the training dataset, which is a list of tuples (<span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub><span class="cmmi-10x-x-109">,π</span><sub><span class="cmmi-8">t</span></sub><span class="cmmi-10x-x-109">,r</span><sub><span class="cmmi-8">t</span></sub>), where <span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub> is the game state, <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">t</span></sub> is the action probabilities calculated from MCTS sampling, and <span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">t</span></sub> is the game’s outcome from the perspective of the player at step <span class="cmmi-10x-x-109">t</span>.</p>
+</section>
+<section class="level4 subsectionHead" id="training-and-evaluation">
+<h2 class="heading-2" id="sigil_toc_id_334"> <span id="x1-37100020.3.4"/>Training and evaluation</h2>
+<p>The self-play process <span id="dx1-371001"/>between two clones of the current best network provides us with a <span id="dx1-371002"/>stream of training data consisting of states, action probabilities, and position values obtained from the self-play games. With this at hand, for training we sample mini-batches from the replay buffer of training examples and minimize the <span class="cmbx-10x-x-109">mean squared error </span>(<span class="cmbx-10x-x-109">MSE</span>) between the value head prediction and the actual position value, as well as the cross-entropy loss between predicted probabilities and sampled probabilities, <span class="cmmi-10x-x-109">π</span>.</p>
+<p>As mentioned earlier, once in several training steps the trained network is evaluated, which consists of playing several games between the current best and trained networks. Once the trained network becomes significantly better than the current best network, we copy the trained network into the best network and continue the process.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="connect-4-with-alphago-zero">
+<h1 class="heading-1" id="sigil_toc_id_335"> <span id="x1-37200020.4"/>Connect 4 with AlphaGo Zero</h1>
+<p>To see the <span id="dx1-372001"/>method in action, let’s implement AlphaGo Zero for a relatively simple game, Connect 4. The game is <span id="dx1-372002"/>for two players with a field size of 6 <span class="cmsy-10x-x-109">× </span>7. Each player has disks of a certain color, which they drop in turn into any of the seven columns. The disks fall to the bottom, stacking vertically. The game objective is to be the first to form a horizontal, vertical, or diagonal line of four disks of the same color. To illustrate the game, two positions are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-372003r2"><span class="cmti-10x-x-109">20.2</span></a>. In the first situation, the first player has just won, while in the second, the second player is going to form a group.</p>
+<div class="minipage">
+<p><img alt="PIC" height="360" src="../Images/file305.png" width="500"/> <span id="x1-372003r2"/></p>
+<span class="id">Figure 20.2: Two game positions in Connect 4 </span>
+</div>
+<p>Despite its <span id="dx1-372004"/>simplicity, this game has <span class="cmsy-10x-x-109">≈ </span>4<span class="cmmi-10x-x-109">.</span>5 <span class="cmsy-10x-x-109">⋅ </span>10<sup><span class="cmr-8">12</span></sup> different game states, which is challenging for computers to solve with brute force. This example consists of several tools and library modules:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/lib/game.py</span>: A low-level game representation that contains functions for making moves, encoding and decoding the game state, and other game-related utilities.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/lib/mcts.py</span>: The MCTS implementation that allows GPU-accelerated expansion of leaves and node backup. The central class here is also responsible for keeping the game node statistics, which are reused between the searches.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/lib/model.py</span>: The NN and other model-related functions, such as the conversion between game states and the model’s input and the playing of a single game.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/train.py</span>: The main training utility that glues everything together and produces the model checkpoints of the new best networks.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/play.py</span>: The tool that organizes the automated tournament between the model checkpoints. This accepts several model files and plays the given number of games against each other to form a leaderboard.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Chapter20/telegram-bot.py</span>: The bot for the Telegram chat platform that allows the user to play against any model file and keep a record of the statistics. This bot was used for human verification of the example’s results.</p>
+</li>
+</ul>
+<p>Now let’s discuss the core of our game – the game model.</p>
+<section class="level4 subsectionHead" id="the-game-model">
+<h2 class="heading-2" id="sigil_toc_id_336"> <span id="x1-37300020.4.1"/>The game model</h2>
+<p>The whole <span id="dx1-373001"/>approach is based on our ability to predict the outcome of our actions; in other words, we need to be able to get the resulting game state after we execute a move. This is a much stronger requirement than we had in the Atari environments and Gym in general, where you can’t specify a state that you want to act from. So, we need a model of the game that encapsulates the game’s rules and dynamics. Luckily, most board games have a simple and compact set of rules, which makes the model implementation a straightforward task.</p>
+<p>In our <span id="dx1-373002"/>case, the full game state of Connect 4 is represented by the state of the 6 <span class="cmsy-10x-x-109">× </span>7 game field cells and the indicator of who is going to move. What is important for our example is to make the game state representation occupy as little memory as possible, but still allow it to work efficiently. The memory requirement is dictated by the necessity of storing large numbers of game states during the MCTS. As our game tree is huge, the more nodes we’re able to keep during the MCTS, the better our final approximation of move probabilities will be. So, potentially, we’d like to be able to keep millions, or maybe even billions, of game states in memory.</p>
+<p>With this in mind, the compactness of the game state representation could have a huge impact on memory requirements and the performance of our training process. However, the game state representation has to be convenient to work with, for example, when checking the board for a winning position, making a move, or finding all the valid moves from some state.</p>
+<p>To keep this balance, two representations of the game field were implemented in <span class="cmtt-10x-x-109">Chapter20/lib/game.py</span>:</p>
+<ul>
+<li>
+<p>The first encoded form is very memory-efficient and takes only 63 bits to encode the full field, which makes it extremely fast and lightweight, as it fits in a machine world on 64-bit architectures.</p>
+</li>
+<li>
+<p>Another decoded game field representation has the form of a list with a length of 7, where each entry is a list of integers representing the disks in a particular column. This form takes much more memory, but it is convenient to work with.</p>
+</li>
+</ul>
+<p>I’m not going to show the full code of <span class="cmtt-10x-x-109">Chapter20/lib/game.py</span>, but if you need it, it’s available in the repository. Here, let’s just take a look at the list of the constants and functions that it provides:</p>
+<div class="tcolorbox" id="tcolobox-425">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-510"><code>GAME_ROWS = 6 
+GAME_COLS = 7 
+BITS_IN_LEN = 3 
+PLAYER_BLACK = 1 
+PLAYER_WHITE = 0 
+COUNT_TO_WIN = 4 
+ 
+INITIAL_STATE = encode_lists([[]] * GAME_COLS)</code></pre>
+</div>
+</div>
+<p>The first two constants in the preceding code define the dimensionality of the game field and are used everywhere in the code, so you can try to change them and experiment with larger or smaller game variants. The <span class="cmtt-10x-x-109">BITS</span><span class="cmtt-10x-x-109">_IN</span><span class="cmtt-10x-x-109">_LEN </span>value is used in state encoding functions and specifies how many bits are used to encode the height of the column (the number of disks present). In the 6 <span class="cmsy-10x-x-109">× </span>7 game, we could have up to six disks in every column, so three bits is enough to keep values from zero to seven. If you change the number of rows, you will need to adjust <span class="cmtt-10x-x-109">BITS</span><span class="cmtt-10x-x-109">_IN</span><span class="cmtt-10x-x-109">_LEN</span> accordingly.</p>
+<p>The <span class="cmtt-10x-x-109">PLAYER</span><span class="cmtt-10x-x-109">_BLACK </span>and <span class="cmtt-10x-x-109">PLAYER</span><span class="cmtt-10x-x-109">_WHITE </span>values define the values used in the <span class="cmti-10x-x-109">decoded </span>game representation and, finally, <span class="cmtt-10x-x-109">COUNT</span><span class="cmtt-10x-x-109">_TO</span><span class="cmtt-10x-x-109">_WIN </span>sets the length of the group that needs to be formed to win the game. So, in theory, you can try to experiment with the code and train the agent for, say, five in a row on a 20 <span class="cmsy-10x-x-109">× </span>40 field by just changing four numbers in <span class="cmtt-10x-x-109">game.py</span>.</p>
+<p>The <span class="cmtt-10x-x-109">INITIAL</span><span class="cmtt-10x-x-109">_STATE </span>value contains the encoded representation for an initial game state, which has <span class="cmtt-10x-x-109">GAME</span><span class="cmtt-10x-x-109">_COLS </span>empty lists.</p>
+<p>The rest of the <span id="dx1-373011"/>code is made up of functions. Some of them are used internally, but some make an interface of the game used everywhere in the example. Let’s list them quickly:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">encode</span><span class="cmtt-10x-x-109">_lists(state</span><span class="cmtt-10x-x-109">_lists)</span>: This converts from a decoded to an encoded representation of the game state. The argument has to be a list of <span class="cmtt-10x-x-109">GAME</span><span class="cmtt-10x-x-109">_COLS </span>lists, with the contents of the column specified in bottom-to-top order. In other words, to drop a new disk at the top of the stack, we just need to append it to the corresponding list. The result of the function is an integer with 63 bits representing the game state.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">decode</span><span class="cmtt-10x-x-109">_binary(state</span><span class="cmtt-10x-x-109">_int)</span>: This converts the integer representation of the field back into the list form.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">possible</span><span class="cmtt-10x-x-109">_moves(state</span><span class="cmtt-10x-x-109">_int)</span>: This returns a list with indices of columns that can be used for moving from the given encoded game state. The columns are numbered from zero to six, left to right.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">move(state</span><span class="cmtt-10x-x-109">_int, col, player)</span>: The central function of the file, which provides game dynamics combined with a win/lose check. In arguments, it accepts the game state in the encoded form, the column to place the disk in, and the index of the player that moves. The column index has to be valid (that is, be present in the result of <span class="cmtt-10x-x-109">possible</span><span class="cmtt-10x-x-109">_moves(state</span><span class="cmtt-10x-x-109">_int)</span>), otherwise an exception will be raised. The function returns a tuple with two elements: a new game state in the encoded form after the move has been performed and a Boolean indicating the move leading to the win of the player. As a player can win only after their move, a single Boolean is enough. Of course, there is a chance of getting a draw state (when nobody has won, but there are no possible moves remaining). Such situations have to be checked by calling the <span class="cmtt-10x-x-109">possible]</span><span class="cmtt-10x-x-109">_moves() </span>function after the <span class="cmtt-10x-x-109">move() </span>function.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">render(state</span><span class="cmtt-10x-x-109">_int)</span>: This returns a list of strings representing the field’s state. This function is used in the Telegram bot to send the field state to the user.</p>
+</li>
+</ul>
+</section>
+<section class="level4 subsectionHead" id="implementing-mcts">
+<h2 class="heading-2" id="sigil_toc_id_337"> <span id="x1-37400020.4.2"/>Implementing MCTS</h2>
+<p>MCTS is <span id="dx1-374001"/>implemented in <span class="cmtt-10x-x-109">Chapter20/lib/mcts.py </span>and represented by a single class, <span class="cmtt-10x-x-109">MCTS</span>, which is responsible for performing a batch of MCTSs and keeping the statistics gathered during it. The code is not very large, but it still has several tricky pieces, so let’s check it in detail.</p>
+<p>The constructor has no arguments except the <span class="cmtt-10x-x-109">c</span><span class="cmtt-10x-x-109">_puct </span>constant, which is used in the node selection process. Silver et al. [<span id="x1-374002"/><a href="#">SSa17</a>] mentioned that it could be tweaked to increase exploration, but I’m not redefining it anywhere and haven’t experimented with it. The body of the constructor creates an empty container to keep statistics about the states:</p>
+<div class="tcolorbox" id="tcolobox-426">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-511"><code>class MCTS: 
+    def __init__(self, c_puct: float = 1.0): 
+        self.c_puct = c_puct 
+        # count of visits, state_int -&gt; [N(s, a)] 
+        self.visit_count: tt.Dict[int, tt.List[int]] = {} 
+        # total value of the state’s act, state_int -&gt; [W(s, a)] 
+        self.value: tt.Dict[int, tt.List[float]] = {} 
+        # average value of actions, state_int -&gt; [Q(s, a)] 
+        self.value_avg: tt.Dict[int, tt.List[float]] = {} 
+        # prior probability of actions, state_int -&gt; [P(s,a)] 
+        self.probs: tt.Dict[int, tt.List[float]] = {}</code></pre>
+</div>
+</div>
+<p>The key in all the dicts is the encoded game state (an integer), and values are lists, keeping the various parameters of actions that we have. The comments above every container have the same notations of values as in the AlphaGo Zero paper.</p>
+<p>The <span class="cmtt-10x-x-109">clear() </span>method clears the state without destroying the <span class="cmtt-10x-x-109">MCTS </span>object, which happens when we switch the current best model to the new one and the gathered statistics become obsolete:</p>
+<div class="tcolorbox" id="tcolobox-427">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-512"><code>    def clear(self): 
+        self.visit_count.clear() 
+        self.value.clear() 
+        self.value_avg.clear() 
+        self.probs.clear()</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">find</span><span class="cmtt-10x-x-109">_leaf() </span>method is used during the search to perform a single traversal of the game tree, starting from the root node given by the <span class="cmtt-10x-x-109">state</span><span class="cmtt-10x-x-109">_int</span> argument and continuing to walk down until one of the following two situations has been faced: we reach the final game state or an as yet unexplored leaf has been found. During the search, we keep track of the visited states and the executed actions so we can update the nodes’ statistics later:</p>
+<div class="tcolorbox" id="tcolobox-428">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-513"><code>    def find_leaf(self, state_int: int, player: int): 
+        states = [] 
+        actions = [] 
+        cur_state = state_int 
+        cur_player = player 
+        value = None</code></pre>
+</div>
+</div>
+<p>Every iteration of the loop processes the game state that we’re currently at. For this state, we extract the statistics that we need to make the decision about the action:</p>
+<div class="tcolorbox" id="tcolobox-429">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-514"><code>        while not self.is_leaf(cur_state): 
+            states.append(cur_state) 
+ 
+            counts = self.visit_count[cur_state] 
+            total_sqrt = m.sqrt(sum(counts)) 
+            probs = self.probs[cur_state] 
+            values_avg = self.value_avg[cur_state]</code></pre>
+</div>
+</div>
+<p>The decision <span id="dx1-374032"/>about the action is based on the action utility, which is a sum of <span class="cmmi-10x-x-109">Q</span>(<span class="cmmi-10x-x-109">s,a</span>) and the prior probabilities scaled to the visit count. The root node of the search process has extra noise added to the probabilities to improve the exploration of the search process. As we perform the MCTS from different game states along the self-play trajectories, this extra Dirichlet noise (according to the parameters used in the paper) ensures that we have tried different actions along the path:</p>
+<div class="tcolorbox" id="tcolobox-430">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-515"><code>            if cur_state == state_int: 
+                noises = np.random.dirichlet([0.03] * game.GAME_COLS) 
+                probs = [0.75 * prob + 0.25 * noise for prob, noise in zip(probs, noises)] 
+            score = [ 
+                value + self.c_puct*prob*total_sqrt/(1+count) 
+                for value, prob, count in zip(values_avg, probs, counts) 
+            ]</code></pre>
+</div>
+</div>
+<p>As we have calculated the score for the actions, we need to mask invalid actions for the state. (For example, when the column is full, we can’t place another disk on the top.) After that, the action with the maximum score is selected and recorded:</p>
+<div class="tcolorbox" id="tcolobox-431">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-516"><code>            invalid_actions = set(range(game.GAME_COLS)) - \ 
+                              set(game.possible_moves(cur_state)) 
+            for invalid in invalid_actions: 
+                score[invalid] = -np.inf 
+            action = int(np.argmax(score)) 
+            actions.append(action)</code></pre>
+</div>
+</div>
+<p>To finish the loop, we ask our game engine to make the move, returning the new state and the indication of whether the player won the game. The final game states (win, lose, or draw) are never added to the MCTS statistics, so they will always be leaf nodes. The function returns the game’s value for the leaf player (or <span class="cmtt-10x-x-109">None </span>if the final state hasn’t been reached), the current player at the leaf state, the list of states we have visited during the search, and the list of the actions taken:</p>
+<div class="tcolorbox" id="tcolobox-432">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-517"><code>            cur_state, won = game.move(cur_state, action, cur_player) 
+            if won: 
+                value = -1.0 
+            cur_player = 1-cur_player 
+            # check for the draw 
+            moves_count = len(game.possible_moves(cur_state)) 
+            if value is None and moves_count == 0: 
+                value = 0.0 
+ 
+        return value, cur_state, cur_player, states, actions</code></pre>
+</div>
+</div>
+<p>The main entry point to the <span class="cmtt-10x-x-109">MCTS </span>class is the <span class="cmtt-10x-x-109">search</span><span class="cmtt-10x-x-109">_batch() </span>function, which performs several batches of searches. Every search consists of finding the leaf of the tree, optionally expanding the leaf, and doing backup. The main bottleneck here is the expand operation, which requires the NN to be used to get the prior probabilities of the actions and the estimated game value. To make this expansion more efficient, we use mini-batches when we search for several leaves, but then perform expansion in a single NN execution. This approach has one disadvantage: as several MCTSs are performed in one batch, we don’t get the same outcome as when they are executed serially.</p>
+<p>Indeed, initially, when <span id="dx1-374056"/>we have no nodes stored in the <span class="cmtt-10x-x-109">MCTS </span>class, our first search will expand the root node, the second will expand some of its child nodes, and so on. However, one single batch of searches can expand only one root node at first. Of course, later, individual searches in the batch could follow the different game paths and expand more, but at first, mini-batch expansion is much less efficient in terms of exploration than a sequential MCTS.</p>
+<p>To compensate for this, I still use mini-batches, but perform several of them:</p>
+<div class="tcolorbox" id="tcolobox-433">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-518"><code>    def is_leaf(self, state_int): 
+        return state_int not in self.probs 
+ 
+    def search_batch(self, count, batch_size, state_int, player, net, device="cpu"): 
+        for _ in range(count): 
+            self.search_minibatch(batch_size, state_int, player, net, device)</code></pre>
+</div>
+</div>
+<p>In the <span id="dx1-374063"/>mini-batch search, we first perform the leaf search, starting from the same state. If the search has found a final game state (in that case, the returned value will not be equal to <span class="cmtt-10x-x-109">None</span>), no expansion is required and we save the result for a backup operation. Otherwise, we store the leaf for later expansion:</p>
+<div class="tcolorbox" id="tcolobox-434">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-519"><code>    def search_minibatch(self, count, state_int, player, net, device="cpu"): 
+        backup_queue = [] 
+        expand_states = [] 
+        expand_players = [] 
+        expand_queue = [] 
+        planned = set() 
+        for _ in range(count): 
+            value, leaf_state, leaf_player, states, actions = \ 
+                self.find_leaf(state_int, player) 
+            if value is not None: 
+                backup_queue.append((value, states, actions)) 
+            else: 
+                if leaf_state not in planned: 
+                    planned.add(leaf_state) 
+                    leaf_state_lists = game.decode_binary(leaf_state) 
+                    expand_states.append(leaf_state_lists) 
+                    expand_players.append(leaf_player) 
+                    expand_queue.append((leaf_state, states, actions))</code></pre>
+</div>
+</div>
+<p>To expand, we convert the states into the form required by the model (there is a special function in the <span class="cmtt-10x-x-109">model.py </span>library) and ask our network to return the prior probabilities and values for the batch of states. We will use those probabilities to create nodes, and the values will be backed up in a final statistics update:</p>
+<div class="tcolorbox" id="tcolobox-435">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-520"><code>        if expand_queue: 
+            batch_v = model.state_lists_to_batch(expand_states, expand_players, device) 
+            logits_v, values_v = net(batch_v) 
+            probs_v = F.softmax(logits_v, dim=1) 
+            values = values_v.data.cpu().numpy()[:, 0] 
+            probs = probs_v.data.cpu().numpy()</code></pre>
+</div>
+</div>
+<p>Node creation is just storing zeros for every action in the visit count and action values (total and average). In prior probabilities, we store values obtained from the network:</p>
+<div class="tcolorbox" id="tcolobox-436">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-521"><code>            for (leaf_state, states, actions), value, prob in \ 
+                    zip(expand_queue, values, probs): 
+                self.visit_count[leaf_state] = [0]*game.GAME_COLS 
+                self.value[leaf_state] = [0.0]*game.GAME_COLS 
+                self.value_avg[leaf_state] = [0.0]*game.GAME_COLS 
+                self.probs[leaf_state] = prob 
+                backup_queue.append((value, states, actions))</code></pre>
+</div>
+</div>
+<p>The backup <span id="dx1-374095"/>operation is the core process in MCTS, and it updates the statistics for a state visited during the search. The visit count of the taken actions is incremented, the total values are summed, and the average values are normalized using visit counts.</p>
+<p>It’s very important to properly track the value of the game during the backup because we have two opponents, and in every turn, the value changes the sign (because a winning position for the current player is a losing game state for the opponent):</p>
+<div class="tcolorbox" id="tcolobox-437">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-522"><code>        for value, states, actions in backup_queue: 
+            cur_value = -value 
+            for state_int, action in zip(states[::-1], actions[::-1]): 
+                self.visit_count[state_int][action] += 1 
+                self.value[state_int][action] += cur_value 
+                self.value_avg[state_int][action] = self.value[state_int][action] / \ 
+                                                    self.visit_count[state_int][action] 
+                cur_value = -cur_value</code></pre>
+</div>
+</div>
+<p>The final function in the class returns the probability of actions and the action values for the game state, using the statistics gathered during the MCTS:</p>
+<div class="tcolorbox" id="tcolobox-438">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-523"><code>    def get_policy_value(self, state_int, tau=1): 
+        counts = self.visit_count[state_int] 
+        if tau == 0: 
+            probs = [0.0] * game.GAME_COLS 
+            probs[np.argmax(counts)] = 1.0 
+        else: 
+            counts = [count ** (1.0 / tau) for count in counts] 
+            total = sum(counts) 
+            probs = [count / total for count in counts] 
+        values = self.value_avg[state_int] 
+        return probs, values</code></pre>
+</div>
+</div>
+<p>Here, there are two <span id="dx1-374115"/>modes of probability calculation, specified by the <span class="cmmi-10x-x-109">τ</span> parameter. If it equals zero, the selection becomes deterministic, as we select the most frequently visited action. In other cases, the distribution given by</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="67" src="../Images/eq74.png" width="134"/>
+</div>
+<p>is used, which, again, improves exploration.</p>
+</section>
+<section class="level4 subsectionHead" id="the-model">
+<h2 class="heading-2" id="sigil_toc_id_338"> <span id="x1-37500020.4.3"/>The model</h2>
+<p>The NN used is a <span id="dx1-375001"/>residual convolutional network with six layers, which is a simplified version of the network used in the original AlphaGo Zero method. For the input, we pass the encoded game state, which consists of two 6 <span class="cmsy-10x-x-109">× </span>7 channels. The first channel contains the places with the current player’s disks, and the second channel has a value of 1.0 where the opponent has their disks. This representation allows us to make the network player invariant and analyze the position from the perspective of the current player.</p>
+<p>The network consists of the common body with residual convolution filters. The features produced by them are passed to the policy and the value heads, which are a combination of a convolution layer and a fully connected layer. The policy head returns the logits for every possible action (the column in which a disk is dropped) and a single-value float. The details are available in the <span class="cmtt-10x-x-109">lib/model.py</span> file.</p>
+<p>Besides the model, this file contains two functions. The first, with the name <span class="cmtt-10x-x-109">state</span><span class="cmtt-10x-x-109">_lists</span><span class="cmtt-10x-x-109">_to</span><span class="cmtt-10x-x-109">_batch()</span>, converts the batch of game states represented in lists into the model’s input form. This function uses a utility function, <span class="cmtt-10x-x-109">_encode</span><span class="cmtt-10x-x-109">_list</span><span class="cmtt-10x-x-109">_state</span>, which converts the states into a NumPy array:</p>
+<div class="tcolorbox" id="tcolobox-439">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-524"><code>def _encode_list_state(dest_np, state_list, who_move): 
+    assert dest_np.shape == OBS_SHAPE 
+    for col_idx, col in enumerate(state_list): 
+        for rev_row_idx, cell in enumerate(col): 
+            row_idx = game.GAME_ROWS - rev_row_idx - 1 
+            if cell == who_move: 
+                dest_np[0, row_idx, col_idx] = 1.0 
+            else: 
+                dest_np[1, row_idx, col_idx] = 1.0 
+ 
+def state_lists_to_batch(state_lists, who_moves_lists, device="cpu"): 
+    assert isinstance(state_lists, list) 
+    batch_size = len(state_lists) 
+    batch = np.zeros((batch_size,) + OBS_SHAPE, dtype=np.float32) 
+    for idx, (state, who_move) in enumerate(zip(state_lists, who_moves_lists)): 
+        _encode_list_state(batch[idx], state, who_move) 
+    return torch.tensor(batch).to(device)</code></pre>
+</div>
+</div>
+<p>The second method is called <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_game </span>and is very important for both the training and testing processes. Its purpose is to simulate the game between two NNs, perform the MCTS, and optionally store the taken moves in a replay buffer:</p>
+<div class="tcolorbox" id="tcolobox-440">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-525"><code>def play_game(mcts_stores: tt.Optional[mcts.MCTS | tt.List[mcts.MCTS]], 
+              replay_buffer: tt.Optional[collections.deque], net1: Net, net2: Net, 
+              steps_before_tau_0: int, mcts_searches: int, mcts_batch_size: int, 
+              net1_plays_first: tt.Optional[bool] = None, 
+              device: torch.device = torch.device("cpu")): 
+    if mcts_stores is None: 
+        mcts_stores = [mcts.MCTS(), mcts.MCTS()] 
+    elif isinstance(mcts_stores, mcts.MCTS): 
+        mcts_stores = [mcts_stores, mcts_stores]</code></pre>
+</div>
+</div>
+<p>As you can <span id="dx1-375028"/>see in the preceding code, the function accepts a lot of parameters:</p>
+<ul>
+<li>
+<p>The <span class="cmtt-10x-x-109">MCTS </span>class instance, which could be a single instance, a list of two instances, or <span class="cmtt-10x-x-109">None</span>. We need to be flexible there to cover different usages of this function.</p>
+</li>
+<li>
+<p>An optional replay buffer.</p>
+</li>
+<li>
+<p>NNs to be used during the game.</p>
+</li>
+<li>
+<p>The number of game steps that need to be taken before the parameter used for the action probability calculation will be changed from 1 to 0.</p>
+</li>
+<li>
+<p>The number of MCTSs to perform.</p>
+</li>
+<li>
+<p>The MCTS batch size.</p>
+</li>
+<li>
+<p>Which player acts first.</p>
+</li>
+</ul>
+<p>Before the game loop, we initialize the game state and select the first player. If there is no information given about who will make the first move, this is chosen randomly:</p>
+<div class="tcolorbox" id="tcolobox-441">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-526"><code>    state = game.INITIAL_STATE 
+    nets = [net1, net2] 
+    if net1_plays_first is None: 
+        cur_player = np.random.choice(2) 
+    else: 
+        cur_player = 0 if net1_plays_first else 1 
+    step = 0 
+    tau = 1 if steps_before_tau_0 &gt; 0 else 0 
+    game_history = []</code></pre>
+</div>
+</div>
+<p>In every turn, we perform the MCTS to populate the statistics and then obtain the probability of actions, which will be sampled to get the action:</p>
+<div class="tcolorbox" id="tcolobox-442">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-527"><code>    result = None 
+    net1_result = None 
+ 
+    while result is None: 
+        mcts_stores[cur_player].search_batch( 
+            mcts_searches, mcts_batch_size, state, 
+            cur_player, nets[cur_player], device=device) 
+        probs, _ = mcts_stores[cur_player].get_policy_value(state, tau=tau) 
+        game_history.append((state, cur_player, probs)) 
+        action = np.random.choice(game.GAME_COLS, p=probs)</code></pre>
+</div>
+</div>
+<p>Then, the game <span id="dx1-375048"/>state is updated using the function in the game engine module, and the handling of different end-of-game situations (such as a win or a draw) is performed:</p>
+<div class="tcolorbox" id="tcolobox-443">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-528"><code>        if action not in game.possible_moves(state): 
+            print("Impossible action selected") 
+        state, won = game.move(state, action, cur_player) 
+        if won: 
+            result = 1 
+            net1_result = 1 if cur_player == 0 else -1 
+            break 
+        cur_player = 1-cur_player 
+        # check the draw case 
+        if len(game.possible_moves(state)) == 0: 
+            result = 0 
+            net1_result = 0 
+            break 
+        step += 1 
+        if step &gt;= steps_before_tau_0: 
+            tau = 0</code></pre>
+</div>
+</div>
+<p>At the end of the function, we populate the replay buffer with probabilities for the action and the game result from the perspective of the current player. This data will be used to train the network:</p>
+<div class="tcolorbox" id="tcolobox-444">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-529"><code>    if replay_buffer is not None: 
+        for state, cur_player, probs in reversed(game_history): 
+            replay_buffer.append((state, cur_player, probs, result)) 
+            result = -result 
+ 
+    return net1_result, step</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="training-1">
+<h2 class="heading-2" id="sigil_toc_id_339"> <span id="x1-37600020.4.4"/>Training</h2>
+<p>With all those <span id="dx1-376001"/>functions in hand, the training process is a simple combination of them in the correct order. The training program is available in <span class="cmtt-10x-x-109">train.py</span>, and it has logic that has already been described: in the loop, our current best model constantly plays against itself, saving the steps in the replay buffer. Another network is trained on this data, minimizing the cross-entropy between the probabilities of actions sampled from MCTS and the result of the policy head. MSE between the value head predictions, about the game and the actual game result, is also added to the total loss.</p>
+<p>Periodically, the network being trained and the current best network play 100 matches, and if the current network is able to win in more than 60% of them, the network’s weights are synced. This process continues infinitely, hopefully, finding models that are more and more proficient at the game.</p>
+</section>
+<section class="level4 subsectionHead" id="testing-and-comparison">
+<h2 class="heading-2" id="sigil_toc_id_340"> <span id="x1-37700020.4.5"/>Testing and comparison</h2>
+<p>During the <span id="dx1-377001"/>training process, the model’s weights are saved every time the current best model is replaced with the trained model. As a result, we get multiple agents <span id="dx1-377002"/>of various strengths. In theory, the later models should be better than the preceding ones, but we would like to check this ourselves. To do this, there is a tool, <span class="cmtt-10x-x-109">play.py</span>, that takes several model files and plays a tournament in which every model plays a specified number of rounds with all the others. The results table, with the number of wins achieved by every model, will represent the relative model’s strength.</p>
+</section>
+<section class="level4 subsectionHead" id="results-24">
+<h2 class="heading-2" id="sigil_toc_id_341"> <span id="x1-37800020.4.6"/>Results</h2>
+<p>To make the <span id="dx1-378001"/>training fast, I intentionally set the hyperparameters of the training process to small values. For example, at every step of the self-play process, only 10 MCTSs were performed, each with a mini-batch size of eight. This, in combination with efficient mini-batch MCTS and the fast game engine, made training very fast.</p>
+<p>Basically, after just one hour of training and 2,500 games played in self-play mode, the produced model was sophisticated enough to be enjoyable to play against. Of course, the level of its play was well below even a child’s level, but it showed some rudimentary strategies and made mistakes in only every other move, which was good progress.</p>
+<p>I’ve done two rounds of training, the first with a learning rate of 0.1 and the second with a learning rate of 0.001. Every experiment was trained for 10 hours and 40K game rounds. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-378002r3"><span class="cmti-10x-x-109">20.3</span></a>, you can see charts with the win ratio (win/loss for the current evaluated policy versus the current best policy). As you can see, both learning rate values are oscillating around 0.5, sometimes spiking to 0.8-0.9:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_20_03.png" width="600"/> <span id="x1-378002r3"/></p>
+<span class="id">Figure 20.3: The win ratio for training with two learning rates; learning rate=0.1 (left) and learning rate=0.001 (right) </span>
+</div>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-378004r4"><span class="cmti-10x-x-109">20.4</span></a> shows <span id="dx1-378003"/>the total loss for both experiments, and there is no clear trend. This is due to constant switches of the current best policy, which leads to constant retraining of the trained model.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_20_04.png" width="600"/> <span id="x1-378004r4"/></p>
+<span class="id">Figure 20.4: The total loss for training with two learning rates; learning rate=0.1 (left) and learning rate=0.001 (right) </span>
+</div>
+<p>The tournament verification was complicated by the number of different models, as several games needed to be played by each pair to estimate their strength. At the beginning, I ran 10 rounds for each model stored during every experiment (separately). To do this, you can run the <span class="cmtt-10x-x-109">play.py </span>utility like this:</p>
+<pre class="lstlisting" id="listing-530"><code>./play.py --cuda -r 10 saves/v2/best\_* &gt; semi-v2.txt</code></pre>
+<p>But for 100 models, it will take a while, as every model plays 10 rounds with all the other models.</p>
+<p>After all the testing, the utility prints on the console the result of all the games and the leaderboard of models. The following is the top 10 for experiment 1 (learning rate=0.1):</p>
+<div class="tcolorbox" id="tcolobox-445">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-531"><code>saves/t1/best_088_39300.dat:     w=1027, l=732, d=1 
+saves/t1/best_025_09900.dat:     w=1024, l=735, d=1 
+saves/t1/best_022_08200.dat:     w=1023, l=737, d=0 
+saves/t1/best_021_08100.dat:     w=1017, l=743, d=0 
+saves/t1/best_009_03400.dat:     w=1010, l=749, d=1 
+saves/t1/best_014_04700.dat:     w=1003, l=757, d=0 
+saves/t1/best_008_02700.dat:     w=998, l=760, d=2 
+saves/t1/best_010_03500.dat:     w=997, l=762, d=1 
+saves/t1/best_029_11800.dat:     w=991, l=768, d=1 
+saves/t1/best_007_02300.dat:     w=980, l=779, d=1</code></pre>
+</div>
+</div>
+<p>Here’s the top 10 for experiment 2 (learning rate=0.001):</p>
+<div class="tcolorbox" id="tcolobox-446">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-532"><code>saves/t2/best_069_41500.dat:     w=1023, l=757, d=0 
+saves/t2/best_070_42200.dat:     w=1016, l=764, d=0 
+saves/t2/best_066_38900.dat:     w=1005, l=775, d=0 
+saves/t2/best_071_42600.dat:     w=1003, l=777, d=0 
+saves/t2/best_059_33700.dat:     w=999, l=781, d=0 
+saves/t2/best_049_27500.dat:     w=990, l=790, d=0 
+saves/t2/best_068_41300.dat:     w=990, l=789, d=1 
+saves/t2/best_048_26700.dat:     w=983, l=796, d=1 
+saves/t2/best_058_32100.dat:     w=982, l=797, d=1 
+saves/t2/best_076_45200.dat:     w=982, l=795, d=3</code></pre>
+</div>
+</div>
+<p>To check that our <span id="dx1-378026"/>training generates better models, I have plotted the win ratio of the models versus their index in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-378027r5"><span class="cmti-10x-x-109">20.5</span></a>. The Y axis is the relative win ratio and the X axis is the index (which is increased during training). As you can see, the quality of models in each experiment is increased, but experiments with smaller learning rates have more consistent behavior.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_20_05.png" width="600"/> <span id="x1-378027r5"/></p>
+<span class="id">Figure 20.5: Win ratio for best models during the training, learning rate=0.1 (left) and learning rate=0.001 (right) </span>
+</div>
+<p>I haven’t done much hyperparameter tuning of the training, so they definitely could be improved. You can try experimenting with this yourself.</p>
+<p>It was also interesting to compare the results with different learning rates. To do that, I’ve taken 10 best models for each experiment and run 10 rounds of games. Here is the top 10 leaderboard for this tournament:</p>
+<div class="tcolorbox" id="tcolobox-447">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-533"><code>saves/t2/best_059_33700.dat:     w=242, l=138, d=0 
+saves/t2/best_058_32100.dat:     w=223, l=157, d=0 
+saves/t2/best_071_42600.dat:     w=217, l=163, d=0 
+saves/t2/best_068_41300.dat:     w=210, l=170, d=0 
+saves/t2/best_076_45200.dat:     w=208, l=171, d=1 
+saves/t2/best_048_26700.dat:     w=202, l=178, d=0 
+saves/t2/best_069_41500.dat:     w=201, l=179, d=0 
+saves/t2/best_049_27500.dat:     w=199, l=181, d=0 
+saves/t2/best_070_42200.dat:     w=197, l=183, d=0 
+saves/t1/best_021_08100.dat:     w=192, l=188, d=0</code></pre>
+</div>
+</div>
+<p>As you can see, models <span id="dx1-378038"/>trained with a learning rate of 0.001 are winning in the joint tournament by a significant margin.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="muzero">
+<h1 class="heading-1" id="sigil_toc_id_342"> <span id="x1-37900020.5"/>MuZero</h1>
+<p>The successor <span id="dx1-379001"/>of AlphaGo Zero (published in 2017) was a method called MuZero, described by Schrittwieser et al. from DeepMind in the paper <span class="cmti-10x-x-109">Mastering Atari,</span> <span class="cmti-10x-x-109">Go, chess and shogi by planning with a learned model </span>[<span id="x1-379002"/><a href="#">Sch+20</a>] published in 2020. In this method, the authors made an attempt to generalize the method by removing the requirement of the precise game model, but still keeping the method in the model-based family. As we saw in the description of Alpha Go Zero, the game model is heavily used during the training process: in the MCTS phase, we use the game model to obtain the available actions in the current state and the new state of the game after applying the action. In addition, the game model provides the final game outcome: whether we have won or lost the game.</p>
+<p>At first glance, it <span id="dx1-379003"/>looks almost impossible to get rid of the model from the training process, but MuZero not only demonstrated how it could be done, but has also beaten the previous AlphaGo Zero records in Go, chess, and shogi, and established state-of-the-art results in 57 Atari games.</p>
+<p>In this part of the chapter, we’ll discuss the method in detail, implement it, and compare it to AlphaGo Zero using Connect 4.</p>
+<section class="level4 subsectionHead" id="high-level-model">
+<h2 class="heading-2" id="sigil_toc_id_343"> <span id="x1-38000020.5.1"/>High-level model</h2>
+<p>First, let’s <span id="dx1-380001"/>take a look at MuZero from a high level. As in AlphaGo Zero, the core is MCTS, which is performed many times to calculate statistics about possible future outcomes of the game state we currently have at the root of the tree. After this search, we calculate visit counters, indicating how frequently the actions have been executed.</p>
+<p>But instead of using the game model to answer the question “what state do I get if I execute this action from this state?”, MuZero introduces two extra neural networks:</p>
+<ol>
+<li>
+<div id="x1-380003x1">
+<p><span class="cmbx-10x-x-109">representation </span><span class="cmmi-10x-x-109">h</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">o</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">s</span>: To compute the hidden state of the game observation</p>
+</div>
+</li>
+<li>
+<div id="x1-380005x2">
+<p><span class="cmbx-10x-x-109">dynamics </span><span class="cmmi-10x-x-109">g</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">r,s</span><span class="cmsy-10x-x-109">′</span>: To apply the action <span class="cmmi-10x-x-109">a </span>to the hidden state <span class="cmmi-10x-x-109">s</span>, transforming it into the next state <span class="cmmi-10x-x-109">s</span><span class="cmsy-10x-x-109">′ </span>(and obtaining the immediate reward <span class="cmmi-10x-x-109">r</span>)</p>
+</div>
+</li>
+</ol>
+<p>As you may remember, in AlphaGo Zero, only one network <span class="cmmi-10x-x-109">f</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">π,v </span>was used, which predicted the policy <span class="cmmi-10x-x-109">π </span>and the value <span class="cmmi-10x-x-109">v </span>of the current state <span class="cmmi-10x-x-109">s</span>. MuZero uses three networks for its operation, which are trained simultaneously. I’ll explain how the training is done a bit later, but for now let’s focus on MCTS.</p>
+<p>In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-380006r6"><span class="cmti-10x-x-109">20.6</span></a>, the MCTS process is shown schematically, indicating the values we compute using our neural networks. As the first step, we compute the hidden state <span class="cmmi-10x-x-109">s</span><sup><span class="cmr-8">0</span></sup> for the current game observation <span class="cmmi-10x-x-109">o </span>using our representation network <span class="cmmi-10x-x-109">h</span><sub><span class="cmmi-8">𝜃</span></sub>.</p>
+<p>Having the hidden state, we can use the network <span class="cmmi-10x-x-109">f</span><sub><span class="cmmi-8">𝜃</span></sub> to compute the policy <span class="cmmi-10x-x-109">π</span><sup><span class="cmr-8">0</span></sup> and values <span class="cmmi-10x-x-109">v</span><sup><span class="cmr-8">0</span></sup> of this state – quantities that indicate what action we should take (<span class="cmmi-10x-x-109">π</span><sup><span class="cmr-8">0</span></sup>) and the expected outcome of those actions (<span class="cmmi-10x-x-109">v</span><sup><span class="cmr-8">0</span></sup>).</p>
+<p>We use the policy and the value (with visit count statistics for the actions) to compute the utility value for the action <span class="cmmi-10x-x-109">U</span>(<span class="cmmi-10x-x-109">s,a</span>) in a similar way to in AlphaGo Zero. Then, the action with the maximum utility value is selected for the tree descent. If it is the first time we select this action from this state node (in other words, the node has not been expanded yet), we use the neural network <span class="cmmi-10x-x-109">g</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s</span><sup><span class="cmr-8">0</span></sup><span class="cmmi-10x-x-109">,a</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">r</span><sup><span class="cmr-8">1</span></sup><span class="cmmi-10x-x-109">,s</span><sup><span class="cmr-8">1</span></sup> to obtain immediate reward <span class="cmmi-10x-x-109">r</span><sup><span class="cmr-8">1</span></sup> and the next hidden state <span class="cmmi-10x-x-109">s</span><sup><span class="cmr-8">1</span></sup>.</p>
+<div class="minipage">
+<p><img alt="×oshπfsgπfb0𝜃0𝜃1𝜃1𝜃s(,(s(,(seo)v0sv1r0)01)v,aat1io)n → or1,s1 " height="300" src="../Images/B22150_20_06.png" width="400"/> <span id="x1-380006r6"/></p>
+<span class="id">Figure 20.6: Monte-Carlo Tree Search in MuZero </span>
+</div>
+<p>This process <span id="dx1-380007"/>is repeated over and over again hundreds of times, accumulating visit counters for actions, expanding more and more nodes in the tree. In every node expansion, the value of the node, obtained from <span class="cmmi-10x-x-109">f</span><sub><span class="cmmi-8">𝜃</span></sub>, is added to all the nodes along the search path until the tree’s root. In the AlphaGo Zero paper, this process was called “backup,” while in the MuZero paper, the term “backpropagation” was used. But essentially, the meaning is the same – adding value from the expanded node to the root of the tree, altering the sign.</p>
+<p>After some time (800 searches in the original MuZero method), the actions’ visit counts are accurate enough (or we believe they are accurate enough) to be used as an approximation of the policy for the action selection and for the training.</p>
+</section>
+<section class="level4 subsectionHead" id="training-process">
+<h2 class="heading-2" id="sigil_toc_id_344"> <span id="x1-38100020.5.2"/>Training process</h2>
+<p>MCTS, as described <span id="dx1-381001"/>above, is used for the single game state (at the root of the tree). After all the search rounds, we select the action from this root state based on the frequency of actions performed during the search. Then, the selected action is executed in the environment and the next state and the reward are obtained. After that, another MCTS is performed using the next state as the root of the search tree.</p>
+<p>This process allows us to generate episodes. We’re storing them in the replay buffer and using them for the training. To prepare the training batch, we sample an episode from the replay buffer and randomly select an offset in the episode. Then, starting from this position in the episode, we unroll the episode to the fixed number of steps (in the MuZero paper, a five-step unroll was used). On every step of unroll, the following data is accumulated:</p>
+<ul>
+<li>
+<p>Action frequencies from MCTS are used as policy targets (trained using cross-entropy loss).</p>
+</li>
+<li>
+<p>A discounted sum of rewards until the end of the episode is used as a value target (trained with MSE loss).</p>
+</li>
+<li>
+<p>Immediate rewards are used as targets for the reward value predicted by the dynamics network (also trained with MSE loss).</p>
+</li>
+</ul>
+<p>Besides that, we <span id="dx1-381002"/>remember the action taken in every unroll step, which will be used as input for the dynamics network, <span class="cmmi-10x-x-109">g</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">r,s</span><span class="cmsy-10x-x-109">′</span>.</p>
+<p>Once the batch is generated, we apply the representation network <span class="cmmi-10x-x-109">h</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">o</span>) to the game observations (the first step of the unrolled episode’s segments). Then, we repeat the unrolling by computing the policy <span class="cmmi-10x-x-109">π </span>and the value <span class="cmmi-10x-x-109">v </span>from the current hidden state, compute their loss, and perform the dynamics network step to obtain the next hidden state. This process is repeated for five steps (the length of the unroll). Schrittwieser et al. used gradient scaling by a factor of 0.5 for unrolled steps, but in my implementation, I just multiplied the loss with this constant to get the same effect.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="connect-4-with-muzero">
+<h1 class="heading-1" id="sigil_toc_id_345"> <span id="x1-38200020.6"/>Connect 4 with MuZero</h1>
+<p>Now that we have <span id="dx1-382001"/>discussed the method, let’s check its implementation and the results in <span id="dx1-382002"/>Connect 4. The implementaton consists of several modules:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">lib/muzero.py</span>: Contains MCTS data structures and functions, neural networks, and batch generation logic</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">train-mu.py</span>: The training loop, implementing self-play for episode generation, training, and periodic validation of the currently trained model versus the best model (the same as the AlphaGo Zero method)</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">play-mu.py</span>: Performs a series of games between the list of models to get their rankings</p>
+</li>
+</ul>
+<section class="level4 subsectionHead" id="hyperparameters-and-mcts-tree-nodes">
+<h2 class="heading-2" id="sigil_toc_id_346"> <span id="x1-38300020.6.1"/>Hyperparameters and MCTS tree nodes</h2>
+<p>Most <span id="dx1-383001"/>MuZero hyperparameters are put in a separate dataclass to simplify passing them around the code:</p>
+<div class="tcolorbox" id="tcolobox-448">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-534"><code>@dataclass 
+class MuZeroParams: 
+    actions_count: int = game.GAME_COLS 
+    max_moves: int = game.GAME_COLS * game.GAME_ROWS &gt;&gt; 2 + 1 
+    dirichlet_alpha: float = 0.3 
+    discount: float = 1.0 
+    unroll_steps: int = 5 
+ 
+    pb_c_base: int = 19652 
+    pb_c_init: float = 1.25 
+ 
+    dev: torch.device = torch.device("cpu")</code></pre>
+</div>
+</div>
+<p>I’m not going to explain these parameters here. I will do that when we discuss the relevant pieces of the code.</p>
+<p>MCTS for MuZero is implemented differently than the AlphaGo Zero implementation. In our AlphaGo Zero implementation, every MCTS node had a unique identifier of the game state, which was an integer. As a result, we kept the whole tree in several dictionaries, mapping the game state to the node’s attributes, such as visit counters, the states of the child nodes, and so on. Every time we saw the game state, we simply updated those dictionaries.</p>
+<p>However, in MuZero, every MCTS node is now identified by a hidden state, which is a list of floats (since the hidden state is produced by the neural network). As a result, we cannot compare two hidden states to check whether they are the same or not. To get around this, we’re now storing the tree “properly” – as nodes referencing child nodes, which is less efficient from a memory point of view. The <span id="dx1-383014"/>following is the core MCTS data structure: an object representing a tree node. For the constructor, we just create an empty unexpanded node:</p>
+<div class="tcolorbox" id="tcolobox-449">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-535"><code>class MCTSNode: 
+    def __init__(self, prior: float, first_plays: bool): 
+        self.first_plays: bool = first_plays 
+        self.visit_count = 0 
+        self.value_sum = 0.0 
+        self.prior = prior 
+        self.children: tt.Dict[Action, MCTSNode] = {} 
+        # node is not expanded, so has no hidden state 
+        self.h = None 
+        # predicted reward 
+        self.r = 0.0</code></pre>
+</div>
+</div>
+<p>The expansion of the node is implemented in the <span class="cmtt-10x-x-109">expand</span><span class="cmtt-10x-x-109">_node </span>method, which will be shown later, after introducing the models. For now, the node is expanded if it has child nodes (actions) and has a hidden state, policy, and value calculated using NNs. The value of the node is computed as the sum of all the values from the children divided by the number of visits:</p>
+<div class="tcolorbox" id="tcolobox-450">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-536"><code>    @property 
+    def is_expanded(self) -&gt; bool: 
+        return bool(self.children) 
+ 
+    @property 
+    def value(self) -&gt; float: 
+        return 0 if not self.visit_count else self.value_sum / self.visit_count</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">select</span><span class="cmtt-10x-x-109">_child </span>method performs the action selection during the MCTS search. This is done by selecting the child with the largest value returned by the <span class="cmtt-10x-x-109">ucb</span><span class="cmtt-10x-x-109">_value </span>function, which will be shown shortly:</p>
+<div class="tcolorbox" id="tcolobox-451">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-537"><code>    def select_child(self, params: MuZeroParams, min_max: MinMaxStats) -&gt; \ 
+            tt.Tuple[Action, "MCTSNode"]: 
+        max_ucb, best_action, best_node = None, None, None 
+        for action, node in self.children.items(): 
+            ucb = ucb_value(params, self, node, min_max) 
+            if max_ucb is None or max_ucb &lt; ucb: 
+                max_ucb = ucb 
+                best_action = action 
+                best_node = node 
+        return best_action, best_node</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">ucb</span><span class="cmtt-10x-x-109">_value </span>method implements the <span class="cmbx-10x-x-109">Upper Confidence Bound </span>(<span class="cmbx-10x-x-109">UCB</span>) calculation for <span id="dx1-383043"/>the node, and it is very similar to the formula we discussed for AlphaGo Zero. The UCB is calculated from the node’s value and the prior multiplied by a coefficient:</p>
+<div class="tcolorbox" id="tcolobox-452">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-538"><code>def ucb_value(params: MuZeroParams, parent: MCTSNode, child: MCTSNode, 
+              min_max: MinMaxStats) -&gt; float: 
+    pb_c = m.log((parent.visit_count + params.pb_c_base + 1) / 
+                 params.pb_c_base) + params.pb_c_init 
+    pb_c *= m.sqrt(parent.visit_count) / (child.visit_count + 1) 
+    prior_score = pb_c * child.prior 
+    value_score = 0.0 
+    if child.visit_count &gt; 0: 
+        value_score = min_max.normalize(child.value + child.r) 
+    return prior_score + value_score</code></pre>
+</div>
+</div>
+<p>Another method of the <span class="cmtt-10x-x-109">MCTSNode </span>class is <span class="cmtt-10x-x-109">get</span><span class="cmtt-10x-x-109">_act</span><span class="cmtt-10x-x-109">_probs()</span>, which returns approximated probabilities from visit counters. Those probabilities are used as targets for the policy network training. This method has a special “temperature coefficient” that allows us to vary the entropy in different stages of training: if the temperature is close to zero, we assign a higher probability to the action with the highest number of visits. If the temperature is high, the distribution becomes more uniform:</p>
+<div class="tcolorbox" id="tcolobox-453">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-539"><code>    def get_act_probs(self, t: float = 1) -&gt; tt.List[float]: 
+        child_visits = sum(map(lambda n: n.visit_count, self.children.values())) 
+        p = np.array([(child.visit_count / child_visits) ** (1 / t) 
+                      for _, child in sorted(self.children.items())]) 
+        p /= sum(p) 
+        return list(p)</code></pre>
+</div>
+</div>
+<p>The last method of <span class="cmtt-10x-x-109">MCTSNode </span>is <span class="cmtt-10x-x-109">select</span><span class="cmtt-10x-x-109">_action()</span>, which uses the <span class="cmtt-10x-x-109">get</span><span class="cmtt-10x-x-109">_act</span><span class="cmtt-10x-x-109">_probs() </span>method to select the action, handling several corner <span id="dx1-383060"/>cases as follows:</p>
+<ul>
+<li>
+<p>If we have no children in the node, the action is done randomly</p>
+</li>
+<li>
+<p>If the temperature coefficient is too small, we take the action with the largest visit count</p>
+</li>
+<li>
+<p>Otherwise, we use <span class="cmtt-10x-x-109">get</span><span class="cmtt-10x-x-109">_act</span><span class="cmtt-10x-x-109">_probs() </span>to get the probabilities for every action based on the temperature coefficient and select the action based on those probabilities</p>
+</li>
+</ul>
+<div class="tcolorbox" id="tcolobox-454">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-540"><code>    def select_action(self, t: float, params: MuZeroParams) -&gt; Action: 
+        act_vals = list(sorted(self.children.keys())) 
+ 
+        if not act_vals: 
+            res = np.random.choice(params.actions_count) 
+        elif t &lt; 0.0001: 
+            res, _ = max(self.children.items(), key=lambda p: p[1].visit_count) 
+        else: 
+            p = self.get_act_probs(t) 
+            res = int(np.random.choice(act_vals, p=p)) 
+        return res</code></pre>
+</div>
+</div>
+<p>The preceding code might look tricky and non-relevant, but it will fit together when we discuss the MuZero models and the MCTS search procedure.</p>
+</section>
+<section class="level4 subsectionHead" id="models-1">
+<h2 class="heading-2" id="sigil_toc_id_347"> <span id="x1-38400020.6.2"/>Models</h2>
+<p>As we have <span id="dx1-384001"/>mentioned, MuZero uses three NNs for various purposes. Let’s take a look at them. You’ll find all the code in the GitHub repository in the <span class="cmtt-10x-x-109">lib/muzero.py </span>module.</p>
+<p>The first model is the representation model, <span class="cmmi-10x-x-109">h</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">o</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">s</span>, which maps game observations into the hidden state. The observations are exactly the same as in the AlphaGo Zero code – we have a tensor of size 2 <span class="cmsy-10x-x-109">× </span>6 <span class="cmsy-10x-x-109">× </span>7, where 6 <span class="cmsy-10x-x-109">× </span>7 is the board size and two planes are the one-hot encoded position of the current player’s and the opponent’s disks. The <span id="dx1-384002"/>dimension of the hidden state is given by the <span class="cmtt-10x-x-109">HIDDEN</span><span class="cmtt-10x-x-109">_STATE</span><span class="cmtt-10x-x-109">_SIZE=64 </span>hyperparameter:</p>
+<div class="tcolorbox" id="tcolobox-455">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-541"><code>class ReprModel(nn.Module): 
+    def __init__(self, input_shape: tt.Tuple[int, ...]): 
+        super(ReprModel, self).__init__() 
+        self.conv_in = nn.Sequential( 
+            nn.Conv2d(input_shape[0], NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU() 
+        ) 
+        # layers with residual 
+        self.conv_1 = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU() 
+        ) 
+        self.conv_2 = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU() 
+        ) 
+        self.conv_3 = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU() 
+        ) 
+        self.conv_4 = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU() 
+        ) 
+        self.conv_5 = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, NUM_FILTERS, kernel_size=3, padding=1), 
+            nn.BatchNorm2d(NUM_FILTERS), 
+            nn.LeakyReLU(), 
+        ) 
+        self.conv_out = nn.Sequential( 
+            nn.Conv2d(NUM_FILTERS, 16, kernel_size=1), 
+            nn.BatchNorm2d(16), 
+            nn.LeakyReLU(), 
+            nn.Flatten() 
+        ) 
+ 
+        body_shape = (NUM_FILTERS,) + input_shape[1:] 
+        size = self.conv_out(torch.zeros(1, *body_shape)).size()[-1] 
+        self.out = nn.Sequential( 
+            nn.Linear(size, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, HIDDEN_STATE_SIZE), 
+        )</code></pre>
+</div>
+</div>
+<p>The structure of the <span id="dx1-384051"/>network is almost the same as in the AlphaGo Zero example, with the difference that it returns a hidden state vector instead of the policy and values.</p>
+<p>As the network blocks are residual, special handling of every layer is required:</p>
+<div class="tcolorbox" id="tcolobox-456">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-542"><code>    def forward(self, x): 
+        v = self.conv_in(x) 
+        v = v + self.conv_1(v) 
+        v = v + self.conv_2(v) 
+        v = v + self.conv_3(v) 
+        v = v + self.conv_4(v) 
+        v = v + self.conv_5(v) 
+        c_out = self.conv_out(v) 
+        out = self.out(c_out) 
+        return out</code></pre>
+</div>
+</div>
+<p>The second model is the prediction model, <span class="cmmi-10x-x-109">f</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">π,v</span>, which takes the hidden state and returns the policy and the value. In my example, I used two-layer heads for the policy and the value:</p>
+<div class="tcolorbox" id="tcolobox-457">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-543"><code>class PredModel(nn.Module): 
+    def __init__(self, actions: int): 
+        super(PredModel, self).__init__() 
+        self.policy = nn.Sequential( 
+            nn.Linear(HIDDEN_STATE_SIZE, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, actions), 
+        ) 
+ 
+        self.value = nn.Sequential( 
+            nn.Linear(HIDDEN_STATE_SIZE, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, 1), 
+        ) 
+ 
+    def forward(self, x) -&gt; tt.Tuple[torch.Tensor, torch.Tensor]: 
+        return self.policy(x), self.value(x).squeeze(1)</code></pre>
+</div>
+</div>
+<p>The third model we have is the <span id="dx1-384079"/>dynamics model, <span class="cmmi-10x-x-109">g</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s,a</span>) <span class="cmsy-10x-x-109">→</span><span class="cmmi-10x-x-109">r,s</span><span class="cmsy-10x-x-109">′</span>, which takes the hidden state and one-hot encoded actions and returns the immediate reward and the next state:</p>
+<div class="tcolorbox" id="tcolobox-458">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-544"><code>class DynamicsModel(nn.Module): 
+    def __init__(self, actions: int): 
+        super(DynamicsModel, self).__init__() 
+        self.reward = nn.Sequential( 
+            nn.Linear(HIDDEN_STATE_SIZE + actions, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, 1), 
+        ) 
+ 
+        self.hidden = nn.Sequential( 
+            nn.Linear(HIDDEN_STATE_SIZE + actions, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, 128), 
+            nn.ReLU(), 
+            nn.Linear(128, HIDDEN_STATE_SIZE), 
+        ) 
+ 
+    def forward(self, h: torch.Tensor, a: torch.Tensor) -&gt; \ 
+            tt.Tuple[torch.Tensor, torch.Tensor]: 
+        x = torch.hstack((h, a)) 
+        return self.reward(x).squeeze(1), self.hidden(x)</code></pre>
+</div>
+</div>
+<p>For convenience, all three networks are kept in the <span class="cmtt-10x-x-109">MuZeroModels </span>class, which provides the required functionality:</p>
+<div class="tcolorbox" id="tcolobox-459">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-545"><code>class MuZeroModels: 
+    def __init__(self, input_shape: tt.Tuple[int, ...], actions: int): 
+        self.repr = ReprModel(input_shape) 
+        self.pred = PredModel(actions) 
+        self.dynamics = DynamicsModel(actions) 
+ 
+    def to(self, dev: torch.device): 
+        self.repr.to(dev) 
+        self.pred.to(dev) 
+        self.dynamics.to(dev)</code></pre>
+</div>
+</div>
+<p>The class provides methods for syncing networks from the other instance. We will use it to store the best model after validation.</p>
+<p>In addition, there are two methods for storing and loading the networks’ weights:</p>
+<div class="tcolorbox" id="tcolobox-460">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-546"><code>    def sync(self, src: "MuZeroModels"): 
+        self.repr.load_state_dict(src.repr.state_dict()) 
+        self.pred.load_state_dict(src.pred.state_dict()) 
+        self.dynamics.load_state_dict(src.dynamics.state_dict()) 
+ 
+    def get_state_dict(self) -&gt; tt.Dict[str, dict]: 
+        return { 
+            "repr": self.repr.state_dict(), 
+            "pred": self.pred.state_dict(), 
+            "dynamics": self.dynamics.state_dict(), 
+        } 
+ 
+    def set_state_dict(self, d: dict): 
+        self.repr.load_state_dict(d[’repr’]) 
+        self.pred.load_state_dict(d[’pred’]) 
+        self.dynamics.load_state_dict(d[’dynamics’])</code></pre>
+</div>
+</div>
+<p>Now that we’ve seen the <span id="dx1-384127"/>models, we’re ready to get to the functions that implement the MCTS logic and the gameplay loop.</p>
+</section>
+<section class="level4 subsectionHead" id="mcts-search">
+<h2 class="heading-2" id="sigil_toc_id_348"> <span id="x1-38500020.6.3"/>MCTS search</h2>
+<p>First, we have two <span id="dx1-385001"/>functions doing similar tasks, but in different situations:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">make</span><span class="cmtt-10x-x-109">_expanded</span><span class="cmtt-10x-x-109">_root() </span>creates the MCTS tree root from the given game state. For the root, we have no parent node, so we don’t need to apply the dynamic NN; instead, we obtain the node hidden state from the encoded game observation with the representation network.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">expand</span><span class="cmtt-10x-x-109">_node() </span>expands the non-root MCTS node. In this case, we perform the dynamics step using the NN to take the parent’s hidden state and generate the hidden state for the child node.</p>
+</li>
+</ul>
+<p>At the beginning of the first function, we create a new <span class="cmtt-10x-x-109">MCTSNode</span>, decode the game state into a list representation, and convert it into a tensor. Then, the representation network is used to obtain the node’s hidden state:</p>
+<div class="tcolorbox" id="tcolobox-461">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-547"><code>def make_expanded_root(player_idx: int, game_state_int: int, params: MuZeroParams, 
+                       models: MuZeroModels, min_max: MinMaxStats) -&gt; MCTSNode: 
+    root = MCTSNode(1.0, player_idx == 0) 
+    state_list = game.decode_binary(game_state_int) 
+    state_t = state_lists_to_batch([state_list], [player_idx], device=params.dev) 
+    h_t = models.repr(state_t) 
+    root.h = h_t[0].cpu().numpy()</code></pre>
+</div>
+</div>
+<p>Using the <span id="dx1-385009"/>hidden state, we get the policy and the value of the node and convert the policy logits into probabilities, after which some random noise is added to increase exploration:</p>
+<div class="tcolorbox" id="tcolobox-462">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-548"><code>    p_t, v_t = models.pred(h_t) 
+    # logits to probs 
+    p_t.exp_() 
+    probs_t = p_t.squeeze(0) / p_t.sum() 
+    probs = probs_t.cpu().numpy() 
+    # add dirichlet noise 
+    noises = np.random.dirichlet([params.dirichlet_alpha] * params.actions_count) 
+    probs = probs * 0.75 + noises * 0.25</code></pre>
+</div>
+</div>
+<p>As we’ve got probabilities, we create child nodes and backpropagate the value of the node. The <span class="cmtt-10x-x-109">backpropagate() </span>method will be discussed a bit later; it adds the node value along the search path. For the root node, our search path has only the root, so it will be just one step (in the next method, <span class="cmtt-10x-x-109">expand</span><span class="cmtt-10x-x-109">_node()</span>, the path could be much longer):</p>
+<div class="tcolorbox" id="tcolobox-463">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-549"><code>    for a, prob in enumerate(probs): 
+        root.children[a] = MCTSNode(prob, not root.first_plays) 
+    v = v_t.cpu().item() 
+    backpropagate([root], v, root.first_plays, params, min_max) 
+    return root</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">expand</span><span class="cmtt-10x-x-109">_node() </span>method is similar, but is used for non-root nodes, so it performs the dynamics step using the parent’s hidden state:</p>
+<div class="tcolorbox" id="tcolobox-464">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-550"><code>def expand_node(parent: MCTSNode, node: MCTSNode, last_action: Action, 
+                params: MuZeroParams, models: MuZeroModels) -&gt; float: 
+    h_t = torch.as_tensor(parent.h, dtype=torch.float32, device=params.dev) 
+    h_t.unsqueeze_(0) 
+    p_t, v_t = models.pred(h_t) 
+    a_t = torch.zeros(params.actions_count, dtype=torch.float32, device=params.dev) 
+    a_t[last_action] = 1.0 
+    a_t.unsqueeze_(0) 
+    r_t, h_next_t = models.dynamics(h_t, a_t) 
+    node.h = h_next_t[0].cpu().numpy() 
+    node.r = float(r_t[0].cpu().item())</code></pre>
+</div>
+</div>
+<p>The rest of the <span id="dx1-385034"/>logic is the same, with the exception that noise is not added to the non-root nodes:</p>
+<div class="tcolorbox" id="tcolobox-465">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-551"><code>    p_t.squeeze_(0) 
+    p_t.exp_() 
+    probs_t = p_t / p_t.sum() 
+    probs = probs_t.cpu().numpy() 
+    for a, prob in enumerate(probs): 
+        node.children[a] = MCTSNode(prob, not node.first_plays) 
+    return float(v_t.cpu().item())</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">backpropagate() </span>function is used to add discounted values to the nodes along the search path. The signs of the values are changed at every level to indicate that player’s turn is changing. So, a positive value for us means a negative value for the opponent and vice versa:</p>
+<div class="tcolorbox" id="tcolobox-466">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-552"><code>def backpropagate(search_path: tt.List[MCTSNode], value: float, first_plays: bool, 
+                  params: MuZeroParams, min_max: MinMaxStats): 
+    for node in reversed(search_path): 
+        node.value_sum += value if node.first_plays == first_plays else -value 
+        node.visit_count += 1 
+        value = node.r + params.discount * value 
+        min_max.update(value)</code></pre>
+</div>
+</div>
+<p>The instance of the <span class="cmtt-10x-x-109">MinMaxStats </span>class is used to keep the minimal and maximal value for the tree during the search. Then, those extremes are used to normalize the resulting values.</p>
+<p>With all those functions, let’s now look at the logic of actual MCTS search. At first, we create a root node, then perform several search rounds. In every round, we traverse the tree by following the UCB value function. When we find a node that is not expanded, we expand it and backpropagate the value to the root of the tree:</p>
+<div class="tcolorbox" id="tcolobox-467">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-553"><code>@torch.no_grad() 
+def run_mcts(player_idx: int, root_state_int: int, params: MuZeroParams, 
+             models: MuZeroModels, min_max: MinMaxStats, 
+             search_rounds: int = 800) -&gt; MCTSNode: 
+    root = make_expanded_root(player_idx, root_state_int, params, models, min_max) 
+    for _ in range(search_rounds): 
+        search_path = [root] 
+        parent_node = None 
+        last_action = 0 
+        node = root 
+        while node.is_expanded: 
+            action, new_node = node.select_child(params, min_max) 
+            last_action = action 
+            parent_node = node 
+            node = new_node 
+            search_path.append(new_node) 
+        value = expand_node(parent_node, node, last_action, params, models) 
+        backpropagate(search_path, value, node.first_plays, params, min_max) 
+    return root</code></pre>
+</div>
+</div>
+<p>As you <span id="dx1-385068"/>can see, this implementation uses NNs without processing nodes in batches. The problem with the MuZero MCTS process is that the search process is deterministic and driven by nodes’ values (which are updated when a node is expanded) and visit counters. As a result, batching has no effect because repeating the search without expanding the node will lead to the same path in the tree, so expansions have to be done one by one. This is a very inefficient way of using NNs, which negatively impacts the overall performance. Here, my intention was not to implement the most efficient possible version of MuZero, but rather to demonstrate a working prototype for you, so I did no optimization. As an exercise, you can change the implementation to perform MCTS searches in parallel from several processes. As an alternative (or in addition), you could add noise during the MCTS search and use batching similarly to when we discussed AlphaGo Zero.</p>
+</section>
+<section class="level4 subsectionHead" id="training-data-and-gameplay">
+<h2 class="heading-2" id="sigil_toc_id_349"> <span id="x1-38600020.6.4"/>Training data and gameplay</h2>
+<p>To store the <span id="dx1-386001"/>data for training, we have the <span class="cmtt-10x-x-109">Episode </span>class, which keeps the sequence of <span class="cmtt-10x-x-109">EpisodeStep </span>objects with additional information:</p>
+<div class="tcolorbox" id="tcolobox-468">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-554"><code>@dataclass 
+class EpisodeStep: 
+    state: int 
+    player_idx: int 
+    action: int 
+    reward: int 
+ 
+ 
+class Episode: 
+    def __init__(self): 
+        self.steps: tt.List[EpisodeStep] = [] 
+        self.action_probs: tt.List[tt.List[float]] = [] 
+        self.root_values: tt.List[float] = [] 
+ 
+    def __len__(self): 
+        return len(self.steps) 
+ 
+    def add_step(self, step: EpisodeStep, node: MCTSNode): 
+        self.steps.append(step) 
+        self.action_probs.append(node.get_act_probs()) 
+        self.root_values.append(node.value)</code></pre>
+</div>
+</div>
+<p>Now, let’s take a look at the <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_game() </span>function, which uses MCTS search several times to play the full episode. At the beginning of the function, we create the game state and the required objects:</p>
+<div class="tcolorbox" id="tcolobox-469">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-555"><code>@torch.no_grad() 
+def play_game( 
+        player1: MuZeroModels, player2: MuZeroModels, params: MuZeroParams, 
+        temperature: float, init_state: tt.Optional[int] = None 
+) -&gt; tt.Tuple[int, Episode]: 
+    episode = Episode() 
+    state = game.INITIAL_STATE if init_state is None else init_state 
+    players = [player1, player2] 
+    player_idx = 0 
+    reward = 0 
+    min_max = MinMaxStats()</code></pre>
+</div>
+</div>
+<p>At the beginning of the game loop, we check if the game is a draw and then run the MCTS search to accumulate statistics. After that, we select an action using random sampling from the actions’ frequencies (not UCB values):</p>
+<div class="tcolorbox" id="tcolobox-470">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-556"><code>    while True: 
+        possible_actions = game.possible_moves(state) 
+        if not possible_actions: 
+            break 
+ 
+        root_node = run_mcts(player_idx, state, params, players[player_idx], min_max) 
+        action = root_node.select_action(temperature, params) 
+ 
+        # act randomly on wrong move 
+        if action not in possible_actions: 
+            action = int(np.random.choice(possible_actions))</code></pre>
+</div>
+</div>
+<p>Once the <span id="dx1-386045"/>action has been selected, we perform a move in our game environment and check for win/lose situations. Then, the process is repeated:</p>
+<div class="tcolorbox" id="tcolobox-471">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-557"><code>        new_state, won = game.move(state, action, player_idx) 
+        if won: 
+            if player_idx == 0: 
+                reward = 1 
+            else: 
+                reward = -1 
+        step = EpisodeStep(state, player_idx, action, reward) 
+        episode.add_step(step, root_node) 
+        if won: 
+            break 
+        player_idx = (player_idx + 1) % 2 
+        state = new_state 
+    return reward, episode</code></pre>
+</div>
+</div>
+<p>Finally, we have the method that samples the batch of training data from the replay buffer (which is a list of <span class="cmtt-10x-x-109">Episode </span>objects). If you remember, the training data is created by unrolling from a random position in a random episode. This is needed to apply the dynamics network and optimize it with actual data. So, our batch is not a tensor, but a list of tensors, where every tensor is a step in the unroll process.</p>
+<p>In preparation for the batch sampling, we create empty lists of the required size:</p>
+<div class="tcolorbox" id="tcolobox-472">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-558"><code>def sample_batch( 
+        episode_buffer: tt.Deque[Episode], batch_size: int, params: MuZeroParams, 
+) -&gt; tt.Tuple[ 
+    torch.Tensor, tt.Tuple[torch.Tensor, ...], tt.Tuple[torch.Tensor, ...], 
+    tt.Tuple[torch.Tensor, ...], tt.Tuple[torch.Tensor, ...], 
+]: 
+    states = [] 
+    player_indices = [] 
+    actions = [[] for _ in range(params.unroll_steps)] 
+    policy_targets = [[] for _ in range(params.unroll_steps)] 
+    rewards = [[] for _ in range(params.unroll_steps)] 
+    values = [[] for _ in range(params.unroll_steps)]</code></pre>
+</div>
+</div>
+<p>Then we sample a random episode and select an offset in this episode:</p>
+<div class="tcolorbox" id="tcolobox-473">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-559"><code>    for episode in np.random.choice(episode_buffer, batch_size): 
+        assert isinstance(episode, Episode) 
+        ofs = np.random.choice(len(episode) - params.unroll_steps) 
+        state = game.decode_binary(episode.steps[ofs].state) 
+        states.append(state) 
+        player_indices.append(episode.steps[ofs].player_idx)</code></pre>
+</div>
+</div>
+<p>After that, the <span id="dx1-386077"/>unroll for a specific number of steps (five, as in the paper) is performed. At every step, we remember the action, the immediate reward, and the actions’ probabilities. After that, we compute the value target by summing the discounted rewards until the end of the episode:</p>
+<div class="tcolorbox" id="tcolobox-474">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-560"><code>        for s in range(params.unroll_steps): 
+            full_ofs = ofs + s 
+            actions[s].append(episode.steps[full_ofs].action) 
+            rewards[s].append(episode.steps[full_ofs].reward) 
+            policy_targets[s].append(episode.action_probs[full_ofs]) 
+ 
+            value = 0.0 
+            for step in reversed(episode.steps[full_ofs:]): 
+                value *= params.discount 
+                value += step.reward 
+            values[s].append(value)</code></pre>
+</div>
+</div>
+<p>With this preparation data aggregated, we convert it into tensors. Actions are one-hot encoded using the <span class="cmtt-10x-x-109">eye() </span>NumPy function with indexing:</p>
+<div class="tcolorbox" id="tcolobox-475">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-561"><code>    states_t = state_lists_to_batch(states, player_indices, device=params.dev) 
+    res_actions = tuple( 
+        torch.as_tensor(np.eye(params.actions_count)[a], 
+                        dtype=torch.float32, device=params.dev) 
+        for a in actions 
+    ) 
+    res_policies = tuple( 
+        torch.as_tensor(p, dtype=torch.float32, device=params.dev) 
+        for p in policy_targets 
+    ) 
+    res_rewards = tuple( 
+        torch.as_tensor(r, dtype=torch.float32, device=params.dev) 
+        for r in rewards 
+    ) 
+    res_values = tuple( 
+        torch.as_tensor(v, dtype=torch.float32, device=params.dev) 
+        for v in values 
+    ) 
+    return states_t, res_actions, res_policies, res_rewards, res_values</code></pre>
+</div>
+</div>
+<p>I’m not going to <span id="dx1-386108"/>show the full training loop here; we perform the self-play with the current best model to populate the replay buffer. The full training code is in the <span class="cmtt-10x-x-109">train-mu.py </span>module. The following code optimizes the network:</p>
+<div class="tcolorbox" id="tcolobox-476">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-562"><code>            states_t, actions, policy_tgt, rewards_tgt, values_tgt = \ 
+                mu.sample_batch(replay_buffer, BATCH_SIZE, params) 
+ 
+            optimizer.zero_grad() 
+            h_t = net.repr(states_t) 
+            loss_p_full_t = None 
+            loss_v_full_t = None 
+            loss_r_full_t = None 
+            for step in range(params.unroll_steps): 
+                policy_t, values_t = net.pred(h_t) 
+                loss_p_t = F.cross_entropy(policy_t, policy_tgt[step]) 
+                loss_v_t = F.mse_loss(values_t, values_tgt[step]) 
+                # dynamic step 
+                rewards_t, h_t = net.dynamics(h_t, actions[step]) 
+                loss_r_t = F.mse_loss(rewards_t, rewards_tgt[step]) 
+                if step == 0: 
+                    loss_p_full_t = loss_p_t 
+                    loss_v_full_t = loss_v_t 
+                    loss_r_full_t = loss_r_t 
+                else: 
+                    loss_p_full_t += loss_p_t * 0.5 
+                    loss_v_full_t += loss_v_t * 0.5 
+                    loss_r_full_t += loss_r_t * 0.5 
+            loss_full_t = loss_v_full_t + loss_p_full_t + loss_r_full_t 
+            loss_full_t.backward() 
+            optimizer.step()</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="muzero-results">
+<h1 class="heading-1" id="sigil_toc_id_350"> <span id="x1-38700020.7"/>MuZero results</h1>
+<p>I ran the <span id="dx1-387001"/>training for 15 hours and it played 3,400 episodes (you see, the training is not very fast). The policy and value losses are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-387002r7"><span class="cmti-10x-x-109">20.7</span></a> . As often happens with self-play training, the charts have no obvious trend:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_20_07.png" width="600"/> <span id="x1-387002r7"/></p>
+<span class="id">Figure 20.7: Policy (left) and value (right) losses for the MuZero training </span>
+</div>
+<p>During the training, almost 200 current best models were stored, which I checked in tournament mode using the <span class="cmtt-10x-x-109">play-mu.py </span>script. Here are the top 10 models:</p>
+<div class="tcolorbox" id="tcolobox-477">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-563"><code>saves/mu-t5-6/best_010_00210.dat:        w=339, l=41, d=0 
+saves/mu-t5-6/best_015_00260.dat:        w=298, l=82, d=0 
+saves/mu-t5-6/best_155_02510.dat:        w=287, l=93, d=0 
+saves/mu-t5-6/best_150_02460.dat:        w=273, l=107, d=0 
+saves/mu-t5-6/best_140_02360.dat:        w=267, l=113, d=0 
+saves/mu-t5-6/best_145_02410.dat:        w=266, l=114, d=0 
+saves/mu-t5-6/best_165_02640.dat:        w=253, l=127, d=0 
+saves/mu-t5-6/best_005_00100.dat:        w=250, l=130, d=0 
+saves/mu-t5-6/best_160_02560.dat:        w=236, l=144, d=0 
+saves/mu-t5-6/best_135_02310.dat:        w=220, l=160, d=0</code></pre>
+</div>
+</div>
+<p>As you can see, the best models are models stored at the beginning of the training, which might be an indication of bad convergence (as I haven’t tuned the hyperparameters much).</p>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-387013r8"><span class="cmti-10x-x-109">20.8</span></a> shows the plot with the model’s winning ratio versus the model index, and this plot correlates a lot with policy loss, which is understandable because lower policy loss should lead to better gameplay:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_20_08.png" width="600"/> <span id="x1-387013r8"/></p>
+<span class="id">Figure 20.8: Winning ratio of the best models stored during the training </span>
+</div>
+</section>
+<section class="level3 sectionHead" id="muzero-and-atari">
+<h1 class="heading-1" id="sigil_toc_id_351"> <span id="x1-38800020.8"/>MuZero and Atari</h1>
+<p>In our example, we <span id="dx1-388001"/>used Connect 4, which is a two-player board game, but we shouldn’t miss the fact that MuZero’s generalization (usage of hidden state) makes it possible to apply it to more classical RL scenarios. In the paper by Schrittwieser et al. [<span id="x1-388002"/><a href="#">Sch+20</a>], the authors successfully applied the method to 57 Atari games. Of course, the method requires tuning and adaptation to such scenarios, but the core is the same. This has been left as an exercise for you to try by yourself.</p>
+</section>
+<section class="level3 sectionHead" id="summary-19">
+<h1 class="heading-1" id="sigil_toc_id_352"> <span id="x1-38900020.9"/>Summary</h1>
+<p>In this chapter, we implemented the AlphaGo Zero and MuZero model-based methods, which were created by DeepMind to solve board games. The primary point of this method is to allow agents to improve their strength via self-play, without any prior knowledge from human games or other data sources. This family of methods has real-world applications in several domains, such as healthcare (protein folding), finance, and energy management. In the next chapter, we will discuss another direction of practical RL: discrete optimization problems, which play an important role in various real-life problems, from schedule optimization to protein folding.</p>
+</section>
+<section class="level3 likesectionHead" id="join-our-community-on-discord-6">
+<h1 class="heading-1" id="sigil_toc_id_353"><span id="x1-390000"/>Join our community on Discord</h1>
+<p>Read this book alongside other users, Deep Learning experts, and the author himself. Ask questions, provide solutions to other readers, chat with the author via Ask Me Anything sessions, and much more. Scan the QR code or visit the link to join the community. <a class="url" href="https://packt.link/rl"><span class="cmtt-10x-x-109">https://packt.link/rl</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file1.png" width="85"/></p>
+</section>
+</section>
+</div></body></html>

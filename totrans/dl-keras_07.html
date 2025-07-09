@@ -1,0 +1,644 @@
+<html><head></head><body>
+        <section>
+
+            <header>
+                <h1 class="header-title">Additional Deep Learning Models</h1>
+            </header>
+
+            <article>
+                
+<p>So far, most of the discussion has been focused around different models that do classification. These models are trained using object features and their labels to predict labels for hitherto unseen objects. The models also had a fairly simple architecture, all the ones we have seen so far have a linear pipeline modeled by the Keras sequential API.</p>
+<p>In this chapter, we will focus on more complex architectures where the pipelines are not necessarily linear. Keras provides the functional API to deal with these sorts of architectures. We will learn how to define our networks using the functional API in this chapter. Note that the functional API can be used to build linear architectures as well.</p>
+<p>The simplest extension of classification networks are regression networks. The two broad subcategories under supervised machine learning are classification and regression. Instead of predicting a category, the network now predicts a continuous value. You saw an example of a regression network when we discussed stateless versus stateful RNNs. Many regression problems can be solved using classification models with very little effort. We will see an example of such a network to predict atmospheric benzene in this chapter.</p>
+<p>Yet another class of models deal with learning the structure of the data from unlabeled data. These are called <strong>unsupervised</strong> (or more correctly, self-supervised) models. They are similar to classification models, but the labels are available implicitly within the data. We have already seen examples of this kind of model; for example, the CBOW and skip-gram word2vec models are self-supervised models. Autoencoders are another example of this type of model. We will learn about autoencoders and describe an example that builds compact vector representations of sentences.</p>
+<p>We will then look at how to compose the networks we have seen so far into larger computation graphs. These graphs are often built to achieve some custom objective that is not achievable by a sequential model alone, and may have multiple inputs and outputs and connections to external components. We will see an example of composing such a network for question answering.</p>
+<p>We then take a detour to look at the Keras backend API, and how we can use this API to build custom components to extend Keras' functionality.</p>
+<p>Going back to models for unlabeled data, another class of models that don't require labels are generative models. These models are trained using a set of existing objects and attempt to learn the distribution these objects come from. Once the distribution is learned, we can draw samples from this distribution that look like the original training data. We have seen an example of this where we trained a character RNN model to generate text similar to <em>Alice in Wonderland</em> in the previous chapter. The idea is already covered, so we won't cover this particular aspect of generative models here. However, we will look at how we can leverage the idea of a trained network learning the data distribution to create interesting visual effects using a VGG-16 network pre-trained on ImageNet data.</p>
+<p>To summarize, we will learn the following topics in this chapter:</p>
+<ul>
+<li>The Keras functional API</li>
+<li>Regression networks</li>
+<li>Autoencoders for unsupervised learning</li>
+<li>Composing complex networks with the functional API</li>
+<li>Customizing Keras</li>
+<li>Generative networks</li>
+</ul>
+<p>Let's get started.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras functional API</h1>
+            </header>
+
+            <article>
+                
+<p>The Keras functional API defines each layer as a function and provides operators to compose these functions into a larger computational graph. A function is some sort of transformation with a single input and single output. For example, the function <em>y = f(x)</em> defines a function <em>f</em> with input <em>x</em> and output <em>y</em>. Let us consider the simple sequential model from Keras (for more information refer to: <a href="https://keras.io/getting-started/sequential-model-guide/" target="_blank">https://keras.io/getting-started/sequential-model-guide/</a>):</p>
+<pre>
+from keras.models import Sequential<br/>from keras.layers.core import dense, Activation<br/><br/>model = Sequential([<br/>   dense(32, input_dim=784),<br/>   Activation("sigmoid"),<br/>   dense(10),<br/>   Activation("softmax"),<br/>])<br/><br/>model.compile(loss="categorical_crossentropy", optimizer="adam")
+</pre>
+<p>As you can see, the sequential model represents the network as a linear pipeline, or list, of layers. We can also represent the network as the composition of the following nested functions. Here <em>x</em> is the input tensor of shape <em>(None, 784)</em> and <em>y</em> is the output tensor of <em>(None, 10)</em>. Here <em>None</em> refers to the as-yet undetermined batch size:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/func-api-1.png"/></div>
+<p>Where:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/func-api-2.png"/></div>
+<p>The network can be redefined using the Keras functional API as follows. Notice how the predictions variable is a composition of the same functions we defined in equation form previously:</p>
+<pre>
+from keras.layers import Input<br/>from keras.layers.core import dense<br/>from keras.models import Model<br/>from keras.layers.core import Activation<br/><br/>inputs = Input(shape=(784,))<br/><br/>x = dense(32)(inputs)<br/>x = Activation("sigmoid")(x)<br/>x = dense(10)(x)<br/>predictions = Activation("softmax")(x)<br/><br/>model = Model(inputs=inputs, outputs=predictions)<br/><br/>model.compile(loss="categorical_crossentropy", optimizer="adam")
+</pre>
+<p>Since a model is a composition of layers that are also functions, a model is also a function. Therefore, you can treat a trained model as just another layer by calling it on an appropriately shaped input tensor. Thus, if you have built a model that does something useful like image classification, you can easily extend it to work with a sequence of images using Keras's <kbd>TimeDistributed</kbd> wrapper:</p>
+<pre>
+sequence_predictions = TimeDistributed(model)(input_sequences)
+</pre>
+<p>The functional API can be used to define any network that can be defined using the sequential API. In addition, the following types of network can only be defined using the functional API:</p>
+<ul>
+<li>Models with multiple inputs and outputs</li>
+<li>Models composed of multiple submodels</li>
+<li>Models that used shared layers</li>
+</ul>
+<p>Models with multiple inputs and outputs are defined by composing the inputs and outputs separately, as shown in the preceding example, and then passing in an array of input functions and an array of output functions in the input and output parameters of the <kbd>Model</kbd> constructor:</p>
+<pre>
+model = Model(inputs=[input1, input2], outputs=[output1, output2])
+</pre>
+<p>Models with multiple inputs and outputs also generally consist of multiple subnetworks, the results of whose computations are merged into the final result. The merge function provides multiple ways to merge intermediate results such as vector addition, dot product, and concatenation. We will see examples of merging in our question answering example later in this chapter.</p>
+<p>Another good use for the functional API are models that use shared layers. Shared layers are defined once, and referenced in each pipeline where their weights need to be shared.</p>
+<p>We will use the functional API almost exclusively in this chapter, so you will see quite a few examples of its use. The Keras website has many more usage examples for the functional API.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Regression networks</h1>
+            </header>
+
+            <article>
+                
+<p>The two major techniques of supervised learning are classification and regression. In both cases, the model is trained with data to predict known labels. In case of classification, these labels are discrete values such as genres of text or image categories. In case of regression, these labels are continuous values, such as stock prices or human intelligence quotients (IQ).</p>
+<p>Most of the examples we have seen show deep learning models being used to perform classification. In this section, we will look at how to perform regression using such a model.</p>
+<p>Recall that classification models have a dense layer with a nonlinear activation at the end, the output dimension of which corresponds to the number of classes the model can predict. Thus, an ImageNet image classification model has a dense (1,000) layer at the end, corresponding to 1,000 ImageNet classes it can predict. Similarly, a sentiment analysis model has a dense layer at the end, corresponding to positive or negative sentiment.</p>
+<p>Regression models also have a dense layer at the end, but with a single output, that is, an output dimension of one, and no nonlinear activation. Thus the dense layer just returns the sum of the activations from the previous layer. In addition, the loss function used is typically <strong>mean squared error</strong> (<strong>MSE</strong>), but some of the other objectives (listed on the Keras objectives page at: <a href="https://keras.io/losses/" target="_blank">https://keras.io/losses/</a>) can be used as well.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras regression example — predicting benzene levels in the air</h1>
+            </header>
+
+            <article>
+                
+<p>In this example, we will predict the concentration of benzene in the atmosphere given some other variables such as concentrations of carbon monoxide, nitrous oxide, and so on in the atmosphere as well as temperature and relative humidity. The dataset we will use is the air quality dataset from the UCI Machine Learning Repository (<a href="https://archive.ics.uci.edu/ml/datasets/Air+Quality" target="_blank">https://archive.ics.uci.edu/ml/datasets/Air+Quality</a>). The dataset contains 9,358 instances of hourly averaged readings from an array of five metal oxide chemical sensors. The sensor array was located in a city in Italy, and the recordings were made from March 2004 to February 2005.</p>
+<p>As usual, first we import all our necessary libraries:</p>
+<pre>
+from keras.layers import Input<br/>from keras.layers.core import dense<br/>from keras.models import Model<br/>from sklearn.preprocessing import StandardScaler<br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import os<br/>import pandas as pd
+</pre>
+<p>The dataset is provided as a CSV file. We load the input data into a Pandas (for more information refer to: <a href="http://pandas.pydata.org/" target="_blank">http://pandas.pydata.org/</a>) data frame. Pandas is a popular data analysis library built around data frames, a concept borrowed from the R language. We use Pandas here to read the dataset for two reasons. First, the dataset contains empty fields where they could not be recorded for some reason. Second, the dataset uses commas for decimal points, a custom common in some European countries. Pandas has built-in support to handle both situations, along with a few other conveniences, as we will see soon:</p>
+<pre>
+DATA_DIR = "../data"<br/>AIRQUALITY_FILE = os.path.join(DATA_DIR, "AirQualityUCI.csv")<br/><br/>aqdf = pd.read_csv(AIRQUALITY_FILE, sep=";", decimal=",", header=0)<br/><br/># remove first and last 2 cols <br/>del aqdf["Date"]<br/>del aqdf["Time"]<br/>del aqdf["Unnamed: 15"]<br/>del aqdf["Unnamed: 16"]<br/><br/># fill NaNs in each column with the mean value<br/>aqdf = aqdf.fillna(aqdf.mean())<br/><br/>Xorig = aqdf.as_matrix()
+</pre>
+<p>The preceding example removes the first two columns, which contains the observation date and time, and the last two columns which seem to be spurious. Next we replace the empty fields with the average value for the column. Finally, we export the data frame as a matrix for downstream use.</p>
+<p>One thing to note is that each column of the data has different scales since they measure different quantities. For example, the concentration of tin oxide is in the 1,000 range, while non-methanic hydrocarbons is in the 100 range. In many situations our features are homogeneous so scaling is not an issue, but in cases like this it is generally a good practice to scale the data. Scaling here consists of subtracting from each column the mean of the column and dividing by its standard deviation:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/zscore.png"/></div>
+<p>To do this, we use the <kbd>StandardScaler</kbd> class provided by the <kbd>scikit-learn</kbd> library, shown as follows. We store the mean and standard deviations because we will need this later when reporting results or predicting against new data. Our target variable is the fourth column in our input dataset, so we split this scaled data into input variables <kbd>X</kbd> and target variable <kbd>y</kbd>:</p>
+<pre>
+scaler = StandardScaler()<br/>Xscaled = scaler.fit_transform(Xorig)<br/># store these off for predictions with unseen data<br/>Xmeans = scaler.mean_<br/>Xstds = scaler.scale_<br/><br/>y = Xscaled[:, 3]<br/>X = np.delete(Xscaled, 3, axis=1)
+</pre>
+<p>We then split the data into the first 70% for training and the last 30% for testing. This gives us 6,549 records for training and 2,808 records for testing:</p>
+<pre>
+train_size = int(0.7 * X.shape[0])<br/>Xtrain, Xtest, ytrain, ytest = X[0:train_size], X[train_size:], <br/>    y[0:train_size], y[train_size:]
+</pre>
+<p>Next we define our network. This is a simple two layer dense network that takes a vector of 12 features as input and outputs a scaled prediction. The hidden dense layer has eight neurons. We initialize weight matrices for both dense layers with a specific initialization scheme called <em>glorot uniform</em>. For a full list of initialization schemes, please refer to the Keras initializations here: <a href="https://keras.io/initializers/" target="_blank">https://keras.io/initializers/</a>. The loss function used is mean squared error (<kbd>mse</kbd>) and the optimizer is <kbd>adam</kbd>:</p>
+<pre>
+readings = Input(shape=(12,))<br/>x = dense(8, activation="relu", kernel_initializer="glorot_uniform")(readings)<br/>benzene = dense(1, kernel_initializer="glorot_uniform")(x)<br/><br/>model = Model(inputs=[readings], outputs=[benzene])<br/>model.compile(loss="mse", optimizer="adam")
+</pre>
+<p>We train this model for 20 epochs and batch size of 10:</p>
+<pre>
+NUM_EPOCHS = 20<br/>BATCH_SIZE = 10<br/><br/>history = model.fit(Xtrain, ytrain, batch_size=BATCH_SIZE, epochs=NUM_EPOCHS,<br/>    validation_split=0.2)
+</pre>
+<p>This results in a model that has a mean squared error of 0.0003 (approximately 2% RMSE) on the training set and 0.0016 (approximately 4% RMSE) on the validation set, as shown in the logs of the training step here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="266" src="assets/ss-7-1.png" width="500"/></div>
+<p>We also look at some values of benzene concentrations that were originally recorded and compare them to those predicted by our model. Both actual and predicted values are rescaled from their scaled <em>z</em>-values to actual values:</p>
+<pre>
+ytest_ = model.predict(Xtest).flatten()<br/>for i in range(10):<br/>    label = (ytest[i] * Xstds[3]) + Xmeans[3]<br/>    prediction = (ytest_[i] * Xstds[3]) + Xmeans[3]<br/>    print("Benzene Conc. expected: {:.3f}, predicted: {:.3f}".format(label, prediction))
+</pre>
+<p>The side-by-side comparison shows that the predictions are quite close to the actual values:</p>
+<pre>
+<span class="packt_screen">Benzene Conc. expected: 4.600, predicted: 5.254<br/>Benzene Conc. expected: 5.500, predicted: 4.932<br/>Benzene Conc. expected: 6.500, predicted: 5.664<br/>Benzene Conc. expected: 10.300, predicted: 8.482<br/>Benzene Conc. expected: 8.900, predicted: 6.705<br/>Benzene Conc. expected: 14.000, predicted: 12.928<br/>Benzene Conc. expected: 9.200, predicted: 7.128<br/>Benzene Conc. expected: 8.200, predicted: 5.983<br/>Benzene Conc. expected: 7.200, predicted: 6.256<br/>Benzene Conc. expected: 5.500, predicted: 5.184</span>
+</pre>
+<p>Finally, we graph the actual values against the predictions for our entire test set. Once more, we see that the network predicts values that are very close to the expected values:</p>
+<pre>
+plt.plot(np.arange(ytest.shape[0]), (ytest * Xstds[3]) / Xmeans[3], <br/>    color="b", label="actual")<br/>plt.plot(np.arange(ytest_.shape[0]), (ytest_ * Xstds[3]) / Xmeans[3], <br/>    color="r", alpha=0.5, label="predicted")<br/>plt.xlabel("time")<br/>plt.ylabel("C6H6 concentrations")<br/>plt.legend(loc="best")<br/>plt.show()
+</pre>
+<p>The output of the preceding example is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/regression-chart.png"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Unsupervised learning — autoencoders</h1>
+            </header>
+
+            <article>
+                
+<p>Autoencoders are a class of neural network that attempt to recreate the input as its target using back-propagation. An autoencoder consists of two parts, an encoder and a decoder. The encoder will read the input and compress it to a compact representation, and the decoder will read the compact representation and recreate the input from it. In other words, the autoencoder tries to learn the identity function by minimizing the reconstruction error.</p>
+<p>Even though the identity function does not seem like a very interesting function to learn, the way in which this is done makes it interesting. The number of hidden units in the autoencoder is typically less than the number of input (and output) units. This forces the encoder to learn a compressed representation of the input which the decoder reconstructs. If there is structure in the input data in the form of correlations between input features, then the autoencoder will discover some of these correlations, and end up learning a low dimensional representation of the data similar to that learned using <strong>principal component analysis</strong> (<strong>PCA</strong>).</p>
+<p>Once the autoencoder is trained, we would typically just discard the decoder component and use the encoder component to generate compact representations of the input. Alternatively, we could use the encoder as a feature detector that generates a compact, semantically rich representation of our input and build a classifier by attaching a softmax classifier to the hidden layer.</p>
+<p>The encoder and decoder components of an autoencoder can be implemented using either dense, convolutional, or recurrent networks, depending on the kind of data that is being modeled. For example, dense networks might be a good choice for autoencoders used to build <strong>collaborative filtering</strong> (<strong>CF</strong>) models (for more information refer to the articles: <span><em>AutoRec: Autoencoders Meet Collaborative Filtering</em>, by S. Sedhain, Proceedings of the 24th International Conference on World Wide Web, ACM, 2015 and <em>Wide &amp; Deep Learning for Recommender Systems</em>, by H. Cheng, Proceedings of the 1st Workshop on Deep Learning for Recommender Systems, ACM, 2016</span>), where we learn a compressed model of user preferences based on actual sparse user ratings. Similarly, convolutional neural networks may be appropriate for the use case covered in the article: <em>See: Using Deep Learning to Remove Eyeglasses from Faces</em>, by M. Runfeldt. and recurrent networks a good choice for autoencoders building on text data, such as deep patient (<span>for more information refer to the article: <em>Deep Patient: An Unsupervised Representation to Predict the Future of Patients from the Electronic Health Records</em>, by R. Miotto, Scientific Reports 6, 2016</span>) and skip-thought vectors (<span>(</span><span>for more information refer to the article: </span><span><em>Skip-Thought Vectors</em>, by R. Kiros, Advances in Neural Information Processing Systems, 2015</span>).</p>
+<p>Autoencoders can also be stacked by successively stacking encoders that compress their input to smaller and smaller representations, and stacking decoders in the opposite sequence. Stacked autoencoders have greater expressive power and the successive layers of representations capture a hierarchical grouping of the input, similar to the convolution and pooling operations in convolutional neural networks.</p>
+<p>Stacked autoencoders used to be trained layer by layer. For example, in the network shown next, we would first train layer <em>X</em> to reconstruct layer <em>X'</em> using the hidden layer <em>H1</em> (ignoring <em>H2</em>). We would then train the layer <em>H1</em> to reconstruct layer <em>H1'</em> using the hidden layer <em>H2</em>. Finally, we would stack all the layers together in the configuration shown and fine tune it to reconstruct <em>X'</em> from <em>X</em>. With better activation and regularization functions nowadays, however, it is quite common to train these networks in totality:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="268" src="assets/stacked-autoencoder.png" width="216"/></div>
+<p>The Keras blog post, <em>Building Autoencoders in Keras</em> (<a href="https://blog.keras.io/building-autoencoders-in-keras.html" target="_blank">https://blog.keras.io/building-autoencoders-in-keras.html</a>) has great examples of building autoencoders that reconstructs MNIST digit images using fully connected and convolutional neural networks. It also has a good discussion on denoising and variational autoencoders, which we will not cover here.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras autoencoder example — sentence vectors</h1>
+            </header>
+
+            <article>
+                
+<p>In this example, we will build and train an LSTM-based autoencoder to generate sentence vectors for documents in the Reuters-21578 corpus (<a href="https://archive.ics.uci.edu/ml/datasets/Reuters-21578+Text+Categorization+Collection" target="_blank">https://archive.ics.uci.edu/ml/datasets/Reuters-21578+Text+Categorization+Collection</a>). We have already seen in <a href="700e9954-f126-49b5-b4e4-fa7321296e85.xhtml" target="_blank">Chapter 5</a>, <span><em>Word Embeddings</em>,</span> how to represent a word using word embeddings to create vectors that represent its meaning in the context of other words it appears with. Here, we will see how to build similar vectors for sentences. Sentences are a sequence of words, so a sentence vector represents the meaning of the sentence.</p>
+<p>The easiest way to build a sentence vector is to just add up the word vectors and divide by the number of words. However, this treats the sentence as a bag of words, and does not take the order of words into account. Thus the sentences <em>The dog bit the man</em> and <em>The man bit the dog</em> would be treated as identical under this scenario. LSTMs are designed to work with sequence input and do take the order of words into consideration thus providing a better and more natural representation for the sentence.</p>
+<p>First we import the necessary libraries:</p>
+<pre>
+from sklearn.model_selection import train_test_split<br/>from keras.callbacks import ModelCheckpoint<br/>from keras.layers import Input<br/>from keras.layers.core import RepeatVector<br/>from keras.layers.recurrent import LSTM<br/>from keras.layers.wrappers import Bidirectional<br/>from keras.models import Model<br/>from keras.preprocessing import sequence<br/>from scipy.stats import describe<br/>import collections<br/>import matplotlib.pyplot as plt<br/>import nltk<br/>import numpy as np<br/>import os
+</pre>
+<p>The data is provided as a set of SGML files. We have already parsed and consolidated this data into a single text file in <a href="57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml" target="_blank">Chapter 6</a>, <em>Recurrent Neural Network — RNN</em>, for our GRU-based POS tagging example. We will reuse this data to first convert each block of text into a list of sentences, one sentence per line:</p>
+<pre>
+sents = []<br/>fsent = open(sent_filename, "rb")<br/>for line in fsent:<br/>    docid, sent_id, sent = line.strip().split("t")<br/>    sents.append(sent)<br/>fsent.close()
+</pre>
+<p>To build up our vocabulary, we read this list of sentences again, word by word. Each word is normalized as it is added. The normalization is to replace any token that looks like a number with the digit <kbd>9</kbd> and to lowercase them. The result is the word frequency table, <kbd>word_freqs</kbd>. We also compute the sentence length for each sentence and create a list of parsed sentences by rejoining the tokens with space so it is easier to parse in a subsequent step:</p>
+<pre>
+def is_number(n):<br/>    temp = re.sub("[.,-/]", "", n)<br/>    return temp.isdigit()<br/><br/>word_freqs = collections.Counter()<br/>sent_lens = []<br/>parsed_sentences = []<br/>for sent in sentences:<br/>    words = nltk.word_tokenize(sent)<br/>    parsed_words = []<br/>    for word in words:<br/>        if is_number(word):<br/>            word = "9"<br/>        word_freqs[word.lower()] += 1<br/>        parsed_words.append(word)<br/>    sent_lens.append(len(words))<br/>    parsed_sentences.append(" ".join(parsed_words))
+</pre>
+<p>This gives us some information about the corpus that will help us figure out good values for our constants for our LSTM network:</p>
+<pre>
+sent_lens = np.array(sent_lens)<br/>print("number of sentences: {:d}".format(len(sent_lens)))<br/>print("distribution of sentence lengths (number of words)")<br/>print("min:{:d}, max:{:d}, mean:{:.3f}, med:{:.3f}".format(<br/>np.min(sent_lens), np.max(sent_lens), np.mean(sent_lens),<br/>np.median(sent_lens)))<br/>print("vocab size (full): {:d}".format(len(word_freqs)))
+</pre>
+<p>This gives us the following information about the corpus:</p>
+<pre>
+<span class="packt_screen">number of sentences: 131545<br/> distribution of sentence lengths (number of words)<br/> min: 1, max: 429, mean: 22.315, median: 21.000<br/> vocab size (full): 50751</span>
+</pre>
+<p>Based on this information, we set the following constants for our LSTM model. We choose our <kbd>VOCAB_SIZE</kbd> as <kbd>5000</kbd>, that is, our vocabulary covers the most frequent 5,000 words that cover over 93% of the words used in the corpus. The remaining words are treated as <strong>out of vocabulary</strong> (<strong>OOV</strong>) and replaced with the token <kbd>UNK</kbd>. At prediction time, any word that the model hasn't seen will also be assigned the token <kbd>UNK</kbd>. <kbd>SEQUENCE_LEN</kbd> is set to approximately twice the median length of sentences in the training set, and indeed, approximately 110 million of our 131 million sentences are shorter than this setting. Sentences that are shorter than <kbd>SEQUENCE_LENGTH</kbd> will be padded by a special <kbd>PAD</kbd> character, and those that are longer will be truncated to fit the limit:</p>
+<pre>
+VOCAB_SIZE = 5000<br/>SEQUENCE_LEN = 50
+</pre>
+<p>Since the input to our LSTM will be numeric, we need to build lookup tables that go back and forth between words and word IDs. Since we limit our vocabulary size to 5,000 and we have to add the two pseudo-words <kbd>PAD</kbd> and <kbd>UNK</kbd>, our lookup table contains entries for the most frequently occurring 4,998 words plus <kbd>PAD</kbd> and <kbd>UNK</kbd>:</p>
+<pre>
+word2id = {}<br/>word2id["PAD"] = 0<br/>word2id["UNK"] = 1<br/>for v, (k, _) in enumerate(word_freqs.most_common(VOCAB_SIZE - 2)):<br/>    word2id[k] = v + 2<br/>id2word = {v:k for k, v in word2id.items()}
+</pre>
+<p>The input to our network is a sequence of words, where each word is represented by a vector. Simplistically, we could just use a one-hot encoding for each word, but that makes the input data very large. So we encode each word using its 50-dimensional GloVe embeddings. The embedding is generated into a matrix of shape <kbd>(VOCAB_SIZE, EMBED_SIZE)</kbd> where each row represents the GloVe embedding for a word in our vocabulary. The <kbd>PAD</kbd> and <kbd>UNK</kbd> rows (<kbd>0</kbd> and <kbd>1</kbd> respectively) are populated with zeros and random uniform values respectively:</p>
+<pre>
+EMBED_SIZE = 50<br/><br/>def lookup_word2id(word):<br/>    try:<br/>        return word2id[word]<br/>    except KeyError:<br/>        return word2id["UNK"]<br/><br/>def load_glove_vectors(glove_file, word2id, embed_size):<br/>    embedding = np.zeros((len(word2id), embed_size))<br/>    fglove = open(glove_file, "rb")<br/>    for line in fglove:<br/>        cols = line.strip().split()<br/>        word = cols[0]<br/>        if embed_size == 0:<br/>            embed_size = len(cols) - 1<br/>        if word2id.has_key(word):<br/>            vec = np.array([float(v) for v in cols[1:]])<br/>        embedding[lookup_word2id(word)] = vec<br/>    embedding[word2id["PAD"]] = np.zeros((embed_size))<br/>    embedding[word2id["UNK"]] = np.random.uniform(-1, 1, embed_size)<br/>    return embedding<br/><br/>embeddings = load_glove_vectors(os.path.join(<br/>    DATA_DIR, "glove.6B.{:d}d.txt".format(EMBED_SIZE)), word2id, EMBED_SIZE)
+</pre>
+<p>Our autoencoder model takes a sequence of GloVe word vectors and learns to produce another sequence that is similar to the input sequence. The encoder LSTM compresses the sequence into a fixed size context vector, which the decoder LSTM uses to reconstruct the original sequence. A schematic of the network is shown here:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="285" src="assets/sent-thoughts.png" width="310"/></div>
+<p>Because the input is quite large, we will use a generator to produce each batch of input. Our generator produces batches of tensors of shape <kbd>(BATCH_SIZE, SEQUENCE_LEN, EMBED_SIZE)</kbd>. Here <kbd>BATCH_SIZE</kbd> is <kbd>64</kbd>, and since we are using 50-dimensional GloVe vectors, <kbd>EMBED_SIZE</kbd> is <kbd>50</kbd>. We shuffle the sentences at the beginning of each epoch, and return batches of 64 sentences. Each sentence is represented as a vector of GloVe word vectors. If a word in the vocabulary does not have a corresponding GloVe embedding, it is represented by a zero vector. We construct two instances of the generator, one for training data and one for test data, consisting of 70% and 30% of the original dataset respectively:</p>
+<pre>
+BATCH_SIZE = 64<br/><br/>def sentence_generator(X, embeddings, batch_size):<br/>    while True:<br/>        # loop once per epoch<br/>        num_recs = X.shape[0]<br/>        indices = np.random.permutation(np.arange(num_recs))<br/>        num_batches = num_recs // batch_size<br/>        for bid in range(num_batches):<br/>            sids = indices[bid * batch_size : (bid + 1) * batch_size]<br/>            Xbatch = embeddings[X[sids, :]]<br/>            yield Xbatch, Xbatch<br/><br/>train_size = 0.7<br/>Xtrain, Xtest = train_test_split(sent_wids, train_size=train_size)<br/>train_gen = sentence_generator(Xtrain, embeddings, BATCH_SIZE)<br/>test_gen = sentence_generator(Xtest, embeddings, BATCH_SIZE)
+</pre>
+<p>Now we are ready to define the autoencoder. As we have shown in the diagram, it is composed of an encoder LSTM and a decoder LSTM. The encoder LSTM reads a tensor of shape <kbd>(BATCH_SIZE, SEQUENCE_LEN, EMBED_SIZE)</kbd> representing a batch of sentences. Each sentence is represented as a padded fixed-length sequence of words of size <kbd>SEQUENCE_LEN</kbd>. Each word is represented as a 300-dimensional GloVe vector. The output dimension of the encoder LSTM is a hyperparameter <kbd>LATENT_SIZE</kbd>, which is the size of the sentence vector that will get out of the encoder part of the trained autoencoder later. The vector space of dimensionality <kbd>LATENT_SIZE</kbd> represents the latent space that encodes the meaning of the sentence. The output of the LSTM is a vector of size (<kbd>LATENT_SIZE</kbd>) for each sentence, so for the batch the shape of the output tensor is <kbd>(BATCH_SIZE, LATENT_SIZE)</kbd>. This is now fed to a RepeatVector layer, which replicates this across the entire sequence, that is., the output tensor from this layer has the shape <kbd>(BATCH_SIZE, SEQUENCE_LEN, LATENT_SIZE)</kbd>. This tensor is now fed into the decoder LSTM, whose output dimension is the <kbd>EMBED_SIZE</kbd>, so the output tensor has shape <kbd>(BATCH_SIZE, SEQUENCE_LEN, EMBED_SIZE)</kbd>, that is, the same shape as the input tensor.</p>
+<p>We compile this model with the <kbd>SGD</kbd> optimizer and the <kbd>mse</kbd> loss function. The reason we use MSE is that we want to reconstruct a sentence that has a similar meaning, that is, something that is close to the original sentence in the embedded space of dimension <kbd>LATENT_SIZE</kbd>:</p>
+<pre>
+inputs = Input(shape=(SEQUENCE_LEN, EMBED_SIZE), name="input")<br/>encoded = Bidirectional(LSTM(LATENT_SIZE), merge_mode="sum",<br/>    name="encoder_lstm")(inputs)<br/>decoded = RepeatVector(SEQUENCE_LEN, name="repeater")(encoded)<br/>decoded = Bidirectional(LSTM(EMBED_SIZE, return_sequences=True),<br/>    merge_mode="sum",<br/>    name="decoder_lstm")(decoded)<br/><br/>autoencoder = Model(inputs, decoded)<br/><br/>autoencoder.compile(optimizer="sgd", loss="mse")
+</pre>
+<p>We train the autoencoder for 10 epochs using the following code. 10 epochs were chosen because the MSE loss converges within this time. We also save the best model retrieved so far based on the MSE loss:</p>
+<pre>
+num_train_steps = len(Xtrain) // BATCH_SIZE<br/>num_test_steps = len(Xtest) // BATCH_SIZE<br/>checkpoint = ModelCheckpoint(filepath=os.path.join(DATA_DIR,<br/>    "sent-thoughts-autoencoder.h5"), save_best_only=True)<br/>history = autoencoder.fit_generator(train_gen,<br/>    steps_per_epoch=num_train_steps,<br/>    epochs=NUM_EPOCHS,<br/>    validation_data=test_gen,<br/>    validation_steps=num_test_steps,<br/>    callbacks=[checkpoint])
+</pre>
+<p>The results of the training are shown as follows. As you can see, the training MSE reduces from 0.14 to 0.1 and the validation MSE reduces from 0.12 to 0.1:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="298" src="assets/ss-7-2.png" width="669"/></div>
+<p>Or, graphically it shows as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="241" src="assets/autoencoder-lossfunc.png" width="350"/></div>
+<p>Since we are feeding in a matrix of embeddings, the output will also be a matrix of word embeddings. Since the embedding space is continuous and our vocabulary is discrete, not every output embedding will correspond to a word. The best we can do is to find a word that is closest to the output embedding in order to reconstruct the original text. This is a bit cumbersome, so we will evaluate our autoencoder in a different way.</p>
+<p>Since the objective of the autoencoder is to produce a good latent representation, we compare the latent vectors produced from the encoder using the original input versus the output of the autoencoder. First, we extract the encoder component into its own network:</p>
+<pre>
+encoder = Model(autoencoder.input, autoencoder.get_layer("encoder_lstm").output)
+</pre>
+<p>Then we run the autoencoder on the test set to return the predicted embeddings. We then send both the input embedding and the predicted embedding through the encoder to produce sentence vectors from each, and compare the two vectors using <em>cosine</em> similarity. Cosine similarities close to one indicate high similarity and those close to zero indicate low similarity. The following code runs against a random subset of 500 test sentences and produces some sample values of cosine similarities between the sentence vectors generated from the source embedding and the corresponding target embedding produced by the autoencoder:</p>
+<pre>
+def compute_cosine_similarity(x, y):<br/>    return np.dot(x, y) / (np.linalg.norm(x, 2) * np.linalg.norm(y, 2))<br/><br/>k = 500<br/>cosims = np.zeros((k))<br/>i = 0<br/>for bid in range(num_test_steps):<br/>    xtest, ytest = test_gen.next()<br/>    ytest_ = autoencoder.predict(xtest)<br/>    Xvec = encoder.predict(xtest)<br/>    Yvec = encoder.predict(ytest_)<br/>    for rid in range(Xvec.shape[0]):<br/>        if i &gt;= k:<br/>            break<br/>        cosims[i] = compute_cosine_similarity(Xvec[rid], Yvec[rid])<br/>        if i &lt;= 10:<br/>            print(cosims[i])<br/>            i += 1<br/>if i &gt;= k:<br/>    break
+</pre>
+<p>The first 10 values of cosine similarities are shown as follows. As we can see, the vectors seem to be quite similar:</p>
+<pre>
+<span class="packt_screen">0.982818722725<br/>0.970908224583<br/>0.98131018877<br/>0.974798440933<br/>0.968060493469<br/>0.976065933704<br/>0.96712064743<br/>0.949920475483<br/>0.973583400249<br/>0.980291545391<br/>0.817819952965</span>
+</pre>
+<p>A histogram of the distribution of values of cosine similarities for the sentence vectors from the first 500 sentences in the test set are shown as follows. As previously, it confirms that the sentence vectors generated from the input and output of the autoencoder are very similar, showing that the resulting sentence vector is a good representation of the sentence:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="290" src="assets/autoencoder-cosims.png" width="415"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Composing deep networks</h1>
+            </header>
+
+            <article>
+                
+<p>We have looked extensively at these three basic deep learning networks—the <strong>fully connected network</strong> (<strong>FCN</strong>), the CNN and the RNN models. While each of these have specific use cases for which they are most suited, you can also compose larger and more useful models by combining these models as Lego-like building blocks and using the Keras functional API to glue them together in new and interesting ways.</p>
+<p>Such models tend to be somewhat specialized to the task for which they were built, so it is impossible to generalize about them. Usually, however, they involve learning from multiple inputs or generating multiple outputs. One example could be a question answering network, where the network learns to predict answers given a story and a question. Another example could be a siamese network that calculates similarity between a pair of images, where the network is trained to predict either a binary (similar/not similar) or categorical (gradations of similarity) label using a pair of images as input. Yet another example could be an object classification and localization network where it learns to predict the image category as well as where the image is located in the picture jointly from the image. The first two examples are examples of composite networks with multiple inputs, and the last is an example of a composite network with multiple outputs.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras example — memory network for question answering</h1>
+            </header>
+
+            <article>
+                
+<p>In this example, we will build a memory network for question answering. Memory networks are a specialized architecture that consist of a memory unit in addition to other learnable units, usually RNNs. Each input updates the memory state and the final output is computed by using the memory along with the output from the learnable unit. This architecture was suggested in 2014 via the paper (for more information refer to: <span><em>Memory Networks</em>, by J. Weston, S. Chopra, and A. Bordes, arXiv:1410.3916, 2014). </span>A year later, another paper (<span>for more information refer to: </span><span><em>Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks</em>, by J. Weston, arXiv:1502.05698, 2015</span>) put forward the idea of a synthetic dataset and a standard set of 20 question answering tasks, each with a higher degree of difficulty than the previous one, and applied various deep learning networks to solve these tasks. Of these, the memory network achieved the best results across all the tasks. This dataset was later made available to the general public through Facebook's bAbI project (<a href="https://research.fb.com/projects/babi/" target="_blank">https://research.fb.com/projects/babi/</a>). The implementation of our memory network resembles most closely the one described in this paper (<span>for more information refer to: <em>End-To-End Memory Networks</em>, by S. Sukhbaatar, J. Weston, and R. Fergus, Advances in Neural Information Processing Systems, 2015</span>), in that all the training happens jointly in a single network. It uses the bAbI dataset to solve the first question answering task.</p>
+<p>First, we will import the necessary libraries:</p>
+<pre>
+from keras.layers import Input<br/>from keras.layers.core import Activation, dense, Dropout, Permute<br/>from keras.layers.embeddings import Embedding<br/>from keras.layers.merge import add, concatenate, dot<br/>from keras.layers.recurrent import LSTM<br/>from keras.models import Model<br/>from keras.preprocessing.sequence import pad_sequences<br/>from keras.utils import np_utils<br/>import collections<br/>import itertools<br/>import nltk<br/>import numpy as np<br/>import matplotlib.pyplot as plt<br/>import os
+</pre>
+<p>The bAbI data for the first question answering task consists of 10,000 short sentences each for the training and the test sets. A story consists of two to three sentences, followed by a question. The last sentence in each story has the question and the answer appended to it at the end. The following block of code parses each of the training and test files into a list of triplets of story, question and answer:</p>
+<pre>
+DATA_DIR = "../data"<br/>TRAIN_FILE = os.path.join(DATA_DIR, "qa1_single-supporting-fact_train.txt")<br/>TEST_FILE = os.path.join(DATA_DIR, "qa1_single-supporting-fact_test.txt")<br/><br/>def get_data(infile):<br/>    stories, questions, answers = [], [], []<br/>    story_text = []<br/>    fin = open(TRAIN_FILE, "rb")<br/>    for line in fin:<br/>        line = line.decode("utf-8").strip()<br/>        lno, text = line.split(" ", 1)<br/>        if "t" in text:<br/>            question, answer, _ = text.split("t")<br/>            stories.append(story_text)<br/>            questions.append(question)<br/>            answers.append(answer)<br/>            story_text = []<br/>        else:<br/>            story_text.append(text)<br/>    fin.close()<br/>    return stories, questions, answers<br/><br/>data_train = get_data(TRAIN_FILE)<br/>data_test = get_data(TEST_FILE)
+</pre>
+<p>Our next step is to run through the texts in the generated lists and build our vocabulary. This should be quite familiar to us by now, since we have used a similar idiom a few times already. Unlike the previous time, our vocabulary is quite small, only 22 unique words, so we will not have any out of vocabulary words:</p>
+<pre>
+def build_vocab(train_data, test_data):<br/>    counter = collections.Counter()<br/>    for stories, questions, answers in [train_data, test_data]:<br/>        for story in stories:<br/>            for sent in story:<br/>                for word in nltk.word_tokenize(sent):<br/>                    counter[word.lower()] += 1<br/>                for question in questions:<br/>                    for word in nltk.word_tokenize(question):<br/>                         counter[word.lower()] += 1<br/>                for answer in answers:<br/>                    for word in nltk.word_tokenize(answer):<br/>                         counter[word.lower()] += 1<br/>    word2idx = {w:(i+1) for i, (w, _) in enumerate(counter.most_common())}<br/>    word2idx["PAD"] = 0<br/>idx2word = {v:k for k, v in word2idx.items()}<br/>    return word2idx, idx2word<br/><br/>word2idx, idx2word = build_vocab(data_train, data_test)<br/><br/>vocab_size = len(word2idx)
+</pre>
+<p>The memory network is based on RNNs, where each sentence in the story and question is treated as a sequence of words, so we need to find out the maximum length of the sequence for our story and question. The following block of code does this. We find that the maximum length of a story is 14 words and the maximum length of a question is just four words:</p>
+<pre>
+def get_maxlens(train_data, test_data):<br/>    story_maxlen, question_maxlen = 0, 0<br/>    for stories, questions, _ in [train_data, test_data]:<br/>        for story in stories:<br/>            story_len = 0<br/>            for sent in story:<br/>                swords = nltk.word_tokenize(sent)<br/>                story_len += len(swords)<br/>            if story_len &gt; story_maxlen:<br/>                story_maxlen = story_len<br/>        for question in questions:<br/>            question_len = len(nltk.word_tokenize(question))<br/>            if question_len &gt; question_maxlen:<br/>                question_maxlen = question_len<br/>    return story_maxlen, question_maxlen<br/><br/>story_maxlen, question_maxlen = get_maxlens(data_train, data_test)
+</pre>
+<p>As previously, the input to our RNNs is a sequence of word IDs. So we need to use our vocabulary dictionary to convert the (story, question, and answer) triplet into a sequence of integer word IDs. The next block of code does this and zero pads the resulting sequences of story and answer to the maximum sequence lengths we computed previously. At this point, we have lists of padded word ID sequences for each triplet in the training and test sets:</p>
+<pre>
+def vectorize(data, word2idx, story_maxlen, question_maxlen):<br/>    Xs, Xq, Y = [], [], []<br/>    stories, questions, answers = data<br/>    for story, question, answer in zip(stories, questions, answers):<br/>        xs = [[word2idx[w.lower()] for w in nltk.word_tokenize(s)] <br/>                   for s in story]<br/>        xs = list(itertools.chain.from_iterable(xs))<br/>        xq = [word2idx[w.lower()] for w in nltk.word_tokenize(question)]<br/>        Xs.append(xs)<br/>        Xq.append(xq)<br/>        Y.append(word2idx[answer.lower()])<br/>    return pad_sequences(Xs, maxlen=story_maxlen),<br/>        pad_sequences(Xq, maxlen=question_maxlen),<br/>        np_utils.to_categorical(Y, num_classes=len(word2idx))<br/><br/>Xstrain, Xqtrain, Ytrain = vectorize(data_train, word2idx, story_maxlen, question_maxlen)<br/>Xstest, Xqtest, Ytest = vectorize(data_test, word2idx, story_maxlen, question_maxlen)
+</pre>
+<p>We want to define the model. The definition is longer than we have seen previously, so it may be convenient to refer to the diagram as you look through the definition:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="442" src="assets/memnet.png" width="448"/></div>
+<p>There are two inputs to our model, the sequence of word IDs for the question and that for the sentence. Each of these is passed into an Embedding layer to convert the word IDs to a vector in the 64-dimensional embedding space. Additionally the story sequence is passed through an additional embedding that projects it to an embedding of size <kbd>max_question_length</kbd>. All these embedding layers start with random weights and are trained jointly with the rest of the network.</p>
+<p>The first two embeddings (story and question) are merged using a dot product to form the network's memory. These represent words in the story and question that are identical or close to each other in the embedding space. The output of the memory is merged with the second story embedding and summed to form the network response, which is once again merged with the embedding for the question to form the response sequence. This response sequence is sent through an LSTM, the context vector of which is sent to a dense layer to predict the answer, which can be one of the words in the vocabulary.</p>
+<p>The model is trained using the RMSprop optimizer and categorical cross-entropy as the loss function:</p>
+<pre>
+EMBEDDING_SIZE = 64<br/>LATENT_SIZE = 32<br/><br/># inputs<br/>story_input = Input(shape=(story_maxlen,))<br/>question_input = Input(shape=(question_maxlen,))<br/><br/># story encoder memory<br/>story_encoder = Embedding(input_dim=vocab_size,<br/>output_dim=EMBEDDING_SIZE,<br/>    input_length=story_maxlen)(story_input)<br/>story_encoder = Dropout(0.3)(story_encoder)<br/><br/># question encoder<br/>question_encoder = Embedding(input_dim=vocab_size,<br/>output_dim=EMBEDDING_SIZE,<br/>    input_length=question_maxlen)(question_input)<br/>question_encoder = Dropout(0.3)(question_encoder)<br/><br/># match between story and question<br/>match = dot([story_encoder, question_encoder], axes=[2, 2])<br/><br/># encode story into vector space of question<br/>story_encoder_c = Embedding(input_dim=vocab_size,<br/>output_dim=question_maxlen,<br/>    input_length=story_maxlen)(story_input)<br/>story_encoder_c = Dropout(0.3)(story_encoder_c)<br/><br/># combine match and story vectors<br/>response = add([match, story_encoder_c])<br/>response = Permute((2, 1))(response)<br/><br/># combine response and question vectors<br/>answer = concatenate([response, question_encoder], axis=-1)<br/>answer = LSTM(LATENT_SIZE)(answer)<br/>answer = Dropout(0.3)(answer)<br/>answer = dense(vocab_size)(answer)<br/>output = Activation("softmax")(answer)<br/><br/>model = Model(inputs=[story_input, question_input], outputs=output)<br/>model.compile(optimizer="rmsprop", loss="categorical_crossentropy",<br/>    metrics=["accuracy"])
+</pre>
+<p>We train this network for 50 epochs with a batch size of 32 and achieve an accuracy of over 81% on the validation set:</p>
+<pre>
+BATCH_SIZE = 32<br/>NUM_EPOCHS = 50<br/>history = model.fit([Xstrain, Xqtrain], [Ytrain], batch_size=BATCH_SIZE, <br/>    epochs=NUM_EPOCHS,<br/>    validation_data=([Xstest, Xqtest], [Ytest]))
+</pre>
+<p>Here is the trace of the training logs:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="351" src="assets/ss-7-3.png" width="663"/></div>
+<p>The change in training and validation loss and accuracy for this training run is shown graphically in this graph:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/memnn-lossfunc-1.png"/></div>
+<p>We ran the model against the first 10 stories from our test set to verify how good the predictions were:</p>
+<pre>
+ytest = np.argmax(Ytest, axis=1)<br/>Ytest_ = model.predict([Xstest, Xqtest])<br/>ytest_ = np.argmax(Ytest_, axis=1)<br/><br/>for i in range(NUM_DISPLAY):<br/>    story = " ".join([idx2word[x] for x in Xstest[i].tolist() if x != 0])<br/>    question = " ".join([idx2word[x] for x in Xqtest[i].tolist()])<br/>    label = idx2word[ytest[i]]<br/>    prediction = idx2word[ytest_[i]]<br/>    print(story, question, label, prediction)
+</pre>
+<p>As you can see, the predictions were mostly correct:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="228" src="assets/memnn-preds-1.png" width="478"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Customizing Keras</h1>
+            </header>
+
+            <article>
+                
+<p>Just as composing our basic building blocks into larger architectures enables us to build interesting deep learning models, sometimes we need to look at the other end of the spectrum. Keras has a lot of functionality built in already, so it is very likely that you can build all your models with the provided components and not feel the need for customization at all. In case you do need customization, Keras has you covered.</p>
+<p>As you will recall, Keras is a high level API that delegates to either a TensorFlow or Theano backend for the computational heavy lifting. Any code you build for your customization will call out to one of these backends. In order to keep your code portable across the two backends, your custom code should use the Keras backend API (<a href="https://keras.io/backend/" target="_blank">https://keras.io/backend/</a>), which provides a set of functions that act like a facade over your chosen backend. Depending on the backend selected, the call to the backend facade will translate to the appropriate TensorFlow or Theano call. The full list of functions available and their detailed descriptions can be found on the Keras backend page.</p>
+<p>In addition to portability, using the backend API also results in more maintainable code, since Keras code is generally more high-level and compact compared to equivalent TensorFlow or Theano code. In the unlikely case that you do need to switch to using the backend directly, your Keras components can be used directly inside TensorFlow (not Theano though) code as described in this Keras blog (<a href="https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html" target="_blank">https://blog.keras.io/keras-as-a-simplified-interface-to-tensorflow-tutorial.html</a>).</p>
+<p>Customizing Keras typically means writing your own custom layer or custom distance function. In this section, we will demonstrate how to build some simple Keras layers. You will see more examples of using the backend functions to build other custom Keras components, such as objectives (loss functions), in subsequent sections.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras example — using the lambda layer</h1>
+            </header>
+
+            <article>
+                
+<p>Keras provides a lambda layer; it can wrap a function of your choosing. For example, if you wanted to build a layer that squares its input tensor element-wise, you can say simply:</p>
+<pre>
+model.add(lambda(lambda x: x ** 2))
+</pre>
+<p>You can also wrap functions within a lambda layer. For example, if you want to build a custom layer that computes the element-wise euclidean distance between two input tensors, you would define the function to compute the value itself, as well as one that returns the output shape from this function, like so:</p>
+<pre>
+def euclidean_distance(vecs):<br/>    x, y = vecs<br/>    return K.sqrt(K.sum(K.square(x - y), axis=1, keepdims=True))<br/><br/>def euclidean_distance_output_shape(shapes):<br/>    shape1, shape2 = shapes<br/>    return (shape1[0], 1)
+</pre>
+<p>You can then call these functions using the lambda layer shown as follows:</p>
+<pre>
+lhs_input = Input(shape=(VECTOR_SIZE,))<br/>lhs = dense(1024, kernel_initializer="glorot_uniform", activation="relu")(lhs_input)<br/><br/>rhs_input = Input(shape=(VECTOR_SIZE,))<br/>rhs = dense(1024, kernel_initializer="glorot_uniform", activation="relu")(rhs_input)<br/><br/>sim = lambda(euclidean_distance, output_shape=euclidean_distance_output_shape)([lhs, rhs])
+</pre>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras example — building a custom normalization layer</h1>
+            </header>
+
+            <article>
+                
+<p>While the lambda layer can be very useful, sometimes you need more control. As an example, we will look at the code for a normalization layer that implements a technique called <strong>local response normalization</strong>. This technique normalizes the input over local input regions, but has since fallen out of favor because it turned out not to be as effective as other regularization methods such as dropout and batch normalization, as well as better initialization methods.</p>
+<p>Building custom layers typically involves working with the backend functions, so it involves thinking about the code in terms of tensors. As you will recall, working with tensors is a two step process. First, you define the tensors and arrange them in a computation graph, and then you run the graph with actual data. So working at this level is harder than working in the rest of Keras. The Keras documentation has some guidelines for building custom layers (<a href="https://keras.io/layers/writing-your-own-keras-layers/" target="_blank">https://keras.io/layers/writing-your-own-keras-layers/</a>), which you should definitely read.</p>
+<p>One of the ways to make it easier to develop code in the backend API is to have a small test harness that you can run to verify that your code is doing what you want it to do. Here is a small harness I adapted from the Keras source to run your layer against some input and return a result:</p>
+<pre>
+from keras.models import Sequential<br/>from keras.layers.core import Dropout, Reshape<br/><br/>def test_layer(layer, x):<br/>    layer_config = layer.get_config()<br/>    layer_config["input_shape"] = x.shape<br/>    layer = layer.__class__.from_config(layer_config)<br/>    model = Sequential()<br/>    model.add(layer)<br/>    model.compile("rmsprop", "mse")<br/>    x_ = np.expand_dims(x, axis=0)<br/>    return model.predict(x_)[0]
+</pre>
+<p>And here are some tests with <kbd>layer</kbd> objects provided by Keras to make sure that the harness runs okay:</p>
+<pre>
+from keras.layers.core import Dropout, Reshape<br/>from keras.layers.convolutional import ZeroPadding2D<br/>import numpy as np<br/><br/>x = np.random.randn(10, 10)<br/>layer = Dropout(0.5)<br/>y = test_layer(layer, x)<br/>assert(x.shape == y.shape)<br/><br/>x = np.random.randn(10, 10, 3)<br/>layer = ZeroPadding2D(padding=(1,1))<br/>y = test_layer(layer, x)<br/>assert(x.shape[0] + 2 == y.shape[0])<br/>assert(x.shape[1] + 2 == y.shape[1])<br/><br/>x = np.random.randn(10, 10)<br/>layer = Reshape((5, 20))<br/>y = test_layer(layer, x)<br/>assert(y.shape == (5, 20))
+</pre>
+<p>Before we begin building our local response normalization layer, we need to take a moment to understand what it really does. This technique was originally used with Caffe, and the Caffe documentation (<a href="http://caffe.berkeleyvision.org/tutorial/layers/lrn.html" target="_blank">http://caffe.berkeleyvision.org/tutorial/layers/lrn.html</a>) describes it as a kind of <em>lateral inhibition</em> that works by normalizing over local input regions. In <kbd>ACROSS_CHANNEL</kbd> mode, the local regions extend across nearby channels but have no spatial extent. In <kbd>WITHIN_CHANNEL</kbd> mode, the local regions extend spatially, but are in separate channels. We will implement the <kbd>WITHIN_CHANNEL</kbd> model as follows. The formula for local response normalization in the <kbd>WITHIN_CHANNEL</kbd> model is given by:</p>
+<div class="CDPAlignCenter CDPAlign"><img src="assets/lrn.png"/></div>
+<p>The code for the custom layer follows the standard structure. The <kbd>__init__</kbd> method is used to set the application specific parameters, that is, the hyperparameters associated with the layer. Since our layer only does a forward computation and doesn't have any learnable weights, all we do in the build method is to set the input shape and delegate to the superclass's build method, which takes care of any necessary book-keeping. In layers where learnable weights are involved, this method is where you would set the initial values.</p>
+<p>The call method does the actual computation. Notice that we need to account for dimension ordering. Another thing to note is that the batch size is usually unknown at design times, so you need to write your operations so that the batch size is not explicitly invoked. The computation itself is fairly straightforward and follows the formula closely. The sum in the denominator can also be thought of as average pooling over the row and column dimension with a padding size of <em>(n, n)</em> and a stride of <em>(1, 1)</em>. Because the pooled data is averaged already, we no longer need to divide the sum by <em>n</em>.</p>
+<p>The last part of the class is the <kbd>get_output_shape_for</kbd> method. Since the layer normalizes each element of the input tensor, the output size is identical to the input size:</p>
+<pre>
+from keras import backend as K<br/>from keras.engine.topology import Layer, InputSpec<br/><br/>class LocalResponseNormalization(Layer):<br/><br/>    def __init__(self, n=5, alpha=0.0005, beta=0.75, k=2, **kwargs):<br/>        self.n = n<br/>        self.alpha = alpha<br/>        self.beta = beta<br/>        self.k = k<br/>        super(LocalResponseNormalization, self).__init__(**kwargs)<br/><br/>    def build(self, input_shape):<br/>        self.shape = input_shape<br/>        super(LocalResponseNormalization, self).build(input_shape)<br/><br/>    def call(self, x, mask=None):<br/>        if K.image_dim_ordering == "th":<br/>            _, f, r, c = self.shape<br/>        else:<br/>            _, r, c, f = self.shape<br/>        squared = K.square(x)<br/>        pooled = K.pool2d(squared, (n, n), strides=(1, 1),<br/>            padding="same", pool_mode="avg")<br/>        if K.image_dim_ordering == "th":<br/>            summed = K.sum(pooled, axis=1, keepdims=True)<br/>            averaged = self.alpha * K.repeat_elements(summed, f, axis=1)<br/>        else:<br/>            summed = K.sum(pooled, axis=3, keepdims=True)<br/>            averaged = self.alpha * K.repeat_elements(summed, f, axis=3)<br/>        denom = K.pow(self.k + averaged, self.beta)<br/>        return x / denom<br/><br/>    def get_output_shape_for(self, input_shape):<br/>        return input_shape
+</pre>
+<p>You can test this layer during development using the test harness we described here. It is easier to run this instead of trying to build a whole network to put this into, or worse, waiting till you have fully specified the layer before running it:</p>
+<pre>
+x = np.random.randn(225, 225, 3)<br/>layer = LocalResponseNormalization()<br/>y = test_layer(layer, x)<br/>assert(x.shape == y.shape)
+</pre>
+<p>While building custom Keras layers seems to be fairly commonplace among experienced Keras developers, there are not too many examples available on the Internet. This is probably because custom layers are usually built to serve a specific narrow purpose and may not be widely useful. The variability also means that one single example cannot demonstrate all the possibilities of what you can do with the API. Now that you have a good idea of how to build a custom Keras layer, you might find it instructive to look at Keunwoo Choi's <kbd>melspectogram</kbd> (<a href="https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/" target="_blank">https://keunwoochoi.wordpress.com/2016/11/18/for-beginners-writing-a-custom-keras-layer/</a>) and Shashank Gupta's <kbd>NodeEmbeddingLayer</kbd> (<a href="http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html" target="_blank">http://shashankg7.github.io/2016/10/12/Custom-Layer-In-Keras-Graph-Embedding-Case-Study.html</a>).</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Generative models</h1>
+            </header>
+
+            <article>
+                
+<p>Generative models are models that learn to create data similar to data it is trained on. We saw one example of a generative model that learns to write prose similar to <em>Alice in Wonderland</em> in <a href="57a694a6-93f4-4eec-9fbf-e4eafd2d6824.xhtml" target="_blank">Chapter 6</a>, <em>Recurrent Neural Network — RNN</em>. In that example, we trained a model to predict the 11th character of text given the first 10 characters. Yet another type of generative model is <strong>generative adversarial models</strong> (<strong>GAN</strong>) that have recently emerged as a very powerful class of models—you saw examples of GANs in <a href="a67ea944-b1a6-48a3-b8aa-4e698166c0eb.xhtml" target="_blank">Chapter 4</a>, <em>Generative Adversarial Networks and WaveNet</em>. The intuition for generative models is that it learns a good internal representation of its training data, and is therefore able to generate similar data during the <em>prediction</em> phase.</p>
+<p>Another perspective on generative models is the probabilistic one. A typical classification or regression network, also called a discriminative model, learns a function that maps the input data <em>X</em> to some label or output <em>y</em>, that is, these models learn the conditional probability <em>P(y|X)</em>. On the other hand, a generative model learns the joint probability and labels simultaneously, that is, <em>P(x, y)</em>. This knowledge can then be used to create probable new <em>(X, y)</em> samples. This gives generative models the ability to explain the underlying structure of input data even when there are no labels. This is a very important advantage in the real world, since unlabeled data is more abundant than labeled data.</p>
+<p>Simple generative models such as the example mentioned above can be extended to audio as well, for example, models that learn to generate and play music. One interesting one is described in the WaveNet paper (for more information refer to: <span><em>WaveNet: A Generative Model for Raw Audio</em>, by A. van den Oord, 2016.</span>) which describes a network built using atrous convolutional layers and provides a Keras implementation on GithHub (<a href="https://github.com/basveeling/wavenet" target="_blank">https://github.com/basveeling/wavenet</a>).</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras example — deep dreaming</h1>
+            </header>
+
+            <article>
+                
+<p>In this example, we will look at a slightly different generative network. We will see how to take a pre-trained convolutional network and use it to generate new objects in an image. Networks trained to discriminate between images learn enough about the images to generate them as well. This was first demonstrated by Alexander Mordvintsev of Google and described in this Google Research blog post (<a href="https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html" target="_blank">https://research.googleblog.com/2015/06/inceptionism-going-deeper-into-neural.html</a>). It was originally called <em>inceptionalism</em> but the term <em>deep dreaming</em> became more popular to describe the technique.</p>
+<p>Deep dreaming takes the backpropagated gradient activations and adds it back to the image, running the same process over and over in a loop. The network optimizes the loss function in the process, but we get to see how it does so in the input image (three channels) rather than in a high dimensional hidden layer that cannot easily be visualized.</p>
+<p>There are many variations to this basic strategy, each of which leads to new and interesting effects. Some variations are blurring, adding constraints on the total activations, decaying the gradient, infinitely zooming into the image by cropping and scaling, adding jitter by randomly moving the image around, and so on. In our example, we will show the simplest approach—we will optimize the gradient of the mean of the selected layer's activation for each of the pooling layers of a pre-trained VGG-16 and observe the effect on our input image.</p>
+<p>First, as usual, we will declare our imports:</p>
+<pre>
+from keras import backend as K<br/>from keras.applications import vgg16<br/>from keras.layers import Input<br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import os
+</pre>
+<p>Next we will load up our input image. This image may be familiar to you from blog posts about deep learning. The original image is from here (<a href="https://www.flickr.com/photos/billgarrett-newagecrap/14984990912" target="_blank">https://www.flickr.com/photos/billgarrett-newagecrap/14984990912</a>):</p>
+<pre>
+DATA_DIR = "../data"<br/>IMAGE_FILE = os.path.join(DATA_DIR, "cat.jpg")<br/>img = plt.imread(IMAGE_FILE)<br/>plt.imshow(img)
+</pre>
+<p>The output of the preceding example is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="300" src="assets/cat-orig.png" width="305"/></div>
+<p>Next we define a pair of functions to preprocess and deprocess the image to and from a four-dimensional representation suitable for input to a pre-trained VGG-16 network:</p>
+<pre>
+def preprocess(img):<br/>    img4d = img.copy()<br/>    img4d = img4d.astype("float64")<br/>    if K.image_dim_ordering() == "th":<br/>        # (H, W, C) -&gt; (C, H, W)<br/>        img4d = img4d.transpose((2, 0, 1))<br/>        img4d = np.expand_dims(img4d, axis=0)<br/>        img4d = vgg16.preprocess_input(img4d)<br/>    return img4d<br/><br/>def deprocess(img4d):<br/>    img = img4d.copy()<br/>    if K.image_dim_ordering() == "th":<br/>        # (B, C, H, W)<br/>        img = img.reshape((img4d.shape[1], img4d.shape[2],         img4d.shape[3]))<br/>        # (C, H, W) -&gt; (H, W, C)<br/>        img = img.transpose((1, 2, 0))<br/>    else:<br/>        # (B, H, W, C)<br/>        img = img.reshape((img4d.shape[1], img4d.shape[2], img4d.shape[3]))<br/>    img[:, :, 0] += 103.939<br/>    img[:, :, 1] += 116.779<br/>    img[:, :, 2] += 123.68<br/>    # BGR -&gt; RGB<br/>    img = img[:, :, ::-1]<br/>    img = np.clip(img, 0, 255).astype("uint8")<br/>return img
+</pre>
+<p>These two functions are inverses of each other, that is, passing the image through <kbd>preprocess</kbd> and then through <kbd>deprocess</kbd> will return the original image.</p>
+<p>Next, we load up our pre-trained VGG-16 network. This network has been pre-trained on ImageNet data and is available from the Keras distribution. You already learned how to work with pre-trained models in <a href="4be2a04a-4545-4051-bcd9-32764d21f0f2.xhtml" target="_blank">Chapter 3</a>, <em>Deep Learning with ConvNets</em>. We select the version whose fully connected layers have been removed already. Apart from saving us the trouble of having to remove them ourselves, this also allows us to pass in any shape of image, since the reason we need to specify the image width and height in our input is because this determines the size of the weight matrices in the fully connected layers. Because CNN transformations are local in nature, the size of the image doesn't affect the sizes of the weight matrices for the convolutional and pooling layers. So the only constraint on image size is that it must be constant within the batch:</p>
+<pre>
+img_copy = img.copy()<br/>print("Original image shape:", img.shape)<br/>p_img = preprocess(img_copy)<br/>batch_shape = p_img.shape<br/>dream = Input(batch_shape=batch_shape)<br/>model = vgg16.VGG16(input_tensor=dream, weights="imagenet", include_top=False)
+</pre>
+<p>We will need to refer to the CNN's layer objects by name in our following calculations, so let us construct a dictionary. We also need to understand the layer naming convention, so we dump it out:</p>
+<pre>
+layer_dict = {layer.name : layer for layer in model.layers}<br/>print(layer_dict)
+</pre>
+<p>The output of the preceding example is as follows:</p>
+<pre>
+<span class="packt_screen">{'block1_conv1': &lt;keras.layers.convolutional.Convolution2D at 0x11b847690&gt;,<br/> 'block1_conv2': &lt;keras.layers.convolutional.Convolution2D at 0x11b847f90&gt;,<br/> 'block1_pool': &lt;keras.layers.pooling.MaxPooling2D at 0x11c45db90&gt;,<br/> 'block2_conv1': &lt;keras.layers.convolutional.Convolution2D at 0x11c45ddd0&gt;,<br/> 'block2_conv2': &lt;keras.layers.convolutional.Convolution2D at 0x11b88f810&gt;,<br/> 'block2_pool': &lt;keras.layers.pooling.MaxPooling2D at 0x11c2d2690&gt;,<br/> 'block3_conv1': &lt;keras.layers.convolutional.Convolution2D at 0x11c47b890&gt;,<br/> 'block3_conv2': &lt;keras.layers.convolutional.Convolution2D at 0x11c510290&gt;,<br/> 'block3_conv3': &lt;keras.layers.convolutional.Convolution2D at 0x11c4afa10&gt;,<br/> 'block3_pool': &lt;keras.layers.pooling.MaxPooling2D at 0x11c334a10&gt;,<br/> 'block4_conv1': &lt;keras.layers.convolutional.Convolution2D at 0x11c345b10&gt;,<br/> 'block4_conv2': &lt;keras.layers.convolutional.Convolution2D at 0x11c345950&gt;,<br/> 'block4_conv3': &lt;keras.layers.convolutional.Convolution2D at 0x11d52c910&gt;,<br/> 'block4_pool': &lt;keras.layers.pooling.MaxPooling2D at 0x11d550c90&gt;,<br/> 'block5_conv1': &lt;keras.layers.convolutional.Convolution2D at 0x11d566c50&gt;,<br/> 'block5_conv2': &lt;keras.layers.convolutional.Convolution2D at 0x11d5b1910&gt;,<br/> 'block5_conv3': &lt;keras.layers.convolutional.Convolution2D at 0x11d5b1710&gt;,<br/> 'block5_pool': &lt;keras.layers.pooling.MaxPooling2D at 0x11fd68e10&gt;,<br/> 'input_1': &lt;keras.engine.topology.InputLayer at 0x11b847410&gt;}</span>
+</pre>
+<p>We then compute the loss at each of the five pooling layers and compute the gradient of the mean activation for three steps each. The gradient is added back to the image and the image displayed at each of the pooling layers for each step:</p>
+<pre>
+num_pool_layers = 5<br/>num_iters_per_layer = 3<br/>step = 100<br/><br/>for i in range(num_pool_layers):<br/>    # identify each pooling layer<br/>    layer_name = "block{:d}_pool".format(i+1)<br/>    # build loss function that maximizes the mean activation in layer<br/>    layer_output = layer_dict[layer_name].output<br/>    loss = K.mean(layer_output)<br/>    # compute gradient of image wrt loss and normalize<br/>    grads = K.gradients(loss, dream)[0]<br/>    grads /= (K.sqrt(K.mean(K.square(grads))) + 1e-5)<br/>    # define function to return loss and grad given input image<br/>    f = K.function([dream], [loss, grads])<br/>    img_value = p_img.copy()<br/>    fig, axes = plt.subplots(1, num_iters_per_layer, figsize=(20, 10))<br/>    for it in range(num_iters_per_layer):<br/>        loss_value, grads_value = f([img_value])<br/>        img_value += grads_value * step <br/>        axes[it].imshow(deprocess(img_value))<br/>    plt.show()
+</pre>
+<p>The resulting images are shown as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-pool1.png"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-pool2.png"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-pool3.png"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-pool5.png"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-pool6.png"/></div>
+<p>As you can see, the process of deep dreaming amplifies the effect of the gradient on the chosen layer, resulting in images that are quite surreal. Later layers backpropagate gradients that result in more distortion, reflecting their larger receptive fields and their capacity to recognize more complex features.</p>
+<p>To convince ourselves that a trained network really learns a representation of the various categories of the image it was trained on, let us consider a completely random image, shown next, and pass it through the pre-trained network:</p>
+<pre>
+img_noise = np.random.randint(100, 150, size=(227, 227, 3), dtype=np.uint8)<br/>plt.imshow(img_noise)
+</pre>
+<p>The output of the preceding example is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="207" src="assets/random-noise.png" width="211"/></div>
+<p>Passing this image through the preceding code results in very specific patterns at each layer, as shown next, showing that the network is trying to find a structure in the random data:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="164" src="assets/noise-pool1.png" width="525"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="164" src="assets/noise-pool2.png" width="525"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="164" src="assets/noise-pool3.png" width="525"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="164" src="assets/noise-pool4.png" width="525"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" height="164" src="assets/noise-pool5.png" width="525"/></div>
+<p>We can repeat our experiment with the noise image as input and compute the loss from a single filter instead of taking the mean across all the filters. The filter we choose is for the ImageNet label African elephant (<kbd>24</kbd>). Thus, we replace the value of the loss in the previous code with the following. So instead of computing the mean across all filters, we calculate the loss as the output of the filter representing the African elephant class:</p>
+<pre>
+loss = layer_output[:, :, :, 24]
+</pre>
+<p>We get back what looks very much like repeating images of the trunk of an elephant in the <kbd>block4_pool</kbd> output, as shown here:</p>
+<div class="CDPAlignCenter"><img class="image-border" height="218" src="assets/random-african-elephant.png" width="698"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Keras example — style transfer</h1>
+            </header>
+
+            <article>
+                
+<p>An extension of deep dreaming was described in this paper (for more information refer to: <span><em>Image Style Transfer Using Convolutional Neural Networks</em>, by L. A. Gatys, A. S. Ecker, and M. Bethge, Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, 2016</span>), which showed that trained neural networks, such as the VGG-16, learn both content and style, and these two can be manipulated independently. Thus an image of an object (content) could be styled to look like a painting by combining it with the image of a painting (style).</p>
+<p>Let us start, as usual, by importing our libraries:</p>
+<pre>
+from keras.applications import vgg16<br/>from keras import backend as K<br/>from scipy.misc import imresize<br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import os
+</pre>
+<p>Our example will demonstrate styling our image of a cat with this image of a reproduction of Claude Monet's <em>The Japanese Bridge</em> by Rosalind Wheeler (<a href="https://goo.gl/0VXC39" target="_blank">https://goo.gl/0VXC39</a>):</p>
+<pre>
+DATA_DIR = "../data"<br/>CONTENT_IMAGE_FILE = os.path.join(DATA_DIR, "cat.jpg")<br/>STYLE_IMAGE_FILE = os.path.join(DATA_DIR, "JapaneseBridgeMonetCopy.jpg")<br/>RESIZED_WH = 400<br/><br/>content_img_value = imresize(plt.imread(CONTENT_IMAGE_FILE), (RESIZED_WH, RESIZED_WH))<br/>style_img_value = imresize(plt.imread(STYLE_IMAGE_FILE), (RESIZED_WH, RESIZED_WH))<br/><br/>plt.subplot(121)<br/>plt.title("content")<br/>plt.imshow(content_img_value)<br/><br/>plt.subplot(122)<br/>plt.title("style")<br/>plt.imshow(style_img_value)<br/><br/>plt.show()
+</pre>
+<p>The output of the preceding example is as follows:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-style.png"/></div>
+<p>As previously, we declare our two functions to convert back and forth from the image and the four-dimensional tensor that the CNN expects:</p>
+<pre>
+def preprocess(img):<br/>    img4d = img.copy()<br/>    img4d = img4d.astype("float64")<br/>    if K.image_dim_ordering() == "th":<br/>        # (H, W, C) -&gt; (C, H, W)<br/>        img4d = img4d.transpose((2, 0, 1))<br/>    img4d = np.expand_dims(img4d, axis=0)<br/>    img4d = vgg16.preprocess_input(img4d)<br/>    return img4d<br/><br/>def deprocess(img4d):<br/>    img = img4d.copy()<br/>    if K.image_dim_ordering() == "th":<br/>        # (B, C, H, W)<br/>        img = img.reshape((img4d.shape[1], img4d.shape[2], img4d.shape[3]))<br/>        # (C, H, W) -&gt; (H, W, C)<br/>        img = img.transpose((1, 2, 0))<br/>    else:<br/>        # (B, H, W, C)<br/>        img = img.reshape((img4d.shape[1], img4d.shape[2], img4d.shape[3]))<br/>    img[:, :, 0] += 103.939<br/>    img[:, :, 1] += 116.779<br/>    img[:, :, 2] += 123.68<br/>    # BGR -&gt; RGB<br/>    img = img[:, :, ::-1]<br/>    img = np.clip(img, 0, 255).astype("uint8")<br/>    return img
+</pre>
+<p>We declare tensors to hold the content image and the style image, and another tensor to hold the combined image. The content and style images are then concatenated into a single input tensor. The input tensor will be fed to the pre-trained VGG-16 network:</p>
+<pre>
+content_img = K.variable(preprocess(content_img_value))<br/>style_img = K.variable(preprocess(style_img_value))<br/>if K.image_dim_ordering() == "th":<br/>    comb_img = K.placeholder((1, 3, RESIZED_WH, RESIZED_WH))<br/>else:<br/>    comb_img = K.placeholder((1, RESIZED_WH, RESIZED_WH, 3))<br/><br/># concatenate images into single input<br/>input_tensor = K.concatenate([content_img, style_img, comb_img], axis=0)
+</pre>
+<p>We instantiate an instance of a pre-trained VGG-16 network, pre-trained with the ImageNet data, and with the fully connected layers excluded:</p>
+<pre>
+model = vgg16.VGG16(input_tensor=input_tensor, weights="imagenet", include_top=False)
+</pre>
+<p>As previously, we construct a layer dictionary to map the layer name to the output layer of the trained VGG-16 network:</p>
+<pre>
+layer_dict = {layer.name : layer.output for layer in model.layers}
+</pre>
+<p>The next block defines the code for computing the <kbd>content_loss</kbd>, the <kbd>style_loss</kbd>, and the <kbd>variational_loss</kbd>. Finally, we define our loss as a linear combination of these three losses:</p>
+<pre>
+def content_loss(content, comb):<br/>    return K.sum(K.square(comb - content))<br/><br/>def gram_matrix(x):<br/>    if K.image_dim_ordering() == "th":<br/>        features = K.batch_flatten(x)<br/>    else:<br/>        features = K.batch_flatten(K.permute_dimensions(x, (2, 0, 1)))<br/>    gram = K.dot(features, K.transpose(features))<br/>    return gram<br/><br/>def style_loss_per_layer(style, comb):<br/>    S = gram_matrix(style)<br/>    C = gram_matrix(comb)<br/>    channels = 3<br/>    size = RESIZED_WH * RESIZED_WH<br/>    return K.sum(K.square(S - C)) / (4 * (channels ** 2) * (size ** 2))<br/><br/>def style_loss():<br/>    stl_loss = 0.0<br/>    for i in range(NUM_LAYERS):<br/>        layer_name = "block{:d}_conv1".format(i+1)<br/>        layer_features = layer_dict[layer_name]<br/>        style_features = layer_features[1, :, :, :]<br/>        comb_features = layer_features[2, :, :, :]<br/>        stl_loss += style_loss_per_layer(style_features, comb_features)<br/>    return stl_loss / NUM_LAYERS<br/><br/>def variation_loss(comb):<br/>    if K.image_dim_ordering() == "th":<br/>        dx = K.square(comb[:, :, :RESIZED_WH-1, :RESIZED_WH-1] - <br/>                      comb[:, :, 1:, :RESIZED_WH-1])<br/>        dy = K.square(comb[:, :, :RESIZED_WH-1, :RESIZED_WH-1] - <br/>                      comb[:, :, :RESIZED_WH-1, 1:])<br/>    else:<br/>        dx = K.square(comb[:, :RESIZED_WH-1, :RESIZED_WH-1, :] - <br/>                      comb[:, 1:, :RESIZED_WH-1, :])<br/>        dy = K.square(comb[:, :RESIZED_WH-1, :RESIZED_WH-1, :] - <br/>                      comb[:, :RESIZED_WH-1, 1:, :])<br/>     return K.sum(K.pow(dx + dy, 1.25))<br/><br/>CONTENT_WEIGHT = 0.1<br/>STYLE_WEIGHT = 5.0<br/>VAR_WEIGHT = 0.01<br/>NUM_LAYERS = 5<br/><br/>c_loss = content_loss(content_img, comb_img)<br/>s_loss = style_loss()<br/>v_loss = variation_loss(comb_img)<br/>loss = (CONTENT_WEIGHT * c_loss) + (STYLE_WEIGHT * s_loss) + (VAR_WEIGHT * v_loss)
+</pre>
+<p>Here the content loss is the root mean square distance (also known as <strong>L2 distance</strong>) between the features of the content image extracted from the target layer and the combination image. Minimizing this has the effect of keeping the styled image close to the original one.</p>
+<p>The style loss is the L2 distance between the gram matrices of the base image representation and the style image. A gram matrix of a matrix <em>M</em> is the transpose of <em>M</em> multiplied by <em>M</em>, that is, <em>MT * M</em>. This loss measures how often features appear together in the content image representation and the style image. One practical implication of this is that the content and style matrices must be square.</p>
+<p>The total variation loss measures the difference between neighboring pixels. Minimizing this has the effect that neighboring pixels will be similar so the final image is smooth rather than <em>jumpy</em>.</p>
+<p>We calculate the gradient and the loss function, and run our network in reverse for five iterations:</p>
+<pre>
+grads = K.gradients(loss, comb_img)[0]<br/>f = K.function([comb_img], [loss, grads])<br/><br/>NUM_ITERATIONS = 5<br/>LEARNING_RATE = 0.001<br/><br/>content_img4d = preprocess(content_img_value)<br/>for i in range(NUM_ITERATIONS):<br/>    print("Epoch {:d}/{:d}".format(i+1, NUM_ITERATIONS))<br/>    loss_value, grads_value = f([content_img4d])<br/>    content_img4d += grads_value * LEARNING_RATE <br/>    plt.imshow(deprocess(content_img4d))<br/>    plt.show()
+</pre>
+<p>The output from the last two iterations is shown as follows. As you can see, it has picked up the impressionistic fuzziness and even the texture of the canvas in the final images:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-style-epoch4.png"/></div>
+<div class="CDPAlignCenter CDPAlign"><img class="image-border" src="assets/cat-style-epoch5.png"/></div>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    
+
+        <section>
+
+            <header>
+                <h1 class="header-title">Summary</h1>
+            </header>
+
+            <article>
+                
+<p>In this chapter, we covered some deep learning networks that were not covered in earlier chapters. We started with a brief look into the Keras functional API, which allows us to build networks that are more complex than the sequential networks we have seen so far. We then looked at regression networks, which allow us to do predictions in a continuous space, and opens up a whole new range of problems we can solve. However, a regression network is really a very simple modification of a standard classification network. The next area we looked at was autoencoders, which are a style of network that allows us to do unsupervised learning and make use of the massive amount of unlabeled data that all of us have access to nowadays. We also learned how to compose the networks we had already learned about as giant Lego-like building blocks into larger and more interesting networks. We then moved from building large networks using smaller networks, to learning how to customize individual layers in a network using the Keras backend layer. Finally, we looked at generative models, another class of models that learn to mimic the input it is trained on, and looked at some novel uses for this kind of model.</p>
+<p>In the next chapter, we will turn our attention to another learning style called reinforcement learning, and explore its concepts by building and training a network in Keras to play a simple computer game.</p>
+
+
+            </article>
+
+            <footer style="margin-top: 5em;">
+                
+            </footer>
+
+        </section>
+    </body></html>

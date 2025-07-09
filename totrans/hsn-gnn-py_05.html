@@ -1,0 +1,509 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div class="IMG---Figure" id="_idContainer215">
+<h1 class="chapter-number" id="_idParaDest-61"><a id="_idTextAnchor064"/>5</h1>
+<h1 id="_idParaDest-62"><a id="_idTextAnchor065"/>Including Node Features with Vanilla Neural Networks</h1>
+<p>So far, the only type of information we’ve considered is the graph topology. However, graph datasets tend to be richer than a mere set of connections: nodes and edges can also have features to represent scores, colors, words, and so on. Including this additional information in our input data is essential to produce the best embeddings possible. In fact, this is something natural in machine learning: node and edge features have the same structure as a tabular (non-graph) dataset. This means that traditional techniques can be applied to this data, such as <span class="No-Break">neural networks.</span></p>
+<p>In this chapter, we will introduce two new graph datasets: <strong class="source-inline">Cora</strong> and <strong class="source-inline">Facebook Page-Page</strong>. We will see how <strong class="bold">Vanilla Neural Networks</strong> perform on node features only by considering them as tabular datasets. We will then experiment to include topological information in our neural networks. This will give us our first GNN architecture: a simple model that considers both node features and edges. Finally, we’ll compare the performance of the two architectures and obtain one of the most important results of <span class="No-Break">this book.</span></p>
+<p>By the end of this chapter, you will master the implementation of vanilla neural networks and vanilla GNNs in PyTorch. You will be able to embed topological features into the node representations, which is the basis of every GNN architecture. This will allow you to greatly improve the performance of your models by transforming tabular datasets into <span class="No-Break">graph problems.</span></p>
+<p>In this chapter, we’ll cover the <span class="No-Break">following topics:</span></p>
+<ul>
+<li>Introducing <span class="No-Break">graph datasets</span></li>
+<li>Classifying nodes with vanilla <span class="No-Break">neural networks</span></li>
+<li>Classifying nodes with vanilla graph <span class="No-Break">neural networks</span></li>
+</ul>
+<h1 id="_idParaDest-63"><a id="_idTextAnchor066"/>Technical requirements</h1>
+<p>All the code examples from this chapter can be found on GitHub <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter05"><span class="No-Break">https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter05</span></a><span class="No-Break">.</span></p>
+<p>Installation steps required to run the code on your local machine can be found in the <em class="italic">Preface</em> of <span class="No-Break">this book.</span></p>
+<h1 id="_idParaDest-64"><a id="_idTextAnchor067"/>Introducing graph datasets</h1>
+<p>The<a id="_idIndexMarker254"/> graph datasets we’re going to use in this chapter are richer than Zachary’s Karate Club: they have more nodes, more edges, and include node features. In this section, we will introduce them to give us a good understanding of these graphs and how to process them with PyTorch Geometric. Here are the two datasets we <span class="No-Break">will use:</span></p>
+<ul>
+<li>The <span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break"> dataset</span></li>
+<li>The <strong class="source-inline">Facebook </strong><span class="No-Break"><strong class="source-inline">Page-Page</strong></span><span class="No-Break"> dataset</span></li>
+</ul>
+<p>Let’s start with the smaller one: the popular <span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break"> dataset.</span></p>
+<h2 id="_idParaDest-65"><a id="_idTextAnchor068"/>The Cora dataset</h2>
+<p>Introduced <a id="_idIndexMarker255"/>by Sen et al. in 2008 [1], <strong class="source-inline">Cora</strong> (no license) is the most popular dataset for node classification in the scientific literature. It represents a network of 2,708 publications, where each connection is a reference. Each publication<a id="_idIndexMarker256"/> is described as a binary vector of 1,433 unique words, where <strong class="source-inline">0</strong> and <strong class="source-inline">1</strong> indicate the absence or presence of the corresponding word, respectively. This representation is also called a <a id="_idIndexMarker257"/>binary <strong class="bold">bag of words</strong> in natural language processing. Our goal is to classify each node into one of <span class="No-Break">seven categories.</span></p>
+<p>Regardless of the type of data, visualization is always an important step to getting a good grasp of the problem we face. However, graphs can quickly become too big to visualize using Python libraries such as <strong class="source-inline">networkx</strong>. This is why dedicated tools have been developed specifically for graph data visualization. In this book, we utilize two of the most<a id="_idIndexMarker258"/> popular <a id="_idIndexMarker259"/>ones: <strong class="bold">yEd Live</strong> (<a href="https://www.yworks.com/yed-live/">https://www.yworks.com/yed-live/</a>) and <span class="No-Break"><strong class="bold">Gephi</strong></span><span class="No-Break"> (</span><a href="https://gephi.org/"><span class="No-Break">https://gephi.org/</span></a><span class="No-Break">).</span></p>
+<p>The<a id="_idIndexMarker260"/> following figure is a plot of the <strong class="source-inline">Cora</strong> dataset made with yEd Live. You <a id="_idIndexMarker261"/>can see nodes corresponding to papers in orange and connections between them in green. Some papers are so interconnected that they form clusters. These clusters should be easier to classify than poorly <span class="No-Break">connected nodes.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer198">
+<img alt="Figure 5.1 – The Cora dataset visualized with yEd Live" height="948" src="image/B19153_05_001.jpg" width="1210"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.1 – The Cora dataset visualized with yEd Live</p>
+<p>Let’s import it and analyze its main characteristics with PyTorch Geometric. This library has a dedicated class to download the dataset and return a relevant data structure. We assume <a id="_idIndexMarker262"/>here that PyTorch Geometric has already <span class="No-Break">been installed:</span></p>
+<ol>
+<li>We import the <strong class="source-inline">Planetoid</strong> class from <span class="No-Break">PyTorch Geometric:</span><pre class="source-code">
+from torch_geometric.datasets import Planetoid</pre></li>
+<li>We download it using <span class="No-Break">this class:</span><pre class="source-code">
+dataset = Planetoid(root=".", name="Cora")</pre></li>
+<li><strong class="source-inline">Cora</strong> only has one graph we can store in a dedicated <span class="No-Break"><strong class="source-inline">data</strong></span><span class="No-Break"> variable:</span><pre class="source-code">
+data = dataset[0]</pre></li>
+<li>Let’s <a id="_idIndexMarker263"/>print information about the dataset <span class="No-Break">in general:</span><pre class="source-code">
+print(f'Dataset: {dataset}')
+print('---------------')
+print(f'Number of graphs: {len(dataset)}')
+print(f'Number of nodes: {data.x.shape[0]}')
+print(f'Number of features: {dataset.num_features}')
+print(f'Number of classes: {dataset.num_classes}')</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">Dataset: Cora()</strong>
+<strong class="bold">---------------</strong>
+<strong class="bold">Number of graphs: 1</strong>
+<strong class="bold">Number of nodes: 2708</strong>
+<strong class="bold">Number of features: 1433</strong>
+<strong class="bold">Number of classes: 7</strong></pre></li>
+<li>We can also get detailed information thanks to dedicated functions from <span class="No-Break">PyTorch Geometric:</span><pre class="source-code">
+print(f'Graph:')
+print('------')
+print(f'Edges are directed: {data.is_directed()}')
+print(f'Graph has isolated nodes: {data.has_isolated_nodes()}')
+print(f'Graph has loops: {data.has_self_loops()}')</pre></li>
+<li>This is the result of the <span class="No-Break">previous block:</span><pre class="source-code">
+<strong class="bold">Graph:</strong>
+<strong class="bold">------</strong>
+<strong class="bold">Edges are directed: False</strong>
+<strong class="bold">Graph has isolated nodes: False</strong>
+<strong class="bold">Graph has loops: False</strong></pre></li>
+</ol>
+<p>The first <a id="_idIndexMarker264"/>output confirms the information about the number of <a id="_idIndexMarker265"/>nodes, features, and classes. The second one gives more insights into the graph itself: edges are undirected, every node has neighbors, and the graph doesn’t have any self-loop. We could test other properties using PyTorch Geometric’s utils functions, but we wouldn’t learn anything new in <span class="No-Break">this example.</span></p>
+<p>Now that we know more about <strong class="source-inline">Cora</strong>, let’s see one that is more representative of the size of real-world social networks: the <strong class="source-inline">Facebook </strong><span class="No-Break"><strong class="source-inline">Page-Page</strong></span><span class="No-Break"> dataset.</span></p>
+<h2 id="_idParaDest-66"><a id="_idTextAnchor069"/>The Facebook Page-Page dataset</h2>
+<p>This <a id="_idIndexMarker266"/>dataset was introduced by Rozemberczki et al. in 2019 [2]. It was created using the Facebook Graph API in November 2017. In <a id="_idIndexMarker267"/>this dataset, each of the 22,470 nodes represents an official Facebook page. Pages are connected when there are mutual likes between them. Node features (128-dim vectors) are created from textual descriptions written by the owners of these pages. Our goal is to classify each node into one of four categories: politicians, companies, television shows, and <span class="No-Break">governmental organizations.</span></p>
+<p>The <strong class="source-inline">Facebook Page-Page</strong> dataset is similar to the previous one: it’s a social network with a node classification task. However, there are <a id="_idIndexMarker268"/>three major differences <span class="No-Break">with </span><span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break">:</span></p>
+<ul>
+<li>The number of nodes is much higher (2,708 <span class="No-Break">versus 22,470)</span></li>
+<li>The dimensionality of the node features decreased dramatically (from 1,433 <span class="No-Break">to 128)</span></li>
+<li>The goal is to classify each node into four categories instead of seven (which is easier since there are <span class="No-Break">fewer options)</span></li>
+</ul>
+<p>The following<a id="_idIndexMarker269"/> figure is a visualization of the dataset using Gephi. First, nodes with few connections have been filtered out to improve performance. The size of the remaining nodes depends on their number of connections, and their color indicates the category they belong to. Finally, two layouts have been applied: Fruchterman-Reingold <span class="No-Break">and ForceAtlas2.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer199">
+<img alt="Figure 5.2 – The Facebook Page-Page dataset visualized with Gephi" height="938" src="image/B19153_05_002.jpg" width="871"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.2 – The Facebook Page-Page dataset visualized with Gephi</p>
+<p>We can <a id="_idIndexMarker270"/>import the <strong class="source-inline">Facebook Page-Page</strong> dataset<a id="_idIndexMarker271"/> the same way we did it <span class="No-Break">for </span><span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break">:</span></p>
+<ol>
+<li>We import the <strong class="source-inline">FacebookPagePage</strong> class from <span class="No-Break">PyTorch Geometric:</span><pre class="source-code">
+from torch_geometric.datasets import FacebookPagePage</pre></li>
+<li>We download it using <span class="No-Break">this class:</span><pre class="source-code">
+dataset = FacebookPagePage(root=".")</pre></li>
+<li>We store the <a id="_idIndexMarker272"/>graph in a dedicated <span class="No-Break"><strong class="source-inline">data</strong></span><span class="No-Break"> variable:</span><pre class="source-code">
+data = dataset[0]</pre></li>
+<li>Let’s <a id="_idIndexMarker273"/>print information about the dataset <span class="No-Break">in general:</span><pre class="source-code">
+print(f'Dataset: {dataset}')
+print('-----------------------')
+print(f'Number of graphs: {len(dataset)}')
+print(f'Number of nodes: {data.x.shape[0]}')
+print(f'Number of features: {dataset.num_features}')
+print(f'Number of classes: {dataset.num_classes}')</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">Dataset: FacebookPagePage()</strong>
+<strong class="bold">-----------------------</strong>
+<strong class="bold">Number of graphs: 1</strong>
+<strong class="bold">Number of nodes: 22470</strong>
+<strong class="bold">Number of features: 128</strong>
+<strong class="bold">Number of classes: 4</strong></pre></li>
+<li>The same dedicated functions can be <span class="No-Break">applied here:</span><pre class="source-code">
+print(f'\nGraph:')
+print('------')
+print(f'Edges are directed: {data.is_directed()}')
+print(f'Graph has isolated nodes: {data.has_isolated_nodes()}')
+print(f'Graph has loops: {data.has_self_loops()}')</pre></li>
+</ol>
+<p>This is the result of the <span class="No-Break">previous block:</span></p>
+<pre class="source-code">
+<strong class="bold">Graph:</strong>
+<strong class="bold">------</strong>
+<strong class="bold">Edges are directed: False</strong>
+<strong class="bold">Graph has isolated nodes: False</strong>
+<strong class="bold">Graph has loops: True</strong></pre>
+<ol>
+<li value="7">Unlike<a id="_idIndexMarker274"/> <strong class="source-inline">Cora</strong>, <strong class="source-inline">Facebook Page-Page</strong> <a id="_idIndexMarker275"/>doesn’t have training, evaluation, and test masks by default. We can arbitrarily create masks with the <span class="No-Break"><strong class="source-inline">range()</strong></span><span class="No-Break"> function:</span><pre class="source-code">
+data.train_mask = range(18000)
+data.val_mask = range(18001, 20000)
+data.test_mask = range(20001, 22470)</pre></li>
+</ol>
+<p>Alternatively, PyTorch Geometric offers a transform function to calculate random masks when the dataset <span class="No-Break">is loaded:</span></p>
+<pre class="source-code">
+import torch_geometric.transforms as T
+dataset = Planetoid(root=".", name="Cora")
+data = dataset[0]</pre>
+<p>The first output confirms the number of nodes and classes we saw in the description of the dataset. The second output tells us that this graph has <strong class="source-inline">self</strong> loops: some pages are connected to themselves. This is surprising but, in practice, it will not matter, as we’re going to <span class="No-Break">see soon.</span></p>
+<p>These are the two graph datasets we will use in the next section, to compare the performance of a Vanilla Neural Network to the performance of our first GNN. Let’s implement them step <span class="No-Break">by step.</span></p>
+<h1 id="_idParaDest-67"><a id="_idTextAnchor070"/>Classifying nodes with vanilla neural networks</h1>
+<p>Compared to<a id="_idIndexMarker276"/> Zachary’s Karate Club, these two datasets include a new type of information: node features. They provide additional<a id="_idIndexMarker277"/> information about the nodes in a graph, such as a user’s age, gender, or interests in a social network. In a vanilla neural network (also called <strong class="bold">multilayer perceptron</strong>), these<a id="_idIndexMarker278"/> embeddings are directly used in the model to perform downstream tasks such as <span class="No-Break">node classification.</span></p>
+<p>In this section, we will consider node features as a regular tabular dataset. We will train a simple neural network on this dataset to classify our nodes. Note that this architecture does not take into account the topology of the network. We will try to fix this issue in the next section and compare <span class="No-Break">our results.</span></p>
+<p>The tabular dataset of node features can be easily accessed through the <strong class="source-inline">data</strong> object we created. First, I would like to convert this object into a regular pandas DataFrame by merging <strong class="source-inline">data.x</strong> (containing the node features) and <strong class="source-inline">data.y</strong> (containing the class label of each node among seven classes). In the following, we will use the <span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break"> dataset:</span></p>
+<pre class="source-code">
+import pandas as pd
+df_x = pd.DataFrame(data.x.numpy())
+df_x['label'] = pd.DataFrame(data.y)</pre>
+<p>This gives us the <span class="No-Break">following dataset:</span></p>
+<table class="No-Table-Style" id="table001-1">
+<colgroup>
+<col/>
+<col/>
+<col/>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style"/>
+<td class="No-Table-Style">
+<p><strong class="bold">0</strong></p>
+</td>
+<td class="No-Table-Style">
+<p><strong class="bold">1</strong></p>
+</td>
+<td class="No-Table-Style">
+<p><strong class="bold">…</strong></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">1432</strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">label</strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><strong class="bold">0</strong></p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>3</p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><strong class="bold">1</strong></p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>4</p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><strong class="bold">…</strong></p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">2707</strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>…</p>
+</td>
+<td class="No-Table-Style">
+<p>0</p>
+</td>
+<td class="No-Table-Style">
+<p>3</p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.3 – Tabular representation of the Cora dataset (without topological information)</p>
+<p>If you’re familiar with machine learning, you probably recognize a typical dataset with data and labels. We can develop a <a id="_idIndexMarker279"/>simple <strong class="bold">Multilayer Perceptron</strong> (<strong class="bold">MLP</strong>) and train it on <strong class="source-inline">data.x</strong> with the labels provided <span class="No-Break">by </span><span class="No-Break"><strong class="source-inline">data.y</strong></span><span class="No-Break">.</span></p>
+<p>Let’s create our own MLP class with <span class="No-Break">four methods:</span></p>
+<ul>
+<li><strong class="source-inline">__init__()</strong> to initialize <span class="No-Break">an instance</span></li>
+<li><strong class="source-inline">forward()</strong> to perform the <span class="No-Break">forward pass</span></li>
+<li><strong class="source-inline">fit()</strong> to train <span class="No-Break">the model</span></li>
+<li><strong class="source-inline">test()</strong> to <span class="No-Break">evaluate it</span></li>
+</ul>
+<p>Before we<a id="_idIndexMarker280"/> can train our model, we must define<a id="_idIndexMarker281"/> the main metric. There are several metrics for multiclass classification problems: accuracy, F1 score, <strong class="bold">Area Under the Receiver Operating Characteristic Curve</strong> (<strong class="bold">ROC AUC</strong>) score, and so on. For this <a id="_idIndexMarker282"/>work, let’s implement a simple accuracy, which is defined as the fraction of correct predictions. It is not the best metric for multiclass classification, but it is simpler to understand. Feel free to replace it with your metric <span class="No-Break">of choice:</span></p>
+<pre class="source-code">
+def accuracy(y_pred, y_true):
+    return torch.sum(y_pred == y_true) / len(y_true)</pre>
+<p>Now, we can start the actual implementation. We don’t need PyTorch Geometric to implement the MLP in this section. Everything can be done in regular PyTorch with the <span class="No-Break">following steps:</span></p>
+<ol>
+<li>We import the required classes <span class="No-Break">from PyTorch:</span><pre class="source-code">
+import torch
+from torch.nn import Linear
+import torch.nn.functional as F</pre></li>
+<li>We create a new class called <strong class="source-inline">MLP</strong>, which will inherit all the methods and properties <span class="No-Break">from </span><span class="No-Break"><strong class="source-inline">torch.nn.Module</strong></span><span class="No-Break">:</span><pre class="source-code">
+class MLP(torch.nn.Module):</pre></li>
+<li>The <strong class="source-inline">__init__()</strong> method has three arguments (<strong class="source-inline">dim_in</strong>, <strong class="source-inline">dim_h</strong>, and <strong class="source-inline">dim_out</strong>) for the number of neurons in the input, hidden, and output layers, respectively. We also define two <span class="No-Break">linear layers:</span><pre class="source-code">
+    def __init__(self, dim_in, dim_h, dim_out):
+        super().__init__()
+        self.linear1 = Linear(dim_in, dim_h)
+        self.linear2 = Linear(dim_h, dim_out)</pre></li>
+<li>The <strong class="source-inline">forward()</strong> method performs the forward pass. The input is fed to the first linear<a id="_idIndexMarker283"/> layer with a <strong class="bold">Rectified Linear Unit</strong> (<strong class="bold">ReLU</strong>) activation <a id="_idIndexMarker284"/>function, and the result is passed to the second linear layer. We<a id="_idIndexMarker285"/> return the log softmax of this final result <span class="No-Break">for classification:</span><pre class="source-code">
+    def forward(self, x):
+        x = self.linear1(x)
+        x = torch.relu(x)
+        x = self.linear2(x)
+        return F.log_softmax(x, dim=1)</pre></li>
+<li>The <strong class="source-inline">fit()</strong> method is in charge of the training loop. First, we initialize a loss function and an optimizer that will be used during the <span class="No-Break">training process:</span><pre class="source-code">
+    def fit(self, data, epochs):
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01, weight_decay=5e-4)</pre></li>
+<li>A regular PyTorch training loop is then implemented. We use our <strong class="source-inline">accuracy()</strong> function on top of the <span class="No-Break">loss function:</span><pre class="source-code">
+        self.train()
+        for epoch in range(epochs+1):
+            optimizer.zero_grad()
+            out = self(data.x)
+            loss = criterion(out[data.train_mask], data.y[data.train_mask])
+            acc = accuracy(out[data.train_mask].argmax(dim=1), data.y[data.train_mask])
+            loss.backward()
+            optimizer.step()</pre></li>
+<li>In the<a id="_idIndexMarker286"/> same loop, we plot the loss <a id="_idIndexMarker287"/>and accuracy for training and evaluation data every <span class="No-Break">20 epochs:</span><pre class="source-code">
+            if epoch % 20 == 0:
+                val_loss = criterion(out[data.val_mask], data.y[data.val_mask])
+                val_acc = accuracy(out[data.val_mask].argmax(dim=1), data.y[data.val_mask])
+                print(f'Epoch {epoch:&gt;3} | Train Loss: {loss:.3f} | Train Acc: {acc*100:&gt;5.2f}% | Val Loss: {val_loss:.2f} | Val Acc: {val_acc*100:.2f}%')</pre></li>
+<li>The <strong class="source-inline">test()</strong> method evaluates the model on the test set and returns the <span class="No-Break">accuracy score:</span><pre class="source-code">
+    def test(self, data):
+        self.eval()
+        out = self(data.x)
+        acc = accuracy(out.argmax(dim=1)[data.test_mask], data.y[data.test_mask])
+        return acc</pre></li>
+</ol>
+<p>Now that our class is complete, we can create, train, and test an instance <span class="No-Break">of MLP.</span></p>
+<p>We have two <a id="_idIndexMarker288"/>datasets, so we need a model<a id="_idIndexMarker289"/> dedicated to <strong class="source-inline">Cora</strong> and another one for <strong class="source-inline">Facebook Page-Page</strong>. First, let’s train an MLP <span class="No-Break">on </span><span class="No-Break"><strong class="source-inline">Cora</strong></span><span class="No-Break">:</span></p>
+<ol>
+<li>We create an MLP model and print it to check that our layers <span class="No-Break">are correct:</span><pre class="source-code">
+mlp = MLP(dataset.num_features, 16, dataset.num_classes)
+print(mlp)</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">MLP(</strong>
+<strong class="bold">  (linear1): Linear(in_features=1433, out_features=16, bias=True)</strong>
+<strong class="bold">  (linear2): Linear(in_features=16, out_features=7, bias=True)</strong>
+<strong class="bold">)</strong></pre></li>
+<li>Good, we get the right number of features. Let’s train this model for <span class="No-Break">100 epochs:</span><pre class="source-code">
+mlp.fit(data, epochs=100)</pre></li>
+<li>Here are the metrics that are printed in the <span class="No-Break">training loop:</span><pre class="source-code">
+<strong class="bold">Epoch   0 | Train Loss: 1.954 | Train Acc: 14.29% | Val Loss: 1.93 | Val Acc: 30.80%</strong>
+<strong class="bold">Epoch  20 | Train Loss: 0.120 | Train Acc: 100.00% | Val Loss: 1.42 | Val Acc: 49.40%</strong>
+<strong class="bold">Epoch  40 | Train Loss: 0.015 | Train Acc: 100.00% | Val Loss: 1.46 | Val Acc: 50.40%</strong>
+<strong class="bold">Epoch  60 | Train Loss: 0.008 | Train Acc: 100.00% | Val Loss: 1.44 | Val Acc: 53.40%</strong>
+<strong class="bold">Epoch  80 | Train Loss: 0.008 | Train Acc: 100.00% | Val Loss: 1.40 | Val Acc: 54.60%</strong>
+<strong class="bold">Epoch 100 | Train Loss: 0.009 | Train Acc: 100.00% | Val Loss: 1.39 | Val Acc: 54.20%</strong></pre></li>
+<li>Finally, we<a id="_idIndexMarker290"/> can evaluate its performance in terms of accuracy with the <span class="No-Break">following lines:</span><pre class="source-code">
+acc = mlp.test(data)
+print(f'MLP test accuracy: {acc*100:.2f}%')</pre></li>
+<li>We <a id="_idIndexMarker291"/>obtain the following accuracy score on <span class="No-Break">test data:</span><pre class="source-code">
+<strong class="bold">MLP test accuracy: 52.50%</strong></pre></li>
+<li>We repeat the same process for the <strong class="source-inline">Facebook Page-Page</strong> dataset, and here is the output <span class="No-Break">we obtain:</span><pre class="source-code">
+<strong class="bold">Epoch   0 | Train Loss: 1.398 | Train Acc: 23.94% | Val Loss: 1.40 | Val Acc: 24.21%</strong>
+<strong class="bold">Epoch  20 | Train Loss: 0.652 | Train Acc: 74.52% | Val Loss: 0.67 | Val Acc: 72.64%</strong>
+<strong class="bold">Epoch  40 | Train Loss: 0.577 | Train Acc: 77.07% | Val Loss: 0.61 | Val Acc: 73.84%</strong>
+<strong class="bold">Epoch  60 | Train Loss: 0.550 | Train Acc: 78.30% | Val Loss: 0.60 | Val Acc: 75.09%</strong>
+<strong class="bold">Epoch  80 | Train Loss: 0.533 | Train Acc: 78.89% | Val Loss: 0.60 | Val Acc: 74.79%</strong>
+<strong class="bold">Epoch 100 | Train Loss: 0.520 | Train Acc: 79.49% | Val Loss: 0.61 | Val Acc: 74.94%</strong>
+<strong class="bold">MLP test accuracy: 74.52%</strong></pre></li>
+</ol>
+<p>Even though these datasets are similar in some aspects, we can see that the accuracy scores we obtain are vastly different. This will make an interesting comparison when we combine node features and network topology in the <span class="No-Break">same model.</span></p>
+<h1 id="_idParaDest-68"><a id="_idTextAnchor071"/>Classifying nodes with vanilla graph neural networks</h1>
+<p>Instead of <a id="_idIndexMarker292"/>directly introducing<a id="_idIndexMarker293"/> well-known GNN architectures, let’s try to build our own model to understand the thought process behind GNNs. First, we need to go back to the definition of a simple <span class="No-Break">linear layer.</span></p>
+<p>A basic neural network layer corresponds to a linear transformation <img alt="" height="46" src="image/Formula_B19153_05_001.png" width="221"/>, where <img alt="" height="35" src="image/Formula_B19153_05_002.png" width="44"/> is the input vector of node <img alt="" height="32" src="image/Formula_B19153_05_005.png" width="28"/> and <img alt="" height="32" src="image/Formula_B19153_05_003.png" width="40"/> is the weight matrix. In PyTorch, this equation can be implemented with the <strong class="source-inline">torch.mm()</strong> function, or with the <strong class="source-inline">nn.Linear</strong> class that adds other parameters such <span class="No-Break">as biases.</span></p>
+<p>With our graph datasets, the input vectors are node features. It means that nodes are completely separate from each other. This is not enough to capture a good understanding of the graph: like a pixel in an image, the context of a node is essential to understand it. If you look at a group of pixels instead of a single one, you can recognize edges, patterns, and so on. Likewise, to understand a node, you need to look at <span class="No-Break">its neighborhood.</span></p>
+<p>Let’s call <img alt="" height="37" src="image/Formula_B19153_05_004.png" width="49"/> the set of neighbors of node <img alt="" height="33" src="image/Formula_B19153_05_0051.png" width="29"/>. Our <strong class="bold">graph linear layer</strong> can <a id="_idIndexMarker294"/>be written <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer206">
+<img alt="" height="209" src="image/Formula_B19153_05_006.jpg" width="481"/>
+</div>
+</div>
+<p>You can <a id="_idIndexMarker295"/>imagine several variants<a id="_idIndexMarker296"/> of this equation. For instance, we could have a weight matrix <img alt="" height="44" src="image/Formula_B19153_05_007.png" width="56"/> dedicated to the central node, and another one <img alt="" height="46" src="image/Formula_B19153_05_008.png" width="58"/> for the neighbors. Note that we cannot have a weight matrix per neighbor, as this number can change from node <span class="No-Break">to node.</span></p>
+<p>We’re talking about neural networks, so we can’t apply the previous equation to each node. Instead, we perform matrix multiplications that are much more efficient. For instance, the equation of the linear layer can be rewritten as <img alt="" height="40" src="image/Formula_B19153_05_009.png" width="215"/>, where <img alt="" height="32" src="image/Formula_B19153_05_010.png" width="31"/> is the <span class="No-Break">input matrix.</span></p>
+<p>In our case, the adjacency matrix <img alt="" height="35" src="image/Formula_B19153_05_011.png" width="30"/> contains the connections between every node in the graph. Multiplying the input matrix by this adjacency matrix will directly sum up the neighboring node features. We can add <strong class="source-inline">self</strong> loops to the adjacency matrix so that the central node is also considered in this operation. We call this updated adjacency matrix <img alt="" height="40" src="image/Formula_B19153_05_012.png" width="164"/>. Our graph linear layer can be rewritten <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer213">
+<img alt="" height="44" src="image/Formula_B19153_05_013.jpg" width="243"/>
+</div>
+</div>
+<p>Let’s test this layer by implementing it in PyTorch Geometric. We’ll then be able to use it as a regular <a id="_idIndexMarker297"/>layer to build <span class="No-Break">a GNN:</span></p>
+<ol>
+<li>First, we create a new class, which is a subclass <span class="No-Break">of </span><span class="No-Break"><strong class="source-inline">torch.nn.Module</strong></span><span class="No-Break">:</span><pre class="source-code">
+class VanillaGNNLayer(torch.nn.Module):</pre></li>
+<li>This class takes two parameters, <strong class="source-inline">dim_in</strong> and <strong class="source-inline">dim_out</strong>, for the number of features of the input and the output, respectively. We add a basic linear transformation <span class="No-Break">without bias:</span><pre class="source-code">
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        self.linear = Linear(dim_in, dim_out, bias=False)</pre></li>
+<li>We<a id="_idIndexMarker298"/> perform two operations – the linear transformation, and then the multiplication with the adjacency <span class="No-Break">matrix <img alt="" height="40" src="image/Formula_B19153_05_014.png" width="29"/></span><span class="No-Break">:</span><pre class="source-code">
+    def forward(self, x, adjacency):
+        x = self.linear(x)
+        x = torch.sparse.mm(adjacency, x)
+        return x</pre></li>
+</ol>
+<p>Before we can create our vanilla GNN, we need to convert the edge index from our dataset (<strong class="source-inline">data.edge_index</strong>) in coordinate format to a dense adjacency matrix. We also need to include <strong class="source-inline">self</strong> loops; otherwise, the central nodes won’t be taken into account in their <span class="No-Break">own embeddings.</span></p>
+<ol>
+<li value="4">This is easily implemented with the <strong class="source-inline">to_den_adj()</strong> and <span class="No-Break"><strong class="source-inline">torch.eye()</strong></span><span class="No-Break"> functions:</span><pre class="source-code">
+from torch_geometric.utils import to_dense_adj
+adjacency = to_dense_adj(data.edge_index)[0]
+adjacency += torch.eye(len(adjacency))
+adjacency</pre></li>
+</ol>
+<p>Here is what the adjacency matrix <span class="No-Break">looks like:</span></p>
+<pre class="source-code">
+<strong class="bold">tensor([[0., 0., 0.,  ..., 0., 0., 0.],</strong>
+<strong class="bold">        [0., 0., 0.,  ..., 0., 0., 0.],</strong>
+<strong class="bold">        [0., 0., 0.,  ..., 0., 0., 0.],</strong>
+<strong class="bold">        ...,</strong>
+<strong class="bold">        [0., 0., 0.,  ..., 0., 0., 0.],</strong>
+<strong class="bold">        [0., 0., 0.,  ..., 0., 0., 0.],</strong>
+<strong class="bold">        [0., 0., 0.,  ..., 0., 0., 0.]])</strong></pre>
+<p>Unfortunately, we <a id="_idIndexMarker299"/>only see zeros in this tensor because it’s a sparse matrix. A more detailed print would show a<a id="_idIndexMarker300"/> few connections between nodes (represented by ones). Now that we have our dedicated layer and the adjacency matrix, the implementation of the vanilla GNN is very similar to that of <span class="No-Break">the MLP.</span></p>
+<ol>
+<li value="5">We create a new class with two vanilla graph <span class="No-Break">linear layers:</span><pre class="source-code">
+class VanillaGNN(torch.nn.Module):
+    def __init__(self, dim_in, dim_h, dim_out):
+        super().__init__()
+        self.gnn1 = VanillaGNNLayer(dim_in, dim_h)
+        self.gnn2 = VanillaGNNLayer(dim_h, dim_out)</pre></li>
+<li>We perform the same operations with our new layers, which take the adjacency matrix we previously calculated as an <span class="No-Break">additional input:</span><pre class="source-code">
+    def forward(self, x, adjacency):
+        h = self.gnn1(x, adjacency)
+        h = torch.relu(h)
+        h = self.gnn2(h, adjacency)
+        return F.log_softmax(h, dim=1)</pre></li>
+<li>The <strong class="source-inline">fit()</strong> and <strong class="source-inline">test()</strong> methods<a id="_idIndexMarker301"/> work in<a id="_idIndexMarker302"/> the exact <span class="No-Break">same way:</span><pre class="source-code">
+    def fit(self, data, epochs):
+        criterion = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01, weight_decay=5e-4)
+        self.train()
+        for epoch in range(epochs+1):
+            optimizer.zero_grad()
+            out = self(data.x, adjacency)
+            loss = criterion(out[data.train_mask], data.y[data.train_mask])
+            acc = accuracy(out[data.train_mask].argmax(dim=1), data.y[data.train_mask])
+            loss.backward()
+            optimizer.step()
+            if epoch % 20 == 0:
+                val_loss = criterion(out[data.val_mask], data.y[data.val_mask])
+                val_acc = accuracy(out[data.val_mask].argmax(dim=1), data.y[data.val_mask])
+                print(f'Epoch {epoch:&gt;3} | Train Loss: {loss:.3f} | Train Acc: {acc*100:&gt;5.2f}% | Val Loss: {val_loss:.2f} | Val Acc: {val_acc*100:.2f}%')
+    def test(self, data):
+        self.eval()
+        out = self(data.x, adjacency)
+        acc = accuracy(out.argmax(dim=1)[data.test_mask], data.y[data.test_mask])
+        return acc</pre></li>
+<li>We can<a id="_idIndexMarker303"/> create, train, and <a id="_idIndexMarker304"/>evaluate our model with the <span class="No-Break">following lines:</span><pre class="source-code">
+gnn = VanillaGNN(dataset.num_features, 16, dataset.num_classes)
+print(gnn)
+gnn.fit(data, epochs=100)
+acc = gnn.test(data)
+print(f'\nGNN test accuracy: {acc*100:.2f}%')</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">VanillaGNN(</strong>
+<strong class="bold">  (gnn1): VanillaGNNLayer(</strong>
+<strong class="bold">    (linear): Linear(in_features=1433, out_features=16, bias=False)</strong>
+<strong class="bold">  )</strong>
+<strong class="bold">  (gnn2): VanillaGNNLayer(</strong>
+<strong class="bold">    (linear): Linear(in_features=16, out_features=7, bias=False)</strong>
+<strong class="bold">  )</strong>
+<strong class="bold">)</strong>
+<strong class="bold">Epoch   0 | Train Loss: 2.008 | Train Acc: 20.00% | Val Loss: 1.96 | Val Acc: 23.40%</strong>
+<strong class="bold">Epoch  20 | Train Loss: 0.047 | Train Acc: 100.00% | Val Loss: 2.04 | Val Acc: 74.60%</strong>
+<strong class="bold">Epoch  40 | Train Loss: 0.004 | Train Acc: 100.00% | Val Loss: 2.49 | Val Acc: 75.20%</strong>
+<strong class="bold">Epoch  60 | Train Loss: 0.002 | Train Acc: 100.00% | Val Loss: 2.61 | Val Acc: 74.60%</strong>
+<strong class="bold">Epoch  80 | Train Loss: 0.001 | Train Acc: 100.00% | Val Loss: 2.61 | Val Acc: 75.20%</strong>
+<strong class="bold">Epoch 100 | Train Loss: 0.001 | Train Acc: 100.00% | Val Loss: 2.56 | Val Acc: 75.00%</strong>
+<strong class="bold">GNN test accuracy: 76.80%</strong></pre></li>
+</ol>
+<p>We <a id="_idIndexMarker305"/>replicate the same training process<a id="_idIndexMarker306"/> with the <strong class="source-inline">Facebook Page-Page</strong> dataset. In order to obtain comparable results, the same experiment is repeated 100 times for each model on each dataset. The following table summarizes <span class="No-Break">the results:</span></p>
+<table class="No-Table-Style _idGenTablePara-1" id="table002">
+<colgroup>
+<col/>
+<col/>
+<col/>
+</colgroup>
+<tbody>
+<tr class="No-Table-Style">
+<td class="No-Table-Style"/>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">MLP</strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">GNN</strong></span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">Cora</strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break">53.47%</span></p>
+<p>(±<span class="No-Break">1.81%)</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break">74.98%</span></p>
+<p>(±<span class="No-Break">1.50%)</span></p>
+</td>
+</tr>
+<tr class="No-Table-Style">
+<td class="No-Table-Style">
+<p><span class="No-Break"><strong class="bold">Facebook</strong></span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break">75.21%</span></p>
+<p>(±<span class="No-Break">0.40%)</span></p>
+</td>
+<td class="No-Table-Style">
+<p><span class="No-Break">84.85%</span></p>
+<p>(±<span class="No-Break">1.68%)</span></p>
+</td>
+</tr>
+</tbody>
+</table>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 5.4 – Summary of accuracy scores with a standard deviation</p>
+<p>As we can<a id="_idIndexMarker307"/> see, the MLP has poor accuracy on <strong class="source-inline">Cora</strong>. It performs better on the <strong class="source-inline">Facebook Page-Page</strong> dataset but is still surpassed by our vanilla GNN in both cases. These results show the<a id="_idIndexMarker308"/> importance of including topological information in node features. Instead of a tabular dataset, our GNN considers the entire neighborhood of each node, which leads to a 10-20% boost in terms of accuracy in these examples. This architecture is still crude, but it gives us a guideline to refine it and build even <span class="No-Break">better models.</span></p>
+<h1 id="_idParaDest-69"><a id="_idTextAnchor072"/>Summary</h1>
+<p>In this chapter, we learned about the missing link between vanilla neural networks and GNNs. We built our own GNN architecture using our intuition and a bit of linear algebra. We explored two popular graph datasets from the scientific literature to compare our two architectures. Finally, we implemented them in PyTorch and evaluated their performance. The result is clear: even our intuitive version of a GNN completely outperforms the MLP on <span class="No-Break">both datasets.</span></p>
+<p>In <a href="B19153_06.xhtml#_idTextAnchor074"><span class="No-Break"><em class="italic">Chapter 6</em></span></a>, <em class="italic">Normalizing Embeddings with Graph Convolutional Networks</em>, we refine our vanilla GNN architecture to correctly normalize its inputs. This graph convolutional network model is an incredibly efficient baseline we’ll keep using in the rest of the book. We will compare its results on our two previous datasets and introduce a new interesting task: <span class="No-Break">node regression.</span></p>
+<h1 id="_idParaDest-70"><a id="_idTextAnchor073"/>Further reading</h1>
+<ul>
+<li>[1] P. Sen, G. Namata, M. Bilgic, L. Getoor, B. Galligher, and T. Eliassi-Rad, “Collective Classification in Network Data”, AIMag, vol. 29, no. 3, p. 93, Sep. 2008. <span class="No-Break">Available: </span><a href="https://ojs.aaai.org//index.php/aimagazine/article/view/2157"><span class="No-Break">https://ojs.aaai.org//index.php/aimagazine/article/view/2157</span></a></li>
+<li>[2] B. Rozemberczki, C. Allen, and R. Sarkar, Multi-Scale Attributed Node Embedding. arXiv, 2019. doi: 10.48550/ARXIV.1909.13021. <span class="No-Break">Available: </span><a href="https://arxiv.org/abs/1909.13021"><span class="No-Break">https://arxiv.org/abs/1909.13021</span></a></li>
+</ul>
+</div>
+</div></body></html>

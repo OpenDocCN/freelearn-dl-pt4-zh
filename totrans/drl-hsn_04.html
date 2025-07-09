@@ -1,0 +1,593 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-4-the-cross-entropy-method">
+<h1 class="chapterNumber">4</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_407">
+<span id="x1-740004"/>The Cross-Entropy Method
+    </h1>
+<p>In the last chapter, you learned about PyTorch. In this chapter, we will wrap up <span class="cmti-10x-x-109">Part 1 </span>of this book and you will become familiar with one of the <span class="cmbx-10x-x-109">reinforcement</span> <span class="cmbx-10x-x-109">learning </span>(<span class="cmbx-10x-x-109">RL</span>) methods: <span class="cmti-10x-x-109">cross-entropy</span>.</p>
+<p>Despite the fact that it is much <span id="dx1-74001"/>less famous than other tools in the RL practitioner’s toolbox, such as <span class="cmbx-10x-x-109">deep Q-network (DQN) </span>or <span class="cmbx-10x-x-109">advantage</span> <span class="cmbx-10x-x-109">actor-critic (A2C)</span>, the <span id="dx1-74002"/>cross-entropy method has its own strengths. Firstly, the cross-entropy method is really simple, which makes it an easy method to follow. For example, its implementation on PyTorch is less than 100 lines of code.</p>
+<p>Secondly, the method has good convergence. In simple environments that don’t require you to learn complex, multistep policies and that have short episodes with frequent rewards, the cross-entropy method usually works very well. Of course, lots of practical problems don’t fall into this category, but sometimes they do. In such cases, the cross-entropy method (on its own or as part of a larger system) can be the perfect fit.</p>
+<p>In this chapter, we will cover:</p>
+<ul>
+<li>
+<p>The practical side of the cross-entropy method</p>
+</li>
+<li>
+<p>How the cross-entropy method works in two environments in Gym (the familiar CartPole and the grid world of FrozenLake)</p>
+</li>
+<li>
+<p>The theoretical background of the cross-entropy method. This section is optional and requires a bit of knowledge of probability and statistics, but if you want to understand why the method works, then you can delve into it.</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="the-taxonomy-of-rl-methods">
+<h1 class="heading-1" id="sigil_toc_id_66"> <span id="x1-750004.1"/>The taxonomy of RL methods</h1>
+<p>The <span id="dx1-75001"/>cross-entropy method falls into the <span class="cmbx-10x-x-109">model-free</span>, <span class="cmbx-10x-x-109">policy-based</span>, and <span class="cmbx-10x-x-109">on-policy </span>categories of methods. These notions are new, so let’s spend some time exploring them.</p>
+<p>All the methods in RL can be classified into various groups:</p>
+<ul>
+<li>
+<p>Model-free or model-based</p>
+</li>
+<li>
+<p>Value-based or policy-based</p>
+</li>
+<li>
+<p>On-policy or off-policy</p>
+</li>
+</ul>
+<p>There are <span id="dx1-75002"/>other ways that you <span id="dx1-75003"/>can taxonomize RL methods, but, for now, we are interested <span id="dx1-75004"/>in the above three. Let’s define them, as the specifics of your problem can influence your choice of a particular method.</p>
+<p>The term <span class="cmbx-10x-x-109">model-free </span>means<span id="dx1-75005"/> that the method doesn’t build a model of the environment or reward; it just directly connects observations to actions (or values that are related to actions). In other words, the agent takes current observations and does some computations on them, and the result is the action that it should take. In contrast, <span class="cmbx-10x-x-109">model-based </span>methods try to predict what the next observation and/or reward will be. Based on this prediction, the agent tries to choose the best possible action to take, very often making such predictions multiple times to look more and more steps into the future.</p>
+<p>Both classes of methods have strong and weak sides, but usually pure model-based methods are used in deterministic environments, such as board games with strict rules. On the other hand, model-free methods are usually easier to train because it’s hard to build good models of complex environments with rich observations. All of the methods described in this book are from the model-free category, as those methods have been the most active area of research for the past few years. Only recently have researchers started to mix the benefits from both worlds (for example, in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch024.xhtml#x1-36400020"><span class="cmti-10x-x-109">20</span></a>, we’ll take a look at the AlphaGo Zero and MuZero methods, which use a model-based approach to board games and Atari).</p>
+<p>Looking at this<span id="dx1-75006"/> from another angle, <span class="cmbx-10x-x-109">policy-based </span>methods directly approximate the policy of the agent, that is, what actions the agent should carry out at every step. The policy is usually represented by a probability distribution over the available actions. Alternatively, the method could be <span class="cmbx-10x-x-109">value-based</span>. In this case, instead of the probability of actions, the agent calculates the value of every possible action and chooses the action with the best value. These families of methods are equally popular, and we will discuss value-based methods in the next part of the book. Policy methods will be the topic of <span class="cmti-10x-x-109">Part</span> <span class="cmti-10x-x-109">3</span>.</p>
+<p>The third important classification of methods is <span class="cmbx-10x-x-109">on-policy </span>versus <span class="cmbx-10x-x-109">off-policy</span>. We will discuss this distinction in more depth in <span class="cmti-10x-x-109">Parts 2 </span>and <span class="cmti-10x-x-109">3 </span>of the book, but, for now, it is enough to explain off-policy as the ability of the method to learn from historical data (obtained by a previous version of the agent, recorded by human demonstration, or just seen by the same agent several episodes ago). On the other hand, on-policy methods<span id="dx1-75007"/> require fresh data for training, generated from the policy we’re currently updating. They cannot be trained on old historical data because the result of the training will be wrong. This makes such methods much less data-efficient (you need much more communication with the environment), but in some cases, this is not a problem (for example, if our environment is very lightweight and fast, so we can quickly interact with it).</p>
+<p>So, our cross-entropy method is model-free, policy-based, and on-policy, which means the following:</p>
+<ul>
+<li>
+<p>It doesn’t build a model of the environment; it just says to the agent what to do at every step</p>
+</li>
+<li>
+<p>It approximates the policy of the agent</p>
+</li>
+<li>
+<p>It requires fresh data obtained from the environment</p>
+</li>
+</ul>
+</section>
+<section class="level3 sectionHead" id="the-cross-entropy-method-in-practice">
+<h1 class="heading-1" id="sigil_toc_id_67"> <span id="x1-760004.2"/>The cross-entropy method in practice</h1>
+<p>The explanation<span id="dx1-76001"/> of the cross-entropy method can be split into two unequal parts: practical and theoretical. The practical part is intuitive in nature, while the theoretical explanation of <span class="cmti-10x-x-109">why </span>the cross-entropy method works and what happens, is more sophisticated.</p>
+<p>You may remember that the central and trickiest thing in RL is the agent, which tries to accumulate as much total reward as possible by communicating with the environment. In practice, we follow a common <span class="cmbx-10x-x-109">machine learning</span> (<span class="cmbx-10x-x-109">ML</span>) approach and replace all of the complications of the agent with some kind of nonlinear trainable function, which maps the agent’s input (observations from the environment) to some output. The details of the output that this function produces may depend on a particular method or a family of methods (such as value-based or policy-based methods), as described in the previous section. As our cross-entropy method is policy-based, our nonlinear function (<span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>)) produces the <span class="cmti-10x-x-109">policy</span>, which basically says for every observation which action the agent should take. In research papers, policy is denoted as <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">a</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>), where <span class="cmmi-10x-x-109">a </span>are actions and <span class="cmmi-10x-x-109">s </span>is the current state. This is illustrated in the following diagram:</p>
+<div class="minipage">
+<p><img alt="SaTmrpalienabalcteion EfOPAnubocvnaslticeiirt∼rcooivynnoπamn(tπae (ai(nN|oatNsn|s)))s " height="300" src="../Images/B22150_04_01.png" width="600"/> <span id="x1-76002r1"/></p>
+<span class="id">Figure 4.1: A high-level approach to policy-based RL </span>
+</div>
+<p>In practice, the policy is usually represented as a probability distribution over actions, which makes it very similar to a classification problem, with the number of classes being equal to the number of actions we can carry out.</p>
+<p>This abstraction makes our agent very simple: it needs to pass an observation from the environment to the NN, get a probability distribution over actions, and perform random sampling using the probability distribution to get an action to carry out. This random sampling adds randomness to our agent, which is a good thing because at the beginning of the training, when our weights are random, the agent behaves randomly. As soon as the agent gets an action to issue, it fires the action to the environment and obtains the next observation and reward for the last action. Then the loop continues, as shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-76002r1"><span class="cmti-10x-x-109">4.1</span></a>.</p>
+<p>During the agent’s lifetime, its experience is presented as episodes. Every <span id="dx1-76003"/>episode is a sequence of observations that the agent has got from the environment, actions it has issued, and rewards for these actions. Imagine that our agent has played several such episodes. For every episode, we can calculate the total reward that the agent has claimed. It can be discounted or not discounted; for simplicity, let’s assume a discount factor of <span class="cmmi-10x-x-109">γ </span>= 1, which just means an undiscounted sum of all local rewards for every episode. This total reward shows how good this episode was for the agent. It is illustrated in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-76004r2"><span class="cmti-10x-x-109">4.2</span></a>, which contains four episodes (note that different episodes have different values for <span class="cmmi-10x-x-109">o</span><sub><span class="cmmi-8">i</span></sub>, <span class="cmmi-10x-x-109">a</span><sub><span class="cmmi-8">i</span></sub>, and <span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">i</span></sub>):</p>
+<div class="minipage">
+<p><img alt="Episode 1: o1,a1,r1 o2,a2,r2 o3,a3,r3 o4,a4,rR4= r1 + r2 + r3 + r4 Episode 2: o1,a1,r1 o2,a2,r2 o3,a3,r3 R = r1 + r2 + r3 Episode 3: o1,a1,r1 o2,a2,r2 R = r1 + r2 Episode 4: o1,a1,r1 o2,a2,r2 o3,a3,r3 R = r1 + r2 + r3 " height="300" src="../Images/B22150_04_02.png" width="600"/> <span id="x1-76004r2"/></p>
+<span class="id">Figure 4.2: Example episodes with their observations, actions, and rewards </span>
+</div>
+<p>Every cell represents the agent’s step in the episode. Due to randomness in the <span id="dx1-76005"/>environment and the way that the agent selects actions to take, some episodes will be better than others. The core of the cross-entropy method is to throw away bad episodes and train on better ones. So, the steps of the method are as follows:</p>
+<ol>
+<li>
+<div id="x1-76007x1">
+<p>Play <span class="cmmi-10x-x-109">N </span>episodes using our current model and environment.</p>
+</div>
+</li>
+<li>
+<div id="x1-76009x2">
+<p>Calculate the total reward for every episode and decide on a reward boundary. Usually, we use a percentile of all rewards, such as the 50th or 70th.</p>
+</div>
+</li>
+<li>
+<div id="x1-76011x3">
+<p>Throw away all episodes with a reward below the boundary.</p>
+</div>
+</li>
+<li>
+<div id="x1-76013x4">
+<p>Train on the remaining ”elite” episodes (with rewards higher than the boundary) using observations as the input and issued actions as the desired output.</p>
+</div>
+</li>
+<li>
+<div id="x1-76015x5">
+<p>Repeat from step 1 until we become satisfied with the result.</p>
+</div>
+</li>
+</ol>
+<p>So, that’s the cross-entropy method’s description. With the preceding procedure, our NN learns how to repeat actions, which leads to a larger reward, constantly moving the boundary higher and higher. Despite the simplicity of this method, it works well in basic environments, it’s easy to implement, and it’s quite robust against changing hyperparameters, which makes it an ideal baseline method to try. Let’s now apply it to our CartPole environment.</p>
+</section>
+<section class="level3 sectionHead" id="the-cross-entropy-method-on-cartpole">
+<h1 class="heading-1" id="sigil_toc_id_68"> <span id="x1-770004.3"/>The cross-entropy method on CartPole</h1>
+<p>The whole code for this example is in <span class="cmtt-10x-x-109">Chapter04/01</span><span class="cmtt-10x-x-109">_cartpole.py</span>. Here, I will show only the most important parts. Our <span id="dx1-77001"/>model’s core is a one-hidden-layer NN, with <span class="cmbx-10x-x-109">rectified linear unit </span>(<span class="cmbx-10x-x-109">ReLU</span>) and 128 hidden neurons (which is absolutely arbitrary; you can try to increase or decrease this constant – we’ve left this as an exercise for you). Other hyperparameters are also set almost randomly and aren’t tuned, as the method is robust and converges very quickly. We define constants at the top of the file:</p>
+<div class="tcolorbox" id="tcolobox-52">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-70"><code>import typing as tt 
+import torch 
+import torch.nn as nn 
+import torch.optim as optim 
+ 
+HIDDEN_SIZE = 128 
+BATCH_SIZE = 16 
+PERCENTILE = 70</code></pre>
+</div>
+</div>
+<p>As shown in the preceding code, the constants include the count of neurons in the hidden layer, the count of episodes we play on every iteration (16), and the percentile of each episode’s total rewards that we use for elite episode filtering. We will take the 70th percentile, which means that we will keep the top 30% of episodes sorted by reward.</p>
+<p>There is nothing special about our NN; it takes a single observation from the environment as an input vector and outputs a number for every action we can perform:</p>
+<div class="tcolorbox" id="tcolobox-53">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-71"><code>class Net(nn.Module): 
+    def __init__(self, obs_size: int, hidden_size: int, n_actions: int): 
+        super(Net, self).__init__() 
+        self.net = nn.Sequential( 
+            nn.Linear(obs_size, hidden_size), 
+            nn.ReLU(), 
+            nn.Linear(hidden_size, n_actions) 
+        ) 
+ 
+    def forward(self, x: torch.Tensor): 
+        return self.net(x)</code></pre>
+</div>
+</div>
+<p>The output from the NN is a probability distribution over actions, so a straightforward way to proceed would be to include softmax nonlinearity after the last layer. However, in the code, we don’t apply softmax to increase the numerical stability of the training process. Rather than calculating softmax (which uses exponentiation) and then calculating cross-entropy loss (which uses a logarithm of probabilities), we will use the <span class="cmtt-10x-x-109">nn.CrossEntropyLoss </span>PyTorch class later, which combines softmax and cross-entropy into a single, more numerically stable expression. <span class="cmtt-10x-x-109">CrossEntropyLoss </span>requires raw, unnormalized values from the NN (also called logits). The downside of this is that we need to remember to apply softmax every time we need to get probabilities from our NN’s output.</p>
+<p>Next, we will define two helper dataclasses:</p>
+<div class="tcolorbox" id="tcolobox-54">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-72"><code>@dataclass 
+class EpisodeStep: 
+    observation: np.ndarray 
+    action: int 
+ 
+@dataclass 
+class Episode: 
+    reward: float 
+    steps: tt.List[EpisodeStep]</code></pre>
+</div>
+</div>
+<p>The purpose of these <span id="dx1-77030"/>dataclasses is as follows:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">EpisodeStep</span>: This will be used to represent one single step that our agent made in the episode, and it stores the observation from the environment and what action the agent performed. We will use episode steps from elite episodes as training data.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Episode</span>: This is a single episode stored as a total undiscounted reward and a collection of <span class="cmtt-10x-x-109">EpisodeStep</span>.</p>
+</li>
+</ul>
+<p>Let’s look at a function that generates batches with episodes:</p>
+<div class="tcolorbox" id="tcolobox-55">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-73"><code>def iterate_batches(env: gym.Env, net: Net, batch_size: int) -&gt; tt.Generator[tt.List[Episode], None, None]: 
+    batch = [] 
+    episode_reward = 0.0 
+    episode_steps = [] 
+    obs, _ = env.reset() 
+    sm = nn.Softmax(dim=1)</code></pre>
+</div>
+</div>
+<p>The preceding function accepts the environment (the <span class="cmtt-10x-x-109">Env </span>class instance from the Gym library), our NN, and the count of episodes it should generate on every iteration. The <span class="cmtt-10x-x-109">batch </span>variable will be used to accumulate our batch (which is a list of <span class="cmtt-10x-x-109">Episode </span>instances). We also declare a reward counter for the current episode and its list of steps (the <span class="cmtt-10x-x-109">EpisodeStep </span>objects). Then we reset our environment to obtain the first observation and create a softmax layer, which will be used to convert the NN’s output to a probability distribution of actions. That’s our preparations complete, so we are ready to start the environment loop:</p>
+<div class="tcolorbox" id="tcolobox-56">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-74"><code>    while True: 
+        obs_v = torch.tensor(obs, dtype=torch.float32) 
+        act_probs_v = sm(net(obs_v.unsqueeze(0))) 
+        act_probs = act_probs_v.data.numpy()[0]</code></pre>
+</div>
+</div>
+<p>At every iteration, we convert our current observation to a PyTorch tensor and pass it to the NN to obtain action probabilities. There are several things to note here:</p>
+<ul>
+<li>
+<p>All <span class="cmtt-10x-x-109">nn.Module </span>instances in PyTorch expect a batch of data items, and the same is true for our NN, so we convert our observation (which is a vector of four numbers in CartPole) into a tensor of size 1 <span class="cmsy-10x-x-109">× </span>4 (to achieve this, we call the <span class="cmtt-10x-x-109">unsqueeze(0) </span>function on our tensor, which adds an extra dimension at the zero position of the shape).</p>
+</li>
+<li>
+<p>As we haven’t used nonlinearity at the output of our NN, it outputs raw action scores, which we need to feed through the softmax function.</p>
+</li>
+<li>
+<p>Both our NN and the softmax layer return tensors that track gradients, so we need to unpack this by accessing the <span class="cmtt-10x-x-109">tensor.data </span>field and then converting the tensor into a NumPy array. This array will have the same two-dimensional structure as the input, with the batch dimension on axis 0, so we need to get the first batch element to obtain a one-dimensional vector of action probabilities.</p>
+</li>
+</ul>
+<p>Now that we have the <span id="dx1-77041"/>probability distribution of actions, we can use it to obtain the actual action for the current step:</p>
+<div class="tcolorbox" id="tcolobox-57">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-75"><code>        action = np.random.choice(len(act_probs), p=act_probs) 
+        next_obs, reward, is_done, is_trunc, _ = env.step(action)</code></pre>
+</div>
+</div>
+<p>Here, we sample the distribution using NumPy’s function <span class="cmtt-10x-x-109">random.choice()</span>. After this, we will pass this action to the environment to get our next observation, our reward, the indication of the episode ending, and the truncation flag. The last value returned by the <span class="cmtt-10x-x-109">step() </span>function is extra information from the environment and is discarded.</p>
+<p>The reward is added to the current episode’s total reward, and our list of episode steps is also extended with an (<span class="cmtt-10x-x-109">observation</span>, <span class="cmtt-10x-x-109">action</span>) pair:</p>
+<div class="tcolorbox" id="tcolobox-58">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-76"><code>        episode_reward += float(reward) 
+        step = EpisodeStep(observation=obs, action=action) 
+        episode_steps.append(step)</code></pre>
+</div>
+</div>
+<p>Note that we save the observation that was used to choose the action, but not the observation returned by the environment as a result of the action. These are the tiny, but important, details that you need to keep in mind.</p>
+<p>The continuation of the code handles the situation when the current episode is over (in the case of CartPole, the episode ends when the stick has fallen down, despite our efforts, or when the time limit of the environment has been reached):</p>
+<div class="tcolorbox" id="tcolobox-59">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-77"><code>        if is_done or is_trunc: 
+            e = Episode(reward=episode_reward, steps=episode_steps) 
+            batch.append(e) 
+            episode_reward = 0.0 
+            episode_steps = [] 
+            next_obs, _ = env.reset() 
+            if len(batch) == batch_size: 
+                yield batch 
+                batch = []</code></pre>
+</div>
+</div>
+<p>We append the finalized episode to the batch, saving the total reward (as the episode has been completed and we have accumulated all the rewards) and steps we have taken. Then we reset our total reward accumulator and clean the list of steps. After that, we reset our environment to start over.</p>
+<p>If our batch has <span id="dx1-77056"/>reached the desired count of episodes, we return it to the caller for processing using <span class="cmtt-10x-x-109">yield</span>. Our function is a generator, so every time the <span class="cmtt-10x-x-109">yield</span> operator is executed, the control is transferred to the outer iteration loop and then continues after the <span class="cmtt-10x-x-109">yield </span>line. If you are not familiar with Python’s generator functions, refer to the Python documentation: <a class="url" href="https://wiki.python.org/moin/Generators"><span class="cmtt-10x-x-109">https://wiki.python.org/moin/Generators</span></a>. After processing, we will clean up the batch.</p>
+<p>The last, but very important, step in our loop is to assign an observation obtained from the environment to our current observation variable:</p>
+<div class="tcolorbox" id="tcolobox-60">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-78"><code>        obs = next_obs</code></pre>
+</div>
+</div>
+<p>After that, everything repeats infinitely – we pass the observation to the NN, sample the action to perform, ask the environment to process the action, and remember the result of this processing.</p>
+<p>One very important fact to understand in this function’s logic is that the training of our NN and the generation of our episodes are performed <span class="cmti-10x-x-109">at the same time</span>. They are not completely in parallel, but every time our loop accumulates enough episodes (16), it passes control to this function caller, which is supposed to train the NN using gradient descent. So, when <span class="cmtt-10x-x-109">yield </span>is returned, the NN will have different, slightly better (we hope) behavior. As you should remember from the beginning of the chapter, the cross-entropy method is from the on-policy class, so using fresh training data is important for the method to work properly.</p>
+<p>Since training and data gathering happen in the same thread, proper synchronization isn’t necessary. However, you should be aware of the frequent jumps between training the NN and using it. Okay; now we need to define yet another function, and then we will be ready to switch to the training loop:</p>
+<div class="tcolorbox" id="tcolobox-61">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-79"><code>def filter_batch(batch: tt.List[Episode], percentile: float) -&gt; \ 
+        tt.Tuple[torch.FloatTensor, torch.LongTensor, float, float]: 
+    rewards = list(map(lambda s: s.reward, batch)) 
+    reward_bound = float(np.percentile(rewards, percentile)) 
+    reward_mean = float(np.mean(rewards))</code></pre>
+</div>
+</div>
+<p>This <span id="dx1-77063"/>function is at the core of the cross-entropy method – from the given batch of episodes and percentile value, it calculates a boundary reward, which is used to filter elite episodes to train on. To obtain the boundary reward, we will use NumPy’s <span class="cmtt-10x-x-109">percentile </span>function, which, from the list of values and the desired percentile, calculates the percentile’s value. Then, we will calculate the mean reward, which is used only for monitoring.</p>
+<p>Next, we will filter off our episodes:</p>
+<div class="tcolorbox" id="tcolobox-62">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-80"><code>    train_obs: tt.List[np.ndarray] = [] 
+    train_act: tt.List[int] = [] 
+    for episode in batch: 
+        if episode.reward &lt; reward_bound: 
+            continue 
+        train_obs.extend(map(lambda step: step.observation, episode.steps)) 
+        train_act.extend(map(lambda step: step.action, episode.steps))</code></pre>
+</div>
+</div>
+<p>For every episode in the batch, we will check that the episode has a higher total reward than our boundary and, if it has, we will populate lists of observations and actions that we will train on.</p>
+<p>The following is the final step of the function:</p>
+<div class="tcolorbox" id="tcolobox-63">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-81"><code>    train_obs_v = torch.FloatTensor(np.vstack(train_obs)) 
+    train_act_v = torch.LongTensor(train_act) 
+    return train_obs_v, train_act_v, reward_bound, reward_mean</code></pre>
+</div>
+</div>
+<p>Here, we will convert our observations and actions from elite episodes into tensors, and return a tuple of four: observations, actions, the boundary of reward, and the mean reward. The last two values are not used in the training; we will write them into TensorBoard to check the performance of our agent.</p>
+<p>Now, the final chunk of code that glues everything together, and mostly consists of the training loop, is as follows:</p>
+<div class="tcolorbox" id="tcolobox-64">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-82"><code>if __name__ == "__main__": 
+    env = gym.make("CartPole-v1") 
+    assert env.observation_space.shape is not None 
+    obs_size = env.observation_space.shape[0] 
+    assert isinstance(env.action_space, gym.spaces.Discrete) 
+    n_actions = int(env.action_space.n) 
+ 
+    net = Net(obs_size, HIDDEN_SIZE, n_actions) 
+    print(net) 
+    objective = nn.CrossEntropyLoss() 
+    optimizer = optim.Adam(params=net.parameters(), lr=0.01) 
+    writer = SummaryWriter(comment="-cartpole")</code></pre>
+</div>
+</div>
+<p>In the <span id="dx1-77086"/>beginning, we create all the required objects: the environment, our NN, the objective function, the optimizer, and the summary writer for TensorBoard.</p>
+<p>In the training loop, we iterate our batches (a list of <span class="cmtt-10x-x-109">Episode </span>objects):</p>
+<div class="tcolorbox" id="tcolobox-65">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-83"><code>    for iter_no, batch in enumerate(iterate_batches(env, net, BATCH_SIZE)): 
+        obs_v, acts_v, reward_b, reward_m = filter_batch(batch, PERCENTILE) 
+        optimizer.zero_grad() 
+        action_scores_v = net(obs_v) 
+        loss_v = objective(action_scores_v, acts_v) 
+        loss_v.backward() 
+        optimizer.step()</code></pre>
+</div>
+</div>
+<p>We perform filtering of the elite episodes <span id="dx1-77094"/>using the <span class="cmtt-10x-x-109">filter</span><span class="cmtt-10x-x-109">_batch </span>function. The result is tensors of observations and taken actions, the reward boundary used for filtering, and the mean reward. After that, we zero the gradients of our NN and pass observations to the NN, obtaining its action scores. These scores are passed to the <span class="cmtt-10x-x-109">objective </span>function, which will calculate the cross-entropy between the NN output and the actions that the agent took. The idea of this is to reinforce our NN to carry out those elite actions that have led to good rewards. Then, we calculate gradients on the loss and ask the optimizer to adjust our NN.</p>
+<p>The rest of the loop is mostly the monitoring of progress:</p>
+<div class="tcolorbox" id="tcolobox-66">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-84"><code>        print("%d: loss=%.3f, reward_mean=%.1f, rw_bound=%.1f" % ( 
+            iter_no, loss_v.item(), reward_m, reward_b)) 
+        writer.add_scalar("loss", loss_v.item(), iter_no) 
+        writer.add_scalar("reward_bound", reward_b, iter_no) 
+        writer.add_scalar("reward_mean", reward_m, iter_no)</code></pre>
+</div>
+</div>
+<p>On the console, we show the iteration number, the loss, the mean reward of the batch, and the reward boundary. We also write the same values to TensorBoard to get a nice chart of the agent’s learning performance.</p>
+<p>The last check in the loop is the comparison of the mean rewards of our batch episodes:</p>
+<div class="tcolorbox" id="tcolobox-67">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-85"><code>        if reward_m &gt; 475: 
+            print("Solved!") 
+            break 
+    writer.close()</code></pre>
+</div>
+</div>
+<p>When the mean reward becomes greater than 475, we stop our training. Why 475? In Gym, the CartPole-v1 environment is considered to be solved <span id="dx1-77104"/>when the mean reward for the last 100 episodes is greater than 475. However, our method converges so quickly that 100 episodes are usually what we need. The properly trained agent can balance the stick for an infinitely long period of time (obtaining any amount of score), but the length of an episode in CartPole-v1 is limited to 500 steps (if you look in <a class="url" href="https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/envs/"><span class="cmtt-10x-x-109">https://github.com/Farama-Foundation/Gymnasium/blob/main/gymnasium/envs/\_\_init\_\_.py</span></a>(<span class="cmtt-10x-x-109">gymnasium/envs/</span><span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_init</span><span class="cmtt-10x-x-109">_</span><span class="cmtt-10x-x-109">_.py</span>) where all the environments are registered, v1 of Cartpole has <span class="cmtt-10x-x-109">max</span><span class="cmtt-10x-x-109">_episode</span><span class="cmtt-10x-x-109">_steps=500</span>). With all this in mind, we will stop training after the mean reward in the batch is greater than 475, which is a good indication that our agent knows how to balance the stick like a pro.</p>
+<p>That’s it. So, let’s start our first RL training!</p>
+<pre class="lstlisting" id="listing-86"><code>Chapter04$ ./01_cartpole.py 
+Net( 
+  (net): Sequential( 
+   (0): Linear(in_features=4, out_features=128, bias=True) 
+   (1): ReLU() 
+   (2): Linear(in_features=128, out_features=2, bias=True) 
+  ) 
+) 
+0: loss=0.683, reward_mean=25.2, rw_bound=24.0 
+1: loss=0.669, reward_mean=34.3, rw_bound=39.0 
+2: loss=0.648, reward_mean=37.6, rw_bound=40.0 
+3: loss=0.647, reward_mean=41.9, rw_bound=43.0 
+4: loss=0.634, reward_mean=41.2, rw_bound=50.0 
+.... 
+38: loss=0.537, reward_mean=431.8, rw_bound=500.0 
+39: loss=0.529, reward_mean=450.1, rw_bound=500.0 
+40: loss=0.533, reward_mean=456.4, rw_bound=500.0 
+41: loss=0.526, reward_mean=422.0, rw_bound=500.0 
+42: loss=0.531, reward_mean=436.8, rw_bound=500.0 
+43: loss=0.526, reward_mean=475.5, rw_bound=500.0 
+Solved!</code></pre>
+<p>It usually doesn’t take the agent more than 50 batches to solve the problem. My experiments show something from 30 to 60 episodes, which is a really good learning performance (remember, we need to play only 16 episodes for every batch). TensorBoard shows that our agent is consistently making progress, pushing the upper boundary at almost every batch (there are some periods of rolling down, but most of the time it improves):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_03.png" width="600"/> <span id="x1-77126r3"/></p>
+<span class="id">Figure 4.3: Mean reward (left) and loss (right) during the training </span>
+</div>
+<div class="minipage">
+<img alt="PIC" height="300" src="../Images/B22150_04_04.png" width="600"/> <span id="x1-77127r4"/>
+<span class="id">Figure 4.4: The reward boundary during the training </span>
+</div>
+<p>To monitor <span id="dx1-77128"/>the training process, you can tweak the environment creation by setting the rendering mode in the CartPole environment and adding a <span class="cmtt-10x-x-109">RecordVideo </span>wrapper:</p>
+<div class="tcolorbox" id="tcolobox-68">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-87"><code>    env = gym.make("CartPole-v1", render_mode="rgb_array") 
+    env = gym.wrappers.RecordVideo(env, video_folder="video")</code></pre>
+</div>
+</div>
+<p>During the training, it will create a video directory with a bunch of MP4 movies inside, allowing you to compare the progress of agent training:</p>
+<pre class="lstlisting" id="listing-88"><code>Chapter04$ ./01_cartpole.py 
+Net( 
+  (net): Sequential( 
+   (0): Linear(in_features=4, out_features=128, bias=True) 
+   (1): ReLU() 
+   (2): Linear(in_features=128, out_features=2, bias=True) 
+  ) 
+) 
+Moviepy - Building video Chapter04/video/rl-video-episode-0.mp4. 
+Moviepy - Writing video Chapter04/video/rl-video-episode-0.mp4 
+Moviepy - Done ! 
+Moviepy - video ready Chapter04/video/rl-video-episode-0.mp4 
+Moviepy - Building video Chapter04/video/rl-video-episode-1.mp4. 
+Moviepy - Writing video Chapter04/video/rl-video-episode-1.mp4 
+...</code></pre>
+<p>The MP4 movies <span id="dx1-77146"/>might look like the following:</p>
+<div class="minipage">
+<p><img alt="PIC" height="216" src="../Images/file16.png" width="216"/> <span id="x1-77147r5"/></p>
+<span class="id">Figure 4.5: CartPole episode movie </span>
+</div>
+<p>Let’s now pause for a bit and think about what’s just happened. Our NN has learned how to play the environment purely from observations and rewards, without <span id="dx1-77148"/>any interpretation of observed values. The environment could easily not be a cart with a stick; it could be, say, a warehouse model with product quantities as an observation and money earned as the reward. Our implementation doesn’t depend on environment-related details. This is the beauty of the RL model and, in the next section, we will look at how exactly the same method can be applied to a different environment from the Gym collection.</p>
+</section>
+<section class="level3 sectionHead" id="the-cross-entropy-method-on-frozenlake">
+<h1 class="heading-1" id="sigil_toc_id_69"> <span id="x1-780004.4"/>The cross-entropy method on FrozenLake</h1>
+<p>The next <span id="dx1-78001"/>environment that we will try to solve using the cross-entropy method is FrozenLake. Its world is from the so-called grid world category, when your agent lives in a grid of size 4 <span class="cmsy-10x-x-109">× </span>4 and can move in four directions: up, down, left, and right. The agent always starts at the top left, and its goal is to reach the bottom-right cell of the grid. There are holes in the fixed cells of the grid and if you get into those holes, the episode ends and your reward is zero. If the agent reaches the destination cell, then it obtains a reward of 1.0 and the episode ends.</p>
+<p>To make life more complicated, the world is slippery (it’s a frozen lake after all), so the agent’s actions do not always turn out as expected – there is a 33% chance that it will slip to the right or to the left. If you want the agent to move left, for example, there is a 33% probability that it will, indeed, move left, a 33% chance that it will end up in the cell above, and a 33% chance that it will end up in the cell below. As you will see at the end of the section, this makes progress difficult.</p>
+<div class="minipage">
+<p><img alt="PIC" height="162" src="../Images/file17.png" width="161"/> <span id="x1-78002r6"/></p>
+<span class="id">Figure 4.6: The FrozenLake environment rendered in human mode </span>
+</div>
+<p>Let’s look at how this <span id="dx1-78003"/>environment is represented in the Gym API:</p>
+<pre class="lstlisting" id="listing-89"><code>&gt;&gt;&gt; e = gym.make("FrozenLake-v1", render_mode="ansi") 
+&gt;&gt;&gt; e.observation_space 
+Discrete(16) 
+&gt;&gt;&gt; e.action_space 
+Discrete(4) 
+&gt;&gt;&gt; e.reset() 
+(0, {’prob’: 1}) 
+&gt;&gt;&gt; print(e.render()) 
+ 
+SFFF 
+FHFH 
+FFFH 
+HFFG</code></pre>
+<p>Our observation space is discrete, which means that it’s just a number from 0 to 15 inclusive. Obviously, this number is our current position in the grid. The action space is also discrete, but it can be from zero to three. Although the action space is similar to CartPole, the observation space is represented in a different way. To minimize the required changes in our implementation, we can apply the traditional one-hot encoding of discrete inputs, which means that the input to our network will have 16 float numbers and zero everywhere, except the index that we will encode (representing our current position on the grid).</p>
+<p>As this transformation only affects the observation of the environment, it could be implemented as an <span class="cmtt-10x-x-109">ObservationWrapper</span>, as we discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch006.xhtml#x1-380002"><span class="cmti-10x-x-109">2</span></a>. Let’s call it <span class="cmtt-10x-x-109">DiscreteOneHotWrapper</span>:</p>
+<div class="tcolorbox" id="tcolobox-69">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-90"><code>class DiscreteOneHotWrapper(gym.ObservationWrapper): 
+    def __init__(self, env: gym.Env): 
+        super(DiscreteOneHotWrapper, self).__init__(env) 
+        assert isinstance(env.observation_space, gym.spaces.Discrete) 
+        shape = (env.observation_space.n, ) 
+        self.observation_space = gym.spaces.Box(0.0, 1.0, shape, dtype=np.float32) 
+ 
+    def observation(self, observation): 
+        res = np.copy(self.observation_space.low) 
+        res[observation] = 1.0 
+        return res</code></pre>
+</div>
+</div>
+<p>With that <span id="dx1-78028"/>wrapper applied to the environment, both the observation space and action space are 100% compatible with our CartPole solution (source code <span class="cmtt-10x-x-109">Chapter04/02</span><span class="cmtt-10x-x-109">_frozenlake</span><span class="cmtt-10x-x-109">_naive.py</span>). However, by launching it, we can see that our training process doesn’t improve the score over time:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_07.png" width="600"/> <span id="x1-78029r7"/></p>
+<span class="id">Figure 4.7: Mean reward (left) and loss (right) on the FrozenLake environment </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_08.png" width="600"/> <span id="x1-78030r8"/></p>
+<span class="id">Figure 4.8: The reward boundary during the training (boring 0<span class="cmmi-10x-x-109">.</span>0 all the time) </span>
+</div>
+<p>To understand <span id="dx1-78031"/>what’s going on, we need to look deeper at the reward structure of both environments. In CartPole, every step of the environment gives us the reward 1.0, until the moment that the pole falls. So, the longer our agent balanced the pole, the more reward it obtained. Due to randomness in our agent’s behavior, different episodes were of different lengths, which gave us a pretty normal distribution of the episodes’ rewards. After choosing a reward boundary, we rejected less successful episodes and learned how to repeat better ones (by training on successful episodes’ data). This is shown in the following diagram:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/file21.png" width="600"/> <span id="x1-78032r9"/></p>
+<span class="id">Figure 4.9: Distribution of the reward in the CartPole environment </span>
+</div>
+<p>In the <span id="dx1-78033"/>FrozenLake environment, episodes and their rewards look different. We get the reward of 1.0 only when we reach the goal, and this reward says nothing about how good each episode was. Was it quick and efficient, or did we make four rounds on the lake before we randomly stepped into the final cell? We don’t know; it’s just a 1.0 reward and that’s it. The distribution of rewards for our episodes is also problematic. There are only two kinds of episodes possible, with zero reward (failed) and one reward (successful), and failed episodes will obviously dominate at the beginning of the training, when the agent acts randomly. So, our percentile selection of elite episodes is totally wrong and gives us bad examples to train on. This is the reason for our training failure.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/file22.png" width="600"/> <span id="x1-78034r10"/></p>
+<span class="id">Figure 4.10: Reward distribution of the FrozenLake environment </span>
+</div>
+<p>This example shows us the limitations of the cross-entropy method:</p>
+<ul>
+<li>
+<p>For training, our episodes have to be finite (in general, they could be infinite) and, preferably, short</p>
+</li>
+<li>
+<p>The total reward for the episodes should have enough variability to separate good episodes from bad ones</p>
+</li>
+<li>
+<p>It is beneficial to have an intermediate reward during the episode instead of having the reward at the end of the episode</p>
+</li>
+</ul>
+<p>Later in the book, you will become familiar with other methods that address these limitations. For now, if you are curious about how FrozenLake <span id="dx1-78035"/>can be solved using the cross-entropy method, here is a list of tweaks of the code that you need to make (the full example is in <span class="cmtt-10x-x-109">Chapter04/03</span><span class="cmtt-10x-x-109">_frozenlake</span><span class="cmtt-10x-x-109">_tweaked.py</span>):</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Larger batches of played episodes</span>: In CartPole, it was sufficient to have 16 episodes on every iteration, but FrozenLake requires at least 100 just to get some successful episodes.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Discount factor applied to the reward</span>: To make the total reward for an episode depend on its length, and to add variety in episodes, we can use a discounted total reward with the discount factor <span class="cmmi-10x-x-109">γ </span>= 0<span class="cmmi-10x-x-109">.</span>9 or 0.95. In this case, the reward for short episodes will be higher than the reward for long ones. This increases variability in reward distribution, which helps to avoid situations like the one shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-78034r10"><span class="cmti-10x-x-109">4.10</span></a>.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Keeping elite episodes for a longer time</span>: In the CartPole training, we sampled episodes from the environment, trained on the best ones, and threw them away. In FrozenLake, a successful episode is a much rarer animal, so we need to keep them for several iterations to train on them.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Decreasing the learning rate</span>: This will give our NN time to average more training samples, as a smaller learning rate decreases the effect of new data on the model.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Much longer training time</span>: Due to the sparsity of successful episodes and the random outcome of our actions, it’s much harder for our NN to get an idea of the best behavior to perform in any particular situation. To reach 50% successful episodes, about 5,000 training iterations are required.</p>
+</li>
+</ul>
+<p>To incorporate all these into our code, we need to change the <span class="cmtt-10x-x-109">filter</span><span class="cmtt-10x-x-109">_batch</span> function to calculate the discounted reward and return elite episodes for us to keep:</p>
+<div class="tcolorbox" id="tcolobox-70">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-91"><code>def filter_batch(batch: tt.List[Episode], percentile: float) -&gt; \ 
+        tt.Tuple[tt.List[Episode], tt.List[np.ndarray], tt.List[int], float]: 
+    reward_fun = lambda s: s.reward * (GAMMA ** len(s.steps)) 
+    disc_rewards = list(map(reward_fun, batch)) 
+    reward_bound = np.percentile(disc_rewards, percentile) 
+ 
+    train_obs: tt.List[np.ndarray] = [] 
+    train_act: tt.List[int] = [] 
+    elite_batch: tt.List[Episode] = [] 
+ 
+    for example, discounted_reward in zip(batch, disc_rewards): 
+        if discounted_reward &gt; reward_bound: 
+            train_obs.extend(map(lambda step: step.observation, example.steps)) 
+            train_act.extend(map(lambda step: step.action, example.steps)) 
+            elite_batch.append(example) 
+ 
+    return elite_batch, train_obs, train_act, reward_bound</code></pre>
+</div>
+</div>
+<p>Then, in the training loop, we will store previous elite episodes to pass them to the preceding function on the next training iteration:</p>
+<div class="tcolorbox" id="tcolobox-71">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-92"><code>    full_batch = [] 
+    for iter_no, batch in enumerate(iterate_batches(env, net, BATCH_SIZE)): 
+        reward_mean = float(np.mean(list(map(lambda s: s.reward, batch)))) 
+        full_batch, obs, acts, reward_bound = filter_batch(full_batch + batch, PERCENTILE) 
+        if not full_batch: 
+            continue 
+        obs_v = torch.FloatTensor(obs) 
+        acts_v = torch.LongTensor(acts) 
+        full_batch = full_batch[-500:]</code></pre>
+</div>
+</div>
+<p>The rest of the code is the same, except that the learning rate decreased 10 times and the <span class="cmtt-10x-x-109">BATCH</span><span class="cmtt-10x-x-109">_SIZE </span>was set to 100. After a period of patient <span id="dx1-78062"/>waiting (the new version takes about 50 minutes to finish 10,000 iterations), you can see that the training of the model stopped improving at around 55% of solved episodes:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_11.png" width="600"/> <span id="x1-78063r11"/></p>
+<span class="id">Figure 4.11: Mean reward (left) and loss (right) of the tweaked version </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_12.png" width="600"/> <span id="x1-78064r12"/></p>
+<span class="id">Figure 4.12: The reward boundary of the tweaked version </span>
+</div>
+<p>There are ways to address this (by applying entropy loss regularization, for example), but those techniques will be discussed in upcoming chapters.</p>
+<p>The final point <span id="dx1-78065"/>to note here is the effect of slipperiness in the FrozenLake environment. Each of our actions, with 33% probability, is replaced with the 90<sup><span class="cmsy-8">∘</span></sup> rotated action (the <span class="cmti-10x-x-109">up </span>action, for instance, will succeed with a 0.33 probability, and there will be a 0.33 chance that it will be replaced with the <span class="cmti-10x-x-109">left </span>action and a 0.33 chance with the <span class="cmti-10x-x-109">right </span>action).</p>
+<p>The nonslippery version is in <span class="cmtt-10x-x-109">Chapter04/04</span><span class="cmtt-10x-x-109">_frozenlake</span><span class="cmtt-10x-x-109">_nonslippery.py</span>, and the only difference is in the environment creation:</p>
+<div class="tcolorbox" id="tcolobox-72">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-93"><code>    env = DiscreteOneHotWrapper(gym.make("FrozenLake-v1", is_slippery=False))</code></pre>
+</div>
+</div>
+<p>The effect is dramatic! The nonslippery version of the environment can be solved in 120-140 batch iterations, which is 100 times faster than the noisy environment:</p>
+<pre class="lstlisting" id="listing-94"><code>Chapter04$ ./04_frozenlake_nonslippery.py 
+2: loss=1.436, rw_mean=0.010, rw_bound=0.000, batch=1 
+3: loss=1.410, rw_mean=0.010, rw_bound=0.000, batch=2 
+4: loss=1.391, rw_mean=0.050, rw_bound=0.000, batch=7 
+5: loss=1.379, rw_mean=0.020, rw_bound=0.000, batch=9 
+6: loss=1.375, rw_mean=0.010, rw_bound=0.000, batch=10 
+7: loss=1.367, rw_mean=0.040, rw_bound=0.000, batch=14 
+8: loss=1.361, rw_mean=0.000, rw_bound=0.000, batch=14 
+9: loss=1.356, rw_mean=0.010, rw_bound=0.000, batch=15 
+... 
+134: loss=0.308, rw_mean=0.730, rw_bound=0.478, batch=93 
+136: loss=0.440, rw_mean=0.710, rw_bound=0.304, batch=70 
+137: loss=0.298, rw_mean=0.720, rw_bound=0.478, batch=106 
+139: loss=0.337, rw_mean=0.790, rw_bound=0.430, batch=65 
+140: loss=0.295, rw_mean=0.720, rw_bound=0.478, batch=99 
+142: loss=0.433, rw_mean=0.670, rw_bound=0.000, batch=67 
+143: loss=0.287, rw_mean=0.820, rw_bound=0.478, batch=114 
+Solved!</code></pre>
+<p>This is also evident from the following graphs:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_04_13.png" width="600"/> <span id="x1-78085r13"/></p>
+<span class="id">Figure 4.13: Mean reward (left) and loss (right) of the nonslippery version </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="200" src="../Images/B22150_04_14.png" width="300"/> <span id="x1-78086r14"/></p>
+<span class="id">Figure 4.14: The reward boundary of the nonslippery version </span>
+</div>
+</section>
+<section class="level3 sectionHead" id="the-theoretical-background-of-the-cross-entropy-method">
+<h1 class="heading-1" id="sigil_toc_id_70"> <span id="x1-790004.5"/>The theoretical background of the cross-entropy method</h1>
+<div class="tcolorbox infobox" id="tcolobox-73">
+<div class="tcolorbox-content">
+<p>This section is optional and is included for readers who want to understand why the method works. If you wish, you can refer to the original paper by <span class="cmti-10x-x-109">Kroese</span>, titled <span class="cmti-10x-x-109">Cross-entropy method</span>, [<span id="x1-79001"/><a href="#">Kro+11</a>].</p>
+</div>
+</div>
+<p>The basis of the <span id="dx1-79002"/>cross-entropy method lies in the importance sampling theorem, which states this:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq4.png" width="546"/>
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq5.png" width="224"/>
+</div>
+<p>In our RL case, <span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">x</span>) is a reward value obtained by some policy <span class="cmmi-10x-x-109">x</span>, and <span class="cmmi-10x-x-109">p</span>(<span class="cmmi-10x-x-109">x</span>) is a distribution of all possible policies. We don’t want to maximize our reward by searching all possible policies; instead, we want to find a way to approximate <span class="cmmi-10x-x-109">p</span>(<span class="cmmi-10x-x-109">x</span>)<span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">x</span>) by <span class="cmmi-10x-x-109">q</span>(<span class="cmmi-10x-x-109">x</span>), iteratively minimizing the distance between them. The distance between two probability distributions is calculated by <span class="cmbx-10x-x-109">Kullback-Leibler (KL) </span>divergence, which is as follows:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="55" src="../Images/eq6.png" width="376"/>
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="25" src="../Images/eq7.png" width="409"/>
+</div>
+<p>The first term in KL is called entropy and it doesn’t depend on <span class="cmmi-10x-x-109">p</span><sub><span class="cmr-8">2</span></sub>(<span class="cmmi-10x-x-109">x</span>), so it could be omitted during the minimization. The second term is called <span class="cmbx-10x-x-109">cross-entropy</span>, which is a very common optimization objective in deep learning.</p>
+<p>Combining both formulas, we can get an iterative algorithm, which starts with <span class="cmmi-10x-x-109">q</span><sub><span class="cmr-8">0</span></sub>(<span class="cmmi-10x-x-109">x</span>) = <span class="cmmi-10x-x-109">p</span>(<span class="cmmi-10x-x-109">x</span>) and on every step improves. This is an approximation of <span class="cmmi-10x-x-109">p</span>(<span class="cmmi-10x-x-109">x</span>)<span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">x</span>) with an update:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="106" src="../Images/eq78.png" width="767"/>
+</div>
+<p>This is a generic cross-entropy method that can be significantly simplified in our RL case. We replace our <span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">x</span>) with an indicator function, which is 1 when the reward for the episode is above the threshold and 0 when the reward is below. Our policy update will look like this:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="79" src="../Images/eq79.png" width="834"/>
+</div>
+<p>Strictly <span id="dx1-79003"/>speaking, the preceding formula misses the normalization term, but it still works in practice without it. So, the method is quite clear: we sample episodes using our current policy (starting with some random initial policy) and minimize the negative log likelihood of the most successful samples and our policy.</p>
+<div class="tcolorbox tipbox" id="tcolobox-74">
+<div class="tcolorbox-content">
+<p>If you are interested, refer to the book written by Reuven Rubinstein and Dirk P. Kroese [<span id="x1-79004"/><a href="#">RK04</a>] that is dedicated to this method. A shorter description can be found in the <span class="cmti-10x-x-109">Cross-entropy</span> <span class="cmti-10x-x-109">method </span>paper ([<span id="x1-79005"/><a href="#">Kro+11</a>]).</p>
+</div>
+</div>
+</section>
+<section class="level3 sectionHead" id="summary-3">
+<h1 class="heading-1" id="sigil_toc_id_71"> <span id="x1-800004.6"/>Summary</h1>
+<p>In this chapter, you became familiar with the cross-entropy method, which is simple but quite powerful, despite its limitations. We applied it to a CartPole environment (with huge success) and to FrozenLake (with much more modest success). In addition, we discussed the taxonomy of RL methods, which will be referenced many times during the rest of the book, as different approaches to RL problems have different properties, which influences their applicability.</p>
+<p>This chapter ends the introductory part of the book. In the next part, we will switch to a more systematic study of RL methods and discuss the value-based family of methods. In upcoming chapters, we will explore more complex, but more powerful, tools of deep RL.</p>
+</section>
+<section class="level3 likesectionHead" id="join-our-community-on-discord-2">
+<h1 class="heading-1" id="sigil_toc_id_72"><span id="x1-81000"/>Join our community on Discord</h1>
+<p>Read this book alongside other users, Deep Learning experts, and the author himself. Ask questions, provide solutions to other readers, chat with the author via Ask Me Anything sessions, and much more. Scan the QR code or visit the link to join the community. <a class="url" href="https://packt.link/rl"><span class="cmtt-10x-x-109">https://packt.link/rl</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file1.png" width="85"/></p>
+</section>
+</section>
+</div>
+
+<div id="sbo-rt-content"><h1 class="partNumber" style="padding-top:280px;">Part 2</h1>
+<h1 class="partTitle" id="sigil_toc_id_427">Value-based methods</h1>
+</div></body></html>

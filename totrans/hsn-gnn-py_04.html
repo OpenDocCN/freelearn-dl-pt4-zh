@@ -1,0 +1,335 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><div id="_idContainer196">
+<h1 class="chapter-number" id="_idParaDest-51"><a id="_idTextAnchor054"/>4</h1>
+<h1 id="_idParaDest-52"><a id="_idTextAnchor055"/>Improving Embeddings with Biased Random Walks in Node2Vec</h1>
+<p><strong class="bold">Node2Vec</strong> is <a id="_idIndexMarker198"/><a id="_idIndexMarker199"/>an architecture largely based on DeepWalk. In the previous chapter, we saw the two main components of this architecture: random walks and Word2Vec. How can we improve the quality of our embeddings? Interestingly enough, not with more machine learning. Instead, Node2Vec brings critical modifications to the way random walks themselves <span class="No-Break">are generated.</span></p>
+<p>In this chapter, we will talk about these modifications and how to find the best parameters for a given graph. We will implement the Node2Vec architecture and compare it to using DeepWalk on Zachary’s Karate Club. This will give you a good understanding of the differences between the two architectures. Finally, we will use this technology to build a real application: a movie <strong class="bold">recommender system</strong> (<strong class="bold">RecSys</strong>) powered <span class="No-Break">by Node2Vec.</span></p>
+<p>By the end of this chapter, you will know how to implement Node2Vec on any graph dataset and how to select good parameters. You will understand why this architecture works better than DeepWalk in general, and how to apply it to build <span class="No-Break">creative applications.</span></p>
+<p>In this chapter, we’ll cover the <span class="No-Break">following topics:</span></p>
+<ul>
+<li><span class="No-Break">Introducing Node2Vec</span></li>
+<li><span class="No-Break">Implementing Node2Vec</span></li>
+<li>Building a <span class="No-Break">movie RecSys</span></li>
+</ul>
+<h1 id="_idParaDest-53"><a id="_idTextAnchor056"/>Technical requirements</h1>
+<p>All the code examples from this chapter can be found on GitHub <span class="No-Break">at </span><a href="https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter04"><span class="No-Break">https://github.com/PacktPublishing/Hands-On-Graph-Neural-Networks-Using-Python/tree/main/Chapter04</span></a><span class="No-Break">.</span></p>
+<p>Installation steps required to run the code on your local machine can be found in the <em class="italic">Preface</em> of <span class="No-Break">this book.</span></p>
+<h1 id="_idParaDest-54"><a id="_idTextAnchor057"/>Introducing Node2Vec</h1>
+<p>Node2Vec was <a id="_idIndexMarker200"/><a id="_idIndexMarker201"/>introduced in 2016 by Grover and Leskovec from Stanford University [1]. It keeps the same two main components from DeepWalk: random walks and Word2Vec. The difference is that instead of obtaining sequences of nodes with a uniform distribution, the random walks are carefully biased in Node2Vec. We will see why these <strong class="bold">biased random walks</strong> perform better and how to implement them in the two <span class="No-Break">following sections:</span></p>
+<ul>
+<li>Defining <span class="No-Break">a </span><span class="No-Break"><strong class="bold">neighborhood</strong></span></li>
+<li>Introducing biases in <span class="No-Break">random walks</span></li>
+</ul>
+<p>Let’s start by questioning our intuitive concept <span class="No-Break">of neighborhoods.</span></p>
+<h2 id="_idParaDest-55"><a id="_idTextAnchor058"/>Defining a neighborhood</h2>
+<p>How do you define the neighborhood <a id="_idIndexMarker202"/><a id="_idIndexMarker203"/>of a node? The key concept introduced in Node2Vec is the flexible notion of a neighborhood. Intuitively, we think of it as something close to the initial node, but what does “close” mean in the context of a graph? Let’s take the following graph as <span class="No-Break">an example:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer121">
+<img alt="Figure 4.1 – Example of a random graph" height="625" src="image/B19153_04_001.jpg" width="1320"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 4.1 – Example of a random graph</p>
+<p>We want to explore three nodes in the neighborhood of node <strong class="bold">A</strong>. This exploration <a id="_idIndexMarker204"/><a id="_idIndexMarker205"/>process is also called a <span class="No-Break"><strong class="bold">sampling strategy</strong></span><span class="No-Break">:</span></p>
+<ul>
+<li>A possible <a id="_idIndexMarker206"/><a id="_idIndexMarker207"/>solution would be to consider the three closest nodes in terms of connections. In this case, the neighborhood of <img alt="" height="32" src="image/Formula_B19153_04_001.png" width="30"/>, noted <img alt="" height="44" src="image/Formula_B19153_04_002.png" width="92"/>, would <span class="No-Break">be <img alt="" height="50" src="image/Formula_B19153_04_003.png" width="319"/>:</span></li>
+<li>Another possible sampling strategy consists of selecting nodes that are not adjacent to previous nodes first. In our example, the neighborhood of <img alt="" height="33" src="image/Formula_B19153_04_004.png" width="31"/> would <span class="No-Break">be <img alt="" height="47" src="image/Formula_B19153_04_005.png" width="313"/>:</span></li>
+</ul>
+<p>In other words, we want <a id="_idIndexMarker208"/><a id="_idIndexMarker209"/>to implement a <strong class="bold">Breadth-First Search</strong> (<strong class="bold">BFS</strong>) in the first case and a <strong class="bold">Depth-First Search</strong> (<strong class="bold">DFS</strong>) in the second <a id="_idIndexMarker210"/><a id="_idIndexMarker211"/>one. You can find more information about these algorithms and implementations in <a href="B19153_02.xhtml#_idTextAnchor023"><span class="No-Break"><em class="italic">Chapter 2</em></span></a><em class="italic">, Graph Theory for Graph </em><span class="No-Break"><em class="italic">Neural Networks.</em></span></p>
+<p>What is important to notice here is that these sampling strategies have opposite behaviors: BFS focuses on the local network around a node while DFS establishes a more macro view of the graph. Considering our intuitive definition of a neighborhood, it is tempting to simply discard DFS. However, Node2Vec’s authors argue that this would be a mistake: each approach captures a different but valuable representation of <span class="No-Break">the network.</span></p>
+<p>They make a connection between these algorithms and two <span class="No-Break">network properties:</span></p>
+<ul>
+<li><strong class="bold">Structural equivalence</strong>, which means that nodes <a id="_idIndexMarker212"/><a id="_idIndexMarker213"/>are structurally equivalent if they share many of the same neighbors. So, if they share many neighbors, their structural equivalence <span class="No-Break">is higher.</span></li>
+<li><strong class="bold">Homophily</strong>, as seen previously, states that similar nodes <a id="_idIndexMarker214"/><a id="_idIndexMarker215"/>are more likely to <span class="No-Break">be connected.</span></li>
+</ul>
+<p>They argue that BFS is ideal to emphasize structural equivalence since this strategy only looks at neighboring nodes. In these random walks, nodes are often repeated and stay close to each other. DFS, on the other hand, emphasizes the opposite of homophily by creating sequences of distant nodes. These random walks can sample nodes that are far from the source and thus become less representative. This is why we’re looking for a trade-off between these two properties: homophily may be more helpful for understanding certain graphs<a id="_idIndexMarker216"/><a id="_idIndexMarker217"/> and <span class="No-Break">vice versa.</span></p>
+<p>If you’re confused about this connection, you’re not alone: several papers and blogs wrongly assume that BFS emphasizes homophily and DFS is connected to structural equivalence. In any case, we consider graphs that combine homophily and structural equivalence to be the desired solution. This is why, regardless of these connections, we want to use both sampling strategies to create <span class="No-Break">our dataset.</span></p>
+<p>Let’s see how we can implement them to generate <span class="No-Break">random walks.</span></p>
+<h2 id="_idParaDest-56"><a id="_idTextAnchor059"/>Introducing biases in random walks</h2>
+<p>As a reminder, random walks are sequences<a id="_idIndexMarker218"/><a id="_idIndexMarker219"/> of nodes that are randomly selected in a graph. They have a starting point, which can also be random, and a predefined length. Nodes that often appear together in these walks are like words that appear together in sentences: under the homophily hypothesis, they share a similar meaning, hence a <span class="No-Break">similar representation.</span></p>
+<p>In Node2Vec, our goal is to bias the randomness of these walks to either one of <span class="No-Break">the following:</span></p>
+<ul>
+<li>Promoting nodes that are not connected to the previous one (similar <span class="No-Break">to DFS)</span></li>
+<li>Promoting nodes that are close to the previous<a id="_idIndexMarker220"/><a id="_idIndexMarker221"/> one (similar <span class="No-Break">to BFS)</span></li>
+</ul>
+<p>Let’s take <span class="No-Break"><em class="italic">Figure 4</em></span><em class="italic">.2</em> as an example. The current<a id="_idIndexMarker222"/><a id="_idIndexMarker223"/> node is called <img alt="" height="40" src="image/Formula_B19153_04_006.png" width="21"/>, the previous node is <img alt="" height="31" src="image/Formula_B19153_04_007.png" width="15"/>, and the future node is <img alt="" height="32" src="image/Formula_B19153_04_008.png" width="23"/>. We note <img alt="" height="40" src="image/Formula_B19153_04_009.png" width="57"/>, the unnormalized transition probability from node <img alt="" height="40" src="image/Formula_B19153_04_006.png" width="21"/> to node <img alt="" height="32" src="image/Formula_B19153_04_011.png" width="23"/>. This probability can be decomposed as <img alt="" height="52" src="image/Formula_B19153_04_012.png" width="315"/> , where <img alt="" height="40" src="image/Formula_B19153_04_013.png" width="105"/> is the <strong class="bold">search bias</strong> between nodes <img alt="" height="35" src="image/Formula_B19153_04_0071.png" width="17"/> and <img alt="" height="32" src="image/Formula_B19153_04_011.png" width="23"/>and <img alt="" height="41" src="image/Formula_B19153_04_016.png" width="62"/> is the weight of the edge from <img alt="" height="40" src="image/Formula_B19153_04_006.png" width="21"/> <span class="No-Break">to <img alt="" height="32" src="image/Formula_B19153_04_011.png" width="23"/>.</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer140">
+<img alt="Figure 4.2 – Example of a random graph" height="552" src="image/B19153_04_002.jpg" width="1044"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 4.2 – Example of a random graph</p>
+<p>In DeepWalk, we have <img alt="" height="42" src="image/Formula_B19153_04_019.png" width="185"/> for any pair of nodes <img alt="" height="25" src="image/Formula_B19153_04_020.png" width="25"/> and <img alt="" height="33" src="image/Formula_B19153_04_021.png" width="23"/>. In Node2Vec, the value of <img alt="" height="44" src="image/Formula_B19153_04_022.png" width="123"/> is defined based on the distance<a id="_idIndexMarker224"/><a id="_idIndexMarker225"/> between the nodes and two additional parameters: <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/>, the return parameter, and <img alt="" height="32" src="image/Formula_B19153_04_024.png" width="22"/>, the in-out parameter. Their role is to approximate DFS and <span class="No-Break">BFS, respectively.</span></p>
+<p>Here is how the value of <img alt="" height="41" src="image/Formula_B19153_04_025.png" width="117"/> <span class="No-Break">is defined:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer148">
+<img alt="" height="261" src="image/Formula_B19153_04_026.jpg" width="424"/>
+</div>
+</div>
+<p>Here, <img alt="" height="45" src="image/Formula_B19153_04_027.png" width="60"/> is the shortest path distance between nodes <img alt="" height="23" src="image/Formula_B19153_04_028.png" width="24"/> and <img alt="" height="33" src="image/Formula_B19153_04_021.png" width="23"/>. We can update the unnormalized transition probability from the previous graph <span class="No-Break">as follows:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer152">
+<img alt="Figure 4.3 – Graph with transition probabilities" height="563" src="image/B19153_04_003.jpg" width="1065"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 4.3 – Graph with transition probabilities</p>
+<p>Let’s decrypt <span class="No-Break">these probabilities:</span></p>
+<ul>
+<li>The walk starts from<a id="_idIndexMarker226"/><a id="_idIndexMarker227"/> node <img alt="" height="31" src="image/Formula_B19153_04_007.png" width="15"/> and now arrives<a id="_idIndexMarker228"/><a id="_idIndexMarker229"/> at node <img alt="" height="40" src="image/Formula_B19153_04_006.png" width="21"/>. The probability of going back to the previous node <img alt="" height="31" src="image/Formula_B19153_04_007.png" width="15"/> is controlled by the parameter <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/>. The higher it is, the more the random walk will explore new nodes instead of repeating the same ones and looking <span class="No-Break">like DFS.</span></li>
+<li>The unnormalized probability of going to <img alt="" height="42" src="image/Formula_B19153_04_032.png" width="39"/> is <img alt="" height="35" src="image/Formula_B19153_04_033.png" width="23"/> because this node is in the immediate neighborhood of our previous <span class="No-Break">node, <img alt="" height="35" src="image/Formula_B19153_04_0071.png" width="17"/>.</span></li>
+<li>Finally, the probability of going to node <img alt="" height="44" src="image/Formula_B19153_04_035.png" width="40"/> is controlled by the parameter <img alt="" height="34" src="image/Formula_B19153_04_036.png" width="23"/>. The higher it is, the more the random walk will focus on nodes that are close to the previous one and look <span class="No-Break">like BFS.</span></li>
+</ul>
+<p>The best way to understand this is to actually implement this architecture and play with the parameters. Let’s do it step by step on Zachary’s Karate Club (a graph from the previous chapter), as shown in <span class="No-Break"><em class="italic">Figure 4</em></span><span class="No-Break"><em class="italic">.4</em></span><span class="No-Break">:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer162">
+<img alt="Figure 4.4 – Zachary’s Karate Club" height="917" src="image/B19153_04_004.jpg" width="1342"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 4.4 – Zachary’s Karate Club</p>
+<p>Note that it is an unweighted<a id="_idIndexMarker230"/><a id="_idIndexMarker231"/> network, which is why the transition probability is only determined by the <span class="No-Break">search bias.</span></p>
+<p>First, we want to create a function that will randomly select the next node in a graph based on the previous node, the current node, and the two parameters <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> <span class="No-Break">and <img alt="" height="32" src="image/Formula_B19153_04_024.png" width="22"/>.</span></p>
+<ol>
+<li>We start by importing the required libraries: <strong class="source-inline">networkx</strong>, <strong class="source-inline">random</strong>, <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">numpy</strong></span><span class="No-Break">:</span><pre class="source-code">
+import networkx as nx
+import random
+random.seed(0)
+import numpy as np
+np.random.seed(0)
+G = nx.erdos_renyi_graph(10, 0.3, seed=1, directed=False)</pre></li>
+<li>We defined the <strong class="source-inline">next_node</strong> function with the list of <span class="No-Break">our parameters:</span><pre class="source-code">
+def next_node(previous, current, p, q):</pre></li>
+<li>We retrieve the list of neighboring nodes from the current node and initialize a list of <span class="No-Break">alpha values:</span><pre class="source-code">
+        neighbors = list(G.neighbors(current))
+        alphas = []</pre></li>
+<li>For each neighbor, we want to calculate the appropriate alpha value: <img alt="" height="45" src="image/Formula_B19153_04_039.png" width="65"/> if this neighbor is the previous node, <img alt="" height="35" src="image/Formula_B19153_04_033.png" width="23"/> if this neighbor is connected to the previous node, and <img alt="" height="45" src="image/Formula_B19153_04_041.png" width="66"/> <span class="No-Break">otherwise:</span><pre class="source-code">
+    for neighbor in neighbors:
+        if neighbor == previous:
+            alpha = 1/p
+        elif G.has_edge(neighbor, previous):
+            alpha = 1
+        else:
+            alpha = 1/q
+        alphas.append(alpha)</pre></li>
+<li>We normalize these values to <span class="No-Break">create probabilities:</span><pre class="source-code">
+probs = [alpha / sum(alphas) for alpha in alphas]</pre></li>
+<li>We randomly select the next node based on the transition probabilities calculated in the previous step using <strong class="source-inline">np.random.choice()</strong> and <span class="No-Break">return it:</span><pre class="source-code">
+    next = np.random.choice(neighbors, size=1, p=probs)[0]
+    return next</pre></li>
+</ol>
+<p>Before this function can be tested, we need the code to generate the entire <span class="No-Break">random walk.</span></p>
+<p>The way we generate these random<a id="_idIndexMarker232"/><a id="_idIndexMarker233"/> walks is similar to what we saw in the previous chapter. The difference is that the next node is chosen by the <strong class="source-inline">next_node()</strong> function, which requires additional parameters: <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="37" src="image/Formula_B19153_04_0241.png" width="26"/>, but also the previous and current nodes. These nodes can easily be obtained by looking at the two last elements added to the <strong class="source-inline">walk</strong> variable. We also return strings instead of integers for <span class="No-Break">compatibility reasons.</span></p>
+<p>Here is the new version of the <span class="No-Break"><strong class="source-inline">random_walk()</strong></span><span class="No-Break"> function:</span></p>
+<pre class="source-code">
+def random_walk(start, length, p, q):
+    walk = [start]
+    for i in range(length):
+        current = walk[-1]
+        previous = walk[-2] if len(walk) &gt; 1 else None
+        next = next_node(previous, current, p, q)
+        walk.append(next)
+    return [str(x) for x in walk]</pre>
+<p>We now have every element to generate our random walks. Let’s try one with a length of 5, <img alt="" height="41" src="image/Formula_B19153_04_044.png" width="99"/>, <span class="No-Break">and <img alt="" height="44" src="image/Formula_B19153_04_045.png" width="105"/>:</span></p>
+<pre class="source-code">
+random_walk(0, 8, p=1, q=1)</pre>
+<p>This function returns the <span class="No-Break">following sequence:</span></p>
+<pre class="source-code">
+[0, 4, 7, 6, 4, 5, 4, 5, 6]</pre>
+<p>This should be random since every neighboring node has the same transition probability. With these parameters, we reproduce the exact <span class="No-Break">DeepWalk algorithm.</span></p>
+<p>Now, let’s bias them toward going back to the previous node <span class="No-Break">with <img alt="" height="40" src="image/Formula_B19153_04_046.png" width="138"/>:</span></p>
+<pre class="source-code">
+random_walk(0, 8, p=1, q=10)</pre>
+<p>This function returns the <span class="No-Break">following sequence:</span></p>
+<pre class="source-code">
+[0, 9, 1, 9, 1, 9, 1, 0, 1]</pre>
+<p>This time, the random walk explores more nodes in the graph. You can see that it never goes back to the previous node because the probability is low <span class="No-Break">with <img alt="" height="42" src="image/Formula_B19153_04_047.png" width="124"/>:</span></p>
+<pre class="source-code">
+random_walk(0, 8, p=10, q=1)</pre>
+<p>This function<a id="_idIndexMarker234"/><a id="_idIndexMarker235"/> returns the <span class="No-Break">following sequence:</span></p>
+<pre class="source-code">
+<strong class="bold">[0, 1, 9, 4, 7, 8, 7, 4, 6]</strong></pre>
+<p>Let’s see how to use these properties in a real example and compare it <span class="No-Break">to DeepWalk.</span></p>
+<h1 id="_idParaDest-57"><a id="_idTextAnchor060"/>Implementing Node2Vec</h1>
+<p>Now that we have the functions<a id="_idIndexMarker236"/><a id="_idIndexMarker237"/> to generate biased random walks, the implementation of Node2Vec is very similar to implementing DeepWalk. It is so similar that we can reuse the same code and create sequences with <img alt="" height="44" src="image/Formula_B19153_04_048.png" width="105"/> and <img alt="" height="42" src="image/Formula_B19153_04_049.png" width="100"/> to implement DeepWalk as a special case of Node2Vec. Let’s reuse Zachary’s Karate Club for <span class="No-Break">this task:</span></p>
+<p>As in the previous chapter, our goal is to correctly classify each member of the club as part of one of the two groups (“Mr. Hi” and “Officer”). We will use the node embeddings provided by Node2Vec as input to a machine learning classifier (Random Forest in <span class="No-Break">this case).</span></p>
+<p>Let’s see how to implement it step <span class="No-Break">by step:</span></p>
+<ol>
+<li>First, we want to install the <strong class="source-inline">gensim</strong> library to use Word2Vec. This time, we will use version 3.8.0 for <span class="No-Break">compatibility reasons:</span><pre class="source-code">
+!pip install -qI gensim==3.8.0</pre></li>
+<li>We import the <span class="No-Break">required libraries:</span><pre class="source-code">
+from gensim.models.word2vec import Word2Vec
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score</pre></li>
+<li>We load the dataset (Zachary’s <span class="No-Break">Karate Club):</span><pre class="source-code">
+G = nx.karate_club_graph()</pre></li>
+<li>We transform the nodes’ labels into numerical values (<strong class="source-inline">0</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">):</span><pre class="source-code">
+labels = []
+for node in G.nodes:
+    label = G.nodes[node]['club']
+    labels.append(1 if label == 'Officer' else 0)</pre></li>
+<li>We generate a list of random walks as seen previously using our <strong class="source-inline">random_walk()</strong> function 80 times for each node in the graph. The parameters <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="37" src="image/Formula_B19153_04_0241.png" width="26"/> as specified here (2 and <span class="No-Break">1, respectively):</span><pre class="source-code">
+walks = []
+for node in G.nodes:
+    for _ in range(80):
+        walks.append(random_walk(node, 10, 3, 2))</pre></li>
+<li>We create an instance<a id="_idIndexMarker238"/><a id="_idIndexMarker239"/> of Word2Vec (a skip-gram model) with a hierarchical <span class="No-Break"><strong class="source-inline">softmax</strong></span><span class="No-Break"> function:</span><pre class="source-code">
+node2vec = Word2Vec(walks,
+                hs=1,   # Hierarchical softmax
+                sg=1,   # Skip-gram
+                vector_size=100,
+                window=10,
+                workers=2,
+                min_count=1,
+                seed=0)</pre></li>
+<li>The skip-gram model is trained on the sequences we generated for <span class="No-Break"><strong class="source-inline">30</strong></span><span class="No-Break"> epochs:</span><pre class="source-code">
+node2vec.train(walks, total_examples=node2vec.corpus_count, epochs=30, report_delay=1)</pre></li>
+<li>We create masks to train and test <span class="No-Break">the classifier:</span><pre class="source-code">
+train_mask = [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
+train_mask_str = [str(x) for x in train_mask]
+test_mask = [0, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 33]
+test_mask_str = [str(x) for x in test_mask]
+labels = np.array(labels)</pre></li>
+<li>The Random Forest classifier is trained on the <span class="No-Break">training data:</span><pre class="source-code">
+clf = RandomForestClassifier(random_state=0)
+clf.fit(node2vec.wv[train_mask_str], labels[train_mask])</pre></li>
+<li>We evaluate it in terms of accuracy for the <span class="No-Break">test data:</span><pre class="source-code">
+y_pred = clf.predict(node2vec.wv[test_mask_str])
+acc = accuracy_score(y_pred, labels[test_mask])
+print(f'Node2Vec accuracy = {acc*100:.2f}%')</pre></li>
+</ol>
+<p>To implement DeepWalk, we can repeat the exact same process with <img alt="" height="44" src="image/Formula_B19153_04_048.png" width="105"/> and <img alt="" height="42" src="image/Formula_B19153_04_049.png" width="100"/>. However, to make a fair comparison, we cannot use a single accuracy score. Indeed, there are a lot of stochastic processes involved – we could be unlucky and get a better result from the <span class="No-Break">worst model.</span></p>
+<p>To limit the randomness <a id="_idIndexMarker240"/><a id="_idIndexMarker241"/>of our results, we can repeat this process 100 times and take the mean value. This result is a lot more stable and can even include the standard deviation (using <strong class="source-inline">np.std()</strong>) to measure the variability in the <span class="No-Break">accuracy scores.</span></p>
+<p>But just before we do that, let’s play a game. In the previous chapter, we talked about Zachary’s Karate Club as a homophilic network. This property is emphasized by DFS, which is encouraged by increasing the parameter <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/>. If this statement and the connection between DFS and homophily are true, we should get better results with higher values <span class="No-Break">of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/>.</span></p>
+<p>I repeated the same experiment for values of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="37" src="image/Formula_B19153_04_0241.png" width="26"/> between 1 and 7. In a real machine learning project, we would use validation data to perform this parameter search. In this example, we use the test data because this study is already our <span class="No-Break">final application.</span></p>
+<p>The following table summarizes <span class="No-Break">the results:</span></p>
+<div>
+<div class="IMG---Figure" id="_idContainer184">
+<img alt="Figure 4.5 – Average accuracy score and standard deviation for different values of p and q" height="903" src="image/B19153_04_005.jpg" width="1576"/>
+</div>
+</div>
+<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 4.5 – Average accuracy score and standard deviation for different values of p and q</p>
+<p>There are several <span class="No-Break">noticeable results:</span></p>
+<ul>
+<li>DeepWalk (<img alt="" height="44" src="image/Formula_B19153_04_048.png" width="105"/> and <img alt="" height="42" src="image/Formula_B19153_04_049.png" width="100"/>) performs worse than any other combination of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="37" src="image/Formula_B19153_04_0241.png" width="26"/> that is covered here. This is true for this dataset and shows how useful biased random walks can be. However, it is not always the case: non-biased random walks can also perform better on <span class="No-Break">other datasets.</span></li>
+<li>High values of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> lead to better performance, which validates our hypothesis. Knowing that this is a social network strongly suggests that biasing our random walks toward homophily is a good strategy. This is something to keep in mind when dealing with this kind <span class="No-Break">of graph.</span></li>
+</ul>
+<p>Feel free to play with the parameters and try to find <a id="_idIndexMarker242"/><a id="_idIndexMarker243"/>other interesting results. We could explore results with very high values of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> (<img alt="" height="29" src="image/Formula_B19153_04_064.png" width="57"/>) or, on the contrary, values of <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="33" src="image/Formula_B19153_04_0242.png" width="23"/> between 0 <span class="No-Break">and 1.</span></p>
+<p>Zachary’s Karate Club is a basic dataset, but we’ll see in the next section how we can use this technology to build much more <span class="No-Break">interesting applications.</span></p>
+<h1 id="_idParaDest-58"><a id="_idTextAnchor061"/>Building a movie RecSys</h1>
+<p>One of the most popular<a id="_idIndexMarker244"/><a id="_idIndexMarker245"/> applications of GNNs is RecSys. If you think about the foundation of Word2Vec (and, thus, DeepWalk and Node2Vec), the goal is to produce vectors with the ability to measure their similarity. Encode movies instead of words, and you can suddenly ask for movies that are the most similar to a given input title. It sounds a lot like a <span class="No-Break">RecSys, right?</span></p>
+<p>But how to encode movies? We want to create (biased) random walks of movies, but this requires a graph dataset where similar movies are connected to each other. This is not easy <span class="No-Break">to find.</span></p>
+<p>Another approach is to look at user ratings. There are different techniques to build a graph based on ratings: bipartite graphs, edges based on pointwise mutual information, and so on. In this section, we’ll implement a simple and intuitive approach: movies that are liked by the same users are connected. We’ll then use this graph to learn movie embeddings <span class="No-Break">using Node2Vec:</span></p>
+<ol>
+<li>First, let’s download a dataset. <strong class="source-inline">MovieLens</strong> [2] is a popular choice, with a small version of the latest dataset (09/2018) comprising 100,836 ratings, 9,742 movies, and 610 users. We can download it with the following <span class="No-Break">Python code:</span><pre class="source-code">
+from io import BytesIO
+from urllib.request import urlopen
+from zipfile import ZipFile
+url = 'https://files.grouplens.org/datasets/movielens/ml-100k.zip'
+with urlopen(url) as zurl:
+    with ZipFile(BytesIO(zurl.read())) as zfile:
+        zfile.extractall('.')</pre></li>
+<li>We are interested in two files: <strong class="source-inline">ratings.csv</strong> and <strong class="source-inline">movies.csv</strong>. The first one stores all the ratings made by users, and the second one allows us to translate movie identifiers <span class="No-Break">into titles.</span></li>
+<li>Let’s see what they look like by importing them with <strong class="source-inline">pandas</strong> <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pd.read_csv()</strong></span><span class="No-Break">:</span><pre class="source-code">
+import pandas as pd
+ratings = pd.read_csv('ml-100k/u.data', sep='\t', names=['user_id', 'movie_id', 'rating', 'unix_timestamp'])
+ratings</pre></li>
+<li>This gives us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">     user_id movie_id rating unix_timestamp</strong>
+<strong class="bold">0     196      242      3      881250949</strong>
+<strong class="bold">1     186      302      3      891717742</strong>
+<strong class="bold">2      22      377      1      878887116</strong>
+<strong class="bold">...    ...     ...     ...      ...</strong>
+<strong class="bold">99998  13      225      2      882399156</strong>
+<strong class="bold">99999  12      203      3      879959583</strong>
+<strong class="bold">100000 rows × 4 columns</strong></pre></li>
+<li>Let’s import <span class="No-Break"><strong class="source-inline">movies.csv</strong></span><span class="No-Break"> now:</span><pre class="source-code">
+movies = pd.read_csv('ml-100k/u.item', sep='|', usecols=range(2), names=['movie_id', 'title'], encoding='latin-1')</pre></li>
+<li>This dataset gives <a id="_idIndexMarker246"/><a id="_idIndexMarker247"/>us <span class="No-Break">this output:</span><pre class="source-code">
+movies
+<strong class="bold">     movie_id      title</strong>
+<strong class="bold">0      1      Toy Story (1995)</strong>
+<strong class="bold">1      2      GoldenEye (1995)</strong>
+<strong class="bold">2      3      Four Rooms (1995)</strong>
+<strong class="bold">...      ...      ...</strong>
+<strong class="bold">1680      1681      You So Crazy (1994)</strong>
+<strong class="bold">1681      1682      Scream of Stone (Schrei aus Stein) (1991)</strong>
+<strong class="bold">1682 rows × 2 columns</strong></pre></li>
+<li>Here, we want to see movies that have been liked by the same users. This means that ratings such as 1, 2, and 3 are not very relevant. We can discard those and only keep scores of 4 <span class="No-Break">and 5:</span><pre class="source-code">
+ratings = ratings[ratings.rating &gt;= 4]
+ratings</pre></li>
+<li>This gives <a id="_idIndexMarker248"/><a id="_idIndexMarker249"/>us the <span class="No-Break">following output:</span><pre class="source-code">
+<strong class="bold">     user_id   movie_id    rating      unix_timestamp</strong>
+<strong class="bold">5      298      474      4      884182806</strong>
+<strong class="bold">7      253      465      5      891628467</strong>
+<strong class="bold">11     286      1014     5      879781125</strong>
+<strong class="bold">...      ...      ...      ...      ...</strong>
+<strong class="bold">99991      676      538      4      892685437</strong>
+<strong class="bold">99996      716      204      5      879795543</strong>
+<strong class="bold">55375 rows × 4 columns</strong></pre></li>
+<li>We now have 48,580 ratings made by 610 users. The next step is to count every time that two movies are liked by the same user. We will repeat this process for every user in <span class="No-Break">the dataset.</span></li>
+<li>To simplify things, we will use a <strong class="source-inline">defaultdict</strong> data structure, which automatically creates missing entries instead of raising an error. We’ll use this structure to count movies that are <span class="No-Break">liked together:</span><pre class="source-code">
+from collections import defaultdict
+pairs = defaultdict(int)</pre></li>
+<li>We loop through the entire list of users in <span class="No-Break">our dataset:</span><pre class="source-code">
+for group in ratings.groupby("userId"):</pre></li>
+<li>We retrieve the list of movies that have been liked by the <span class="No-Break">current user:</span><pre class="source-code">
+user_movies = list(group[1]["movieId"])</pre></li>
+<li>We increment a counter specific to a pair of movies every time they are seen together in the <span class="No-Break">same list:</span><pre class="source-code">
+for i in range(len(user_movies)):
+            for j in range(i+1, len(user_movies)):
+                pairs[(user_movies[i], user_movies[j])] += 1</pre></li>
+<li>The <strong class="source-inline">pairs</strong> object now stores the number of times two movies have been liked by the same user. We can use this information to build the edges of our graph <span class="No-Break">as follows.</span></li>
+<li>We create a graph using the <span class="No-Break"><strong class="source-inline">networkx</strong></span><span class="No-Break"> library:</span><pre class="source-code">
+G = nx.Graph()</pre></li>
+<li>For each pair of movies in our <strong class="source-inline">pairs</strong> structure, we unpack the two movies and their <span class="No-Break">corresponding score:</span><pre class="source-code">
+for pair in pairs:
+    movie1, movie2 = pair
+    score = pairs[pair]</pre></li>
+<li>If this score is higher than 10, we add a weighted link to the graph to connect both movies based on this score. We don’t consider scores lower than 10 because that would create a large graph in which connections were <span class="No-Break">less meaningful:</span><pre class="source-code">
+if score &gt;= 20:
+    G.add_edge(movie1, movie2, weight=score)</pre></li>
+<li>The graph we created <a id="_idIndexMarker250"/><a id="_idIndexMarker251"/>has 410 nodes (movies) and 14,936 edges. We can now train Node2Vec on it to learn the <span class="No-Break">node embeddings!</span></li>
+</ol>
+<p>We could reuse our implementation from the previous section, but there is actually an entire Python library dedicated to Node2Vec (also called <strong class="source-inline">node2vec</strong>). Let’s try it in <span class="No-Break">this example:</span></p>
+<ol>
+<li>We install the <strong class="source-inline">node2vec</strong> library and import the <span class="No-Break"><strong class="source-inline">Node2Vec</strong></span><span class="No-Break"> class:</span><pre class="source-code">
+!pip install node2vec
+from node2vec import Node2Vec</pre></li>
+<li>We create an instance of <strong class="source-inline">Node2Vec</strong> that will automatically generate biased random walks based on <img alt="" height="32" src="image/Formula_B19153_04_023.png" width="26"/> and <img alt="" height="37" src="image/Formula_B19153_04_0241.png" width="26"/> <span class="No-Break">parameters:</span><pre class="source-code">
+node2vec = Node2Vec(G, dimensions=64, walk_length=20, num_walks=200, p=2, q=1, workers=1)</pre></li>
+<li>We train a model on these biased random walks with a window of 10 (5 nodes before, 5 <span class="No-Break">nodes after):</span><pre class="source-code">
+model = node2vec.fit(window=10, min_count=1, 
+batch_words=4)</pre></li>
+</ol>
+<p>The Node2Vec model is trained and we can now use it the same way we use the Word2Vec object from the <strong class="source-inline">gensim</strong> library. Let’s create a function to recommend movies based on a <span class="No-Break">given title:</span></p>
+<ol>
+<li value="4">We create the <strong class="source-inline">recommend()</strong> function, which takes a movie title as input. It starts by converting the title into a movie ID we can use to query <span class="No-Break">our model:</span><pre class="source-code">
+def recommend(movie):
+    movie_id = str
+        movies.title == movie].movie_ id.values[0])</pre></li>
+<li>We loop through the five most similar word vectors. We convert these IDs into movie titles that we print with their corresponding <span class="No-Break">similarity scores:</span><pre class="source-code">
+    for id in model.wv.most_similar(movie_id)[:5]:
+        title = movies[movies.movie_id == int(id[0])].title.values[0]
+        print(f'{title}: {id[1]:.2f}')</pre></li>
+<li>We call this function to obtain the five movies that are the most similar to Star Wars in terms of <span class="No-Break">cosine similarity:</span><pre class="source-code">
+recommend('Star Wars (1977)')</pre></li>
+<li>We receive <a id="_idIndexMarker252"/><a id="_idIndexMarker253"/>the <span class="No-Break">following output:</span><pre class="source-code">
+Return of the Jedi (1983): 0.61
+Raiders of the Lost Ark (1981): 0.55
+Godfather, The (1972): 0.49
+Indiana Jones and the Last Crusade (1989): 0.46
+White Squall (1996): 0.44</pre></li>
+</ol>
+<p>The model tells us that <strong class="source-inline">Return of the Jedi</strong> and <strong class="source-inline">Raiders of the Lost Ark</strong> are the most similar to <strong class="source-inline">Star Wars</strong>, although with a relatively low score (&lt; 0.7). Nonetheless, this is a good result for our first step into the RecSys world! In later chapters, we’ll see more powerful models and approaches to building <span class="No-Break">state-of-the-art RecSys.</span></p>
+<h1 id="_idParaDest-59"><a id="_idTextAnchor062"/>Summary</h1>
+<p>In this chapter, we learned about Node2Vec, a second architecture based on the popular Word2Vec. We implemented functions to generate biased random walks and explained the connection between their parameters and two network properties: homophily and structural equivalence. We showed their usefulness by comparing Node2Vec’s results to DeepWalk’s for Zachary’s Karate Club. Finally, we built our first RecSys using a custom graph dataset and another implementation of Node2Vec. It gave us correct recommendations that we will improve even more in <span class="No-Break">later chapters.</span></p>
+<p>In <a href="B19153_05.xhtml#_idTextAnchor064"><span class="No-Break"><em class="italic">Chapter 5</em></span></a><em class="italic">, Including Node Features with Vanilla Neural Networks</em>, we will talk about one overlooked issue concerning DeepWalk and Node2Vec: the lack of proper node features. We will try to address this problem using traditional neural networks, which cannot understand the network topology. This dilemma is important to understand before we finally introduce the answer: graph <span class="No-Break">neural networks.</span></p>
+<h1 id="_idParaDest-60"><a id="_idTextAnchor063"/>Further reading</h1>
+<ul>
+<li>[1] A. Grover and J. Leskovec, <em class="italic">node2vec: Scalable Feature Learning for Networks</em>. arXiv, 2016. DOI: 10.48550/ARXIV.1607.00653. <span class="No-Break">Available: </span><a href="https://arxiv.org/abs/1607.00653"><span class="No-Break">https://arxiv.org/abs/1607.00653</span></a><span class="No-Break">.</span></li>
+<li>[2] F. Maxwell Harper and Joseph A. Konstan. 2015. <em class="italic">The MovieLens Datasets: History and Context. ACM Transactions on Interactive Intelligent Systems (TiiS)</em> 5, 4: 19:1–19:19. <a href="https://doi.org/10.1145/2827872">https://doi.org/10.1145/2827872</a>. <span class="No-Break">Available: </span><a href="https://dl.acm.org/doi/10.1145/2827872"><span class="No-Break">https://dl.acm.org/doi/10.1145/2827872</span></a><span class="No-Break">.</span></li>
+</ul>
+</div>
+<div>
+<div class="IMG---Figure" id="_idContainer197">
+</div>
+</div>
+</div></body></html>

@@ -1,0 +1,1222 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Creating Models Using FastText Command Line</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">FastText has a powerful command line. In fact, you can call fastText a command-line-first library. Now, a lot of developers and researchers are not comfortable with the command line, and I would ask you to go through the examples in this chapter with greater attention. My hope is that by the end of this chapter, you will have some confidence in command-line file manipulations. The advantages of using the command line are as follows:</p>
+<ul class="calibre10">
+<li class="calibre11">Commands such as <kbd class="calibre12">cat</kbd>, <kbd class="calibre12">grep</kbd>, <kbd class="calibre12">sed</kbd>, and <kbd class="calibre12">awk</kbd> are quite old and their behavior is well-documented on the internet. Chances are high that, for any use case that you might have, you will easily get snippets on Stack Overflow/Google (or your colleague next door will know it).</li>
+<li class="calibre11">Since they are generally implemented in the C language, they are very fast.</li>
+<li class="calibre11">The commands are very crisp and concise, which means there is not a lot of code to write and maintain.</li>
+</ul>
+<p class="calibre2">We will take a look at how classification and word vector generation works in fastText. In this chapter, we will explore how to implement them using the command line:</p>
+<ul class="calibre10">
+<li class="calibre11">Text classification using fastText</li>
+<li class="calibre11">FastText word vectors</li>
+<li class="calibre11">Creating word vectors</li>
+<li class="calibre11">Facebook word vectors</li>
+<li class="calibre11">Using pretrained word vectors</li>
+</ul>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Text classification using fastText</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">To access the command line, open the Terminal on your Linux or macOS machines, or the command prompt (by typing <kbd class="calibre12">cmd</kbd> in Windows + <em class="calibre16">R</em> and hitting <em class="calibre16">Enter</em>) on Windows machines, and then type <kbd class="calibre12">fastText</kbd>. You should see some output coming out. If you are not seeing anything, or getting an error saying that the command not found, please take a look at the previous chapter on how to install fastText on your computer. <span class="calibre5">If you are able to see some output, the output is a basic description of all the options. A description of the command line options for fastText can be found in the</span> <em class="calibre16">Appendix</em> <span class="calibre5">of this book.</span></p>
+<div class="packt_infobox">All the methods and command line statements mentioned in this chapter will work on Linux and Mac machines. If you are a Windows user, focus more on the description and the logic of what is being done and follow the logic of the steps. A helpful guide on command line differences between Windows and Linux is mentioned in the <em class="calibre20">Appendix</em>.</div>
+<p class="calibre2">In fastText, there are two primary use cases for the command line. These are the following:</p>
+<ul class="calibre10">
+<li class="calibre11">Text classification</li>
+<li class="calibre11">Text representation</li>
+</ul>
+<p class="calibre2">One of the core areas of focus for fastText is text classification. Text classification is a technique in which we learn to which set of categories the input text belongs. This is basically a supervised machine learning problem, so first and foremost, you will need a dataset that contains text and the corresponding labels.</p>
+<p class="calibre2">Roughly speaking, machine learning algorithms run some kind of optimization problem on a set of matrices and vectors. They do not really understand "raw text," which means that you will need to set up a pipeline to convert the raw text into numbers. Here are the steps that can be followed to do that:</p>
+<ul class="calibre10">
+<li class="calibre11">First, you need the data and hence for text classification you need a series of texts or documents that will be labeled. You convert them into a series of text-label pairs.</li>
+<li class="calibre11">The next step is called <strong class="calibre1">tokenization</strong>. Tokenization <span><span>is the process of dividing the text into individual pieces or tokens. Tokenization is primarily done by understanding the word boundaries in the given text. Many languages in the world are space delimited. Examples of these are English and French. In some other cases, the word boundaries may not be clear, such as in the case of Mandarin, Tamil, and Urdu.</span></span></li>
+<li class="calibre11"><span>Once the tokenization is done, based on the process you may end up with a "bag of words," which is essentially a vector for the document/sentence telling you whether a specific word is there or not, and how many times.</span> <span>T</span>he columns in the matrix are all the set of words present, which is called the dictionary, and the rows are the count of the particular words in the document. This is called the <strong class="calibre1">bag</strong>-<strong class="calibre1">of</strong>-<strong class="calibre1">words</strong> approach.</li>
+<li class="calibre11">Convert the bag of words into a TF-IDF matrix to reduce the weight of the common terms. TF-IDF has been used so that the terms that are common in the document do not have too much impact on the resultant matrix.</li>
+<li class="calibre11">Now that you have the matrix, you can pass the matrix as input to a classification algorithm, which will essentially <em class="calibre21">train a model</em> on this input matrix. General algorithms that are quite popular in this stage are logistic regression, as well as algorithms such as XGBoost, random forest, and so on.</li>
+</ul>
+<p class="calibre2">Some of the additional steps that may need to be taken are the following:</p>
+<ul class="calibre10">
+<li class="calibre11">Removal of stop words.</li>
+<li class="calibre11">Stemming or a heurestic removal of end of words. This process works mostly in English and related languages due to the prevalence of derivational affixes.</li>
+<li class="calibre11">Addition of n-grams to the model.</li>
+<li class="calibre11">Synonymous sets.</li>
+<li class="calibre11">Part of speech tagging.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Text preprocessing</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Depending on the dataset, you may need to do some or all of these steps:</p>
+<ul class="calibre10">
+<li class="calibre11">Tokenize the text.</li>
+<li class="calibre11">Convert the text into lowercase. This is only required for languages using Latin, Greek, Cyrillic, and Armenian scripts. Examples of such languages are English, French, German, and so on.</li>
+<li class="calibre11">Strip empty lines and their correspondences.</li>
+<li class="calibre11">Remove lines with XML tags (starting with <kbd class="calibre12">&lt;</kbd>).</li>
+</ul>
+<p class="calibre2">These steps should be done in both cases, for sentence classification as well as the creation of word vectors.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">English text and text using other Roman alphabets</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We will understand text processing using a sample dataset. In this chapter, the Yelp dataset is used. This is a popular dataset containing text reviews and the ratings given by users. In this dataset, you will find information about businesses in 11 metropolitan areas in four countries. If you download the data from the Kaggle link <span class="calibre5">where it is shared</span><span class="calibre5">,</span> <a href="https://www.kaggle.com/yelp-dataset/yelp-dataset/data" class="calibre9">https://www.kaggle.com/yelp-dataset/yelp-dataset/data</a><span class="calibre5">, there are various files we will see, but in our case we will only be interested in the review text provided by users in the</span> <kbd class="calibre12">yelp_review.csv</kbd> <span class="calibre5">file. As a challenge, we will try to see whether we can correctly predict the ratings or not.</span></p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Downloading the data</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Since this information is related to a particular business, and in case you are interested in downloading and playing with the data, please take a look at these steps before downloading the data:</p>
+<ol class="calibre13">
+<li value="1" class="calibre11">Please review the Yelp dataset webpage.</li>
+<li value="2" class="calibre11">Please review, agree to, and respect Yelp's terms of use.</li>
+<li value="3" class="calibre11">Download <kbd class="calibre12">yelp_review.csv</kbd> from Kaggle. The link for that is here: <a href="https://www.kaggle.com/yelp-dataset/yelp-dataset/data" class="calibre9">https://www.kaggle.com/yelp-dataset/yelp-dataset/data</a>.</li>
+</ol>
+<p class="calibre2">This is the code:</p>
+<pre class="calibre17"><strong class="calibre1">$ mkdir -p data/yelp</strong><br class="title-page-name"/><strong class="calibre1">$ cd data/yelp</strong><br class="title-page-name"/><strong class="calibre1">$ mv ~/Downloads/yelp_review.csv.zip .</strong><br class="title-page-name"/><strong class="calibre1">$ unzip yelp_review.csv.zip</strong><br class="title-page-name"/><strong class="calibre1">Archive: yelp_review.csv.zip</strong><br class="title-page-name"/><strong class="calibre1"> inflating: yelp_review.csv</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Preprocessing the Yelp data</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Take a look at the data. Always take a deep look at the data. The first line contains the headers:</p>
+<pre class="calibre17"><strong class="calibre1">$ head -n1 yelp_review.csv</strong><br class="title-page-name"/><strong class="calibre1"> "review_id","user_id","business_id","stars","date","text","useful","funny","cool"</strong></pre>
+<p class="calibre2">When you check the other lines, you will see that all the individual values are quotes. Also, the text field has new lines in many places. Since the strength of fastText is in text processing, we will only be taking the "stars" and the "text" fields, and will try to predict the ratings based on what is written in the text field.</p>
+<p class="calibre2">You can use the following Python script to save the text and the ratings to another file, since the review text has a lot of new lines and we needed to remove the new lines from the text. You can keep them if you want and change the new line to another delimiter so that the file is fastText-compatible, but for our example we will remove the new lines from the text.</p>
+<p class="calibre2">Here is the Python code to get only the relevant parts of the <kbd class="calibre12">.csv</kbd>:</p>
+<pre class="calibre17">import csv<br class="title-page-name"/>import sys<br class="title-page-name"/>w = csv.writer(sys.stdout)<br class="title-page-name"/>for row in csv.DictReader(sys.stdin):<br class="title-page-name"/>    w.writerow([row['stars'], row['text'].replace('\n', '')])</pre>
+<p class="calibre2">Save this in a file named <kbd class="calibre12">parse_yelp_dataset.py</kbd> and then run the following command:</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/yelp/yelp_review.csv | \</strong><br class="title-page-name"/><strong class="calibre1"> python parse_yelp_dataset.py \<br class="title-page-name"/> &gt; data/yelp/yelp_review.v1.csv</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Text normalization</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this section, will take a look at some text normalization techniques that you can use.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Removing stop words</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The removal of stop words may or may not increase the performance of your model. So, keep two files, one with the stop words and one with the stop words stripped out. We will talk about how to check model performance in the <em class="calibre16">Model testing and evaluation</em> section.</p>
+<p class="calibre2">You can use the following script to remove the stop words. This is a Python script with dependencies such as <kbd class="calibre12">nltk</kbd>, so use it with your Anaconda installation. Please ensure that you have already downloaded the <kbd class="calibre12">nltk</kbd> <kbd class="calibre12">'english'</kbd> package before running the following script:</p>
+<pre class="calibre17"><strong class="calibre1">$ python -c "import nltk; nltk.download('stopwords')"</strong></pre>
+<p class="calibre2">Save the following code in a file named <kbd class="calibre12">remove_stop_words.py</kbd>:</p>
+<pre class="calibre17">import io<br class="title-page-name"/>from nltk.corpus import stopwords<br class="title-page-name"/>from nltk.tokenize import word_tokenize<br class="title-page-name"/>import sys<br class="title-page-name"/>def get_lines():<br class="title-page-name"/>    lines = sys.stdin.readlines()<br class="title-page-name"/>    for line in lines:<br class="title-page-name"/>        yield line<br class="title-page-name"/>stop_words = set(stopwords.words('english'))<br class="title-page-name"/>for line in get_lines():<br class="title-page-name"/>    words = line.lower().split()<br class="title-page-name"/>    newwords = [w for w in words if w not in stop_words]<br class="title-page-name"/>    print(' '.join(newwords))</pre>
+<p class="calibre2">To run the file, you will need to pass the contents to the Python file. In the following explanations though, we are not really removing the stop words for the sake of brevity. You are of course encouraged to try both approaches.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Normalizing</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Since we are dealing with English, it is recommended to first convert all uppercase letters to lowercase as follows:</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/yelp/yelp_review.v1.csv \<br class="title-page-name"/>    | tr '[:upper:]' '[:lower:]' \<br class="title-page-name"/>    &gt; data/yelp/yelp_review.v2.csv</strong></pre>
+<p class="calibre2">Languages using the Latin, Greek, Cyrillic, and Armenian scripts are bicameral, which means that there are uppercase and lowercase letters. Examples of these are English, French, and German. Only in such languages should you be careful to con<span class="calibre5">vert all the text to lowercase. While processing a corpus for other languages, this step is not required.</span></p>
+<p class="calibre2">Now, the start of the files already has all the labels. <span class="calibre5"><span class="calibre5">If we prefix</span></span> the start of <span class="calibre5">all</span> <span class="calibre5">sentences with</span> <kbd class="calibre12">__label__</kbd><span class="calibre5">, it will add all the labels with the</span> <kbd class="calibre12">__label__</kbd> <span class="calibre5">text. This prefixing of the labels is necessary as the library takes in the whole text as the input, and there is no specific way to specify the input and the labels separately, as you might have seen in</span> <kbd class="calibre12">scikit-learn</kbd> <span class="calibre5">or other libraries. You can change the specific label prefix though, as you will see in the</span> <em class="calibre16">A</em><em class="calibre16">ppendix</em><span class="calibre5">.</span></p>
+<p class="calibre2">So, to read the file in fastText and enable fastText to differentiate between normal text and label text, you will need to append <kbd class="calibre12">__label__</kbd> to the labels. One of the ways you can do that easily in the command line is shown here:</p>
+<pre class="calibre17"><strong class="calibre1">$  cat data/yelp/yelp_review.v2.csv \<br class="title-page-name"/>    | sed -e 's/^/__label__/g' \<br class="title-page-name"/>    &gt; data/yelp/yelp_review.v3.csv</strong></pre>
+<p class="calibre2">Separate out and remove some of the punctuation that may be irrelevant:</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/yelp/yelp_review.v3.csv \<br class="title-page-name"/>    | sed -e "s/'/ ' /g" \</strong><br class="title-page-name"/><strong class="calibre1">     -e 's/"//g' -e 's/\./ \. /g' -e 's/&lt;br \/&gt;/ /g' \</strong><br class="title-page-name"/><strong class="calibre1">     -e 's/,/ , /g' -e 's/(/ ( /g' -e 's/)/ ) /g' \<br class="title-page-name"/>     -e 's/\!/ \! /g' \</strong><br class="title-page-name"/><strong class="calibre1">     -e 's/\?/ \? /g' -e 's/\;/ /g' \<br class="title-page-name"/>     -e 's/\:/ /g' &gt; data/yelp/yelp_review.v4.csv</strong></pre>
+<p class="calibre2">Do not forget to keep checking how the data has been transformed after each transformation. On checking the data now, you can see that there is a comma at the beginning. There are also a lot of dots (<kbd class="calibre12">.</kbd>):</p>
+<pre class="calibre17"><strong class="calibre1">$ head -n 2 data/yelp/yelp_review.v4.csv</strong><br class="title-page-name"/><strong class="calibre1"> __label__5 , super simple place but amazing nonetheless . it ' s been around since the 30 ' s and they still serve the same thing they started with a bologna and salami sandwich with mustard . staff was very helpful and friendly .</strong><br class="title-page-name"/><strong class="calibre1"> __label__5 , small unassuming place that changes their menu every so often . cool decor and vibe inside their 30 seat restaurant . call for a reservation . we had their beef tartar and pork belly to start and a salmon dish and lamb meal for mains . everything was incredible ! i could go on at length about how all the listed ingredients really make their dishes amazing but honestly you just need to go . a bit outside of downtown montreal but take the metro out and it ' s less than a 10 minute walk from the station .</strong></pre>
+<p class="calibre2">Remove the commas and the dots. Keep in mind that fastText does not require the removal of punctuation and lowercasing all the letters; in fact, in some cases these may be important. Remember to take all the advice given here with a grain of salt and try all possible options you can think of. The ultimate aim is to train the best model.</p>
+<pre class="calibre17"><strong class="calibre1">cat data/yelp/yelp_review.v4.csv | sed 's/\,//g' &gt; data/yelp/yelp_review.v5.csv</strong><br class="title-page-name"/><strong class="calibre1">cat data/yelp/yelp_review.v5.csv | sed 's/\.//g' &gt; data/yelp/yelp_review.v6.csv</strong><br class="title-page-name"/><strong class="calibre1">mv data/yelp/yelp_review.v6.csv data/yelp/yelp_review.v5.csv</strong></pre>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2">Finally, remove all the consecutive spaces. Please note that in the following example, after all these transformations, the files are no longer in the <kbd class="calibre12">.csv</kbd> format, but that is fine for us because at the end of the day, <kbd class="calibre12">.csv</kbd> files are also text files and hence you should be fine with using <kbd class="calibre12">.txt</kbd> or any other textual format. As long as the files are text files with the contents in UTF-8 format, you should be good to go.</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/yelp/yelp_review.v5.csv | tr -s " " &gt; data/yelp/yelp_review.v6.csv</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Shuffling all the data</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Shuffling the data before training the classifier is important. If the labels for the data are clustered, then the precision and recall, and hence the performance of the resulting model, will be low. This is because fastText uses stochastic gradient descent to learn the model. The training data from the files is processed in order. In our example, this is not the case as the labels of the same class are not together, but still it may be a good idea to keep this in mind and <span class="calibre5">always</span> <span class="calibre5">shuffle before training.</span></p>
+<p class="calibre2">In *Nix systems, you have the shuffle command, as follows:</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/yelp/yelp_review.v6.csv | shuf &gt; data/yelp/yelp_review.v7.csv</strong></pre>
+<p class="calibre2">Sometimes, the shuffle command is quite slow and you may want to consider using the <kbd class="calibre12">perl</kbd> one-liner in the case of large files:</p>
+<pre class="calibre17"><strong class="calibre1">$ perl -MList::Util -e 'print List::Util::shuffle &lt;&gt;' \<br class="title-page-name"/>    data/yelp/yelp_review.v6.csv \<br class="title-page-name"/>    &gt; data/yelp/yelp_review.v8.csv</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Dividing into training and validation</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Model performance evaluation should always be done on independent data. You should always separate out your whole dataset into train and test sets. But, dividing too much also reduces the amount of data that you have for training, so 80% is a good midpoint. You can divide the file into an 80-20 split using the following command:</p>
+<pre class="calibre17"><strong class="calibre1">$ awk -v lines=$(wc -l &lt; data/yelp/yelp_review.v9.csv) \<br class="title-page-name"/>    -v fact=0.80 \<br class="title-page-name"/>    'NR &lt;= lines * fact {print &gt; "train.txt"; next} {print &gt; "val.txt"}' \<br class="title-page-name"/>    data/yelp/yelp_review.v9.csv</strong></pre>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Model building</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this section, we take a look at how to go about the steps of model training and evaluation.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Model training</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Now, you can start the training step:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model</strong></pre>
+<p class="calibre2">The output will be shown when training, and at the end you should get an output similar to this:</p>
+<pre class="calibre17"><strong class="calibre1">Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 3327124 lr: 0.000000 loss: 0.789366 ETA: 0h 0m</strong></pre>
+<p class="calibre2">If you now check the <kbd class="calibre12">result/yelp/</kbd> directory, you should be able to see two files with extensions <kbd class="calibre12">.vec</kbd> and <kbd class="calibre12">.bin</kbd>. The <kbd class="calibre12">.bin</kbd> file is the trained classifier. The <kbd class="calibre12">.vec</kbd> file has all the words with the vectors for the individual words. You can open the <kbd class="calibre12">.vec</kbd> file. It is just a text file. However, take care to open it using a lightweight text editor such as Sublime Text or Notepad++, as it will be a big file. Or, just use command line tools such as <kbd class="calibre12">head</kbd> or <kbd class="calibre12">tail</kbd>.</p>
+<p class="calibre2">Here are some of the vectors created in our case. The first line has the dimensions of the vectors, which are (<kbd class="calibre12">1459620</kbd>, <kbd class="calibre12">100</kbd>) in our case. The next two lines are the vectors for <kbd class="calibre12">.</kbd> and <kbd class="calibre12">the</kbd>:</p>
+<pre class="calibre17">1459620 100<br class="title-page-name"/> . -0.080999 ... -0.029536<br class="title-page-name"/> the -0.022696 ... 0.084717</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Model testing and evaluation</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Now that you know how to create model files in fastText, you will need to test and check the performance of your model, and report its efficacy in real terms. This can be done using various performance measures.</p>
+<p class="calibre2"/>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Precision and recall</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">To test the accuracy of a classification model, two parameters that are very popular and are supported by fastText are precision and recall. Recall is the percentage of labels that are correctly recalled of all the labels that actually exist, and precision is the percentage of all the labels that were predicted correctly. These two parameter values can be checked using the following command:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext test result/yelp/star_model.bin data/yelp/val.txt</strong><br class="title-page-name"/><strong class="calibre1"> Now    1052334</strong><br class="title-page-name"/><strong class="calibre1"> P@1    0.685</strong><br class="title-page-name"/><strong class="calibre1"> R@1    0.685</strong><br class="title-page-name"/><strong class="calibre1"> Number of examples: 1052334</strong></pre>
+<p class="calibre2">The precision and recall are currently at 68%. Let's optimize some parameters and see if we can make the model better.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Confusion matrix</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Now that you have a model, you can also see the performance of the model with respect to the different labels using the confusion matrix. Along with precision and recall, confusion matrices give a good idea of the <strong class="calibre4">true negatives</strong> (<strong class="calibre4">TN</strong>) and the <strong class="calibre4">false positives</strong> (<strong class="calibre4">FP</strong>) as well. In an ideal world, all the diagonals have high values, while all the remaining cells have negligible values, but in a real scenario, you may need to chose if you are OK with having high FP values or high <strong class="calibre4">false negative</strong> (<strong class="calibre4">FN</strong>) values.</p>
+<p class="calibre2">To get the confusion matrix, you will need to do some post-processing. Separate the sentences from the labels. Then, using the predict command, you will be able to predict the label for each test line. A Python script is provided, which can be used to get the confusion matrix:</p>
+<pre class="calibre17"><strong class="calibre1">$ mv data/yelp/val.testlabel data/yelp/val.testsentences</strong><br class="title-page-name"/><strong class="calibre1">$ cut -f 1 -d ' ' data/yelp/val.txt &gt; data/yelp/val.testlabel</strong><br class="title-page-name"/><strong class="calibre1">$ cut -f 2- -d ' ' data/yelp/val.txt &gt; data/yelp/val.testsentences</strong><br class="title-page-name"/><strong class="calibre1">$ fasttext predict result/yelp/star_model.bin data/yelp/val.testsentences &gt; pexp</strong><br class="title-page-name"/><strong class="calibre1">$ python fasttext_confusion_matrix.py data/yelp/val.testlabel pexp</strong><br class="title-page-name"/><strong class="calibre1"> Accuracy: 0.716503505541</strong><br class="title-page-name"/><strong class="calibre1"> [[124224 16161 3347 864 1639]</strong><br class="title-page-name"/><strong class="calibre1"> [ 24537 39460 19435 2748 1283]</strong><br class="title-page-name"/><strong class="calibre1"> [ 5514 15646 63775 32668 5424]</strong><br class="title-page-name"/><strong class="calibre1"> [ 1445 1815 22583 139956 78795]</strong><br class="title-page-name"/><strong class="calibre1"> [ 1707 548 3071 59103 386586]]</strong></pre>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2">You can download the Python script from this gist: <a href="https://gist.github.com/loretoparisi/41b918add11893d761d0ec12a3a4e1aa#file-fasttext_confusion_matrix-py" class="calibre9">https://gist.github.com/loretoparisi/41b918add11893d761d0ec12a3a4e1aa#file-fasttext_confusion_matrix-py</a>. Or, you can get it from the GitHub repository:</p>
+<pre class="calibre17">import argparse<br class="title-page-name"/>import numpy as np<br class="title-page-name"/>from sklearn.metrics import confusion_matrix<br class="title-page-name"/>def parse_labels(path):<br class="title-page-name"/>    with open(path, 'r') as f:<br class="title-page-name"/>        return np.array(list(map(lambda x: x[9:], f.read().split())))<br class="title-page-name"/>if __name__ == "__main__":<br class="title-page-name"/>    parser = argparse.ArgumentParser(description='Display confusion matrix.')<br class="title-page-name"/>    parser.add_argument('test', help='Path to test labels')<br class="title-page-name"/>    parser.add_argument('predict', help='Path to predictions')<br class="title-page-name"/>    args = parser.parse_args()<br class="title-page-name"/>    test_labels = parse_labels(args.test)<br class="title-page-name"/>    pred_labels = parse_labels(args.predict)<br class="title-page-name"/>    eq = test_labels == pred_labels<br class="title-page-name"/>    print("Accuracy: " + str(eq.sum() / len(test_labels)))<br class="title-page-name"/>    print(confusion_matrix(test_labels, pred_labels))</pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Hyperparameters</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">There are multiple hyperparameters that can be supplied when training the model to improve the model. Take a look at some of the hyperparameters here and their effects on model training.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Epoch</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">By default, fastText takes a look at each data point five times. You can change this using the <kbd class="calibre12">-epoch</kbd> command. In the following example, we change the epoch parameter to 25 and see whether there is any improvement in our model:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model -epoch 25</strong><br class="title-page-name"/><strong class="calibre1"> Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 3451048 lr: 0.000000 loss: 0.761496 ETA: 0h 0m</strong></pre>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2">The result of the model is 68.6% for precision and recall, which is only a 0.1% improvement:</p>
+<pre class="calibre17"><strong class="calibre1">P@1 0.686</strong><br class="title-page-name"/><strong class="calibre1">R@1 0.686</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Learning rate</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">This may be because we already have a huge number of samples. Another important hyperparameter that we can change is the learning rate, using the <kbd class="calibre12">-lr</kbd> argument. The learning rate controls how "fast" the model updates during training. This parameter controls the size of the update that is applied to the parameters of the models. Changing the learning rate from 0.025 to 1.0 means that the updates that are applied to the model are 40 times larger. In our model, we could also see that the learning rate was becoming <kbd class="calibre12">0</kbd> at the end. This means that the model was not learning at all by the end. Lets try to make the learning rate as <kbd class="calibre12">1</kbd> and see what happens:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model -lr 1.0</strong><br class="title-page-name"/><strong class="calibre1"> Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 3381014 lr: 0.000000 loss: 0.847610 ETA: 0h 0m</strong></pre>
+<p class="calibre2">The result for this model was the same as before. There was no difference when changing the learning rate:</p>
+<pre class="calibre17"><strong class="calibre1">P@1 0.686</strong><br class="title-page-name"/><strong class="calibre1">R@1 0.686</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">N-grams</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We have one more hyperparameter that may have a huge influence on the performance of the model. By default, when creating word vectors for the model, unigrams are used. Unigrams are n-grams where <em class="calibre16">n</em> is 1. N-grams can be best explained using the following diagram:</p>
+<div class="cdpaligncenter"><img src="../images/00006.jpeg" class="calibre22"/></div>
+<p class="calibre2">Source: <a href="https://stackoverflow.com/a/45477420/5417164" class="calibre9">https://stackoverflow.com/a/45477420/5417164</a></p>
+<p class="calibre2">You also can fix the value of <kbd class="calibre12">N</kbd> in fastText using the <kbd class="calibre12">-wordNgrams</kbd> parameter:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model -wordNgrams 2</strong><br class="title-page-name"/><strong class="calibre1"> Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 1141636 lr: 0.000000 loss: 0.687991 ETA: 0h 0m</strong></pre>
+<p class="calibre2">Now, the precision and recall are 71.8%, which is a 3.2% improvement. Lets try for some more:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model -wordNgrams 3</strong><br class="title-page-name"/><strong class="calibre1"> Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 620672 lr: 0.000000 loss: 0.633638 ETA: 0h 0m</strong><br class="title-page-name"/><strong class="calibre1"> $ fasttext test result/yelp/star_model.bin data/yelp/val.txt</strong><br class="title-page-name"/><strong class="calibre1"> Now1052334</strong><br class="title-page-name"/><strong class="calibre1"> P@1   0.717</strong><br class="title-page-name"/><strong class="calibre1"> R@1   0.717</strong><br class="title-page-name"/><strong class="calibre1"> Number of examples: 1052334</strong></pre>
+<p class="calibre2">Making N = 3 resulted in a decrease in performance. So, let's keep the value of N as 2.</p>
+<p class="calibre2"/>
+<p class="calibre2">You can combine all the parameters to create the new model:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model -wordNgrams 2 -lr 1.0 -epoch 10</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Start with pretrained word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">If the text corpus that you have is not huge, it is generally advised to start with some pretrained word vectors for the language that you are training the classifier for, or the classification results may be poor. How to create word vectors from your corpus is handled in depth in the next section.</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input data/yelp/train.txt -output result/yelp/star_model_withprevecs -pretrainedVectors wiki-news-300d-1M.vec -dim 300</strong><br class="title-page-name"/><strong class="calibre1"> Read 563M words</strong><br class="title-page-name"/><strong class="calibre1"> Number of words: 1459620</strong><br class="title-page-name"/><strong class="calibre1"> Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1"> Progress: 100.0% words/sec/thread: 1959282 lr: 0.000000 loss: 0.788021 ETA: 0h 0m</strong></pre>
+<p class="calibre2">In our case, there was not much improvement. The precision and recall increased marginally and stood at 68.5%.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Finding the best fastText hyperparameters</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">FastText has a lot of hyperparameters that you can optimize to find the right balance for your model. For a classifier, you can start with the loss functions, see whether changing the character n-grams makes sense, and see whether changing the learning rate and dimensions have any effect.</p>
+<p class="calibre2">A popular algorithm for implementing hyperparameter optimization is using the grid-search approach. Since your aim is to find a good model, you will have a training dataset and a test dataset. Let's say the training data is the <kbd class="calibre12">train.txt</kbd> file and the test data is the <kbd class="calibre12">test.txt</kbd> file. You are essentially solving an optimization problem (P), which is the function of the combination of weights in this case <em class="calibre16">w</em><sup class="calibre23">'</sup> and the hyperparameters, be in n-grams, learning rate or epochs.</p>
+<p class="calibre2">So, you understand that solving the optimization problem for a fixed set of values for the hyperparameters gives you a specific model. Since the optimal model (call it model*) is a function of the hyperparameters, we can write it as follows:</p>
+<p class="calibre2"><img class="fm-editor-equation" src="../images/00007.jpeg"/></p>
+<p class="calibre2"/>
+<p class="calibre2">Now, you can use this model* to predict on the training data to get the accuracy. Thus, the goal of hyperparameter optimization is to find the set of hyperparameters that gives the highest accuracy.</p>
+<p class="calibre2">Note that this calculation of the best model is going to be quite expensive. There is no magic mantra, no magic formula to find the hyperparameters for the best model. Just taking one hyperparameter, the learning rate, would make the calculation impractical. This is a continuous variable and you would need to feed in each specific value, compute the model, and check the performance.</p>
+<p class="calibre2">Therefore, we resort to a grid search: basically, picking a bunch of values for the hyperparameters based on a heurestic, and based on all the combinations of the values, feeding them into the calculation and picking the set of values with the best performance.</p>
+<p class="calibre2">This is called a grid search because the set of values that are considered, when plotted on a graph, look like a grid.</p>
+<p class="calibre2">How you can implement this is by defining an array of values for your hyperparameters:</p>
+<pre class="calibre17">dim=(10 20)<br class="title-page-name"/>lr=(0.1 0.3)<br class="title-page-name"/>epochs=(5 10)</pre>
+<p class="calibre2">Now, we have a global variable where we will save the individual variables, as and when we find better models, and initialize them to be 0. We will also have a global performance variable to store the present best performance and set it to 0 initially. In this case, since we are experimenting with three hyperparameters, we will have the variable as length 3, as you can see here:</p>
+<pre class="calibre17">final=(0 0 0)<br class="title-page-name"/>performance=0</pre>
+<p class="calibre2">Now comes the implementation of the <kbd class="calibre12">for</kbd> loops that will cycle through all the combinations of the values. Note that the depth of the <kbd class="calibre12">for</kbd> loop would be based on the number of hyperparameters that you are cycling through:</p>
+<pre class="calibre17">for z in ${dim[@]}<br class="title-page-name"/>do<br class="title-page-name"/>    for y in ${lr[@]}<br class="title-page-name"/>    do<br class="title-page-name"/>        for x in ${epochs[@]}<br class="title-page-name"/>        do<br class="title-page-name"/>            # train with the current set of parameters<br class="title-page-name"/>            ...<br class="title-page-name"/>            <br class="title-page-name"/>            # test the current model<br class="title-page-name"/>            ...<br class="title-page-name"/>            <br class="title-page-name"/>            # see if current model is the best model and update the final variable.<br class="title-page-name"/>            ...<br class="title-page-name"/>            <br class="title-page-name"/>        done<br class="title-page-name"/>    done<br class="title-page-name"/>done</pre>
+<p class="calibre2">As you can probably <span class="calibre5">guess</span><span class="calibre5">, since we are checking for two values each for the three hyperparameters, the number of times training will happen is 2 x 2 x 2 = 8. So, if each training step takes, say, 5 minutes, that would mean that the total process will take 8 x 5 minutes or 40 minutes.</span></p>
+<p class="calibre2">Now, let's go to the mean. Here is the training step:</p>
+<pre class="calibre17"><strong class="calibre1">$ ./fasttext supervised -input train.txt -output model -dim "$z" -lr "$y" -epoch "$x"</strong></pre>
+<p class="calibre2">Once the training is done, then comes the test phase. We save the test data to a file so that we can compare the results later:</p>
+<pre class="calibre17"><strong class="calibre1">$ ./fasttext test model.bin test.txt &gt; performance.txt</strong></pre>
+<p class="calibre2">Now comes the comparison and saving the best models:</p>
+<pre class="calibre17">present_performance=$(cat performance.txt | awk 'NR==2 {print $2}') # get the precision values<br class="title-page-name"/>if (( $(echo "$present_performance &gt; $performance" | bc -l) )); then<br class="title-page-name"/>    # if current performance is the best performance till date<br class="title-page-name"/>    final[0]="$z"<br class="title-page-name"/>    final[1]="$y"<br class="title-page-name"/>    final[2]="$x"<br class="title-page-name"/>    echo "Performance values changed to ${final[@]}"<br class="title-page-name"/>    echo "present accuracy:"<br class="title-page-name"/>    cat performance.txt<br class="title-page-name"/>fi</pre>
+<p class="calibre2">Now, you can extend this script to bring in more hyperparameters as well. You can find the whole code in the repo in the file.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Model quantization</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">With the help of model quantization, the fastest models have the ability to fit on mobile and on small devices such as Raspberry Pi. Since the code is open source, there are Java and Swift libraries that can be used to load the quantized models and serve them in Android and iOS apps respectively.</p>
+<p class="calibre2">The algorithm for compressing the fastText models was created with collaboration between fastText and the <strong class="calibre4">Facebook AI Research</strong> (<strong class="calibre4">FAIR</strong>) team. This results in the reduction of fastText models by a huge amount. FastText models that are of the range of hundreds of MB get reduced to around 1-2 MB.</p>
+<p class="calibre2">Implementing quantization can be done using the quantize argument. You will need to train a model with the normal route though:</p>
+<pre class="calibre17"><strong class="calibre1">$ DATADIR=data</strong><br class="title-page-name"/><strong class="calibre1">$ RESULTDIR=result</strong><br class="title-page-name"/><strong class="calibre1">$ ./fasttext supervised -input "${DATADIR}/train.txt" -output "${RESULTDIR}/model" -dim 10 -lr 0.1 -wordNgrams 2 -minCount 1 -bucket 10000000 -epoch 5 -thread 4</strong><br class="title-page-name"/><strong class="calibre1">Read 298M words</strong><br class="title-page-name"/><strong class="calibre1">Number of words: 1454893</strong><br class="title-page-name"/><strong class="calibre1">Number of labels: 5</strong><br class="title-page-name"/><strong class="calibre1">Progress: 100.0% words/sec/thread: 2992746 lr: 0.000000 loss: 0.634722 eta: 0h0m</strong><br class="title-page-name"/><strong class="calibre1">$ fastText-0.1.0 git:(master) ./fasttext quantize -output "${RESULTDIR}/model" -input "${DATADIR}/train.txt" -qnorm -retrain -epoch 1 -cutoff 100000</strong><br class="title-page-name"/><strong class="calibre1">Progress: 100.0% words/sec/thread: 2382426 lr: 0.000000 loss: 0.711356 eta: 0h0m h-14m</strong></pre>
+<p class="calibre2">Note that there is a huge difference between the quantized model and the unquantized one:</p>
+<pre class="calibre17"><strong class="calibre1">$ du -sh $RESULTDIR/model.bin</strong><br class="title-page-name"/><strong class="calibre1">466M result/yelp/model.bin</strong><br class="title-page-name"/><strong class="calibre1">$ du -sh $RESULTDIR/model.ftz</strong><br class="title-page-name"/><strong class="calibre1">1.6M result/yelp/model.ftz</strong></pre>
+<p class="calibre2">The <kbd class="calibre12">.bin</kbd> file is about 466 MB, while the quantized model is just 1.6 MB.</p>
+<p class="calibre2">Interestingly there seems to be a slight increase in precision and recall values.</p>
+<pre class="calibre17"><strong class="calibre1">$ ./fasttext test $RESULTDIR/model.bin $DATADIR/val.txt</strong><br class="title-page-name"/><strong class="calibre1">N 1052334</strong><br class="title-page-name"/><strong class="calibre1">P@1 0.699</strong><br class="title-page-name"/><strong class="calibre1">R@1 0.699</strong><br class="title-page-name"/><strong class="calibre1">Number of examples: 1052334</strong><br class="title-page-name"/><strong class="calibre1">$ ./fasttext test $RESULTDIR/model.ftz $DATADIR/val.txt</strong><br class="title-page-name"/><strong class="calibre1">N 1052334</strong><br class="title-page-name"/><strong class="calibre1">P@1 0.7</strong><br class="title-page-name"/><strong class="calibre1">R@1 0.7</strong><br class="title-page-name"/><strong class="calibre1">Number of examples: 1052334</strong></pre>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2"/>
+<p class="calibre2">So you get almost no difference in performance and a good saving in space. You can now deploy this model in a smaller device. In the next chapter, we will discuss how this model quantization works. Also, in <a href="part0160.html#4OIQ00-05950c18a75943d0a581d9ddc51f2755" class="calibre9">Chapter 7</a>, <em class="calibre16">Deploying Models to Web and Mobile</em>, we will discuss how you can package a quantized model as part of an Android app.</p>
+<p class="calibre2">Unfortunately, quantization only works for supervised models for now, but this may change in the future, so keep your fastText installation updated.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Understanding the model</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Once the model is created, you can now see the parameters that were used while generating the model. This can be useful later when you are thinking deeper about your data and would like to change some model parameters, or for general documentation purposes:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext dump result/yelp/star_model.bin args</strong><br class="title-page-name"/><strong class="calibre1">  dim 100</strong><br class="title-page-name"/><strong class="calibre1">  ws 5</strong><br class="title-page-name"/><strong class="calibre1">  epoch 5</strong><br class="title-page-name"/><strong class="calibre1">  minCount 1</strong><br class="title-page-name"/><strong class="calibre1">  neg 5</strong><br class="title-page-name"/><strong class="calibre1">  wordNgrams 2</strong><br class="title-page-name"/><strong class="calibre1">  loss softmax</strong><br class="title-page-name"/><strong class="calibre1">  model sup</strong><br class="title-page-name"/><strong class="calibre1">  bucket 2000000</strong><br class="title-page-name"/><strong class="calibre1">  minn 0</strong><br class="title-page-name"/><strong class="calibre1">  maxn 0</strong><br class="title-page-name"/><strong class="calibre1">  lrUpdateRate 100</strong><br class="title-page-name"/><strong class="calibre1">  t 0.0001</strong></pre>
+<p class="calibre2">The <kbd class="calibre12">dict</kbd> parameter gives information on the dictionary of words that was used in training. In the preceding training procedure, 1,459,625 words have been used, which can be seen as follows. <kbd class="calibre12">was</kbd> is used 8,272,495 times, <kbd class="calibre12">crinkle-also</kbd> is used only once in the whole set of sentences, and so on. It also gives information on whether the word is used as a word or a label. As you can see, the labels are listed at the end:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext dump result/yelp/star_model.bin dict &gt; dumpdict</strong><br class="title-page-name"/><strong class="calibre1">$ ls -lhrt dumpdict</strong><br class="title-page-name"/><strong class="calibre1"> -rw-rw-r-- 1 joydeep joydeep 27M Apr 2 11:05 dumpdict</strong><br class="title-page-name"/><strong class="calibre1">$ head dumpdict</strong><br class="title-page-name"/><strong class="calibre1"> 1459625</strong><br class="title-page-name"/><strong class="calibre1">. 34285218 word</strong><br class="title-page-name"/><strong class="calibre1">the 23539464 word</strong><br class="title-page-name"/><strong class="calibre1">, 16399539 word</strong><br class="title-page-name"/><strong class="calibre1">and 16299051 word</strong><br class="title-page-name"/><strong class="calibre1">i 14330427 word</strong><br class="title-page-name"/><strong class="calibre1">a 12034982 word</strong><br class="title-page-name"/><strong class="calibre1">to 11508988</strong><br class="title-page-name"/><strong class="calibre1">' 8907643 word</strong><br class="title-page-name"/><strong class="calibre1">was 8272495 word</strong><br class="title-page-name"/><strong class="calibre1">$ tail dumpdict</strong><br class="title-page-name"/><strong class="calibre1">m&amp;m\/chocolate 1 word</strong><br class="title-page-name"/><strong class="calibre1">drops-surprisingly 1 word</strong><br class="title-page-name"/><strong class="calibre1">crinkle-also 1 word</strong><br class="title-page-name"/><strong class="calibre1">cookie-humungo 1 word</strong><br class="title-page-name"/><strong class="calibre1">dishes\/restaurants 1 word</strong><br class="title-page-name"/><strong class="calibre1">__label__5 1802332 label</strong><br class="title-page-name"/><strong class="calibre1">__label__4 978722 label</strong><br class="title-page-name"/><strong class="calibre1">__label__1 585128 label</strong><br class="title-page-name"/><strong class="calibre1">__label__3 492454 label</strong><br class="title-page-name"/><strong class="calibre1">__label__2 350698 label</strong></pre>
+<p class="calibre2">The rows of the dump of input and output correspond to the parameters of the model. In our model, the first 1,459,620 rows of input are the vectors associated to the individual words, while the remaining 2 million rows are used to represent subwords. Those 2 million subwords were chosen to represent the overall meaning and can be understood from the bucket parameter in the output for the dump of the args as well. The rows of output are the vectors associated to the context or our labels. Usually, when learning unsupervised word representations, these are not kept after training:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext dump result/yelp/star_model.bin input &gt; dumpinput</strong><br class="title-page-name"/><strong class="calibre1"> $ cat dumpinput | wc -l</strong><br class="title-page-name"/><strong class="calibre1"> 3459621</strong><br class="title-page-name"/><strong class="calibre1"> $ fasttext dump result/yelp/star_model.bin output &gt; dumpoutput</strong><br class="title-page-name"/><strong class="calibre1"> $ cat dumpoutput | wc -l</strong><br class="title-page-name"/><strong class="calibre1"> 5</strong></pre>
+<p class="calibre2">The transformations mentioned in this section can be seen in the <kbd class="calibre12">transformations.sh</kbd> file in the GitHub repository.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">FastText word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">The second major focus of fastText is creating word embeddings for the input text. During training, fastText looks at the supplied text corpus and forms a high-dimensional vector space model, where it tries to encapsulate as much meaning as possible. The aim of creating the vectors space is that the vectors of similar words should be near to each other. In fastText, these word vectors are <span class="calibre5">then</span> <span class="calibre5">saved in two files, similar to what you have seen in text classification: a</span> <kbd class="calibre12">.bin</kbd> <span class="calibre5">file and a</span> <kbd class="calibre12">.vec</kbd> <span class="calibre5">file.</span></p>
+<p class="calibre2"/>
+<p class="calibre2">In this section, we will look at the creation and use of word vectors using the fastText command line.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Creating word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">We will now take a look at how to go about creating word vectors in fastText. You will probably be working with and building a solution for a specific domain, and in such a case, my advice would be to generate the raw text from the specific domain. But in cases where the raw text is not available to you, then you can use the help of Wikipedia, which is a huge collection of raw text in multiple languages.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Downloading from Wikipedia</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">To start with word vectors, you will need data or a text corpus. If you are lucky, you have the text corpus available to you. If you are not so lucky, which you will eventually be if you are interested in solving interesting problems in NLP, you will not have the data with you. In those cases, Wikipedia is your friend. The best thing about Wikipedia is that it is the best source of written text in more than 250 languages from around the world. Granted that is a minuscule number compared to the number of languages there are, but still that will probably be enough for most of your use cases. And if you are working in a language for which there are not enough Wikipedia resources, maybe you should raise awareness of how important Wikipedia is in your language community and ask the community to contribute to Wikipedia more. Once you know your target language, you can download the Wikipedia corpus using the <kbd class="calibre12">get-wikimedia.sh</kbd> file. You can get this file from the GitHub repository of fastText. A slightly updated version of the file can be copied from the <em class="calibre16">Appendix</em>.</p>
+<p class="calibre2">Use the <kbd class="calibre12">get-wikimedia.sh</kbd> file to download the Wikipedia corpus.</p>
+<p class="calibre2">You can get the list of all the languages that Wikipedia has articles on at this link: <a href="https://meta.wikimedia.org/wiki/List_of_Wikipedias" class="calibre9">https://meta.wikimedia.org/wiki/List_of_Wikipedias</a>. At this link, the list of languages is given in this format:</p>
+<p class="calibre2"/>
+<div class="cdpaligncenter"><img src="../images/00008.jpeg" class="calibre19"/></div>
+<p class="calibre2">It is the third column that needs your attention. Note down the third value for your language of choice and run <kbd class="calibre12">bash get-wikimedia.sh</kbd>:</p>
+<pre class="calibre17"><strong class="calibre1">$ bash get-wikimedia.sh</strong><br class="title-page-name"/><strong class="calibre1"> Saving data in data/wikimedia/20180402</strong><br class="title-page-name"/><strong class="calibre1"> Choose a language (e.g. en, bh, fr, etc.): ja</strong><br class="title-page-name"/><strong class="calibre1"> Chosen language: ja</strong><br class="title-page-name"/><strong class="calibre1"> Continue to download (WARNING: This might be big and can take a long time!)(y/n)? y</strong><br class="title-page-name"/><strong class="calibre1"> Starting download...</strong><br class="title-page-name"/><strong class="calibre1"> --2018-04-02 19:32:40-- https://dumps.wikimedia.org/jawiki/latest/jawiki-latest-pages-articles.xml.bz2</strong><br class="title-page-name"/><strong class="calibre1"> Resolving dumps.wikimedia.org (dumps.wikimedia.org)... 208.80.154.11, 2620:0:861:1:208:80:154:11</strong><br class="title-page-name"/><strong class="calibre1"> Connecting to dumps.wikimedia.org (dumps.wikimedia.org)|208.80.154.11|:443... connected.</strong><br class="title-page-name"/><strong class="calibre1"> HTTP request sent, awaiting response... 200 OK</strong><br class="title-page-name"/><strong class="calibre1"> Length: 2656121742 (2.5G) [application/octet-stream]</strong><br class="title-page-name"/><strong class="calibre1"> Saving to: ‘data/wikimedia/20180402/jawiki-latest-pages-articles.xml.bz2’</strong><br class="title-page-name"/> <br class="title-page-name"/><strong class="calibre1"> jawiki-latest-pages-articles.xml.bz 0%[</strong></pre>
+<p class="calibre2">You will receive a BZ2 file. To uncompress a BZ2 file, run the following command:</p>
+<pre class="calibre17"><strong class="calibre1">bzip2 -d enwiki-20170820-pages-articles.xml.bz2</strong></pre>
+<p class="calibre2">If you open the file (be careful while doing this, the file is huge), you will find a lot of unnecessary stuff, such as HTML tags and links. So, you will need to clean the text with the <kbd class="calibre12">wikifil.pl</kbd> script, which was written by Matt Mahoney. This script is distributed with the fastText GitHub files.</p>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Text normalization</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">If you have downloaded the English corpus, you can use the <kbd class="calibre12">wikifil.pl</kbd> script:</p>
+<pre class="calibre17">perl wikifil.pl data/enwik9 &gt; data/fil9</pre>
+<p class="calibre2">In our case, we have the Japanese text and hence we will be using WikiExtractor (<a href="https://github.com/attardi/wikiextractor" class="calibre9">https://github.com/attardi/wikiextractor</a>) to extract the text from the BZ2 file:</p>
+<pre class="calibre17">find data/jap_wiki/cleaned_jap_text.txt/ -type f -exec cat {} \; | python japanese_parser.py -d /var/lib/mecab/dic/ipadic-utf8 &gt; data/jap_wiki_parsed.txt</pre>
+<p class="calibre2">There are still a lot of tags and English words that are part of the tags. You will need to do some more processing and text cleaning to make the corpus ready for training:</p>
+<pre class="calibre17"><strong class="calibre1">$ cat data/jap_wiki_parsed.txt | sed "s/^.*https.*$//g" &gt; <br class="title-page-name"/>  data/jap_wiki_parsed1.txt</strong><br class="title-page-name"/><strong class="calibre1"> $ cat data/jap_wiki_parsed1.txt | tr '[:upper:]' '[:lower:]' &gt; data/jap_wiki_parsed2.txt</strong><br class="title-page-name"/><strong class="calibre1"> $ cat data/jap_wiki_parsed2.txt | sed   <br class="title-page-name"/>  "s/[abcdefghijklmnopqrstuvwxyz]//g" &gt; data/jap_wiki_parsed3.txt</strong><br class="title-page-name"/><strong class="calibre1"> $ cat data/jap_wiki_parsed3.txt | tr -s " " &gt;             <br class="title-page-name"/>   data/jap_wiki_parsed4.txt</strong><br class="title-page-name"/><strong class="calibre1"> $ cat data/jap_wiki_parsed4.txt | awk 'NF' | awk '{$1=$1;print}' &gt;  <br class="title-page-name"/>   data/jap_wiki_parsed5.txt</strong></pre>
+<p class="calibre2">Now, you can go ahead and start the training process. We will keep the English numbers.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Create word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Now, you can create the word vectors. Create the <kbd class="calibre12">result</kbd> directory:</p>
+<pre class="calibre17"><strong class="calibre1">$ mkdir -p result/jap_wiki</strong><br class="title-page-name"/><strong class="calibre1">  fasttext skipgram -input data/jap_wiki_parsed5.txt -output    <br class="title-page-name"/>  result/jap_wiki/jap</strong></pre>
+<p class="calibre2">There are two algorithms that are supported by fastText for creating word vectors, <kbd class="calibre12">skipgram</kbd> and <kbd class="calibre12">cbow</kbd>:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext skipgram -input data/jap_wiki/fil_cleaned_jap_text3.txt - <br class="title-page-name"/>  output result/jap_wiki/jap</strong></pre>
+<p class="calibre2">and</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext cbow -input data/jap_wiki/fil_cleaned_jap_text3.txt -output <br class="title-page-name"/>  result/jap_wiki/jap_cbow</strong></pre>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Model evaluation</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Model evaluation for word vectors is largely a manual process. In such cases, you can try some samples of the words and see if the model gives adequate results.</p>
+<p class="calibre2">Some of the methods that you can use for model evaluation are looking at the nearest neighbors of the model and looking at some word analogies. One popular method is through t-SNE visualizations. We will look at t-SNE visualizations in <a target="_blank" href="part0098.html#2TEN40-05950c18a75943d0a581d9ddc51f2755" class="calibre9">Chapter 4</a>,<br class="calibre6"/>
+<em class="calibre16">Sentence Classification in FastText</em>.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Nearest neighbors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">To get the nearest neighbors of a given word, pass the <kbd class="calibre12">nn</kbd> <span class="calibre5">argument,</span> <span class="calibre5">and then you will need to give the path to the BIN file. For brevity, we will show only three results here:</span></p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext nn result/jap_wiki/jap.bin</strong><br class="title-page-name"/><strong class="calibre1"> Pre-computing word vectors... done.</strong><br class="title-page-name"/><strong class="calibre1"> Query word? <img src="../images/00009.jpeg" class="calibre19"/></strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00010.jpeg" class="calibre19"/> 0.949732</strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00011.jpeg" class="calibre19"/> 0.945276</strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00012.jpeg" class="calibre19"/> 0.943492</strong></pre>
+<p class="calibre2">Similar words to sleep (<img src="../images/00013.jpeg" class="calibre24"/>) give the previous results, which mean "return to the mainland"; "Hachinosu," which is a peak in Antarctica; and "national election." The results are random in our case and therefore not good.</p>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Word analogies</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Word analogies are a good way of finding out whether the model is working or not. How analogies work is that two groups of words with similar relationships should be separated by similar distances in the vector space. So, when you provide words for man, woman, and king, the result should be queen, as in a good vector space, the distance between word vector denoting "man" and the word vector denoting "woman" should be close to the distance between the word vector denoting "king" and the word vector denoting "queen." The command shows 10, but here only the top three are shown:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext analogies result/jap_wiki/jap.bin</strong><br class="title-page-name"/><strong class="calibre1"> Query triplet (A - B + C)? <img src="../images/00014.jpeg" class="calibre25"/> (man woman king)</strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00015.jpeg" class="calibre19"/> 0.856853</strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00016.jpeg" class="calibre19"/> 0.855393</strong><br class="title-page-name"/><strong class="calibre1"> <img src="../images/00017.jpeg" class="calibre19"/> 0.852085</strong></pre>
+<p class="calibre2">The meaning of the symbols in this code block are "cracking," "Monkey King," and "King", which are not very helpful in our case.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Other parameters when training</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Similar to supervised learning, you can change various hyperparameters and see whether the models that are created work better. So, you can fix the minimal number of word occurrences with the <kbd class="calibre12">-minCount</kbd> parameter and the maximum length of word n-grams with the <kbd class="calibre12">-wordNgrams</kbd> parameter. You can change the number of buckets that fastText uses to hash the word and character n-grams to limit memory use. If you have a huge memory in your system, you can change this bucket parameter by passing a larger value than 2 million to see whether your model performance increases using the <kbd class="calibre12">-bucket</kbd> <span class="calibre5">parameter</span><span class="calibre5">. You can change the minimum and maximum length of character n-grams using the parameters</span> <kbd class="calibre12">-minn</kbd> <span class="calibre5">and</span> <kbd class="calibre12">-maxn</kbd><span class="calibre5">. Change the sampling threshold using</span> <kbd class="calibre12">-t</kbd><span class="calibre5">, change the learning rate using</span> <kbd class="calibre12">-lr</kbd><span class="calibre5">, change the rate of updates for the learning rate using</span> <kbd class="calibre12">-lrUpdateRate</kbd><span class="calibre5">, change the dimensions of the word vectors using</span> <kbd class="calibre12">-dim</kbd><span class="calibre5">, change the size of the context window using</span> <kbd class="calibre12">-ws</kbd><span class="calibre5">, change the number of epochs, which is the number of times each row is looked at during training, from the default 5 using</span> <kbd class="calibre12">-epoch</kbd><span class="calibre5">, change the number of negatives sampled using</span> <kbd class="calibre12">-neg</kbd><span class="calibre5">, and change the loss function that is used from the default</span> <strong class="calibre4">ns</strong> <span class="calibre5">(</span><strong class="calibre4">negative sampling</strong><span class="calibre5">) to softmax or</span> <strong class="calibre4">hs</strong> <span class="calibre5">(</span><strong class="calibre4">hierarchical softmax</strong><span class="calibre5">). The default number of threads used is 12, but generally people have four cores or eight cores, and hence you can change the number of threads to optimally use the cores using the</span> <kbd class="calibre12">-thread</kbd> <span class="calibre5">parameter.</span></p>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Out of vocabulary words</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">FastText also supports out of vocabulary words. FastText is able to do that because it not only keeps track of word-level N-grams, but also character-level n-grams. So, things like "learn," "learns," and "learned" look similar to it. To get the vectors for out of vocabulary words, you have to use binary models, which means the model files with the <kbd class="calibre12">.bin</kbd> extension:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext print-word-vectors wiki.it.300.bin &lt; oov_words.txt</strong></pre>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Facebook word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Facebook has released a large number of pretrained word vectors based on Wikipedia and common crawling, which you can download from their website and use in your projects (<a href="https://fasttext.cc/docs/en/pretrained-vectors.html" class="calibre9">https://fasttext.cc/docs/en/pretrained-vectors.html</a>). The common crawl models are CBOW models, and the wiki models are skip-gram models. Vectors are of dimensions 300 and character n-grams of length 5 are used, and a window size of 5 and 10 negatives are used.</p>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Using pretrained word vectors</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">You can use pretrained word vectors for your supervised learning task. This has been discussed briefly under supervised learning. An example command is shown as follows:</p>
+<pre class="calibre17"><strong class="calibre1">$ fasttext supervised -input train.txt -output model -epoch 25 - <br class="title-page-name"/>  wordNgrams 2 -dim 300 -loss hs -thread 7 -minCount 1 -lr 1.0 -verbose   <br class="title-page-name"/>  2 -pretrainedVectors wiki.ru.vec</strong></pre>
+<div class="packt_tip">There are some things that need to be taken care of while using pretrained vectors. You can find them at <a href="https://stackoverflow.com/questions/47692906/fasttext-using-pre-trained-word-vector-for-text-classification" class="calibre26">https://stackoverflow.com/questions/47692906/fasttext-using-pre-trained-word-vector-for-text-classification</a>.</div>
+<p class="calibre2"/>
+<p class="calibre2"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Machine translation</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">Facebook has done a lot of work on neural machine translation in the form of MUSE. MUSE is a library for multilingual unsupervised and supervised word embeddings. MUSE uses and is built on top of fastText word embeddings. The word embeddings that you get with fastText are monolingual, and hence the vectors need to be aligned to effectively translate from one language to the other. As part of MUSE, see the following features:</p>
+<ul class="calibre10">
+<li class="calibre11">fastText Wikipedia supervised word embeddings for 30 languages were released. These word embeddings are aligned in a single vector space.</li>
+<li class="calibre11">110 large-scale ground truth bilingual dictionaries were also released so that you can train your own models.</li>
+</ul>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    </header><h1 class="header-title" id="calibre_pb_0">Summary</h1>
+                
+            
+            <article>
+                
+<p class="calibre2">In this chapter, you took a look at how you can combine the command line text transformation capabilities of the *Nix shell and the fastText library to implement a training, validation, and prediction pipeline. The commands that you explored in this chapter are not only versatile, they are fast as well. Having good mastery over the command line, along with a fastText app, should enable you to create fast prototypes and deploy them in a fast-paced environment. With this, the first part of the book is complete.</p>
+<p class="calibre2">The next part of the book is about the theory and algorithms that have gone into making the package, with the next chapter being about unsupervised learning using fastText.</p>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>

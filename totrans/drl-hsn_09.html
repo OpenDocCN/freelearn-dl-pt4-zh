@@ -1,0 +1,475 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-9-ways-to-speed-up-rl">
+<h1 class="chapterNumber">9</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_412">
+<span id="x1-1600009"/>Ways to Speed Up RL
+    </h1>
+<p>In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, you saw several practical tricks to make the <span class="cmbx-10x-x-109">deep Q-network</span> (<span class="cmbx-10x-x-109">DQN</span>) method more stable and converge faster. They involved basic DQN method modifications (like injecting noise into the network or unrolling the Bellman equation) to get a better policy, with less time spent on training. But in this chapter, we will explore another way to do this: tweaking the implementation details of the method to improve the speed of the training. This is a pure engineering approach, but it’s also important since it is useful in practice.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Take the Pong environment from the previous chapter and try to get it solved as fast as possible</p>
+</li>
+<li>
+<p>In a step-by-step manner, get Pong solved almost 2 times faster using exactly the same commodity hardware</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="why-speed-matters">
+<h1 class="heading-1" id="sigil_toc_id_142"> <span id="x1-1610009.1"/>Why speed matters</h1>
+<p>First, let’s <span id="dx1-161001"/>talk a bit about why speed is<span id="dx1-161002"/> important and why we optimize it at all. It might not be obvious, but enormous hardware performance improvements have happened in the last decade or two. Almost 20 years ago, I was involved with a project that focused on building a supercomputer for <span class="cmbx-10x-x-109">computational fluid</span> <span class="cmbx-10x-x-109">dynamics </span>(<span class="cmbx-10x-x-109">CFD</span>) simulations performed by an aircraft engine design company. The system consisted of 64 servers, occupied three 42-inch racks, and required dedicated cooling and power subsystems. The hardware alone (without cooling) cost around <span class="tcrm-1095">$</span>1M.</p>
+<p>In 2005, this supercomputer was ranked fourth among ex-USSR supercomputers and was the fastest system installed in the industry. Its theoretical performance was 922 GFLOPS (almost a trillion floating-point operations per second), but in comparison to the GTX 1080 Ti released 12 years later, all the capabilities of this pile of iron look tiny.</p>
+<p>One single GTX 1080 Ti is able to perform 11,340 GFLOPS, which is 12.3 times more than what supercomputers from 2005 could do. And the price was only <span class="tcrm-1095">$</span>700 per GPU when it was released! If we count computation power per <span class="tcrm-1095">$</span>1, we get a price drop of more than 17,500 times for every GFLOP. This number is even more dramatic with the latest (at the time of writing) H100 GPU, which provides 134 teraflops (with FP32 operations).</p>
+<p>It has been said many times that <span class="cmbx-10x-x-109">artificial intelligence </span>(<span class="cmbx-10x-x-109">AI</span>) progress (and <span class="cmbx-10x-x-109">machine learning </span>(<span class="cmbx-10x-x-109">ML</span>) in general) is being driven by data availability and computing power increases, and I believe that this is absolutely true. Imagine some computations that require a month to complete on one machine (a very common situation in CFD and other physics simulations). If we are able to increase speed by five times, this month of patient waiting will turn into six days. Speeding up by 100 times will<span id="dx1-161003"/> mean that this heavy one-month <span id="dx1-161004"/>computation will end up taking eight hours, so you could have three of them done in just one day! It’s very cool to be able to get 20,000 times more power for the same money nowadays. By the way, speeding up by 20k times will mean that our one-month problem will be done in two to three minutes!</p>
+<p>This has happened not only in the “big iron” (also known as <span class="cmti-10x-x-109">high-performance</span> <span class="cmti-10x-x-109">computing</span>) world; basically, it is everywhere. Modern microcontrollers have the performance characteristics of the desktops that we worked with 15 years ago (for example, you can build a pocket computer for <span class="tcrm-1095">$</span>50, with a 32-bit microcontroller running at 120 MHz, that is able to run the Atari 2600 emulator: <a class="url" href="https://hackaday.io/project/80627-badge-for-hackaday-conference-2018-in-belgrade"><span class="cmtt-10x-x-109">https://hackaday.io/project/80627-badge-for-hackaday-conference-2018-in-belgrade</span></a>). I’m not even talking about modern smartphones, which normally have four to eight cores, a <span class="cmbx-10x-x-109">graphics processing unit </span>(<span class="cmbx-10x-x-109">GPU</span>), and several GB of RAM.</p>
+<p>Of course, there are a lot of complications there. It’s not just taking the same code that you used a decade ago and now, magically, finding that it works several thousand times faster. It might be the opposite: you might not be able to run it at all, due to a change in libraries, operating system interfaces, and other factors. (Have you ever tried to read old CD-RW disks written just a decade ago?) Nowadays, to get the full capabilities of modern hardware, you need to parallelize your code, which automatically means tons of details about distributed systems, data locality, communications, and the internal characteristics of the hardware and libraries. High-level libraries try to hide all those complications from you, but you can’t ignore all of them if you want to use these libraries efficiently. However, it is definitely worth it — one month of patient waiting could be turned into three minutes, remember. On the other hand, it might not be fully obvious why we need to speed things up in the first place. One month is not that long, after all; just lock the computer in a server room and go on vacation! But think about the process involved in preparing and making this computation work. You might already have noticed that even simple ML problems can be almost impossible to implement properly on the first attempt.</p>
+<p>They require many trial runs before you find good hyperparameters and fix all the bugs and code ready for a clean launch. There is exactly the same process in physics simulations, RL research, big data processing, and programming in general. So, if we are able to make something run faster, it’s not only beneficial for the single run but also enables us to iterate quickly and do more experiments with code, which might significantly speed up the whole process and improve the quality of the final result.</p>
+<p>I remember one situation from my career when we deployed a Hadoop cluster in our department, where we were developing a web search engine (similar to Google, but for Russian websites). Before the deployment, it took several weeks to conduct even simple experiments with data. Several terabytes of data were lying on different servers; you needed to run your code several times on every machine, gather and combine intermediate results, deal with occasional hardware failures, and do a lot of manual tasks not related to the problem that you were supposed to solve. After integrating the Hadoop platform into the data processing, the time needed for experiments dropped to several hours, which was completely game-changing. Since then, developers have been able to conduct many experiments much more easily and faster without bothering with unnecessary details. The number of experiments (and willingness to run them) has increased significantly, which has also increased the quality of the final product.</p>
+<p>Another <span id="dx1-161005"/>reason in favor of optimization is<span id="dx1-161006"/> the size of problems that we can deal with. Making some method run faster might mean two different things: we can get the results sooner, or we can increase the size (or some other measure of the problem’s complexity). A complexity increase might have different meanings in different cases, like getting more accurate results, making fewer simplifications of the real world, or taking into account more data, but, almost always, this is a good thing.</p>
+<p>Returning to the main topic of the book, let’s outline how RL methods might benefit from speed-ups. First of all, even state-of-the-art RL methods are not very sample efficient, which means that training needs to communicate with the environment many times (in the case of Atari, millions of times) before learning a good policy, and that might mean weeks of training. If we can speed up this process a bit, we can get the results faster, do more experiments, and find better hyperparameters. Besides this, if we have faster code, we can even increase the complexity of the problems that they are applied to.</p>
+<p>In modern RL, Atari games are considered solved; even so-called “hard-exploration games,” like <span class="cmti-10x-x-109">Montezuma’s Revenge</span>, can be trained to superhuman accuracy. Therefore, new frontiers in research require more complex problems, with richer observation and action spaces, which inevitably require more training time and more hardware. Such research has already been started (and has increased the complexity of problems a bit too much, from my point of view) by DeepMind and OpenAI, which have switched from Atari to much more challenging problems like protein folding (AlphaFold system) and <span class="cmbx-10x-x-109">Large Language</span> <span class="cmbx-10x-x-109">Models </span>(<span class="cmbx-10x-x-109">LLMs</span>). Those problems require thousands of GPUs working in parallel.</p>
+<p>I want to end this introduction with a small warning: all performance optimizations make sense only when the core method is working properly (which is not always obvious in cases of RL and ML in general). As an instructor of an online course about performance <span id="dx1-161007"/>optimizations said, “It’s much <span id="dx1-161008"/>better to have a slow and correct program than a fast but incorrect one.”</p>
+</section>
+<section class="level3 sectionHead" id="baseline">
+<h1 class="heading-1" id="sigil_toc_id_143"> <span id="x1-1620009.2"/>Baseline</h1>
+<p>In this <span id="dx1-162001"/>chapter, we will <span id="dx1-162002"/>take the Atari Pong environment that you are already familiar with and try to speed up its convergence. As a baseline, we will take the same simple DQN that we used in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, and the hyperparameters will also be the same. To compare the effect of our changes, we will use two characteristics:</p>
+<ul>
+<li>
+<p>The <span class="cmbx-10x-x-109">number of frames </span>that we consume from the environment every second (FPS). This indicates how fast we can communicate with the environment during the training. It is very common in RL papers to indicate the number of frames that the agent observed during the training; normal numbers are 25M–50M frames. So, if our FPS=200, it will take <img alt="--50⋅106--- 200⋅60⋅60⋅24" class="frac" data-align="middle" height="30" src="../Images/eq39.png"/> <span class="cmsy-10x-x-109">≈ </span>2<span class="cmmi-10x-x-109">.</span>89 days. In such calculations, you need to take into account that RL papers commonly report raw environment frames. But if frame skip is used (and it almost always is), the count of frames needs to be divided by this factor, which is commonly equal to 4. In our measurements, we calculate FPS in terms of agent communications with the environment, so the “raw environment FPS” will be four times larger.</p>
+</li>
+<li>
+<p>The <span class="cmbx-10x-x-109">wall clock time </span>before the game is solved. We stop training when the smoothed reward for the last 100 episodes reaches 18 (the maximum score in Pong is 21.) This boundary could be increased, but normally 18 is a good indication that the agent has almost mastered the game and polishing the policy to perfection is just a matter of the training time. We check the wall clock time because FPS alone is not the best indicator of training speed-up.</p>
+</li>
+</ul>
+<p>Due to our manipulations performed with the code, we can get a very high FPS, but convergence might suffer. This value alone also can’t be used as a reliable characteristic of our improvements, as the training process is stochastic. Even by specifying random seeds (we need to set seeds explicitly for PyTorch, Gym, and NumPy), parallelization (which will be used in subsequent steps) adds randomness to the process, which is almost impossible to avoid. So, the best we can do is run the benchmark several times and average the results. But one single run’s outcome can’t be used to make any decisions.</p>
+<p>Because of the randomness mentioned above, all the charts in this chapter were obtained from averaging 5 runs of the same experiment. All the benchmarks use the same machine with an Intel i5-7600K CPU, a GTX 1080 Ti GPU with CUDA 12.3, and NVIDIA drivers version 545.29.06.</p>
+<p>Our first<span id="dx1-162003"/> benchmark <span id="dx1-162004"/>will be our baseline version, which is in <span class="cmtt-10x-x-109">Chapter09/01</span><span class="cmtt-10x-x-109">_baseline.py</span>. I will not provide the source code here, as it has already been given in the previous chapter and is the same here. During the training, the code writes into TensorBoard several metrics:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">reward</span>: The raw undiscounted reward from the episode; the <span class="cmti-10x-x-109">x </span>axis is the episode number.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">avg</span><span class="cmtt-10x-x-109">_reward</span>: The same as reward but smoothed by running the average with <span class="cmmi-10x-x-109">α </span>= 0<span class="cmmi-10x-x-109">.</span>98.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">steps</span>: The number of steps that the episode lasted. Normally, in the beginning, the agent loses very quickly, so every episode is around 1,000 steps. Then, it learns how to act better, so the number of steps increases to 3,000–4,000 with the reward increase; but, in the end, when the agent masters the game, the number of steps drops back to 2,000 steps, as the policy is polished to win as quickly as possible (due to the discount factor <span class="cmmi-10x-x-109">γ</span>). In fact, this drop in episode length might be an indication of overfitting to the environment, which is a huge problem in RL. However, dealing with this issue is beyond the scope of our experiments.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">loss</span>: The loss during the training, sampled every 100 iterations. It should be around 2<span class="cmsy-10x-x-109">⋅</span>10<sup><span class="cmsy-8">−</span><span class="cmr-8">3</span></sup><span class="cmmi-10x-x-109">…</span>1<span class="cmsy-10x-x-109">⋅</span>10<sup><span class="cmsy-8">−</span><span class="cmr-8">2</span></sup>, with occasional increases when the agent discovers new behavior, leading to a different reward from that learned by the Q-value.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">avg</span><span class="cmtt-10x-x-109">_loss</span>: A smoothed version of the loss.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">epsilon</span>: The current value of <span class="cmmi-10x-x-109">𝜖 </span>— probability of taking the random action.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">avg</span><span class="cmtt-10x-x-109">_fps</span>: The speed of agent communication with the environment (observations per second), smoothed with a running average.</p>
+</li>
+</ul>
+<p>In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-162006r1"><span class="cmti-10x-x-109">9.1</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-162007r2"><span class="cmti-10x-x-109">9.2</span></a>, the charts are averaged from 5 baseline<span id="dx1-162005"/> runs. As before, each chart is drawn with two <span class="cmti-10x-x-109">x </span>axes: the bottom one is the wall clock time in hours, and the top is the step number (episode in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-162006r1"><span class="cmti-10x-x-109">9.1</span></a> and training iteration in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-162007r2"><span class="cmti-10x-x-109">9.2</span></a>):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_01.png" width="600"/> <span id="x1-162006r1"/></p>
+<span class="id">Figure 9.1: Reward and episode length in baseline version </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_02.png" width="600"/> <span id="x1-162007r2"/></p>
+<span class="id">Figure 9.2: Loss and FPS during the training of baseline version </span>
+</div>
+</section>
+<section class="level3 sectionHead" id="the-computation-graph-in-pytorch">
+<h1 class="heading-1" id="sigil_toc_id_144"> <span id="x1-1630009.3"/>The computation graph in PyTorch</h1>
+<p>Our first <span id="dx1-163001"/>examples won’t be around<span id="dx1-163002"/> speeding up the baseline, but will show one common, and not always obvious, situation that can cost you performance. In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch007.xhtml#x1-530003"><span class="cmti-10x-x-109">3</span></a>, we discussed the way PyTorch calculates gradients: it builds the graph of all operations that you perform on tensors, and when you call the <span class="cmtt-10x-x-109">backward() </span>method of the final loss, all gradients in the model parameters are automatically calculated.</p>
+<p>This works well, but RL code is normally much more complex than traditional supervised learning training, so the RL model that we are currently training is also being applied to get the actions that the agent needs to perform in the environment. The target network discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a> makes it even more tricky. So, in DQN, a <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) is normally used in three different situations:</p>
+<ul>
+<li>
+<p>When we want to calculate Q-values predicted by the network to get the loss in respect to reference Q-values approximated by the Bellman equation</p>
+</li>
+<li>
+<p>When we apply the target network to get Q-values for the next state to calculate a Bellman approximation</p>
+</li>
+<li>
+<p>When the agent wants to make a decision about the action to perform</p>
+</li>
+</ul>
+<p>In our training, we need gradients calculated only for the first situation. In <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>, we avoided gradients by explicitly calling <span class="cmtt-10x-x-109">detach() </span>on the tensor returned by the target network. This <span class="cmtt-10x-x-109">detach </span>is very important, as it prevents gradients from flowing into our model “from the unexpected direction” and, without this, the DQN might not converge at all. In the third situation, gradients were stopped by converting the network result into a NumPy array.</p>
+<p>Our code in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>, worked, but we missed one subtle detail: the computation graph that is created for all three situations. This is not a major problem, but creating the graph still uses some resources (in terms of both speed and memory), which are wasted because PyTorch creates this computation graph even if we don’t call <span class="cmtt-10x-x-109">backward() </span>on some graph. To prevent this, one very nice option exists: the decorator <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad()</span>.</p>
+<p>Decorators in<span id="dx1-163003"/> Python is a very wide topic. They <span id="dx1-163004"/>give the developer a lot of power (when properly used), but are well beyond the scope of this book. Here, I’ll just give an example where we define two functions:</p>
+<pre class="lstlisting" id="listing-251"><code>&gt;&gt;&gt; import torch 
+&gt;&gt;&gt; @torch.no_grad 
+... def fun_a(t): 
+...    return t*2 
+... 
+&gt;&gt;&gt; def fun_b(t): 
+...    return t*2 
+...</code></pre>
+<p>Both these functions are doing the same thing, doubling its argument, but the first function is declared with <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad() </span>and the second is just a normal function. This decorator temporarily disables gradient computation for all tensors passed to the function. As you can see, although the tensor, <span class="cmtt-10x-x-109">t</span>, requires <span class="cmtt-10x-x-109">grad</span>, the result from <span class="cmtt-10x-x-109">fun</span><span class="cmtt-10x-x-109">_a </span>(the decorated function) doesn’t have gradients:</p>
+<pre class="lstlisting" id="listing-252"><code>&gt;&gt;&gt; t = torch.ones(3, requires_grad=True) 
+&gt;&gt;&gt; t 
+tensor([1., 1., 1.], requires_grad=True) 
+&gt;&gt;&gt; a = fun_a(t) 
+&gt;&gt;&gt; b = fun_b(t) 
+&gt;&gt;&gt; b 
+tensor([2., 2., 2.], grad_fn=&lt;MulBackward0&gt;) 
+&gt;&gt;&gt; a 
+tensor([2., 2., 2.])</code></pre>
+<p>But this effect is bounded inside the decorated function:</p>
+<pre class="lstlisting" id="listing-253"><code>&gt;&gt;&gt; a*t 
+tensor([2., 2., 2.], grad_fn=&lt;MulBackward0&gt;)</code></pre>
+<p>The function <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad() </span>also could be used as a <span class="cmti-10x-x-109">context manager </span>(another powerful Python concept that I recommend you learn about) to stop gradients in some chunk of code:</p>
+<pre class="lstlisting" id="listing-254"><code>&gt;&gt;&gt; with torch.no_grad(): 
+...    c = t*2 
+... 
+&gt;&gt;&gt; c 
+tensor([2., 2., 2.])</code></pre>
+<p>This functionality<span id="dx1-163029"/> provides you with a<span id="dx1-163030"/> very convenient way to indicate parts of your code that should be excluded from the gradient machinery completely. This has already been done in <span class="cmtt-10x-x-109">ptan.agent.DQNAgent </span>(and other agents provided by PTAN) and in the <span class="cmtt-10x-x-109">common.calc</span><span class="cmtt-10x-x-109">_loss</span><span class="cmtt-10x-x-109">_dqn </span>function. But if you are writing a custom agent or implementing your own code, it might be very easy to forget about this.</p>
+<p>To benchmark the effect of unnecessary graph calculation, I’ve provided the modified baseline code in <span class="cmtt-10x-x-109">Chapter09/00</span><span class="cmtt-10x-x-109">_slow</span><span class="cmtt-10x-x-109">_grads.py</span>, which is exactly the same, but the agent and loss calculations are copied without <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad()</span>. The following charts show the effect of this:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_03.png" width="600"/> <span id="x1-163031r3"/></p>
+<span class="id">Figure 9.3: A comparison of reward and FPS between the baseline and version without <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad()</span> </span>
+</div>
+<p>As you can see, the speed penalty is not that large (around 10 FPS), but that might become different in the case of a larger network with a more complicated<span id="dx1-163032"/> structure. I’ve<span id="dx1-163033"/> seen a 50% performance boost in more complex recurrent NNs obtained after adding <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad()</span>.</p>
+</section>
+<section class="level3 sectionHead" id="several-environments">
+<h1 class="heading-1" id="sigil_toc_id_145"> <span id="x1-1640009.4"/>Several environments</h1>
+<p>The first idea<span id="dx1-164001"/> that we usually apply to speed up deep learning training is <span class="cmti-10x-x-109">larger</span> <span class="cmti-10x-x-109">batch size</span>. It’s also applicable to the domain of deep RL, but you need to be careful here. In the normal supervised learning case, the simple rule “a large batch is better” is usually true: you just increase your batch as your GPU memory allows, and a larger batch normally means more samples will be processed in a unit of time thanks to enormous GPU parallelism.</p>
+<p>The RL case is slightly different. During the training, two things happen simultaneously:</p>
+<ul>
+<li>
+<p>Your network is trained to get better predictions on the current data</p>
+</li>
+<li>
+<p>Your agent explores the environment</p>
+</li>
+</ul>
+<p>As the agent explores the environment and learns about the outcome of its actions, the training data changes. In a shooter example, your agent can run randomly for a time while being shot by monsters and have only a miserable “death is everywhere” experience in the training buffer. But after a while, the agent will discover that it has a weapon it can use. This new experience can dramatically change the data that we are using for training. RL convergence usually lies on a fragile balance between training and exploration. If we just increase a batch size without tweaking other options, we can easily overfit to the current data (for our shooter example, your agent can start thinking that “dying young” is the only option to minimize suffering and may never discover the gun it has).</p>
+<p>So, in the example in <span class="cmtt-10x-x-109">Chapter09/02</span><span class="cmtt-10x-x-109">_n</span><span class="cmtt-10x-x-109">_envs.py</span>, our agent uses several copies of the same environment to gather the training data. On every training iteration, we populate our replay buffer with samples from all those environments and then sample a proportionally larger batch size. This also allows us to speed up <span class="cmti-10x-x-109">inference time </span>a bit, as we can make a decision about the actions to execute for all N environments in one forward pass of the NN. In terms of implementation, the preceding logic requires just a couple of changes in the code:</p>
+<ul>
+<li>
+<p>As PTAN supports several environments out of the box, what we need to do is just pass <span class="cmmi-10x-x-109">N </span>Gym environments to the <span class="cmtt-10x-x-109">ExperienceSource</span> instance</p>
+</li>
+<li>
+<p>The agent code (in our case, <span class="cmtt-10x-x-109">DQNAgent</span>) is already optimized for the batched application of the NN</p>
+</li>
+</ul>
+<p>Several pieces of code were changed to address this. The <span id="dx1-164002"/>function that generates batches now performs multiple steps (equal to the total number of environments) for every training iteration:</p>
+<div class="tcolorbox" id="tcolobox-199">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-255"><code>def batch_generator(buffer: ptan.experience.ExperienceReplayBuffer, 
+                    initial: int, batch_size: int, steps: int): 
+    buffer.populate(initial) 
+    while True: 
+        buffer.populate(steps) 
+        yield buffer.sample(batch_size)</code></pre>
+</div>
+</div>
+<p>The experience source accepts the array of environments instead of a single environment:</p>
+<div class="tcolorbox" id="tcolobox-200">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-256"><code>    envs = [ 
+        ptan.common.wrappers.wrap_dqn(gym.make(params.env_name)) 
+        for _ in range(args.envs) 
+    ] 
+    params.batch_size *= args.envs 
+    exp_source = ptan.experience.ExperienceSourceFirstLast( 
+        envs, agent, gamma=params.gamma, env_seed=common.SEED)</code></pre>
+</div>
+</div>
+<p>Other changes are just minor tweaks of constants to adjust the FPS tracker and compensated speed of epsilon decay (ratio of random steps). As the number of environments is the new hyperparameter that needs to be tuned, I ran several experiments with <span class="cmmi-10x-x-109">N </span>from 2<span class="cmmi-10x-x-109">…</span>6. The following charts show the averaged dynamics:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_04.png" width="600"/> <span id="x1-164016r4"/></p>
+<span class="id">Figure 9.4: Reward and FPS in the baseline, two, and three environments </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_05.png" width="600"/> <span id="x1-164017r5"/></p>
+<span class="id">Figure 9.5: Reward and FPS for <span class="cmmi-10x-x-109">n </span>= 3<span class="cmmi-10x-x-109">…</span>6 </span>
+</div>
+<p>As you can see from the charts, adding an extra environment provided a 47% gain in FPS (from 227 FPS to 335 FPS) and sped up the convergence about 10% (from 52 minutes to 48 minutes). The same effect came from adding the third environment (398 FPS, and 36 minutes), but adding more environments had a negative effect on convergence speed, despite a further increase in FPS. So, it looks like <span class="cmmi-10x-x-109">N </span>= 3 is more or less the optimal value for our hyperparameter, but, of course, you are free to tweak and<span id="dx1-164018"/> experiment. It also illustrates why we’re monitoring not just raw speed in FPS but also how quickly the agent is able to solve the game.</p>
+</section>
+<section class="level3 sectionHead" id="playing-and-training-in-separate-processes">
+<h1 class="heading-1" id="sigil_toc_id_146"> <span id="x1-1650009.5"/>Playing and training in separate processes</h1>
+<p>At a high level, our <span id="dx1-165001"/>training contains a repetition of the following steps:</p>
+<ol>
+<li>
+<div id="x1-165003x1">
+<p>Ask the current network to choose actions and execute them in our array of environments.</p>
+</div>
+</li>
+<li>
+<div id="x1-165005x2">
+<p>Put observations into the replay buffer.</p>
+</div>
+</li>
+<li>
+<div id="x1-165007x3">
+<p>Randomly sample the training batch from the replay buffer.</p>
+</div>
+</li>
+<li>
+<div id="x1-165009x4">
+<p>Train on this batch.</p>
+</div>
+</li>
+</ol>
+<p>The purpose of the first two steps is to populate the replay buffer with samples from the environment (which are observation, action, reward, and next observation). The last two steps are for training our network.</p>
+<p>The following is an illustration of the preceding steps that will make potential parallelism slightly more obvious. On the left, the training flow is shown. The training steps use environments, the replay buffer, and our NN. The solid lines show data and code flow. Dotted lines represent usage of the NN for training and inference.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_06.png" width="500"/> <span id="x1-165010r6"/></p>
+<span class="id">Figure 9.6: A sequential diagram of the training process </span>
+</div>
+<p>As you can see, the top two steps communicate with the bottom only via the replay buffer and NN. This makes it possible to separate those two parts in different parallel processes. The following figure is a diagram of the scheme:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_07.png" width="600"/> <span id="x1-165011r7"/></p>
+<span class="id">Figure 9.7: The parallel version of the training and play steps </span>
+</div>
+<p>In the case of our Pong environment, it might look like an unnecessary complication of the code, but this separation might be extremely useful in some cases. Imagine that you have a very slow and heavy environment, so every step takes seconds of computations. That’s not a contrived example; for instance, past NeurIPS competitions, such as <span class="cmti-10x-x-109">Learning to Run, AI for Prosthetics Challenge, and Learn to Move </span>( <a class="url" href="https://www.aicrowd.com/challenges/neurips-2019-learn-to-move-walk-around"><span class="cmtt-10x-x-109">https://www.aicrowd.com/challenges/neurips-2019-learn-to-move-walk-around</span></a>), have very slow neuromuscular simulators, so you have to separate experience gathering from the training process. In such cases, you can have many<span id="dx1-165012"/> concurrent environments that deliver the experience to the central training process.</p>
+<p>To turn our serial code into parallel code, some modifications are needed. In the file <span class="cmtt-10x-x-109">Chapter09/03</span><span class="cmtt-10x-x-109">_parallel.py</span>, you can find the full source of the example. In the following, I’ll focus only on major differences.</p>
+<p>First, we use the <span class="cmtt-10x-x-109">torch.multiprocessing </span>module as a drop-in replacement for the standard Python multiprocessing module:</p>
+<div class="tcolorbox" id="tcolobox-201">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-257"><code>import torch.multiprocessing as mp 
+ 
+@dataclass 
+class EpisodeEnded: 
+    reward: float 
+    steps: int 
+    epsilon: float 
+ 
+ 
+def play_func(params: common.Hyperparams, net: dqn_model.DQN, 
+              dev_name: str, exp_queue: mp.Queue): 
+    env = gym.make(params.env_name) 
+    env = ptan.common.wrappers.wrap_dqn(env) 
+    device = torch.device(dev_name) 
+ 
+    selector = ptan.actions.EpsilonGreedyActionSelector(epsilon=params.epsilon_start) 
+    epsilon_tracker = common.EpsilonTracker(selector, params) 
+    agent = ptan.agent.DQNAgent(net, selector, device=device) 
+    exp_source = ptan.experience.ExperienceSourceFirstLast( 
+        env, agent, gamma=params.gamma, env_seed=common.SEED) 
+ 
+    for frame_idx, exp in enumerate(exp_source): 
+        epsilon_tracker.frame(frame_idx//2) 
+        exp_queue.put(exp) 
+        for reward, steps in exp_source.pop_rewards_steps(): 
+            ee = EpisodeEnded(reward=reward, steps=steps, epsilon=selector.epsilon) 
+            exp_queue.put(ee)</code></pre>
+</div>
+</div>
+<p>The version from the standard library provides several primitives to work with code executed in separated processes, such as <span class="cmtt-10x-x-109">mp.Queue </span>(distributed queue), <span class="cmtt-10x-x-109">mp.Process </span>(child process), and others. PyTorch provides a wrapper around the standard multiprocessing library, which allows torch tensors to be shared between processes without copying them. This is implemented using shared memory in the case of CPU tensors, or CUDA references for tensors on a GPU. This sharing mechanism removes the major bottleneck when communication is performed within a single computer. Of course, in the case of truly distributed communications, you need to serialize data yourself.</p>
+<p>The function <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_func </span>implements our “play process” and will be <span id="dx1-165040"/>running in a separate child process started by the main process. Its responsibility is to get experience from the environment and push it into the shared queue. In addition, it wraps information about the end of the episode into a dataclass and pushes it into the same queue to keep the training process informed about the episode reward and the number of steps.</p>
+<p>The function <span class="cmtt-10x-x-109">batch</span><span class="cmtt-10x-x-109">_generator </span>is replaced by the class <span class="cmtt-10x-x-109">BatchGenerator</span>:</p>
+<div class="tcolorbox" id="tcolobox-202">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-258"><code>class BatchGenerator: 
+    def __init__(self, buffer_size: int, exp_queue: mp.Queue, 
+                 fps_handler: ptan_ignite.EpisodeFPSHandler, 
+                 initial: int, batch_size: int): 
+        self.buffer = ptan.experience.ExperienceReplayBuffer( 
+            experience_source=None, buffer_size=buffer_size) 
+        self.exp_queue = exp_queue 
+        self.fps_handler = fps_handler 
+        self.initial = initial 
+        self.batch_size = batch_size 
+        self._rewards_steps = [] 
+        self.epsilon = None 
+ 
+    def pop_rewards_steps(self) -&gt; tt.List[tt.Tuple[float, int]]: 
+        res = list(self._rewards_steps) 
+        self._rewards_steps.clear() 
+        return res 
+ 
+    def __iter__(self): 
+        while True: 
+            while self.exp_queue.qsize() &gt; 0: 
+                exp = self.exp_queue.get() 
+                if isinstance(exp, EpisodeEnded): 
+                    self._rewards_steps.append((exp.reward, exp.steps)) 
+                    self.epsilon = exp.epsilon 
+                else: 
+                    self.buffer._add(exp) 
+                    self.fps_handler.step() 
+            if len(self.buffer) &lt; self.initial: 
+                continue 
+            yield self.buffer.sample(self.batch_size)</code></pre>
+</div>
+</div>
+<p>This class provides an iterator over batches and additionally mimics the <span class="cmtt-10x-x-109">ExperienceSource </span>interface with the method <span class="cmtt-10x-x-109">pop</span><span class="cmtt-10x-x-109">_reward</span><span class="cmtt-10x-x-109">_steps()</span>. The logic of this class is simple: it consumes the queue (populated by the “play process”), and if the <span class="cmtt-10x-x-109">EpisodeEnded </span>object was received, it remembers information about epsilon and the count of steps the game took; otherwise, the object is a piece of experience that needs to be added into the replay buffer. From the queue, we consume all objects <span id="dx1-165072"/>available at the moment, and then the training batch is sampled from the buffer and yielded.</p>
+<p>In the beginning of the training process, we need to tell <span class="cmtt-10x-x-109">torch.multiprocessing</span> which start method to use:</p>
+<div class="tcolorbox" id="tcolobox-203">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-259"><code>if __name__ == "__main__": 
+    warnings.simplefilter("ignore", category=UserWarning) 
+    mp.set_start_method(’spawn’)</code></pre>
+</div>
+</div>
+<p>There are several of them, but <span class="cmtt-10x-x-109">spawn </span>is the most flexible.</p>
+<p>Then, the queue for communication is created, and we start our <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_func </span>as a separate process. As arguments, we pass the NN, hyperparameters, and queue to be used for experience:</p>
+<div class="tcolorbox" id="tcolobox-204">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-260"><code>    exp_queue = mp.Queue(maxsize=2) 
+    proc_args = (params, net, args.dev, exp_queue) 
+    play_proc = mp.Process(target=play_func, args=proc_args) 
+    play_proc.start()</code></pre>
+</div>
+</div>
+<p>The rest of the code is almost the same, with the exception that we use a <span class="cmtt-10x-x-109">BatchGenerator </span>instance as the data source for Ignite and for <span class="cmtt-10x-x-109">EndOfEpisodeHandler </span>(which requires the method <span class="cmtt-10x-x-109">pop</span><span class="cmtt-10x-x-109">_rewards</span><span class="cmtt-10x-x-109">_steps()</span>). The following charts were obtained from my benchmarks:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_08.png" width="600"/> <span id="x1-165080r8"/></p>
+<span class="id">Figure 9.8: Reward and FPS in the baseline and parallel version </span>
+</div>
+<p>As you can see, in terms of FPS, we got an increase of 27%: 290 FPS in the parallel version versus 228 in the baseline. The average time to solve the environment decreased by 41%.</p>
+<p>In terms of FPS increase, the parallel version looks worse than the best result from<span id="dx1-165081"/> the previous section (with 3 game environments, we got almost 400 FPS), but the convergence speed is better.</p>
+</section>
+<section class="level3 sectionHead" id="tweaking-wrappers">
+<h1 class="heading-1" id="sigil_toc_id_147"> <span id="x1-1660009.6"/>Tweaking wrappers</h1>
+<p>The final step in<span id="dx1-166001"/> our sequence of experiments will be tweaking wrappers applied to the environment. This is very easy to overlook, as wrappers are normally written once or just borrowed from other code, applied to the environment, and left to sit there. But you should be aware of their importance in terms of the speed and convergence of your method. For example, the normal DeepMind-style stack of wrappers applied to an Atari game looks like this:</p>
+<ol>
+<li>
+<div id="x1-166003x1">
+<p><span class="cmtt-10x-x-109">NoopResetEnv</span>: Applies a random amount of NOOP operations to the game reset. In some Atari games, this is needed to remove weird initial observations.</p>
+</div>
+</li>
+<li>
+<div id="x1-166005x2">
+<p><span class="cmtt-10x-x-109">MaxAndSkipEnv</span>: Applies <span class="cmtt-10x-x-109">max </span>to <span class="cmmi-10x-x-109">N </span>observations (four by default) and returns this as an observation for the step. This solves the “flickering” problem in some Atari games, when the game draws different portions of the screen on even and odd frames (a normal practice among Atari developers to overcome the platform’s limitations and increase the complexity of the game’s sprites).</p>
+</div>
+</li>
+<li>
+<div id="x1-166007x3">
+<p><span class="cmtt-10x-x-109">EpisodicLifeEnv</span>: In some games, this detects a lost life and turns this situation into the end of the episode. This significantly increases convergence, as our episodes become shorter (one single life versus several given by the game logic). This is relevant only for some games supported by the Atari 2600 Learning Environment.</p>
+</div>
+</li>
+<li>
+<div id="x1-166009x4">
+<p><span class="cmtt-10x-x-109">FireResetEnv</span>: Executes a <span class="cmbx-10x-x-109">FIRE </span>action on game reset. Some games require this to start the gameplay. Without this, our environment becomes a <span class="cmbx-10x-x-109">partially observable Markov decision process</span> (<span class="cmbx-10x-x-109">POMDP</span>), which makes it impossible to converge.</p>
+</div>
+</li>
+<li>
+<div id="x1-166011x5">
+<p><span class="cmtt-10x-x-109">WarpFrame</span>: Also known as <span class="cmtt-10x-x-109">ProcessFrame84</span>, this converts an image to grayscale and resizes it to 84 <span class="cmsy-10x-x-109">× </span>84.</p>
+</div>
+</li>
+<li>
+<div id="x1-166013x6">
+<p><span class="cmtt-10x-x-109">ClipRewardEnv</span>: Clips the reward to a <span class="cmsy-10x-x-109">−</span>1<span class="cmmi-10x-x-109">…</span>1 range, which unifies wide variability in scoring among different Atari games. For example, Pong might have a <span class="cmsy-10x-x-109">−</span>21<span class="cmmi-10x-x-109">…</span>21 score range, but the score in the River Raid game could be 0<span class="cmmi-10x-x-109">…</span><span class="cmsy-10x-x-109">∞</span>.</p>
+</div>
+</li>
+<li>
+<div id="x1-166015x7">
+<p><span class="cmtt-10x-x-109">FrameStack</span>: Stacks <span class="cmmi-10x-x-109">N </span>sequential observations into the stack (the default is four). As we already discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>, in some games, this is required to fulfill the Markov property. For example, in Pong, from one single frame, it is impossible to get the direction the ball is moving in.</p>
+</div>
+</li>
+</ol>
+<p>The code of those<span id="dx1-166016"/> wrappers was heavily optimized by many people and several versions exist. My personal favorite is the <span class="cmti-10x-x-109">Stable Baselines3</span>, which is a fork from the OpenAI <span class="cmti-10x-x-109">Baselines </span>project. You can find it here: <a class="url" href="https://stable-baselines3.readthedocs.io/."><span class="cmtt-10x-x-109">https://stable-baselines3.readthedocs.io/.</span></a></p>
+<p>But you shouldn’t take this code as the final source of truth, as your concrete environment might have different requirements and specifics. For example, if you are interested in speeding up one specific game from the Atari suite, <span class="cmtt-10x-x-109">NoopResetEnv </span>and <span class="cmtt-10x-x-109">MaxAndSkipEnv </span>(more precisely, the max pooling operation from <span class="cmtt-10x-x-109">MaxAndSkipEnv</span>) might not be needed. Another thing that could be tweaked is the number of frames in the <span class="cmtt-10x-x-109">FrameStack </span>wrapper. The normal practice is to use four, but you need to understand that this number was used by DeepMind and other researchers to train on the full Atari 2600 game suite, which currently includes more than 50 games. For your specific case, a history of two frames might be enough to give you a performance boost, as less data will need to be processed by the NN.</p>
+<p>Finally, the image resize could be the bottleneck of wrappers, so you might want to optimize libraries used by wrappers, for example, rebuilding them or replacing them with faster versions. Prior to 2020, replacing the OpenCV2 library with the <span class="cmtt-10x-x-109">pillow-simd </span>library gave a boost of about 50 frames per second. Nowadays, OpenCV2 uses an optimized rescaling operation, so such replacement has no effect. But still, you might experiment with different scaling methods and different libraries.</p>
+<p>Here, we’ll apply the following changes to the Pong wrappers:</p>
+<ul>
+<li>
+<p>Disable <span class="cmtt-10x-x-109">NoopResetEnv</span></p>
+</li>
+<li>
+<p>Replace <span class="cmtt-10x-x-109">MaxAndSkipEnv </span>with a simplified version, which just skips four frames without max pooling</p>
+</li>
+<li>
+<p>Keep only two frames in <span class="cmtt-10x-x-109">FrameStack</span></p>
+</li>
+</ul>
+<p>To check the combined effect of our tweaks, we’ll add the above changes to the modifications done in the previous two sections: several environments and parallel execution of playing and training.</p>
+<p>As the changes are not complex, let’s just quickly discuss them without the actual code (the full code can be found in the files <span class="cmtt-10x-x-109">Chapter09/04</span><span class="cmtt-10x-x-109">_wrappers</span><span class="cmtt-10x-x-109">_n</span><span class="cmtt-10x-x-109">_env.py</span>, <span class="cmtt-10x-x-109">Chapter09/04</span><span class="cmtt-10x-x-109">_wrappers</span><span class="cmtt-10x-x-109">_parallel.py</span>, and <span class="cmtt-10x-x-109">Chapter09/lib/atari</span><span class="cmtt-10x-x-109">_wrappers.py</span>):</p>
+<ul>
+<li>
+<p>Library <span class="cmtt-10x-x-109">atari</span><span class="cmtt-10x-x-109">_wrappers.py </span>is quite simple — it contains the copy of the <span class="cmtt-10x-x-109">wrap</span><span class="cmtt-10x-x-109">_dqn </span>function from PTAN and the <span class="cmtt-10x-x-109">AtariWrapper </span>class from Stable Baselines3.</p>
+</li>
+<li>
+<p>In <span class="cmtt-10x-x-109">AtariWrapper</span>, the class <span class="cmtt-10x-x-109">MaxAndSkipEnv </span>was replaced with a simplified version without max pooling between frames.</p>
+</li>
+<li>
+<p>Two modules, <span class="cmtt-10x-x-109">04</span><span class="cmtt-10x-x-109">_wrappers</span><span class="cmtt-10x-x-109">_n</span><span class="cmtt-10x-x-109">_env.py </span>and <span class="cmtt-10x-x-109">04</span><span class="cmtt-10x-x-109">_wrappers</span><span class="cmtt-10x-x-109">_prallel.py, </span>are just copies of <span class="cmtt-10x-x-109">02</span><span class="cmtt-10x-x-109">_n</span><span class="cmtt-10x-x-109">_env.py </span>and <span class="cmtt-10x-x-109">03</span><span class="cmtt-10x-x-109">_parallel.py </span>we’ve already seen, with tweaked environment creation.</p>
+</li>
+</ul>
+<p>That’s it! The following are charts with reward dynamics <span id="dx1-166017"/>and FPS for both versions:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_09.png" width="600"/> <span id="x1-166018r9"/></p>
+<span class="id">Figure 9.9: Reward and FPS in the baseline and “3 environments and 2 frames” version </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_09_10.png" width="600"/> <span id="x1-166019r10"/></p>
+<span class="id">Figure 9.10: Reward and FPS in the baseline and “parallel and 2 frames” version </span>
+</div>
+<p>Out of curiosity, I also tried to reduce the number of frames kept in <span class="cmtt-10x-x-109">FrameStack</span> to just one frame (you can repeat the experiment with the command-line argument <span class="cmtt-10x-x-109">--stack 1</span>). Surprisingly, such a version was able to solve the game, but it took significantly longer in terms of games needed and the training became unstable (about 3 out of 8 training runs didn’t converge at all). This might be an indication that Pong with just one frame is not POMDP and the agent still can learn<span id="dx1-166020"/> how to win the game having just one frame as observation. But the efficiency of training definitely suffers.</p>
+</section>
+<section class="level3 sectionHead" id="benchmark-results">
+<h1 class="heading-1" id="sigil_toc_id_148"> <span id="x1-1670009.7"/>Benchmark results</h1>
+<p>I’ve summarized<span id="dx1-167001"/> our experiments in the following table. The percentages show the changes versus the baseline version:</p>
+<div class="table">
+<figure class="float">
+<div class="center">
+<div class="tabular">
+<table class="table-container" id="TBL-4">
+<tbody>
+<tr id="TBL-4-1-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-1-1"><span class="cmbx-10x-x-109">Step </span></td>
+<td class="table-cell" id="TBL-4-1-2"><span class="cmbx-10x-x-109">FPS </span></td>
+<td class="table-cell" id="TBL-4-1-3"><span class="cmbx-10x-x-109">FPS </span>Δ</td>
+<td class="table-cell" id="TBL-4-1-4"><span class="cmbx-10x-x-109">Time, mins </span></td>
+<td class="table-cell" id="TBL-4-1-5"><span class="cmbx-10x-x-109">Time </span>Δ</td>
+</tr>
+<tr id="TBL-4-2-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-2-1">Baseline</td>
+<td class="table-cell" id="TBL-4-2-2">229</td>
+<td class="table-cell" id="TBL-4-2-3"/>
+<td class="table-cell" id="TBL-4-2-4">52.2</td>
+<td class="table-cell" id="TBL-4-2-5"/>
+</tr>
+<tr id="TBL-4-3-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-3-1">Without <span class="cmtt-10x-x-109">torch.no</span><span class="cmtt-10x-x-109">_grad() </span></td>
+<td class="table-cell" id="TBL-4-3-2">219</td>
+<td class="table-cell" id="TBL-4-3-3">-4.3%</td>
+<td class="table-cell" id="TBL-4-3-4">51.0</td>
+<td class="table-cell" id="TBL-4-3-5">-2.3%</td>
+</tr>
+<tr id="TBL-4-4-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-4-1">3 environments</td>
+<td class="table-cell" id="TBL-4-4-2">395</td>
+<td class="table-cell" id="TBL-4-4-3">+72.5%</td>
+<td class="table-cell" id="TBL-4-4-4">36.0</td>
+<td class="table-cell" id="TBL-4-4-5">-31.0%</td>
+</tr>
+<tr id="TBL-4-5-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-5-1">Parallel version</td>
+<td class="table-cell" id="TBL-4-5-2">290</td>
+<td class="table-cell" id="TBL-4-5-3">+26.6%</td>
+<td class="table-cell" id="TBL-4-5-4">31.2</td>
+<td class="table-cell" id="TBL-4-5-5">-40.2%</td>
+</tr>
+<tr id="TBL-4-6-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-6-1">Wrappers + 3 environments</td>
+<td class="table-cell" id="TBL-4-6-2">448</td>
+<td class="table-cell" id="TBL-4-6-3">+95.6%</td>
+<td class="table-cell" id="TBL-4-6-4">47.4</td>
+<td class="table-cell" id="TBL-4-6-5">-9.2%</td>
+</tr>
+<tr id="TBL-4-7-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-4-7-1">Wrappers + parallel</td>
+<td class="table-cell" id="TBL-4-7-2">325</td>
+<td class="table-cell" id="TBL-4-7-3">+41.9%</td>
+<td class="table-cell" id="TBL-4-7-4">30.0</td>
+<td class="table-cell" id="TBL-4-7-5">-42.5%</td>
+</tr>
+</tbody>
+</table>
+</div>
+<span id="x1-167002r1"/>
+<span class="id">Table 9.1: Optimization results </span>
+</div>
+</figure>
+</div>
+</section>
+<section class="level3 sectionHead" id="summary-8">
+<h1 class="heading-1" id="sigil_toc_id_149"> <span id="x1-1680009.8"/>Summary</h1>
+<p>In this chapter, you saw several ways to improve the performance of the RL method using a pure engineering approach, which was in contrast to the “algorithmic” or “theoretical” approach covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>. From my perspective, both approaches complement each other, and a good RL practitioner needs to both know the latest tricks that researchers have found and be aware of the implementation details.</p>
+<p>In the next chapter, we will begin applying our DQN knowledge to stocks trading as a practical example.</p>
+</section>
+</section>
+</div></body></html>

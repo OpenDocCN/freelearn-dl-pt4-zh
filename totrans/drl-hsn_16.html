@@ -1,0 +1,744 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-16-trust-region-methods">
+<h1 class="chapterNumber">16</h1>
+<h1 class="heading-1" id="sigil_toc_id_419">
+<span id="x1-29000016"/>Trust Region Methods
+    </h1>
+<p>In this chapter, we will take a look at the approaches used to improve the stability of the stochastic policy gradient method. Some attempts have been made to make the policy improvement more stable, and in this chapter, we will focus on three methods:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Proximal policy optimization </span>(<span class="cmbx-10x-x-109">PPO</span>)</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Trust region policy optimization </span>(<span class="cmbx-10x-x-109">TRPO</span>)</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Advantage actor-critic </span>(<span class="cmbx-10x-x-109">A2C</span>) using <span class="cmbx-10x-x-109">Kronecker-factored trust</span> <span class="cmbx-10x-x-109">region </span>(<span class="cmbx-10x-x-109">ACKTR</span>) .</p>
+</li>
+</ul>
+<p>In addition, we <span id="dx1-290001"/>will compare these methods to a relatively new off-policy <span id="dx1-290002"/>method called <span class="cmbx-10x-x-109">soft actor-critic </span>(<span class="cmbx-10x-x-109">SAC</span>), which is the evolution of the deep <span class="cmbx-10x-x-109">deterministic policy gradients </span>(<span class="cmbx-10x-x-109">DDPG</span>) method described in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch019.xhtml#x1-27200015"><span class="cmti-10x-x-109">15</span></a>. To compare them to the A2C baseline, we will use several environments from the so-called “locomotion gym environments” – environments shipped with Farama Gymnasium (using MuJoCo and PyBullet). We also will do a head-to-head comparison between PyBullet and MuJoCo (which we discussed in <span class="cmti-10x-x-109">Chapter</span> <span class="cmti-10x-x-109">15</span>).</p>
+<p>The purpose of the methods that we will look at is to improve the stability of the policy update during training. There is a dilemma: on the one hand, we’d like to train as fast as we can, making large steps <span id="dx1-290003"/>during the <span class="cmbx-10x-x-109">stochastic gradient</span> <span class="cmbx-10x-x-109">descent </span>(<span class="cmbx-10x-x-109">SGD</span>) update. On the other hand, a large update of the policy is usually a bad idea. The policy is a very nonlinear thing, so a large update could ruin the policy we’ve just learned.</p>
+<p>Things can become even worse in the <span class="cmbx-10x-x-109">reinforcement learning </span>(<span class="cmbx-10x-x-109">RL</span>) landscape because you can’t recover from making a bad update to the policy by subsequent updates. Instead, the bad policy will provide bad experience samples that we will use in subsequent training steps, which could break our policy completely. Thus, we want to avoid making large updates by all means possible. One of the naïve solutions would be to use a small learning rate to take baby steps during SGD, but this would significantly slow down the convergence.</p>
+<p>To break this vicious cycle, several attempts have been made by researchers to <span id="dx1-290004"/>estimate the effect that our policy update is going to have in terms of future outcomes. One of the popular approaches is the <span class="cmbx-10x-x-109">trust region</span> <span class="cmbx-10x-x-109">optimization </span>extension, which constrains the steps taken during the optimization to limit its effect on the policy. The main idea is to prevent a dramatic policy update during the loss optimization by <span id="dx1-290005"/>checking the <span class="cmbx-10x-x-109">Kullback-Leibler </span>(<span class="cmbx-10x-x-109">KL</span>) divergence between the old and the new policy. Of course, this is an informal explanation, but it can help you understand the idea, especially as those methods are quite math-heavy (especially TRPO).</p>
+<section class="level3 sectionHead" id="environments-1">
+<h1 class="heading-1" id="sigil_toc_id_262"> <span id="x1-29100016.1"/>Environments</h1>
+<p>Previous editions of this book used the Roboschool library from OpenAI (<a class="url" href="https://openai.com/index/roboschool"><span class="cmtt-10x-x-109">https://openai.com/index/roboschool</span></a>) to illustrate trust region methods. But eventually, OpenAI deprecated Roboschool and stopped its support.</p>
+<p>But environments are still available in other sources:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">PyBullet</span>: The physics <span id="dx1-291001"/>simulator we experimented with in the previous chapter, which includes a wide variety of environments that support Gym. PyBullet may be a bit outdated (the latest release was in 2022), but it is still workable with a bit of hacking.</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Farama Gymnasium MuJoCo environments</span>: MuJoCo is a physics simulator that we <span id="dx1-291002"/>discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch019.xhtml#x1-27200015"><span class="cmti-10x-x-109">15</span></a>. After it was made open source, MuJoCo was adopted in various products, including Gymnasium, which ships several environments: <a class="url" href="https://gymnasium.farama.org/environments/mujoco/"><span class="cmtt-10x-x-109">https://gymnasium.farama.org/environments/mujoco/</span></a>.</p>
+</li>
+</ul>
+<p>In this chapter, we will explore two problems: <span class="cmtt-10x-x-109">HalfCheetah-v4</span>, which models a two-legged creature, and <span class="cmtt-10x-x-109">Ant-v4</span>, which has four legs. Their state and action spaces are very similar to the Minitaur environment that we saw in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch019.xhtml#x1-27200015"><span class="cmti-10x-x-109">15</span></a>: the state includes characteristics from joints, and the actions are activations of those joints. The goal for each problem is to move as far as possible, minimizing the energy spent. The following figure shows screenshots of the two environments:</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file215.png" width="288"/> <span id="x1-291003r1"/></p>
+<span class="id">Figure 16.1: Screenshots of the cheetah and ant environments </span>
+</div>
+<p>In our experiment, we’ll use PyBullet and MuJoCo to do a comparison of both simulators in terms of speed and training dynamics (however, note that the internal structure of the PyBullet and MuJoCo environments might be different, and so the comparison of training dynamics may not always be reliable). To install the Gymnasium with MuJoCo extensions, you need to run the following command in your Python environment: <span class="cmtt-10x-x-109">pip install</span> <span class="cmtt-10x-x-109">gymnasium[mujoco]==0.29.0</span>.</p>
+</section>
+<section class="level3 sectionHead" id="the-a2c-baseline">
+<h1 class="heading-1" id="sigil_toc_id_263"> <span id="x1-29200016.2"/>The A2C baseline</h1>
+<p>To <span id="dx1-292001"/>establish the baseline results, we will use the A2C method in a very similar way to the previous chapter. The complete source code is in the <span class="cmtt-10x-x-109">Chapter16/01</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_a2c.py </span>and <span class="cmtt-10x-x-109">Chapter16/lib/model.py </span>files. There are a few differences between this baseline and the version we used before:</p>
+<ul>
+<li>
+<p>16 parallel environments are used to gather experience during the training.</p>
+</li>
+<li>
+<p>They differ in model structure and the way that we perform exploration.</p>
+</li>
+</ul>
+<section class="level4 subsectionHead" id="implementation-14">
+<h2 class="heading-2" id="sigil_toc_id_264"> <span id="x1-29300016.2.1"/>Implementation</h2>
+<p>To illustrate the <span id="dx1-293001"/>differences between this baseline and the previously discussed version, let’s look at the model and the agent classes.</p>
+<p>The actor and critic are placed in separate networks without sharing weights. They follow the approach used in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch019.xhtml#x1-27200015"><span class="cmti-10x-x-109">15</span></a>, with our critic estimating the mean and the variance for the actions. However, now, variance is not a separate head of the base network; it is just a single parameter of the model. This parameter will be adjusted during the training by SGD, but it doesn’t depend on the observation.</p>
+<p>The actor network has two hidden layers of 64 neurons, each with tanh nonlinearity (to push the output in the <span class="cmsy-10x-x-109">−</span>1<span class="cmmi-10x-x-109">…</span>1 range). The variance is modeled as a separate network parameter and is interpreted as a logarithm of the standard deviation:</p>
+<div class="tcolorbox" id="tcolobox-353">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-424"><code>HID_SIZE = 64 
+ 
+class ModelActor(nn.Module): 
+    def __init__(self, obs_size: int, act_size: int): 
+        super(ModelActor, self).__init__() 
+ 
+        self.mu = nn.Sequential( 
+            nn.Linear(obs_size, HID_SIZE), 
+            nn.Tanh(), 
+            nn.Linear(HID_SIZE, HID_SIZE), 
+            nn.Tanh(), 
+            nn.Linear(HID_SIZE, act_size), 
+            nn.Tanh(), 
+        ) 
+        self.logstd = nn.Parameter(torch.zeros(act_size)) 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        return self.mu(x)</code></pre>
+</div>
+</div>
+<p>The critic <span id="dx1-293020"/>network also has two hidden layers of the same size, with one single output value, which is the estimation of <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span>), which is a discounted value of the state:</p>
+<div class="tcolorbox" id="tcolobox-354">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-425"><code>class ModelCritic(nn.Module): 
+    def __init__(self, obs_size: int): 
+        super(ModelCritic, self).__init__() 
+ 
+        self.value = nn.Sequential( 
+            nn.Linear(obs_size, HID_SIZE), 
+            nn.ReLU(), 
+            nn.Linear(HID_SIZE, HID_SIZE), 
+            nn.ReLU(), 
+            nn.Linear(HID_SIZE, 1), 
+        ) 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        return self.value(x)</code></pre>
+</div>
+</div>
+<p>The agent that converts the state into the action also works by simply obtaining the predicted mean from the state and applying the noise with variance, dictated by the current value of the <span class="cmtt-10x-x-109">logstd </span>parameter:</p>
+<div class="tcolorbox" id="tcolobox-355">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-426"><code>class AgentA2C(ptan.agent.BaseAgent): 
+    def __init__(self, net, device: torch.device): 
+        self.net = net 
+        self.device = device 
+ 
+    def __call__(self, states: ptan.agent.States, agent_states: ptan.agent.AgentStates): 
+        states_v = ptan.agent.float32_preprocessor(states) 
+        states_v = states_v.to(self.device) 
+ 
+        mu_v = self.net(states_v) 
+        mu = mu_v.data.cpu().numpy() 
+        logstd = self.net.logstd.data.cpu().numpy() 
+        rnd = np.random.normal(size=logstd.shape) 
+        actions = mu + np.exp(logstd) * rnd 
+        actions = np.clip(actions, -1, 1) 
+        return actions, agent_states</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="results-18">
+<h2 class="heading-2" id="sigil_toc_id_265"> <span id="x1-29400016.2.2"/>Results</h2>
+<p>The <span id="dx1-294001"/>training utility <span class="cmtt-10x-x-109">01</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_a2c.py </span>could be started in two different modes: with PyBullet as the physics simulator (without any extra command-line options) or with MuJoCo (if the <span class="cmtt-10x-x-109">--mujoco </span>parameter is given).</p>
+<p>By default, the HalfCheetah environment is used, which simulates a flat two-legged creature that can jump around on its legs. With <span class="cmtt-10x-x-109">-e ant</span>, you can switch to the Ant environment, which is a 3-dimensional 4-legged spider. You can also experiment with other environments shipped with Gymnasium and PyBullet, but this will require tweaking the <span class="cmtt-10x-x-109">common.py</span> module.</p>
+<p>Results for HalfCheetah on PyBullet are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-294002r2"><span class="cmti-10x-x-109">16.2</span></a>. Performance on my machine (using the GPU) was about 1,600 frames per second during the training, so 100M training steps took 20 hours in total.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_02.png" width="600"/> <span id="x1-294002r2"/></p>
+<span class="id">Figure 16.2: The reward during training (left) and test reward (right) for HalfCheetah on PyBullet </span>
+</div>
+<p>The dynamics suggest that the policy could be further improved with more time given to optimization, but for our purpose of method comparison, it should be enough. Of course, if you’re curious and have plenty of time, you can run this for longer and find the point when the policy stops improving. According to research papers, HalfCheetah has a maximum score of around 4,000-5,000.</p>
+<p>To use MuJoCo as a <span id="dx1-294003"/>physics simulation engine, training has to be started with the <span class="cmtt-10x-x-109">--mujoco </span>command-line option. MuJoCo has a performance of 5,100 frames per second, which is 3 times faster than PyBullet, which is really nice. In addition, the training has much better dynamics, so in 90M training steps (which took about 5 hours) the model got a reward of 4,500. Plots for MuJoCo are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-294004r3"><span class="cmti-10x-x-109">16.3</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_03.png" width="600"/> <span id="x1-294004r3"/></p>
+<span class="id">Figure 16.3: The reward during training (left) and the test reward (right) for HalfCheetah on MuJoCo </span>
+</div>
+<p>The difference could be explained by a more accurate simulation, but could also be attributed to the difference in the observation space and the underlying model differences. PyBullet’s model has 26 parameters provided to the agent as observations, while MuJoCo has only 17, so those models are not identical.</p>
+<p>To test our model in the Ant environment, the <span class="cmtt-10x-x-109">-e ant </span>command-line option has to be passed to the training process. This model is more complex (due to the 3D nature of the model and more joints being used), so the simulation is slower. On PyBullet, the speed is around 1,400 frames per second. On MuJoCo, the speed is 2,500.</p>
+<p>The MuJoCo Ant environment also has an additional check for “healthiness” – if the simulated creature is inclined more than a certain degree, the <span id="dx1-294005"/>episode is terminated. This check is enabled by default and has a very negative effect on the training – in the early stage of the training, our method has no chance of figuring out how to make the ant stand on its legs. The reward in the environment is the distance traveled, but with this early termination, our training has no chance of discovering this. As a result, the training process got stuck forever in local minima without making progress. To overcome this, we need to disable this healthiness check by passing the <span class="cmtt-10x-x-109">--no-unhealthy </span>command-line option (which only has to be done for MuJoCo training).</p>
+<div class="tcolorbox tipbox" id="tcolobox-356">
+<div class="tcolorbox-content">
+<p>In principle, you can implement more advanced exploration methods, such as the OU process (discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch019.xhtml#x1-27200015"><span class="cmti-10x-x-109">15</span></a>) or other methods (covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch022.xhtml#x1-32800018"><span class="cmti-10x-x-109">18</span></a>) to address the issue we just discussed.</p>
+</div>
+</div>
+<p>The results of the training in the Ant environment are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-294006r4"><span class="cmti-10x-x-109">16.4</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-294007r5"><span class="cmti-10x-x-109">16.5</span></a>.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_04.png" width="600"/> <span id="x1-294006r4"/></p>
+<span class="id">Figure 16.4: The reward during training (left) and the test reward (right) for Ant on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_05.png" width="600"/> <span id="x1-294007r5"/></p>
+<span class="id">Figure 16.5: The reward during training (left) and the test reward (right) for Ant on MuJoCo </span>
+</div>
+<p>As you can see from the MuJoCo plots in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-294007r5"><span class="cmti-10x-x-109">16.5</span></a>, the testing reward had <span id="dx1-294008"/>almost no increase for the first 100M steps of training, but then grew to a score of 5,000 (the best model got 5,380 on testing). This result is quite impressive. According to the <a class="url" href="https://paperswithcode.com"><span class="cmtt-10x-x-109">https://paperswithcode.com</span></a> website, the state of the art for Ant MuJoCo environment is 4,362.9, obtained by IQ-Learn in 2021: <a class="url" href="https://paperswithcode.com/sota/mujoco-games-on-ant"><span class="cmtt-10x-x-109">https://paperswithcode.com/sota/mujoco-games-on-ant</span></a>.</p>
+</section>
+<section class="level4 subsectionHead" id="video-recording">
+<h2 class="heading-2" id="sigil_toc_id_266"> <span id="x1-29500016.2.3"/>Video recording</h2>
+<p>As in the previous <span id="dx1-295001"/>chapter, there is a utility that can benchmark the trained model and record a video of the agent in action. As all the methods in this chapter share the same actor network, the tool is universal for all the methods illustrated here: <span class="cmtt-10x-x-109">02</span><span class="cmtt-10x-x-109">_play.py</span>.</p>
+<p>You need to pass the model file stored in the <span class="cmtt-10x-x-109">saves </span>directory during training, change the environment using the <span class="cmtt-10x-x-109">-e ant </span>command line, and enable the MuJoCo engine with the <span class="cmtt-10x-x-109">--mujoco </span>parameter. This is important because the same environments in PyBullet and MuJoCo have different amounts of observations, and so the physics engine has to match to the model.</p>
+<p>You can find the individual videos for the best A2C models as follows:</p>
+<ul>
+<li>
+<p>HalfCheetah on PyBullet (score 2,189): <a class="url" href="https://youtu.be/f3ZhjnORQm0"><span class="cmtt-10x-x-109">https://youtu.be/f3ZhjnORQm0</span></a></p>
+</li>
+<li>
+<p>HalfCheetah on MuJoCo (score 4,718): <a class="url" href="https://youtube.com/shorts/SpaWbS0hM8I"><span class="cmtt-10x-x-109">https://youtube.com/shorts/SpaWbS0hM8I</span></a></p>
+</li>
+<li>
+<p>Ant on PyBullet (score 2,425): <a class="url" href="https://youtu.be/SIUM_Q24zSk"><span class="cmtt-10x-x-109">https://youtu.be/SIUM_Q24zSk</span></a></p>
+</li>
+<li>
+<p>Ant on MuJoCo (score 5,380): <a class="url" href="https://youtube.com/shorts/mapOraGKtG0"><span class="cmtt-10x-x-109">https://youtube.com/shorts/mapOraGKtG0</span></a></p>
+</li>
+</ul>
+</section>
+</section>
+<section class="level3 sectionHead" id="ppo">
+<h1 class="heading-1" id="sigil_toc_id_267"> <span id="x1-29600016.3"/>PPO</h1>
+<p>The PPO method <span id="dx1-296001"/>came from the OpenAI team, and it was proposed after TRPO, which is from 2015. However, we will start with PPO because it is much simpler than TRPO. It was first proposed in the 2017 paper named <span class="cmti-10x-x-109">Proximal Policy Optimization Algorithms </span>by Schulman et al. [<span id="x1-296002"/><a href="#">Sch+17</a>].</p>
+<p>The core improvement over the classic A2C method is changing the formula used to estimate the policy gradients. Instead of using the gradient of the logarithm probability of the action taken, the PPO method uses a different objective: the ratio between the new and the old policy scaled by the advantages.</p>
+<p>In math form, the A2C objective could be written like this</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="23" src="../Images/eq60.png" width="268"/>
+</div>
+<p>which means our gradient on model <span class="cmmi-10x-x-109">𝜃 </span>is estimated as the logarithm of the policy <span class="cmmi-10x-x-109">π </span>multiplied by the advantage <span class="cmmi-10x-x-109">A</span>.</p>
+<p>The new objective proposed in PPO is the following:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="56" src="../Images/eq55.png" width="240"/>
+</div>
+<p>The reason for changing the objective is the same as with the cross-entropy method covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a>: importance sampling. However, if we just start to blindly maximize this value, it may lead to a very large update to the policy weights. To limit the update, the clipped objective is used. If we write the ratio between the new and the old policy as <img alt="-π𝜃(at|st)- π𝜃old(at|st)" class="frac" data-align="middle" height="40" src="../Images/eq56.png"/>, the clipped objective could be written as</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="30" src="../Images/eq57.png" width="491"/>
+</div>
+<p>This objective limits the ratio between the old and the new policy to be in the interval [1 <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">𝜖,</span>1 + <span class="cmmi-10x-x-109">𝜖</span>], so by varying <span class="cmmi-10x-x-109">𝜖</span>, we can limit the size of the update.</p>
+<p>Another difference from the A2C method is the way that we estimate the advantage. In the A2C paper, the advantage obtained from the finite-horizon estimation of <span class="cmmi-10x-x-109">T </span>steps is in the form</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="26" src="../Images/eq58.png" width="579"/>
+</div>
+<p>In the PPO paper, the authors used a more general estimation</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="26" src="../Images/eq59.png" width="539"/>
+</div>
+<p>where <span class="cmmi-10x-x-109">σ</span><sub><span class="cmmi-8">t</span></sub> = <span class="cmmi-10x-x-109">r</span><sub><span class="cmmi-8">t</span></sub> + <span class="cmmi-10x-x-109">γV </span>(<span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span><span class="cmr-8">+1</span></sub>) <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">t</span></sub>).</p>
+<p>The original A2C estimation is a <span id="dx1-296003"/>special case of the proposed method with <span class="cmmi-10x-x-109">λ </span>= 1. The PPO method also uses a slightly different training procedure: a long sequence of samples is obtained from the environment and then the advantage is estimated for the whole sequence before several epochs of training are performed.</p>
+<section class="level4 subsectionHead" id="implementation-15">
+<h2 class="heading-2" id="sigil_toc_id_268"> <span id="x1-29700016.3.1"/>Implementation</h2>
+<p>The <span id="dx1-297001"/>code of the sample is placed in two source code files: <span class="cmtt-10x-x-109">Chapter16/04</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_ppo.py</span> and <span class="cmtt-10x-x-109">Chapter16/lib/model.py</span>. The actor, the critic, and the agent classes are exactly the same as we had in the A2C baseline.</p>
+<p>The differences are in the training procedure and the way that we calculate advantages, but let’s start with the hyperparameters:</p>
+<div class="tcolorbox" id="tcolobox-357">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-427"><code>GAMMA = 0.99 
+GAE_LAMBDA = 0.95 
+ 
+TRAJECTORY_SIZE = 2049 
+LEARNING_RATE_ACTOR = 1e-5 
+LEARNING_RATE_CRITIC = 1e-4 
+ 
+PPO_EPS = 0.2 
+PPO_EPOCHES = 10 
+PPO_BATCH_SIZE = 64</code></pre>
+</div>
+</div>
+<p>The value of <span class="cmtt-10x-x-109">GAMMA </span>is already familiar, but <span class="cmtt-10x-x-109">GAE</span><span class="cmtt-10x-x-109">_LAMBDA </span>is the new constant that specifies the lambda factor in the advantage estimator. The authors chose to use a value of 0.95 in the PPO paper.</p>
+<p>The method assumes that a large number of transitions will be obtained from the environment for every subiteration. (As mentioned previously in this section, when describing PPO, during training, it performs several epochs over the sampled training batch.) We also use two different optimizers for the actor and the critic (as they have no shared weights).</p>
+<p>For every batch of <span class="cmtt-10x-x-109">TRAJECTORY</span><span class="cmtt-10x-x-109">_SIZE </span>samples, we perform <span class="cmtt-10x-x-109">PPO</span><span class="cmtt-10x-x-109">_EPOCHES</span> iterations of the PPO objective, with mini-batches of 64 samples. The value <span class="cmtt-10x-x-109">PPO</span><span class="cmtt-10x-x-109">_EPS </span>specifies the clipping value for the ratio of the new and the old policy. The following function takes the trajectory with steps and calculates advantages for the actor and reference values for the critic training. Our trajectory is not a single episode, but could be several episodes concatenated together:</p>
+<div class="tcolorbox" id="tcolobox-358">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-428"><code>def calc_adv_ref(trajectory: tt.List[ptan.experience.Experience], 
+                 net_crt: model.ModelCritic, states_v: torch.Tensor, gamma: float, 
+                 gae_lambda: float, device: torch.device): 
+    values_v = net_crt(states_v) 
+    values = values_v.squeeze().data.cpu().numpy()</code></pre>
+</div>
+</div>
+<p>As the first step, we ask the critic to convert states into values.</p>
+<p>The next loop joins the values obtained and experience points:</p>
+<div class="tcolorbox" id="tcolobox-359">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-429"><code>    last_gae = 0.0 
+    result_adv = [] 
+    result_ref = [] 
+    for val, next_val, (exp,) in zip( 
+            reversed(values[:-1]), reversed(values[1:]), reversed(trajectory[:-1])):</code></pre>
+</div>
+</div>
+<p>For <span id="dx1-297022"/>every trajectory step, we need the current value (obtained from the current state) and the value for the subsequent step (to perform the estimation using the Bellman equation). We also traverse the trajectory in reverse order in order to calculate more recent values of the advantage in one step.</p>
+<div class="tcolorbox" id="tcolobox-360">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-430"><code>        if exp.done_trunc: 
+            delta = exp.reward - val 
+            last_gae = delta 
+        else: 
+            delta = exp.reward + gamma * next_val - val 
+            last_gae = delta + gamma * gae_lambda * last_gae</code></pre>
+</div>
+</div>
+<p>In every step, our action depends on the <span class="cmtt-10x-x-109">done</span><span class="cmtt-10x-x-109">_trunc </span>flag for this step. If this is the terminal step of the episode, we have no prior reward to take into account. (Remember, we’re processing the trajectory in reverse order.) So, our value of <span class="cmtt-10x-x-109">delta </span>in this step is just the immediate reward minus the value predicted for the step. If the current step is not terminal, <span class="cmtt-10x-x-109">delta </span>will be equal to the immediate reward plus the discounted value from the subsequent step, minus the value for the current step. In the classic A2C method, this delta was used as an advantage estimation, but here, the smoothed version is used, so the advantage estimation (tracked in the <span class="cmtt-10x-x-109">last</span><span class="cmtt-10x-x-109">_gae </span>variable) is calculated as the sum of deltas with the discount factor <span class="cmmi-10x-x-109">γ</span><sup><span class="cmmi-8">λ</span></sup>.</p>
+<p>The goal of the function is to calculate advantages and reference values for the critic, so we save them in lists:</p>
+<div class="tcolorbox" id="tcolobox-361">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-431"><code>        result_adv.append(last_gae) 
+        result_ref.append(last_gae + val)</code></pre>
+</div>
+</div>
+<p>At the end of the function, we convert values to tensors and return them:</p>
+<div class="tcolorbox" id="tcolobox-362">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-432"><code>    adv_v = torch.FloatTensor(np.asarray(list(reversed(result_adv)))) 
+    ref_v = torch.FloatTensor(np.asarray(list(reversed(result_ref)))) 
+    return adv_v.to(device), ref_v.to(device)</code></pre>
+</div>
+</div>
+<p>In the <span id="dx1-297034"/>training loop, we gather a trajectory of the desired size using the <span class="cmtt-10x-x-109">ExperienceSource(steps</span><span class="cmtt-10x-x-109">_count=1) </span>class from the PTAN library. This configuration provides us with individual steps from the environment in <span class="cmtt-10x-x-109">Experience </span>dataclass instances, containing the state, action, reward, and termination flag. The following is the relevant part of the training loop:</p>
+<div class="tcolorbox" id="tcolobox-363">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-433"><code>            trajectory.append(exp) 
+            if len(trajectory) &lt; TRAJECTORY_SIZE: 
+                continue 
+ 
+            traj_states = [t[0].state for t in trajectory] 
+            traj_actions = [t[0].action for t in trajectory] 
+            traj_states_v = torch.FloatTensor(np.asarray(traj_states)) 
+            traj_states_v = traj_states_v.to(device) 
+            traj_actions_v = torch.FloatTensor(np.asarray(traj_actions)) 
+            traj_actions_v = traj_actions_v.to(device) 
+            traj_adv_v, traj_ref_v = common.calc_adv_ref( 
+                trajectory, net_crt, traj_states_v, GAMMA, GAE_LAMBDA, device=device)</code></pre>
+</div>
+</div>
+<p>When we’ve got a trajectory that’s large enough for training (which is given by the <span class="cmtt-10x-x-109">TRAJECTORY</span><span class="cmtt-10x-x-109">_SIZE </span>hyperparameter), we convert states and actions taken into tensors and use the already-described function to obtain advantages and reference values. Although our trajectory is quite long, the observations of our environments are small enough, so it’s fine to process our batch in one step. In the case of Atari frames, such a batch could cause a GPU memory error. In the next step, we calculate the logarithm of the probability of the actions taken. This value will be used as <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span><sub><span class="cmmi-6">old</span></sub></sub> in the objective of PPO. Additionally, we normalize the advantage’s mean and variance to improve the training stability:</p>
+<div class="tcolorbox" id="tcolobox-364">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-434"><code>            mu_v = net_act(traj_states_v) 
+            old_logprob_v = model.calc_logprob(mu_v, net_act.logstd, traj_actions_v) 
+ 
+            traj_adv_v = traj_adv_v - torch.mean(traj_adv_v) 
+            traj_adv_v /= torch.std(traj_adv_v)</code></pre>
+</div>
+</div>
+<p>The two <span id="dx1-297052"/>subsequent lines drop the last entry from the trajectory to reflect the fact that our advantages and reference values are one step shorter than the trajectory length (as we shifted values in the loop inside the <span class="cmtt-10x-x-109">calc</span><span class="cmtt-10x-x-109">_adv</span><span class="cmtt-10x-x-109">_ref</span> function):</p>
+<div class="tcolorbox" id="tcolobox-365">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-435"><code>            trajectory = trajectory[:-1] 
+            old_logprob_v = old_logprob_v[:-1].detach()</code></pre>
+</div>
+</div>
+<p>When all the preparations have been done, we perform several epochs of training on our trajectory. For every batch, we extract the portions from the corresponding arrays and do the critic and the actor training separately:</p>
+<div class="tcolorbox" id="tcolobox-366">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-436"><code>            for epoch in range(PPO_EPOCHES): 
+                for batch_ofs in range(0, len(trajectory), PPO_BATCH_SIZE): 
+                    batch_l = batch_ofs + PPO_BATCH_SIZE 
+                    states_v = traj_states_v[batch_ofs:batch_l] 
+                    actions_v = traj_actions_v[batch_ofs:batch_l] 
+                    batch_adv_v = traj_adv_v[batch_ofs:batch_l] 
+                    batch_adv_v = batch_adv_v.unsqueeze(-1) 
+                    batch_ref_v = traj_ref_v[batch_ofs:batch_l] 
+                    batch_old_logprob_v = old_logprob_v[batch_ofs:batch_l]</code></pre>
+</div>
+</div>
+<p>To train the critic, all we need to do is calculate the <span class="cmbx-10x-x-109">mean squared error</span> (<span class="cmbx-10x-x-109">MSE</span>) loss with the reference values calculated beforehand:</p>
+<div class="tcolorbox" id="tcolobox-367">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-437"><code>                    opt_crt.zero_grad() 
+                    value_v = net_crt(states_v) 
+                    loss_value_v = F.mse_loss(value_v.squeeze(-1), batch_ref_v) 
+                    loss_value_v.backward() 
+                    opt_crt.step()</code></pre>
+</div>
+</div>
+<p>In the actor training, we minimize the negated clipped objective:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="23" src="../Images/eq61.png" width="424"/>
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="56" src="../Images/eq62.png" width="270"/>
+</div>
+<p>To achieve this, we use the following code:</p>
+<div class="tcolorbox" id="tcolobox-368">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-438"><code>                    opt_act.zero_grad() 
+                    mu_v = net_act(states_v) 
+                    logprob_pi_v = model.calc_logprob(mu_v, net_act.logstd, actions_v) 
+                    ratio_v = torch.exp(logprob_pi_v - batch_old_logprob_v) 
+                    surr_obj_v = batch_adv_v * ratio_v 
+                    c_ratio_v = torch.clamp(ratio_v, 1.0 - PPO_EPS, 1.0 + PPO_EPS) 
+                    clipped_surr_v = batch_adv_v * c_ratio_v 
+                    loss_policy_v = -torch.min(surr_obj_v, clipped_surr_v).mean() 
+                    loss_policy_v.backward() 
+                    opt_act.step()</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="results-19">
+<h2 class="heading-2" id="sigil_toc_id_269"> <span id="x1-29800016.3.2"/>Results</h2>
+<p>After being <span id="dx1-298001"/>trained in both our test environments, the PPO method has shown much faster convergence than the A2C method. On HalfCheetah using PyBullet, PPO reached an average training reward of 1,800 and 2,500 during the testing after 8 hours of training and 25M training steps. A2C got lower results after 110M steps and 20 hours. <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-298002r6"><span class="cmti-10x-x-109">16.6</span></a> shows the comparison plots.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_06.png" width="600"/> <span id="x1-298002r6"/></p>
+<span class="id">Figure 16.6: The reward during training (left) and the test reward (right) for HalfCheetah on PyBullet </span>
+</div>
+<p>But on HalfCheetah using MuJoCo, the situation is the opposite – PPO growth was much slower, and I stopped it after 50M training steps (12 hours). <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-298003r7"><span class="cmti-10x-x-109">16.7</span></a> shows the plots.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_07.png" width="600"/> <span id="x1-298003r7"/></p>
+<span class="id">Figure 16.7: The reward during training (left) and the test reward (right) for HalfCheetah on MuJoCo </span>
+</div>
+<p>After checking <span id="dx1-298004"/>the video of the model (links are provided later in this section), we might guess the reason for the low score – our agent learned how to flip the cheetah on its back and move forward in this position. During training, it wasn’t able to get from this suboptimal “local maximum.” Most likely, running the training several times might yield a better policy. Another approach to solving this might be to optimize hyperparameters. Again, this is something you can try experimenting with.</p>
+<p>In the Ant environment, PPO was better on both PyBullet and MuJoco and was able to reach the same level of reward almost twice as fast as A2C. This comparison is shown in the plots in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-298005r8"><span class="cmti-10x-x-109">16.8</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-298006r9"><span class="cmti-10x-x-109">16.9</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_08.png" width="600"/> <span id="x1-298005r8"/></p>
+<span class="id">Figure 16.8: The reward during training (left) and the test reward (right) for Ant on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_09.png" width="600"/> <span id="x1-298006r9"/></p>
+<span class="id">Figure 16.9: The reward during training (left) and the test reward (right) for Ant on MuJoCo </span>
+</div>
+<p>As before, you <span id="dx1-298007"/>can use the <span class="cmtt-10x-x-109">02</span><span class="cmtt-10x-x-109">_play.py </span>utility to benchmark saved models and record videos of the learned policy in action. This is the list of the best models for my training experiments:</p>
+<ul>
+<li>
+<p>HalfCheetah on PyBullet (score 2,567): <a class="url" href="https://youtu.be/Rai-smyfyeE"><span class="cmtt-10x-x-109">https://youtu.be/Rai-smyfyeE</span></a>. The agent learned how to do long jumps with the back leg.</p>
+</li>
+<li>
+<p>HalfCheetah on MuJoCo (score 1,623): <a class="url" href="https://youtube.com/shorts/VcyzNtbVzd4"><span class="cmtt-10x-x-109">https://youtube.com/shorts/VcyzNtbVzd4</span></a>. Quite a funny video: the cheetah flips on its back and moves forward this way.</p>
+</li>
+<li>
+<p>Ant on PyBullet (score 2,560): <a class="url" href="https://youtu.be/8lty_Mdjnfs"><span class="cmtt-10x-x-109">https://youtu.be/8lty_Mdjnfs</span></a>. The Ant policy is much better than A2C – it steadily moves forward.</p>
+</li>
+<li>
+<p>Ant on MuJoCo (score 5,108): <a class="url" href="https://youtube.com/shorts/AcXxH2f_KWs"><span class="cmtt-10x-x-109">https://youtube.com/shorts/AcXxH2f_KWs</span></a>. This model is much faster; most likely, the weight of the ant in the MuJoCo model is lower than in PyBullet.</p>
+</li>
+</ul>
+</section>
+</section>
+<section class="level3 sectionHead" id="trpo">
+<h1 class="heading-1" id="sigil_toc_id_270"> <span id="x1-29900016.4"/>TRPO</h1>
+<p>TRPO was<span id="dx1-299001"/> proposed in 2015 by Berkeley researchers in a paper by Schulman et al., called <span class="cmti-10x-x-109">Trust region policy optimization </span>[<span id="x1-299002"/><a href="#">Sch15</a>]. This paper was a step towards improving the stability and consistency of stochastic policy gradient optimization and has shown good results on various control tasks.</p>
+<p>Unfortunately, the paper and the method are quite math-heavy, so it can be hard to understand the details. The same could be said about the implementation, which uses the conjugate gradients method to efficiently solve the constrained optimization problem.</p>
+<p>As the first step, the TRPO method defines the discounted visitation frequencies of the state as follows:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="26" src="../Images/eq63.png" width="520"/>
+</div>
+<p>In this equation, <span class="cmmi-10x-x-109">P</span>(<span class="cmmi-10x-x-109">s</span><sub><span class="cmmi-8">i</span></sub> = <span class="cmmi-10x-x-109">s</span>) equals the sampled probability of state <span class="cmmi-10x-x-109">s </span>to be met at position <span class="cmmi-10x-x-109">i </span>of the sampled trajectories.</p>
+<p>Then, TRPO defines the optimization objective as</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="48" src="../Images/eq64.png" width="427"/>
+</div>
+<p>where</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="69" src="../Images/eq65.png" width="224"/>
+</div>
+<p>is the expected discounted reward of the policy and π̃ = arg max<sub><span class="cmmi-8">a</span></sub><span class="cmmi-10x-x-109">A</span><sub><span class="cmmi-8">π</span></sub>(<span class="cmmi-10x-x-109">s,a</span>) defines the deterministic policy. To address the issue of large policy updates, TRPO defines the additional constraint on the policy update, which is expressed as the maximum KL divergence between the old and the new policies, which could be written as</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="27" src="../Images/eq66.png" width="176"/>
+</div>
+<p>As a <span id="dx1-299003"/>reminder, KL divergence measures the similarity between probability distributions and is calculated as follows:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="49" src="../Images/eq67.png" width="274"/>
+</div>
+<p>We met KL divergence in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch008.xhtml#x1-740004"><span class="cmti-10x-x-109">4</span></a> and <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch015.xhtml#x1-18200011"><span class="cmti-10x-x-109">11</span></a>.</p>
+<section class="level4 subsectionHead" id="implementation-16">
+<h2 class="heading-2" id="sigil_toc_id_271"> <span id="x1-30000016.4.1"/>Implementation</h2>
+<p>Most of <span id="dx1-300001"/>the TRPO implementations available on GitHub, or in other open source repositories, are very similar to each other, probably because all of them grew from the original John Schulman TRPO implementation here: <a class="url" href="https://github.com/joschu/modular_rl"><span class="cmtt-10x-x-109">https://github.com/joschu/modular_rl</span></a>. My version of TRPO is also not very different and uses the core functions that implement the conjugate gradient method (used by TRPO to solve the constrained optimization problem) from this repository: <a class="url" href="https://github.com/ikostrikov/pytorch-trpo"><span class="cmtt-10x-x-109">https://github.com/ikostrikov/pytorch-trpo</span></a>.</p>
+<p>The complete example is in <span class="cmtt-10x-x-109">03</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_trpo.py </span>and <span class="cmtt-10x-x-109">lib/trpo.py</span>, and the training loop is very similar to the PPO example: we sample the trajectory of transitions of the predefined length and calculate the advantage estimation using the smoothed formula discussed in the PPO section (historically, this estimator was proposed first in the TRPO paper.) Next, we do one training step of the critic using MSE loss with the calculated reference value, and one step of the TRPO update, which consists of finding the direction we should go in by using the conjugate gradients method and doing a linear search in this direction to find a step that preserves the desired KL divergence.</p>
+<p>The following is the piece of the training loop that carries out both those steps:</p>
+<div class="tcolorbox" id="tcolobox-369">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-439"><code>            opt_crt.zero_grad() 
+            value_v = net_crt(traj_states_v) 
+            loss_value_v = F.mse_loss(value_v.squeeze(-1), traj_ref_v) 
+            loss_value_v.backward() 
+            opt_crt.step()</code></pre>
+</div>
+</div>
+<p>To <span id="dx1-300007"/>perform the TRPO step, we need to provide two functions: the first will calculate the loss of the current actor policy, which uses the same ratio as the PPO of the new and the old policies multiplied by the advantage estimation. The second function has to calculate KL divergence between the old and the current policy:</p>
+<div class="tcolorbox" id="tcolobox-370">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-440"><code>            def get_loss(): 
+                mu_v = net_act(traj_states_v) 
+                logprob_v = model.calc_logprob(mu_v, net_act.logstd, traj_actions_v) 
+                dp_v = torch.exp(logprob_v - old_logprob_v) 
+                action_loss_v = -traj_adv_v.unsqueeze(dim=-1)*dp_v 
+                return action_loss_v.mean() 
+ 
+            def get_kl(): 
+                mu_v = net_act(traj_states_v) 
+                logstd_v = net_act.logstd 
+                mu0_v = mu_v.detach() 
+                logstd0_v = logstd_v.detach() 
+                std_v = torch.exp(logstd_v) 
+                std0_v = std_v.detach() 
+                v = (std0_v ** 2 + (mu0_v - mu_v) ** 2) / (2.0 * std_v ** 2) 
+                kl = logstd_v - logstd0_v + v - 0.5 
+                return kl.sum(1, keepdim=True) 
+ 
+            trpo.trpo_step(net_act, get_loss, get_kl, args.maxkl, 
+                           TRPO_DAMPING, device=device)</code></pre>
+</div>
+</div>
+<p>In other words, the PPO method is TRPO that uses the simple clipping of the policy ratio to limit the policy update, instead of the complicated conjugate gradients and line search.</p>
+</section>
+<section class="level4 subsectionHead" id="results-20">
+<h2 class="heading-2" id="sigil_toc_id_272"> <span id="x1-30100016.4.2"/>Results</h2>
+<p>TRPO in the <span id="dx1-301001"/>HalfCheetah environment was able to reach better rewards than PPO and A2C. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-301002r10"><span class="cmti-10x-x-109">16.10</span></a>, the results from PyBullet training is shown. On MuJoCo, the results are even more impressive – the best reward was over 5,000. The plots for MuJoCo are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-301003r11"><span class="cmti-10x-x-109">16.11</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_10.png" width="600"/> <span id="x1-301002r10"/></p>
+<span class="id">Figure 16.10: The reward during training (left) and test reward (right) for HalfCheetah on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_11.png" width="600"/> <span id="x1-301003r11"/></p>
+<span class="id">Figure 16.11: The reward during training (left) and the test reward (right) for HalfCheetah on MuJoCo </span>
+</div>
+<p>Unfortunately, the <span id="dx1-301004"/>Ant environment shows much less stable convergence. The plots shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-301005r12"><span class="cmti-10x-x-109">16.12</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-301006r13"><span class="cmti-10x-x-109">16.13</span></a> compare the train and test rewards on A2C and TRPO:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_12.png" width="600"/> <span id="x1-301005r12"/></p>
+<span class="id">Figure 16.12: The reward during training (left) and the test reward (right) for Ant on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_13.png" width="600"/> <span id="x1-301006r13"/></p>
+<span class="id">Figure 16.13: The reward during training (left) and the test reward (right) for Ant on MuJoCo </span>
+</div>
+<p>Video recordings <span id="dx1-301007"/>of the best actions could be done in the same way as before. Here are some videos for the best TRPO models:</p>
+<ul>
+<li>
+<p>HalfCheetah on PyBullet (score 2,419): <a class="url" href="https://youtu.be/NIfkt2lVT74"><span class="cmtt-10x-x-109">https://youtu.be/NIfkt2lVT74</span></a>. Front leg joints are not used.</p>
+</li>
+<li>
+<p>HalfCheetah on MuJoCo (score 5,753): <a class="url" href="https://youtube.com/shorts/FLM2t-XWDLc?feature=share"><span class="cmtt-10x-x-109">https://youtube.com/shorts/FLM2t-XWDLc?feature=share</span></a>. This is a really fast Cheetah!</p>
+</li>
+<li>
+<p>Ant on PyBullet (score 834): <a class="url" href="https://youtu.be/Ny1WBPVluNQ"><span class="cmtt-10x-x-109">https://youtu.be/Ny1WBPVluNQ</span></a>. The training got stuck in a “stand still” local minimum.</p>
+</li>
+<li>
+<p>Ant on MuJoCo (score 993): <a class="url" href="https://youtube.com/shorts/9sybZGvXQFs"><span class="cmtt-10x-x-109">https://youtube.com/shorts/9sybZGvXQFs</span></a>. The same as PyBullet – the agent just stands still and does not move anywhere.</p>
+</li>
+</ul>
+</section>
+</section>
+<section class="level3 sectionHead" id="acktr">
+<h1 class="heading-1" id="sigil_toc_id_273"> <span id="x1-30200016.5"/>ACKTR</h1>
+<p>The third <span id="dx1-302001"/>method that we will compare, ACKTR, uses a different approach to address SGD stability. In the paper by Wu et al. called <span class="cmti-10x-x-109">Scalable trust-region</span> <span class="cmti-10x-x-109">method for deep reinforcement learning using Kronecker-factored approximation</span>, published in 2017 [<span id="x1-302002"/><a href="#">Wu+17</a>], the authors combined the second-order optimization methods and trust region approach.</p>
+<p>The idea of the second-order methods is to improve the traditional SGD by taking the second-order derivatives of the optimized function (in other words, its curvature) to improve the convergence of the optimization process. To make things more complicated, working with the second-order derivatives usually requires you to build and invert a Hessian matrix, which can be prohibitively large, so the practical methods typically approximate it in some way. This area is currently very active in research because developing robust, scalable optimization methods is very important for the whole machine learning domain.</p>
+<p>One of the second-order methods is called <span class="cmbx-10x-x-109">Kronecker-factored approximate</span> <span class="cmbx-10x-x-109">curvature (K-FAC)</span>, which was proposed by James Martens and Roger Grosse in their paper <span class="cmti-10x-x-109">Optimizing neural networks with Kronecker-factored approximate</span> <span class="cmti-10x-x-109">curvature</span>, published in 2015 [<span id="x1-302003"/><a href="#">MG15</a>]. However, a detailed description of this method is well beyond the scope of this book.</p>
+<section class="level4 subsectionHead" id="implementation-17">
+<h2 class="heading-2" id="sigil_toc_id_274"> <span id="x1-30300016.5.1"/>Implementation</h2>
+<p>There are not very <span id="dx1-303001"/>many implementations of this method available, and none of them are part of PyTorch (unfortunately). As far as I know, there are two versions of the K-FAC optimizer that work with PyTorch; one from Ilya Kostrikov (<a class="url" href="https://github.com/ikostrikov/pytorch-a2c-ppo-acktr"><span class="cmtt-10x-x-109">https://github.com/ikostrikov/pytorch-a2c-ppo-acktr</span></a>) and one from Nicholas Gao (<a class="url" href="https://github.com/n-gao/pytorch-kfac"><span class="cmtt-10x-x-109">https://github.com/n-gao/pytorch-kfac</span></a>). I’ve experimented only with the first one; you can give the second one a try. There is a version of K-FAC available for TensorFlow, which comes with OpenAI Baselines, but porting and testing it on PyTorch can be difficult.</p>
+<p>For my experiments, I’ve taken the K-FAC implementation from Kostrikov and adapted it to the existing code, which required replacing the optimizer and doing an extra <span class="cmtt-10x-x-109">backward() </span>call to gather Fisher information. The critic was trained in the same way as in A2C. The complete example is in <span class="cmtt-10x-x-109">05</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_acktr.py </span>and is not shown here, as it’s basically the same as A2C. The only difference is that a different optimizer was used.</p>
+</section>
+<section class="level4 subsectionHead" id="results-21">
+<h2 class="heading-2" id="sigil_toc_id_275"> <span id="x1-30400016.5.2"/>Results</h2>
+<p>Overall, the ACKTR <span id="dx1-304001"/>method was very unstable in both environments and physics engines. It could be due to a lack of fine-tuning of hyperparameters or some bugs in the implementation.</p>
+<p>The results of experiments on HalfCheetah are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-304002r14"><span class="cmti-10x-x-109">16.14</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-304003r15"><span class="cmti-10x-x-109">16.15</span></a>.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_14.png" width="600"/> <span id="x1-304002r14"/></p>
+<span class="id">Figure 16.14: The reward during training (left) and the test reward (right) for HalfCheetah on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_15.png" width="600"/> <span id="x1-304003r15"/></p>
+<span class="id">Figure 16.15: The reward during training (left) and test reward (right) for HalfCheetah on MuJoCo </span>
+</div>
+<p>In the Ant environment, the <span id="dx1-304004"/>ACKTR method shows bad results on PyBullet and no reward improvements compared to training on MuJoCo. <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-304005r16"><span class="cmti-10x-x-109">16.16</span></a> shows plots for PyBullet.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_16.png" width="600"/> <span id="x1-304005r16"/></p>
+<span class="id">Figure 16.16: The reward during training (left) and the test reward (right) for Ant on PyBullet </span>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="sac">
+<h1 class="heading-1" id="sigil_toc_id_276"> <span id="x1-30500016.6"/>SAC</h1>
+<p>In the final section, we <span id="dx1-305001"/>will check our environments on a relatively new method called SAC, which was proposed by a group of Berkeley researchers and introduced in the paper <span class="cmti-10x-x-109">Soft actor-critic: Off-policy maximum entropy deep</span> <span class="cmti-10x-x-109">reinforcement learning</span>, by Haarnoja et al., published in 2018 [<span id="x1-305002"/><a href="#">Haa+18</a>].</p>
+<p>At the moment, it’s considered to be one of the best methods for continuous control problems and is very widely used. The core idea of the method is closer to the DDPG method than to A2C policy gradients. We will compare it directly with PPO’s performance, which has been considered to be the standard in continuous control problems for a long time.</p>
+<p>The central idea of the SAC method is <span class="cmbx-10x-x-109">entropy regularization</span>, which adds a bonus reward at each timestamp that is proportional to the entropy of the policy at this timestamp. In mathematical notation, the policy we’re looking for is the following:</p>
+<div class="math-display">
+<img alt="π (a |s) = P[At = a|St = s] " class="math-display" height="64" src="../Images/eq68.png" width="544"/>
+</div>
+<p>Here, <span class="cmmi-10x-x-109">H</span>(<span class="cmmi-10x-x-109">P</span>) = <span class="msbm-10x-x-109">𝔼</span> <sub><span class="cmmi-8">x</span><span class="cmsy-8">∼</span><span class="cmmi-8">P</span></sub> [<span class="cmsy-10x-x-109">−</span>log <span class="cmmi-10x-x-109">P</span>(<span class="cmmi-10x-x-109">x</span>)] is the entropy of distribution <span class="cmmi-10x-x-109">P</span>. In other words, we give the agent a bonus for getting into situations where the entropy is at its maximum, which is very similar to the advanced exploration methods covered in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch022.xhtml#x1-32800018"><span class="cmti-10x-x-109">18</span></a>. In addition, the SAC method incorporates the clipped double-Q trick, where, in addition to the value function, we learn two networks predicting Q-values, and choose the minimum of them for Bellman approximation. According to researchers, this helps with dealing with Q-value overestimation during training. This problem was discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>, but was addressed differently.</p>
+<p>So, in total, we <span id="dx1-305003"/>train four networks: the policy, <span class="cmmi-10x-x-109">π</span>(<span class="cmmi-10x-x-109">s</span>), value, <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s,a</span>) and two Q-networks, <span class="cmmi-10x-x-109">Q</span><sub><span class="cmr-8">1</span></sub>(<span class="cmmi-10x-x-109">s,a</span>) and <span class="cmmi-10x-x-109">Q</span><sub><span class="cmr-8">2</span></sub>(<span class="cmmi-10x-x-109">s,a</span>). For the value network, <span class="cmmi-10x-x-109">V </span>(<span class="cmmi-10x-x-109">s,a</span>), the target network is used. So, in summary, SAC training looks like this:</p>
+<ul>
+<li>
+<p>Q-networks are trained using the MSE objective by doing Bellman approximation using the target value network: <span class="cmmi-10x-x-109">y</span><sub><span class="cmmi-8">q</span></sub>(<span class="cmmi-10x-x-109">r,s</span><span class="cmsy-10x-x-109">′</span>) = <span class="cmmi-10x-x-109">r</span>+<span class="cmmi-10x-x-109">γV</span> <sub><span class="cmmi-8">tgt</span></sub>(<span class="cmmi-10x-x-109">s</span><span class="cmsy-10x-x-109">′</span>) (for non-terminating steps)</p>
+</li>
+<li>
+<p>The V-network is trained using the MSE objective with the following target, <span class="cmmi-10x-x-109">y</span><sub><span class="cmmi-8">v</span></sub>(<span class="cmmi-10x-x-109">s</span>) = min<sub><span class="cmmi-8">i</span><span class="cmr-8">=1</span><span class="cmmi-8">,</span><span class="cmr-8">2</span></sub><span class="cmmi-10x-x-109">Q</span><sub><span class="cmmi-8">i</span></sub>(<span class="cmmi-10x-x-109">s,</span><span class="cmmi-10x-x-109">ã</span>) <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">α</span> log <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">ã</span><span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>), where <span class="cmmi-10x-x-109">ã</span> is sampled from policy <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmsy-10x-x-109">⋅|</span><span class="cmmi-10x-x-109">s</span>)</p>
+</li>
+<li>
+<p>The policy network, <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span></sub>, is trained in DDPG style by maximizing the following objective, <span class="cmmi-10x-x-109">Q</span><sub><span class="cmr-8">1</span></sub>(<span class="cmmi-10x-x-109">s,</span><span class="cmmi-10x-x-109">ã</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s</span>)) <span class="cmsy-10x-x-109">−</span><span class="cmmi-10x-x-109">α</span> log <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">ã</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmmi-10x-x-109">s</span>)<span class="cmsy-10x-x-109">|</span><span class="cmmi-10x-x-109">s</span>), where <span class="cmmi-10x-x-109">ã</span><sub><span class="cmmi-8">𝜃</span></sub> is a sample from <span class="cmmi-10x-x-109">π</span><sub><span class="cmmi-8">𝜃</span></sub>(<span class="cmsy-10x-x-109">⋅|</span><span class="cmmi-10x-x-109">s</span>)</p>
+</li>
+</ul>
+<section class="level4 subsectionHead" id="implementation-18">
+<h2 class="heading-2" id="sigil_toc_id_277"> <span id="x1-30600016.6.1"/>Implementation</h2>
+<p>The <span id="dx1-306001"/>implementation of the SAC method is in <span class="cmtt-10x-x-109">06</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_sac.py</span>. The model consists of the following networks, defined in <span class="cmtt-10x-x-109">lib/model.py</span>:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">ModelActor</span>: This is the same policy that we used in the previous examples in this chapter. As the policy variance is not parametrized by the state (the <span class="cmtt-10x-x-109">logstd </span>field is not a network, but just a tensor), the training objective does not 100% comply with SAC. On the one hand, it might influence the convergence and performance, as the core idea of the SAC method is entropy regularization, which can’t be implemented without parametrized variance. On the other hand, it decreases the number of parameters in the model. If you’re curious, you can extend the example with the parametrized variance of the policy and implement a proper SAC method.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">ModelCritic</span>: This is the same value network as in the previous examples.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">ModelSACTwinQ</span>: These two networks take the state and action as the input and predict Q-values.</p>
+</li>
+</ul>
+<p>The first function implementing the method is <span class="cmtt-10x-x-109">unpack</span><span class="cmtt-10x-x-109">_batch</span><span class="cmtt-10x-x-109">_sac()</span>, and it is defined in <span class="cmtt-10x-x-109">lib/common.py</span>. Its goal is to take the batch of trajectory steps and calculate target values for V-networks and twin Q-networks:</p>
+<div class="tcolorbox" id="tcolobox-371">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-441"><code>@torch.no_grad() 
+def unpack_batch_sac(batch: tt.List[ptan.experience.ExperienceFirstLast], 
+                     val_net: model.ModelCritic, twinq_net: model.ModelSACTwinQ, 
+                     policy_net: model.ModelActor, gamma: float, ent_alpha: float, 
+                     device: torch.device): 
+    states_v, actions_v, ref_q_v = unpack_batch_a2c(batch, val_net, gamma, device) 
+ 
+    mu_v = policy_net(states_v) 
+    act_dist = distr.Normal(mu_v, torch.exp(policy_net.logstd)) 
+    acts_v = act_dist.sample() 
+    q1_v, q2_v = twinq_net(states_v, acts_v) 
+ 
+    ref_vals_v = torch.min(q1_v, q2_v).squeeze() - \ 
+                 ent_alpha * act_dist.log_prob(acts_v).sum(dim=1) 
+    return states_v, actions_v, ref_vals_v, ref_q_v</code></pre>
+</div>
+</div>
+<p>The <span id="dx1-306017"/>first step of the function uses the already defined <span class="cmtt-10x-x-109">unpack</span><span class="cmtt-10x-x-109">_batch</span><span class="cmtt-10x-x-109">_a2c()</span> method, which unpacks the batch, converts states and actions into tensors, and calculates the reference for Q-networks using Bellman approximation. Once this is done, we need to calculate the reference for the V-network from the minimum of the twin Q-values minus the scaled entropy coefficient. The entropy is calculated from our current policy network. As was already mentioned, our policy has the parametrized mean value, but the variance is global and doesn’t depend on the state.</p>
+<p>In the main training loop, we use the function defined previously and do three different optimization steps: for V, for Q, and for the policy. The following is the relevant part of the training loop defined in <span class="cmtt-10x-x-109">06</span><span class="cmtt-10x-x-109">_train</span><span class="cmtt-10x-x-109">_sac.py</span>:</p>
+<div class="tcolorbox" id="tcolobox-372">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-442"><code>                batch = buffer.sample(BATCH_SIZE) 
+                states_v, actions_v, ref_vals_v, ref_q_v = common.unpack_batch_sac( 
+                        batch, tgt_crt_net.target_model, twinq_net, act_net, GAMMA, 
+                        SAC_ENTROPY_ALPHA, device)</code></pre>
+</div>
+</div>
+<p>In the beginning, we unpack the batch to get the tensors and targets for the Q- and V-networks.</p>
+<p>The twin Q-networks are optimized by the same target value:</p>
+<div class="tcolorbox" id="tcolobox-373">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-443"><code>                twinq_opt.zero_grad() 
+                q1_v, q2_v = twinq_net(states_v, actions_v) 
+                q1_loss_v = F.mse_loss(q1_v.squeeze(), ref_q_v.detach()) 
+                q2_loss_v = F.mse_loss(q2_v.squeeze(), ref_q_v.detach()) 
+                q_loss_v = q1_loss_v + q2_loss_v 
+                q_loss_v.backward() 
+                twinq_opt.step()</code></pre>
+</div>
+</div>
+<p>The critic network is also optimized with the trivial MSE objective using the already calculated target value:</p>
+<div class="tcolorbox" id="tcolobox-374">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-444"><code>                crt_opt.zero_grad() 
+                val_v = crt_net(states_v) 
+                v_loss_v = F.mse_loss(val_v.squeeze(), ref_vals_v.detach()) 
+                v_loss_v.backward() 
+                crt_opt.step()</code></pre>
+</div>
+</div>
+<p>And finally, we optimize the actor network:</p>
+<div class="tcolorbox" id="tcolobox-375">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-445"><code>                act_opt.zero_grad() 
+                acts_v = act_net(states_v) 
+                q_out_v, _ = twinq_net(states_v, acts_v) 
+                act_loss = -q_out_v.mean() 
+                act_loss.backward() 
+                act_opt.step()</code></pre>
+</div>
+</div>
+<p>In <span id="dx1-306040"/>comparison with the formulas given previously, the code is missing the entropy regularization term and corresponds to DDPG training. As our variance doesn’t depend on the state, it can be omitted from the optimization objective.</p>
+</section>
+<section class="level4 subsectionHead" id="results-22">
+<h2 class="heading-2" id="sigil_toc_id_278"> <span id="x1-30700016.6.2"/>Results</h2>
+<p>I ran SAC training<span id="dx1-307001"/> in the HalfCheetah and Ant environments for 9-13 hours, with 5M observations. The results are a bit contradictory. On the one hand, the sample efficiency and reward growing dynamics of SAC were better than the PPO method. For example, SAC was able to reach a reward of 900 after just 0.5M observations on HalfCheetah. PPO required more than 1M observations to reach the same policy. In the MuJoCo environment, SAC was able to find the policy that got a reward of 7,063, which is an absolute record (demonstrating state-of-the-art performance on this environment).</p>
+<p>On the other hand, due to the off-policy nature of SAC, the training speed was much slower, as we did more calculations than with on-policy methods. On my machine, 5M frames on HalfCheetah took 10 hours. As a reminder, A2C did 50M observations in the same time.</p>
+<p>This demonstrates the trade-offs between on-policy and off-policy methods, as you have seen many times in this book so far: if your environment is fast and observations are cheap to obtain, an on-policy method like PPO might be the best choice. But if your observations are hard to obtain, off-policy methods will do a better job, but require more calculations to be performed.</p>
+<p><span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-307002r17"><span class="cmti-10x-x-109">16.17</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-307003r18"><span class="cmti-10x-x-109">16.18</span></a> show the reward dynamics on HalfCheetah:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_17.png" width="600"/> <span id="x1-307002r17"/></p>
+<span class="id">Figure 16.17: The reward during training (left) and the test reward (right) for HalfCheetah on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_18.png" width="600"/> <span id="x1-307003r18"/></p>
+<span class="id">Figure 16.18: The reward during training (left) and the test reward (right) for HalfCheetah on MuJoCo </span>
+</div>
+<p>The results in the <span id="dx1-307004"/>Ant environment are much worse – according to the score, the learned policy can barely stand. The PyBullet plots are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-307005r19"><span class="cmti-10x-x-109">16.19</span></a>; MuJoCo plots are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-307006r20"><span class="cmti-10x-x-109">16.20</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_19.png" width="600"/> <span id="x1-307005r19"/></p>
+<span class="id">Figure 16.19: The reward during training (left) and the test reward (right) for Ant on PyBullet </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_16_20.png" width="600"/> <span id="x1-307006r20"/></p>
+<span class="id">Figure 16.20: The reward during training (left) and the test reward (right) for Ant on MuJoCo </span>
+</div>
+<p>Here are the videos<span id="dx1-307007"/> for the best SAC models:</p>
+<ul>
+<li>
+<p>HalfCheetah on PyBullet (score 1,765): <a class="url" href="https://youtu.be/80afu9OzQ5s"><span class="cmtt-10x-x-109">https://youtu.be/80afu9OzQ5s</span></a>. Our creature is a bit clumsy here.</p>
+</li>
+<li>
+<p>HalfCheetah on MuJoCo (score 7,063): <a class="url" href="https://youtube.com/shorts/0Ywn3LTJxxs"><span class="cmtt-10x-x-109">https://youtube.com/shorts/0Ywn3LTJxxs</span></a>. This result is really impressive – a super-fast Cheetah.</p>
+</li>
+<li>
+<p>Ant on PyBullet (score 630): <a class="url" href="https://youtu.be/WHqXJ3VqX4k"><span class="cmtt-10x-x-109">https://youtu.be/WHqXJ3VqX4k</span></a>. After a couple of steps, the ant got stuck for some reason.</p>
+</li>
+</ul>
+</section>
+</section>
+<section class="level3 sectionHead" id="overall-results">
+<h1 class="heading-1" id="sigil_toc_id_279"> <span id="x1-30800016.7"/>Overall results</h1>
+<p>To simplify the comparison of the methods, I put all the numbers related to the best rewards obtained in the following table:</p>
+<div class="table">
+<figure class="float">
+<div class="center">
+<div class="tabular">
+<table class="table-container" id="TBL-5">
+<tbody>
+<tr id="TBL-5-1-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-1-1">
+<div class="multirow"> Method </div>
+</td>
+<td class="table-cell" colspan="2" id="TBL-5-1-2">
+<div class="multicolumn" style="white-space:nowrap; text-align:center;"> HalfCheetah </div>
+</td>
+<td class="table-cell" colspan="2" id="TBL-5-1-4">
+<div class="multicolumn" style="white-space:nowrap; text-align:center;"> Ant </div>
+</td>
+</tr>
+<tr id="TBL-5-3-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-3-1"/>
+<td class="table-cell" id="TBL-5-3-2">PyBullet</td>
+<td class="table-cell" id="TBL-5-3-3">MuJoCo</td>
+<td class="table-cell" id="TBL-5-3-4">PyBullet</td>
+<td class="table-cell" id="TBL-5-3-5">MuJoCo</td>
+</tr>
+<tr id="TBL-5-4-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-4-1">A2C</td>
+<td class="table-cell" id="TBL-5-4-2">2,189</td>
+<td class="table-cell" id="TBL-5-4-3">4,718</td>
+<td class="table-cell" id="TBL-5-4-4">2,425</td>
+<td class="table-cell" id="TBL-5-4-5"><span class="cmbx-10x-x-109">5,380 </span></td>
+</tr>
+<tr id="TBL-5-5-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-5-1">PPO</td>
+<td class="table-cell" id="TBL-5-5-2"><span class="cmbx-10x-x-109">2,567 </span></td>
+<td class="table-cell" id="TBL-5-5-3">1,623</td>
+<td class="table-cell" id="TBL-5-5-4"><span class="cmbx-10x-x-109">2,560 </span></td>
+<td class="table-cell" id="TBL-5-5-5">5,108</td>
+</tr>
+<tr id="TBL-5-6-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-6-1">TRPO</td>
+<td class="table-cell" id="TBL-5-6-2">2,419</td>
+<td class="table-cell" id="TBL-5-6-3">5,753</td>
+<td class="table-cell" id="TBL-5-6-4">834</td>
+<td class="table-cell" id="TBL-5-6-5">993</td>
+</tr>
+<tr id="TBL-5-7-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-7-1">ACKTR</td>
+<td class="table-cell" id="TBL-5-7-2">250</td>
+<td class="table-cell" id="TBL-5-7-3">3,100</td>
+<td class="table-cell" id="TBL-5-7-4">1,820</td>
+<td class="table-cell" id="TBL-5-7-5">—</td>
+</tr>
+<tr id="TBL-5-8-" style="vertical-align:baseline;">
+<td class="table-cell" id="TBL-5-8-1">SAC</td>
+<td class="table-cell" id="TBL-5-8-2">1,765</td>
+<td class="table-cell" id="TBL-5-8-3"><span class="cmbx-10x-x-109">7,063 </span></td>
+<td class="table-cell" id="TBL-5-8-4">630</td>
+<td class="table-cell" id="TBL-5-8-5">—</td>
+</tr>
+</tbody>
+</table>
+</div>
+<span id="x1-308001r1"/>
+<span class="id">Table 16.1: Summary table </span>
+</div>
+</figure>
+</div>
+<p>As you can see, there is no single winning method – some do well in some environments but get worse results in others. In principle, we can call A2C and PPO as quite consistent methods because they’re getting good results everywhere (PPO’s “backflip cheetah” on MuJoCo could be attributed to a bad starting seed, so rerunning the training might lead to a better policy).</p>
+</section>
+<section class="level3 sectionHead" id="summary-15">
+<h1 class="heading-1" id="sigil_toc_id_280"> <span id="x1-30900016.8"/>Summary</h1>
+<p>In this chapter, we checked three different methods with the aim of improving the stability of the stochastic policy gradient and compared them to the A2C implementation on two continuous control problems. Along with the methods covered in the previous chapter (DDPG and D4PG), these methods are basic tools to work with a continuous control domain. Finally, we checked a relatively new off-policy method that is an extension of DDPG: SAC. Here, we have just scratched the surface of this topic, but it could be a good starting point to dive into it in more depth. These methods are widely used in robotics and related areas.</p>
+<p>In the next chapter, we will switch to a different set of RL methods that have been becoming popular recently: <span class="cmti-10x-x-109">black-box </span>or <span class="cmti-10x-x-109">gradient-free </span>methods.</p>
+</section>
+<section class="level3 likesectionHead" id="join-our-community-on-discord-5">
+<h1 class="heading-1" id="sigil_toc_id_281"><span id="x1-310000"/>Join our community on Discord</h1>
+<p>Read this book alongside other users, Deep Learning experts, and the author himself. Ask questions, provide solutions to other readers, chat with the author via Ask Me Anything sessions, and much more. Scan the QR code or visit the link to join the community. <a class="url" href="https://packt.link/rl"><span class="cmtt-10x-x-109">https://packt.link/rl</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file1.png" width="85"/></p>
+</section>
+</section>
+</div></body></html>

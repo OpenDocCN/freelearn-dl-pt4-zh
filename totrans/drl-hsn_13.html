@@ -1,0 +1,986 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-13-the-textworld-environment">
+<h1 class="chapterNumber">13</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_416">
+<span id="x1-21900013"/>The TextWorld Environment
+    </h1>
+<p>In this chapter, we will now use RL to solve text-based interactive fiction games, using the environment published by Microsoft Research called TextWorld. This will provide a good illustration of how RL can be applied to complicated environments with a rich observation space. In addition, we’ll touch on deep NLP methods a bit and play with LLMs.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Cover a brief historical overview of interactive fiction</p>
+</li>
+<li>
+<p>Study the TextWorld environment</p>
+</li>
+<li>
+<p>Implement the<span id="dx1-219001"/> simple baseline <span class="cmbx-10x-x-109">deep Q-network </span>(<span class="cmbx-10x-x-109">DQN</span>) method, and then try to improve it by adding several tweaks to the observation</p>
+</li>
+<li>
+<p>Use pretrained tronsformers from the Hugging Face Hub to implement sentence embedding for our agent</p>
+</li>
+<li>
+<p>Use OpenAI ChatGPT to check the power of modern <span class="cmbx-10x-x-109">Large</span> <span class="cmbx-10x-x-109">Language Models </span>(<span class="cmbx-10x-x-109">LLMs</span>) on interactive fiction games</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="interactive-fiction">
+<h1 class="heading-1" id="sigil_toc_id_194"> <span id="x1-22000013.1"/>Interactive fiction</h1>
+<p>As you have already <span id="dx1-220001"/>seen, computer games are not only entertaining for humans but also provide challenging problems for RL researchers due to the complicated observations and action spaces, long sequences of decisions to be made during the gameplay, and natural reward systems.</p>
+<p>Arcade games like those on the Atari 2600 are just one of many genres that the gaming industry has. Let’s take a step back and take a quick look at the historical perspective. The Atari 2600 platform peaked in popularity during the late 70s and early 80s. Then followed the era of Z80 and clones, which evolved into the period of the PC-compatible platforms and consoles we have now. Over time, computer games continually become more complex, colorful, and detailed in terms of graphics, which inevitably increased hardware requirements. This trend makes it harder for RL researchers and practitioners to apply RL methods to the more recent games; for example, almost everybody can train an RL agent to solve an Atari game, but for StarCraft II, DeepMind had to burn electricity for weeks, leveraging<span id="dx1-220002"/> clusters of <span class="cmbx-10x-x-109">graphics processing unit </span>(<span class="cmbx-10x-x-109">GPU</span>) machines. Of course, this activity is needed for future research, as it allows us to check ideas and optimize methods, but the complexity of StarCraft II and Dota, for example, makes them prohibitively expensive for most people.</p>
+<p>There are several ways of solving this problem:</p>
+<ul>
+<li>
+<p>The first one is to take games that are “in the middle” of the complexities of Atari and StarCraft. Luckily, there are literally thousands of games from the Z80, NES, Sega, and C64 platforms.</p>
+</li>
+<li>
+<p>Another way is to take a challenging game but make a simplification to the environment. There are several Doom environments (available in Gym), for example, that use the game engine as a platform, but the goal is much simpler than in the original game, like navigating the corridor, gathering weapons, or shooting enemies. Those microgames are also available on StarCraft II.</p>
+</li>
+<li>
+<p>The third, and completely different, approach is to take some game that may not be very complex in terms of observation but requires long-term planning, complex exploration of the state space, and has challenging interactions between objects. An example of this family is the famous Montezuma’s Revenge from the Atari suite, which is still challenging even for modern RL methods.</p>
+</li>
+</ul>
+<p>The last approach is quite<span id="dx1-220003"/> appealing, due to the accessibility of resources, combined with still having a complexity that reaches the edge of RL methods’ limits. Another example of this is text-based games, which are also known as interactive fiction. This genre is almost dead now, being made obsolete by modern games and hardware progress, but at the time of Atari and Z80, interactive fiction was provided concurrently with traditional games. Instead of using rich graphics to show the game state (which was tricky for hardware from the 70s), these games relied on the players’ minds and imagination.</p>
+<p>The gaming process was communicated via text when the description of the current game state was given to the player. An example is, <span class="cmti-10x-x-109">You</span> <span class="cmti-10x-x-109">are standing at the end of a road before a small brick building. Around</span> <span class="cmti-10x-x-109">you is a forest. A small stream flows out of the building and down a</span> <span class="cmti-10x-x-109">gully.</span></p>
+<p>As you can see in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-220004r1"><span class="cmti-10x-x-109">13.1</span></a>, this is the very beginning of the Adventure game from 1976, which was the first game of this kind. Actions in the game were given in the form of free-text commands, which normally had a simple structure and a limited set of words, for example, “verb + noun.”</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file150.png" width="288"/> <span id="x1-220004r1"/></p>
+<span class="id">Figure 13.1: An example of the interactive fiction game process </span>
+</div>
+<p>Despite <span id="dx1-220005"/>the simplistic descriptions, in the 80s and early 90s, hundreds of large and small games were developed by individual developers and commercial studios. Those games sometimes required many hours of gameplay, contained thousands of locations, and had a lot of objects to interact with. For example, <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-220006r2"><span class="cmti-10x-x-109">13.2</span></a> shows part of the Zork I game map published by Infocom in 1980.</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file151.jpg" width="288"/> <span id="x1-220006r2"/></p>
+<span class="id">Figure 13.2: The underground portion of the Zork I map (for better visualization, refer to https://packt.link/gbp/9781835882702) </span>
+</div>
+<p>As you can imagine, the challenges of such games could be increased almost infinitely, as complex interactions between objects, exploration of game states, communication with other characters, and other real-life scenarios could be included. There are many such games available on the Interactive Fiction Archive website: <a class="url" href="http://ifarchive.org"><span class="cmtt-10x-x-109">http://ifarchive.org</span></a>.</p>
+<p>In June 2018, Microsoft Research released an open source project that aimed to provide researchers and RL enthusiasts with a simple way to experiment with text-based games using familiar tools. Their project, called TextWorld, is available on GitHub (<a class="url" href="https://github.com/microsoft/TextWorld"><span class="cmtt-10x-x-109">https://github.com/microsoft/TextWorld</span></a>) and provides the following functionality:</p>
+<ul>
+<li>
+<p>A Gym environment for text-based games. It supports games in two formats: Z-machine bytecode (versions 1–8 are supported) and Glulx games.</p>
+</li>
+<li>
+<p>A game generator that allows you to produce randomly generated quests with pre-defined complexity like the number of objects, the description, and the quest length.</p>
+</li>
+<li>
+<p>The capability to tune (for generated games) the complexity of the environment by peeking at the game state. For example, intermediate rewards could be enabled, which will give a positive reward to the agent every time it makes a step in the right direction. Several<span id="dx1-220007"/> such factors will be described in the next section.</p>
+</li>
+</ul>
+<div class="tcolorbox infobox" id="tcolobox-283">
+<div class="tcolorbox-content">
+<p>As we progress with this chapter, we will experiment with several games to explore the environment’s capabilities and implement several versions of training code to solve the generated games. You need to generate them by using the provided script: <span class="cmtt-10x-x-109">Chapter13/game/make</span><span class="cmtt-10x-x-109">_games.sh</span>. It generates 21 games of length 5, using different seed values to ensure variability between the games. The complexity of the games will not be very high, but you can use them as a basis for your own experiments and idea validation.</p>
+</div>
+</div>
+</section>
+<section class="level3 sectionHead" id="the-environment-2">
+<h1 class="heading-1" id="sigil_toc_id_195"> <span id="x1-22100013.2"/>The environment</h1>
+<p>At the time <span id="dx1-221001"/>of writing, the TextWorld environment supports only Linux and macOS platforms (for Windows, you can use a Docker container) and internally relies on the Inform 7 system (<a class="url" href="https://inform7.com"><span class="cmtt-10x-x-109">https://inform7.com</span></a>). There are two web pages for the project: one is the Microsoft Research web page ( <a class="url" href="https://www.microsoft.com/en-us/research/project/textworld/"><span class="cmtt-10x-x-109">https://www.microsoft.com/en-us/research/project/textworld/</span></a>), which contains general information about the environment, and the another is on GitHub (<a class="url" href="https://github.com/microsoft/TextWorld"><span class="cmtt-10x-x-109">https://github.com/microsoft/TextWorld</span></a>) and describes installation and usage. Let’s start with installation.</p>
+<section class="level4 subsectionHead" id="installation">
+<h2 class="heading-2" id="sigil_toc_id_196"> <span id="x1-22200013.2.1"/>Installation</h2>
+<p>Installation<span id="dx1-222001"/> can be done with simple <span class="cmtt-10x-x-109">pip install textworld==1.6.1</span>. All the examples in this chapter were tested with the latest 1.6.1 release of the package.</p>
+<p>Once installed, the package can be imported in Python code, and it also provides two command-line utilities for game generation and gameplay: <span class="cmtt-10x-x-109">tw-make </span>and <span class="cmtt-10x-x-109">tw-play</span>. They are not needed if you have ambitious plans to solve full-featured interactive fiction games from <a class="url" href="http://ifarchive.org"><span class="cmtt-10x-x-109">http://ifarchive.org</span></a>, but in our case, we will start with artificially generated quests for simplicity.</p>
+</section>
+<section class="level4 subsectionHead" id="game-generation">
+<h2 class="heading-2" id="sigil_toc_id_197"> <span id="x1-22300013.2.2"/>Game generation</h2>
+<p>The <span class="cmtt-10x-x-109">tw-make </span>utility <span id="dx1-223001"/>allows you to generate games with the following characteristics:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Game scenario</span>: For example, you can choose a classic quest with the aim of using objects and following some sequence of actions, or a “coin collection” scenario, when the player needs to navigate the scenes and find coins</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Game theme</span>: You can set up the interior of the game, but at the moment, only the “house” and “basic” themes exist</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Object properties</span>: You can include adjectives with objects; for instance, it might be the “green key” that opens the box, not just the “key”</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">The number of parallel quests that the game can have</span>: By default, there is only one sequence of actions to be found, but you can change this and allow the game to have subgoals and alternative paths</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">The length of the quest</span>: You can define how many steps the player needs to take before reaching the end or solution of the game</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Random seeds</span>: You can use these to generate reproducible games</p>
+</li>
+</ul>
+<p>The resulting game generated could be in Glulx or Z-machine format, which are standard portable virtual machine instructions that are widely used for normal games and supported by several interactive fiction interpreters, so you can play the generated games in the same way as normal interactive fiction games.</p>
+<p>Let’s generate some games and check what they bring us:</p>
+<pre class="lstlisting" id="listing-340"><code>$ tw-make tw-coin_collector --output t1 --seed 10 --level 5 --format ulx 
+Global seed: 10 
+Game generated: t1.ulx</code></pre>
+<p>The command generates three files: <span class="cmtt-10x-x-109">t1.ulx</span>, <span class="cmtt-10x-x-109">t1.ni</span>, and <span class="cmtt-10x-x-109">t1.json</span>. The first one contains bytecode to be loaded into the interpreter, and the others are extended data that could be used by the environment to provide extra information during the gameplay.</p>
+<p>To play the game in interactive mode, you can use any interactive fiction interpreter supporting the Glulx format, or use the provided utility <span class="cmtt-10x-x-109">tw-play</span>, which might not be the most convenient way to play interactive fiction games but will enable you <span id="dx1-223005"/>to check the result:</p>
+<pre class="lstlisting" id="listing-341"><code>$ tw-play t1.ulx 
+Using TWInform7. 
+... 
+ 
+Hey, thanks for coming over to the TextWorld today, there 
+is something I need you to do for me. First thing I need you 
+to do is to try to venture east. Then, venture south. After 
+that, try to go to the south. Once you succeed at that, try 
+to go west. If you can finish that, pick-up the coin from 
+the floor of the chamber. Once that’s all handled, you can stop! 
+ 
+-= Spare Room =- 
+You are in a spare room. An usual one. 
+ 
+You don’t like doors? Why not try going east, that entranceway 
+is unblocked. 
+ 
+&gt; _</code></pre>
+</section>
+<section class="level4 subsectionHead" id="observation-and-action-spaces">
+<h2 class="heading-2" id="sigil_toc_id_198"> <span id="x1-22400013.2.3"/>Observation and action spaces</h2>
+<p>Generating <span id="dx1-224001"/>and playing a game might be fun, but the core value of TextWorld is in its ability to provide an RL interface for generated or existing games. Let’s check what we can do with the game we just generated in the previous section:</p>
+<pre class="lstlisting" id="listing-342"><code>&gt;&gt;&gt; from textworld import gym 
+&gt;&gt;&gt; from textworld.gym import register_game 
+&gt;&gt;&gt; env_id = register_game("t1.ulx") 
+&gt;&gt;&gt; env_id 
+’tw-v0’ 
+&gt;&gt;&gt; env = gym.make(env_id) 
+&gt;&gt;&gt; env 
+&lt;textworld.gym.envs.textworld.TextworldGymEnv object at 0x102f77350&gt; 
+&gt;&gt;&gt; r = env.reset() 
+&gt;&gt;&gt; print(r[1]) 
+{} 
+&gt;&gt;&gt; print(r[0][1205:]) 
+$$ 
+ 
+Hey, thanks for coming over to the TextWorld today, there is something I need you to do for me. First thing I need you to do is to try to venture east. Then, venture south. After that, try to go to the south. Once you succeed at that, try to go west. If you can finish that, pick-up the coin from the floor of the chamber. Once that’s all handled, you can stop! 
+ 
+-= Spare Room =- 
+You are in a spare room. An usual one. 
+ 
+You don’t like doors? Why not try going east, that entranceway is unblocked.</code></pre>
+<p>Here, we registered the generated game and created the environment. You might notice that we are not using the Gymnasium <span class="cmtt-10x-x-109">make() </span>function, but instead, we use a function from the <span class="cmtt-10x-x-109">textworld </span>module, which has the same name. This is not a mistake. In fact, the latest TextWorld release (at the time of writing) removed dependency on Gym API packages and provides their own environment class that looks very similar to <span class="cmtt-10x-x-109">the Env </span>class (but not exactly the same).</p>
+<p>I believe this removal is temporary and part of the transition from OpenAI Gym to Farama Gymnasium. But at the moment, there are several aspects we have to take into account when using TextWorld:</p>
+<ul>
+<li>
+<p>You have to create games using the <span class="cmtt-10x-x-109">textworld.gym.make() </span>function, not <span class="cmtt-10x-x-109">gym.make().</span></p>
+</li>
+<li>
+<p>Created environments don’t have observation and action space specifications. By default, both observation and actions are strings.</p>
+</li>
+<li>
+<p>The function <span class="cmtt-10x-x-109">step() </span>in the environment doesn’t return the <span class="cmtt-10x-x-109">is</span><span class="cmtt-10x-x-109">_truncated </span>flag, just observation, reward, flag <span class="cmtt-10x-x-109">is</span><span class="cmtt-10x-x-109">_done, </span>and a dictionary with extra information. Because of that, you cannot apply Gymnasium wrappers to this environment — small “adapter” wrapper has to be created.</p>
+</li>
+</ul>
+<p>In previous versions of TextWorld, they provided tokenization functions, but they were <span id="dx1-224022"/>removed, so we’ll need to deal with text preprocessing ourselves.</p>
+<p>Let’s now take a look at additional information the game engine provides us.</p>
+</section>
+<section class="level4 subsectionHead" id="extra-game-information">
+<h2 class="heading-2" id="sigil_toc_id_199"> <span id="x1-22500013.2.4"/>Extra game information</h2>
+<p>Before we start<span id="dx1-225001"/> planning our first training code, we need to discuss one additional functionality of TextWorld that we will use. As you might guess, even a simple problem might be too challenging for us:</p>
+<ul>
+<li>
+<p>Observations are text sequences of up to 200 tokens from the vocabulary of size 1,250. Actions could be up to eight tokens long. Generated games have five actions to be executed in the correct order. So, our chance of randomly finding the proper sequence of 8 <span class="cmsy-10x-x-109">× </span>5 = 40 tokens is something around <img alt="1215040" class="frac" data-align="middle" height="30" src="../Images/eq48.png"/>. This is not very promising, even with the fastest GPUs. Of course, we have start- and end-sequence tokens, which we can take into account to increase our chances; still, the probability of finding the correct sequence of actions with random exploration is tiny.</p>
+</li>
+<li>
+<p>Another <span id="dx1-225002"/>challenge is the <span class="cmbx-10x-x-109">partially observable Markov decision</span> <span class="cmbx-10x-x-109">process </span>(<span class="cmbx-10x-x-109">POMDP</span>) nature of the environment, which comes from the fact that our inventory in the game is usually not shown. It is a normal practice in interactive fiction games to display the objects your character possesses only after some explicit command, like <span class="cmtt-10x-x-109">inventory</span>. But our agent has no idea about the previous state. So, from its point of view, the situation after the command <span class="cmtt-10x-x-109">take apple </span>is exactly the same as before (with the difference that the apple is no longer mentioned in the scene description). We can deal with that by stacking states, as we did in Atari games, but we need to do it explicitly, and the amount of information the agent needs to process will increase significantly.</p>
+</li>
+</ul>
+<p>With all this being said, we should make some simplifications in the environment. Luckily, TextWorld provides us with convenient means for such workarounds. During the game registration, we can pass extra flags to enrich the observation space with extra pieces of more structured information. Here is the list of internals that we can peek into:</p>
+<ul>
+<li>
+<p>A separate description of the current room, as it will be given by the <span class="cmtt-10x-x-109">look </span>command</p>
+</li>
+<li>
+<p>The current inventory</p>
+</li>
+<li>
+<p>The name of the current location</p>
+</li>
+<li>
+<p>The facts of the current world state</p>
+</li>
+<li>
+<p>The last action and the last command performed</p>
+</li>
+<li>
+<p>The list of admissible commands in the current state</p>
+</li>
+<li>
+<p>The sequence of actions to execute to win the game</p>
+</li>
+</ul>
+<p>In addition, besides extra structured observations<span id="dx1-225003"/> provided on every step, we can ask TextWorld to give us intermediate rewards every time we move in the right direction in the quest. As you might guess, this is extremely helpful for speeding up the convergence.</p>
+<p>The most useful features in the additional information we can add are admissible commands, which enormously decrease our action space from 1250<sup><span class="cmr-8">40</span></sup> to just a dozen, and intermediate rewards, which guide the training in the right direction. To enable this extra information, we need to pass an optional argument to the <span class="cmtt-10x-x-109">register</span><span class="cmtt-10x-x-109">_game() </span>method:</p>
+<pre class="lstlisting" id="listing-343"><code>&gt;&gt;&gt; from textworld import gym, EnvInfos 
+&gt;&gt;&gt; from textworld.gym import register_game 
+&gt;&gt;&gt; env_id = register_game("t1.ulx", request_infos=EnvInfos(inventory=True, intermediate_reward=True, admissible_commands=True, description=True)) 
+&gt;&gt;&gt; env = gym.make(env_id) 
+&gt;&gt;&gt; r = env.reset() 
+&gt;&gt;&gt; r[1] 
+{’description’: "-= Spare Room =-\nYou are in a spare room. An usual one.\n\n\n\nYou don’t like doors? Why not try going east, that entranceway is unblocked.", ’admissible_commands’: [’go east’, ’inventory’, ’look’], ’inventory’: ’You are carrying nothing.’, ’intermediate_reward’: 0}</code></pre>
+<p>As you can see, the environment now provides us with extra information in the dictionary that was empty before. In this state, only three commands make sense (<span class="cmtt-10x-x-109">go east</span>, <span class="cmtt-10x-x-109">inventory</span>, and <span class="cmtt-10x-x-109">look</span>). Let’s try the first one:</p>
+<pre class="lstlisting" id="listing-344"><code>&gt;&gt;&gt; r = env.step(’go east’) 
+&gt;&gt;&gt; r[1:] 
+(0, False, {’description’: "-= Attic =-\nYou make a grand eccentric entrance into an attic.\n\n\n\nYou need an unblocked exit? You should try going south. You don’t like doors? Why not try going west, that entranceway is unblocked.", ’admissible_commands’: [’go south’, ’go west’, ’inventory’, ’look’], ’inventory’: ’You are carrying nothing.’, ’intermediate_reward’: 1})</code></pre>
+<p>The command was accepted, and we were given an intermediate reward of 1. Okay, that’s <span id="dx1-225014"/>great. Now we have everything needed to implement our first baseline DQN agent to solve TextWorld problems! But before that, we need to <span id="dx1-225015"/>dive a bit into the <span class="cmbx-10x-x-109">natural language processing </span>(<span class="cmbx-10x-x-109">NLP</span>) world.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="the-deep-nlp-basics">
+<h1 class="heading-1" id="sigil_toc_id_200"> <span id="x1-22600013.3"/>The deep NLP basics</h1>
+<p>In this short section, I’m going to walk you through <span id="dx1-226001"/>deep NLP building blocks and standard approaches. This domain is evolving at enormous speed, especially now, as ChatGPT and LLMs have set a new standards in chatbots and text processing.</p>
+<p>The material in this section just scratches the surface and covers the most common and standard building blocks. Some of them, like RNNs and LSTMs, might even look outdated — I still believe this is fine, as being aware of historical perspective is important. For simple tasks, you might consider using simple tools depending on what is most suitable for the task at hand, even if they are not hyped anymore.</p>
+<section class="level4 subsectionHead" id="recurrent-neural-networks-rnns">
+<h2 class="heading-2" id="sigil_toc_id_201"> <span id="x1-22700013.3.1"/>Recurrent Neural Networks (RNNs)</h2>
+<p>NLP has its own specifics that make it different <span id="dx1-227001"/>from<span id="dx1-227002"/> computer vision or other domains. One such feature is processing variable-length objects. At various levels, NLP deals with objects that could have different lengths; for example, a word in a language could contain several characters. Sentences are formed from variable-length word sequences. Paragraphs or documents consist of varying numbers of sentences. Such variability is not NLP-specific and can arise in different domains, like in signal processing or video processing. Even standard computer vision problems could be seen as a sequence of some objects, like an <span id="dx1-227003"/>image captioning problem when a <span class="cmbx-10x-x-109">neural network </span>(<span class="cmbx-10x-x-109">NN</span>) can focus on various amounts of regions of the same image to better describe the image.</p>
+<p>RNNs provide one of the standard building blocks to deal with this variability. An RNN is a network with fixed input and output that is applied to a sequence of objects and can pass information along this sequence. This information is called the hidden state, and it is normally just a vector of numbers of some size.</p>
+<p>In the following diagram, we have an RNN with one input, which is a fixed-sized vector of numbers; the output is another vector. What makes it different from a standard feed-forward or convolutional NN is two extra gates: one input and one output. The extra input feeds the hidden state from the previous item into the RNN unit, and the extra output provides<span id="dx1-227004"/> a transformed<span id="dx1-227005"/> hidden state to the next sequence:</p>
+<div class="minipage">
+<p><img alt="PIC" height="180" src="../Images/file152.png" width="180"/> <span id="x1-227006r3"/></p>
+<span class="id">Figure 13.3: The structure of an RNN building block </span>
+</div>
+<p>As an RNN has two inputs, it can be applied to input sequences of any length, just by passing the hidden state produced by the previous entry to the next one. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-227007r4"><span class="cmti-10x-x-109">13.4</span></a>, an RNN is applied to the sentence <span class="cmti-10x-x-109">this is a cat</span>, producing the output for every word in the sequence. During the application, we have the same RNN applied to every input item, but by having the hidden state, it can now pass information along the sequence:</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file153.png" width="288"/> <span id="x1-227007r4"/></p>
+<span class="id">Figure 13.4: How an RNN is applied to a sentence </span>
+</div>
+<p>This is similar to convolutional NNs, when we have the same set of filters applied to various locations of the image, but the difference is that a convolutional NN can’t pass the hidden state.</p>
+<p>Despite the simplicity of this model, it adds an extra degree of freedom to the standard feed-forward NN model. The feed-forward NNs are determined by their input and always produce the same output for some fixed input (during the inference, of course, and not during the training). An RNN’s output depends not only on the input but also on the hidden state, which could be changed by the NN itself. So, the NN could pass some information from the beginning of the sequence to the end and produce a different output for the same input in different contexts. This context dependency is very important in NLP, as in natural language, a single word could have a completely different meaning in different contexts, and the meaning of a whole sentence could be changed by a single word.</p>
+<p>Of course, such<span id="dx1-227008"/> flexibility comes with its own cost. RNNs usually require more time to train and can produce some weird behavior, like loss oscillations<span id="dx1-227009"/> or sudden amnesia during the training. However, the research community has already done a lot of work and is still working hard to make RNNs more practical and stable, so RNNs and their modern alternatives like transformers can be seen as a standard building block of the systems that need to process variable-length input.</p>
+<p>In our example, we’ll <span id="dx1-227010"/>use the evolution of RNNs, called the <span class="cmbx-10x-x-109">Long Short-Term</span> <span class="cmbx-10x-x-109">Memory </span>(<span class="cmbx-10x-x-109">LSTM</span>) model, which was first proposed in 1995 by Sepp Hochreiter and Jürgen Schmidhuber in the paper <span class="cmti-10x-x-109">LSTM can solve hard long time lag</span> <span class="cmti-10x-x-109">problems</span>, and <span id="dx1-227011"/>then published in 1996 at a <span class="cmbx-10x-x-109">Neural Information Processing</span><span id="dx1-227012"/> <span class="cmbx-10x-x-109">Systems </span>(<span class="cmbx-10x-x-109">NIPS</span>) conference [<span id="x1-227013"/><a href="#">HS96</a>]. This model is very similar to the RNN we just discussed, but has more complicated internal structure<span id="dx1-227014"/> to address some RNN problems.</p>
+</section>
+<section class="level4 subsectionHead" id="word-embedding">
+<h2 class="heading-2" id="sigil_toc_id_202"> <span id="x1-22800013.3.2"/>Word embedding</h2>
+<p>Another standard<span id="dx1-228001"/> building <span id="dx1-228002"/>block of modern DL-driven NLP is <span class="cmbx-10x-x-109">word</span> <span class="cmbx-10x-x-109">embeddings</span>, which is also called <span class="cmbx-10x-x-109">word2vec </span>by one of the <span id="dx1-228003"/>most popular training methods for simple tasks. The idea comes from the problem of representing our language sequences in NNs. Normally, NNs work with fixed-sized vectors of numbers, but in NLP, we normally have words or characters as input to the model.</p>
+<div class="tcolorbox tipbox" id="tcolobox-284">
+<div class="tcolorbox-content">
+<p>While older methods like word2vec are commonly used for more simple tasks and remain very relevant in the field, other methods such as BERT and transformers are widely used for more complex tasks. We’ll briefly discuss transformers later in this chapter.</p>
+</div>
+</div>
+<p>One possible solution might be <span class="cmti-10x-x-109">one-hot encoding </span>our dictionary, which is when every word has its own position in the input vector and we set this number to 1 when we encounter this word in the input sequence. This is a standard approach for NNs when you have to deal with some relatively small discrete set of items and want to represent them in an NN-friendly way. Unfortunately, one-hot encoding doesn’t work very well for several reasons:</p>
+<ul>
+<li>
+<p>Our input set is usually not small. If we want to encode only the most commonly used English dictionary, it will contain at least several thousand words. The <span class="cmti-10x-x-109">Oxford English Dictionary </span>has 170,000 commonly used words and 50,000 obsolete and rare words. This is only established vocabulary and doesn’t count slang, new words, scientific terms, abbreviations, typos, jokes, Twitter/X memes, and so on. And this is only for the English language!</p>
+</li>
+<li>
+<p>The second problem related to the one-hot representation of words is the uneven frequency of vocabulary. There are relatively small sets of very frequent words, like <span class="cmti-10x-x-109">a </span>and <span class="cmti-10x-x-109">cat</span>, but a very large set of much more rarely used words, like <span class="cmti-10x-x-109">covfefe </span>or <span class="cmti-10x-x-109">bibliopole</span>, and those rare words can occur only once or twice in a very large text corpus. So, our one-hot representation is very inefficient in terms of space.</p>
+</li>
+<li>
+<p>Another issue with simple one-hot representation is not capturing a word’s relations. For example, some words are synonyms and have the same meaning, but they will be represented by different vectors. Some words are used very frequently together, like <span class="cmti-10x-x-109">United Nations </span>or <span class="cmti-10x-x-109">fair</span> <span class="cmti-10x-x-109">trade</span>, and this fact is also not captured in one-hot representation.</p>
+</li>
+</ul>
+<p>To overcome all this, we can use word embeddings, which map every word in some vocabulary into a dense, fixed-length vector of numbers. These numbers are not random but trained on a large corpus of text to capture the context of words. A detailed description of word embeddings is beyond the scope of this book, but this is a really powerful and widely used NLP technique to represent words, characters, and other objects in some sequence. For now, you can think about them as just mapping words into number vectors, and this mapping is convenient for the NN to be able to distinguish words from each other. To obtain this mapping, two methods exist. First, you can download pretrained vectors for the language that you need. There are several sources of embeddings available; just search on Google for “GloVe pretrained vectors” or “word2vec pretrained” (GloVe and word2vec are different methods used to train such vectors, which produce similar results). An alternate way to obtain embeddings is to train them on your own dataset. To do this, you can either use special tools, such as fastText (<a class="url" href="https://fasttext.cc/"><span class="cmtt-10x-x-109">https://fasttext.cc/</span></a>, an open source utility from Facebook), or just initialize embeddings randomly and allow your model to adjust them during normal training.</p>
+<p>In addition, LLMs (and, in general, any sequence-to-sequence architectures) can produce very high-quality embeddings<span id="dx1-228004"/> of texts. The OpenAI ChatGPT API has a special request<span id="dx1-228005"/> that converts any piece of text into an embedding vector.</p>
+</section>
+<section class="level4 subsectionHead" id="the-encoder-decoder-architecture">
+<h2 class="heading-2" id="sigil_toc_id_203"> <span id="x1-22900013.3.3"/>The Encoder-Decoder architecture</h2>
+<p>Another model that is widely used in NLP is called <span class="cmbx-10x-x-109">Encoder-Decoder</span>, or seq2seq. It originally <span id="dx1-229001"/>comes from<span id="dx1-229002"/> machine translation, when your system needs to accept a sequence of words in the source language and produce another sequence in the target language. The idea behind seq2seq is to use an RNN to process an input sequence and <span class="cmti-10x-x-109">encode </span>this sequence into some fixed-length representation. This RNN is called an <span class="cmbx-10x-x-109">encoder</span>. Then<span id="dx1-229003"/> you feed the encoded<span id="dx1-229004"/> vector into another RNN, called a <span class="cmbx-10x-x-109">decoder</span>, which has to produce the resulting sequence in the target language. An example of this idea is shown next, where we are translating an English sentence into Russian:</p>
+<div class="minipage">
+<p><img alt="PIC" height="200" src="../Images/file154.png" width="600"/> <span id="x1-229005r5"/></p>
+<span class="id">Figure 13.5: The Encoder-Decoder architecture in machine translation </span>
+</div>
+<p>This model (with a lot of modern tweaks and extensions) is still a major workhorse of machine translation, but is general enough to be applicable to a much wider set of domains, for example, audio processing, image annotation, and video captioning. In our TextWorld example, we’ll use it to generate embeddings of variable-sized observations from the environment.</p>
+<p>RNNs continue to be very effective in certain contexts, but in recent years, NLP has seen significant advancements with the introduction <span id="dx1-229006"/>of the<span id="dx1-229007"/> more complex Transformer models. Let’s take a look at Transformer architecture next.</p>
+</section>
+<section class="level4 subsectionHead" id="transformers">
+<h2 class="heading-2" id="sigil_toc_id_204"> <span id="x1-23000013.3.4"/>Transformers</h2>
+<p>Transformers is<span id="dx1-230001"/> an architecture proposed in 2017 in the paper <span class="cmti-10x-x-109">Attention is all</span> <span class="cmti-10x-x-109">you</span> <span id="dx1-230002"/><span class="cmti-10x-x-109">need </span>by Vaswani et al. from Google [<span id="x1-230003"/><a href="#">Vas17</a>]. At a high-level, it uses the same encoder-decoder architecture we just discussed, but adds several improvements to the underlying building blocks, which turned out to be very important for addressing existing RNN problems:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Positional encoding</span>: This injects information about the input and output sequences’ positions into embeddings</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Attention mechanism</span>: This concept was proposed in 2015 and could be seen as a trainable way for systems to focus on specific parts of input sequences. In transformers, attention was heavily used (which you can guess from the paper’s title)</p>
+</li>
+</ul>
+<p>Nowadays, transformers are at the core of almost every NLP and DL system, including LLMs. I’m not going to go deep into this architecture, as there are lots of resources available about this topic, but if you’re curious, you can check the following article: <a class="url" href="https://jalammar.github.io/illustrated-transformer/"><span class="cmtt-10x-x-109">https://jalammar.github.io/illustrated-transformer/</span></a>.</p>
+<p>Now we have everything needed to implement our first baseline DQN agent to solve TextWorld problems.</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="baseline-dqn">
+<h1 class="heading-1" id="sigil_toc_id_205"> <span id="x1-23100013.4"/>Baseline DQN</h1>
+<p>Getting back <span id="dx1-231001"/>to our TextWorld environment, the following are the major challenges:</p>
+<ul>
+<li>
+<p>Text sequences might be problematic on their own, as we discussed earlier in this chapter. The variability of sequence lengths might cause vanishing and exploding gradients in RNNs, slow training, and convergence issues. In addition to that, our TextWorld environment provides us with several such sequences that we need to handle separately. Our scene description string, for example, might have a completely different meaning to the agent than the inventory string, which describes our possessions.</p>
+</li>
+<li>
+<p>Another obstacle is the action space. As you have seen in the previous section, TextWorld might provide us with a list of commands that we can execute in every state. It significantly reduces the action space we need to choose from, but there are other complications. One of them is that the list of admissible commands changes from state to state (as different locations might allow different commands to be executed). Another issue is that every entry in the admissible commands list is a sequence of words.</p>
+</li>
+</ul>
+<p>Potentially, we might get rid of both of those variabilities by building a dictionary of all possible commands and using it as a discrete, fixed-size action space. In simple games, this might work, as the number of locations and objects is not that large. You can try this as an exercise, but we will follow a different path.</p>
+<p>Thus far, you have seen only discrete action spaces having a small number of predefined actions, and this influenced the architecture of the DQN: the output from the network predicted Q-values for all actions in one pass, which was convenient both during the training and model application (as we need all Q-values for all actions to find argmax anyway). But this choice of DQN architecture is not something dictated by the method, so if needed, we can tweak it. And our issue with a variable number of actions might be solved this way. To get a better understanding of how, let’s check the architecture of our TextWorld baseline DQN, as shown in the following figure:</p>
+<div class="minipage">
+<p><img alt="PIC" height="250" src="../Images/file155.png" width="500"/> <span id="x1-231002r6"/></p>
+<span class="id">Figure 13.6: The architecture of the TextWorld baseline DQN </span>
+</div>
+<p>The major part of the diagram is occupied by preprocessing blocks. On input to<span id="dx1-231003"/> the network (blocks on the left), we get variable sequences of individual parts of observations (“Raw text”, “Description”, and “Inventory”) and the sequence of one action command to be evaluated. This command will be taken from the admissible commands list, and the goal of our network will be to predict a single Q-value for the current game state and this particular command. This approach is different from the DQNs we have used before, but as we don’t know in advance which commands will be evaluated in every state, we will evaluate every command individually.</p>
+<p>Those four input sequences (which are lists of token IDs in our vocabulary) will be passed through an embeddings layer and then fed into separate LSTM RNNs.</p>
+<p>The goal of LSTM networks (which are called “Encoders” in the figure, since LSTMs are concrete implementations of encoders) is to convert variable-length sequences into fixed-size vectors. Every input piece is processed by its own LSTM with separated weights, which will allow the network to capture different data from different input sequences. Later in this chapter, we’ll replace LSTMs with pretrained transformers from the Hugging Face Hub to check the effect of using a much smarter and larger model on the same problem.</p>
+<p>The output from the encoders is concatenated into one single vector and passed to the main DQN network. As our variable-length sequences have been transformed into fixed-size vectors, the DQN network is simple: just several feed-forward layers producing one single Q-value. This is less efficient computationally, but for the baseline, it is fine.</p>
+<p>The complete source code is in the <span class="cmtt-10x-x-109">Chapter13 </span>directory and it includes the following modules:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">train</span><span class="cmtt-10x-x-109">_basic.py</span>: A baseline training program</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">lib/common.py</span>: Common utilities to set up the Ignite engine and hyperparameters</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">lib/preproc.py</span>: The preprocessing pipeline, including embeddings and encoder classes</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">lib/model.py</span>: The DQN model and DQN agent with helper functions</p>
+</li>
+</ul>
+<p>We won’t be presenting the full source code in the chapter. Instead, we will be explaining <span id="dx1-231004"/>only the most important or tricky parts in the subsequent sections.</p>
+<section class="level4 subsectionHead" id="observation-preprocessing">
+<h2 class="heading-2" id="sigil_toc_id_206"> <span id="x1-23200013.4.1"/>Observation preprocessing</h2>
+<p>Let’s start <span id="dx1-232001"/>with the leftmost part of our pipeline (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-231002r6"><span class="cmti-10x-x-109">13.6</span></a>). On the input, we’re going to get several lists of tokens, both for the individual state observation and for our command that we’re going to evaluate. But as you have already seen, the TextWorld environment produces the string and a dict with the extended information, so we need to tokenize the strings and get rid of non-relevant information. That’s the responsibility of the <span class="cmtt-10x-x-109">TextWorldPreproc </span>class, which is defined in the <span class="cmtt-10x-x-109">lib/preproc.py</span> module:</p>
+<div class="tcolorbox" id="tcolobox-285">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-345"><code>class TextWorldPreproc(gym.Wrapper): 
+    log = logging.getLogger("TextWorldPreproc") 
+ 
+    OBS_FIELD = "obs" 
+ 
+    def __init__( 
+            self, env: gym.Env, vocab_rev: tt.Optional[tt.Dict[str, int]], 
+            encode_raw_text: bool = False, 
+            encode_extra_fields: tt.Iterable[str] = (’description’, ’inventory’), 
+            copy_extra_fields: tt.Iterable[str] = (), 
+            use_admissible_commands: bool = True, keep_admissible_commands: bool = False, 
+            use_intermediate_reward: bool = True, tokens_limit: tt.Optional[int] = None, 
+            reward_wrong_last_command: tt.Optional[float] = None 
+    ): 
+        super(TextWorldPreproc, self).__init__(env) 
+        self._vocab_rev = vocab_rev 
+        self._encode_raw_text = encode_raw_text 
+        self._encode_extra_field = tuple(encode_extra_fields) 
+        self._copy_extra_fields = tuple(copy_extra_fields) 
+        self._use_admissible_commands = use_admissible_commands 
+        self._keep_admissible_commands = keep_admissible_commands 
+        self._use_intermedate_reward = use_intermediate_reward 
+        self._num_fields = len(self._encode_extra_field) + int(self._encode_raw_text) 
+        self._last_admissible_commands = None 
+        self._last_extra_info = None 
+        self._tokens_limit = tokens_limit 
+        self._reward_wrong_last_command = reward_wrong_last_command 
+        self._cmd_hist = []</code></pre>
+</div>
+</div>
+<p>The class implements the <span class="cmtt-10x-x-109">gym.Wrapper </span>interface, so it will transform the TextWorld environment observations and actions in <span id="dx1-232030"/>the way we need. The constructor accepts several flags, which simplifies future experiments. For example, you can disable the usage of admissible commands or intermediate rewards, set the limit of tokens, or change the set of observation fields to be processed.</p>
+<p>Next, the <span class="cmtt-10x-x-109">num</span><span class="cmtt-10x-x-109">_fields </span>property returns the count of observation sequences, which is used to get the idea of the encoded observation’s shape:</p>
+<div class="tcolorbox" id="tcolobox-286">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-346"><code>    @property 
+    def num_fields(self): 
+        return self._num_fields 
+ 
+    def _maybe_tokenize(self, s: str) -&gt; str | tt.List[int]: 
+        if self._vocab_rev is None: 
+            return s 
+        tokens = common.tokenize(s, self._vocab_rev) 
+        if self._tokens_limit is not None: 
+            tokens = tokens[:self._tokens_limit] 
+        return tokens</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">_maybe</span><span class="cmtt-10x-x-109">_tokenize() </span>method performs tokenization of input string. If no vocabulary is given, the string is returned unchanged. We will use this functionality in the transformer version, as Hugging Face libraries are performing their own tokenization.</p>
+<p>The <span class="cmtt-10x-x-109">_encode() </span>method is the heart of the observation transformation:</p>
+<div class="tcolorbox" id="tcolobox-287">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-347"><code>    def _encode(self, obs: str, extra_info: dict) -&gt; dict: 
+        obs_result = [] 
+        if self._encode_raw_text: 
+            obs_result.append(self._maybe_tokenize(obs)) 
+        for field in self._encode_extra_field: 
+            extra = extra_info[field] 
+            obs_result.append(self._maybe_tokenize(extra)) 
+        result = {self.OBS_FIELD: obs_result} 
+        if self._use_admissible_commands: 
+            result[KEY_ADM_COMMANDS] = [ 
+                self._maybe_tokenize(cmd) for cmd in extra_info[KEY_ADM_COMMANDS] 
+            ] 
+            self._last_admissible_commands = extra_info[KEY_ADM_COMMANDS] 
+        if self._keep_admissible_commands: 
+            result[KEY_ADM_COMMANDS] = extra_info[KEY_ADM_COMMANDS] 
+            if ’policy_commands’ in extra_info: 
+                result[’policy_commands’] = extra_info[’policy_commands’] 
+        self._last_extra_info = extra_info 
+        for field in self._copy_extra_fields: 
+            if field in extra_info: 
+                result[field] = extra_info[field] 
+        return result</code></pre>
+</div>
+</div>
+<p>The preceding<span id="dx1-232064"/> method takes the observation string and the extended information dictionary and returns a single dictionary with the following keys:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">obs</span>: The list of lists with the token IDs of input sequences.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">admissible</span><span class="cmtt-10x-x-109">_commands</span>: A list with commands available from the current state. Every command is tokenized and converted into the list of token IDs.</p>
+</li>
+</ul>
+<p>In addition, the method remembers the extra information dictionary and raw admissible commands list. This is not needed for training, but will be useful during the model application, to be able to get back the command text from the index of the command.</p>
+<p>With the <span class="cmtt-10x-x-109">_encode() </span>method defined, implementation of the <span class="cmtt-10x-x-109">reset() </span>and <span class="cmtt-10x-x-109">step()</span> methods is simple — we’re encoding observations and handling intermediate rewards (if they are enabled):</p>
+<div class="tcolorbox" id="tcolobox-288">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-348"><code>    def reset(self, seed: tt.Optional[int] = None): 
+        res, extra = self.env.reset() 
+        self._cmd_hist = [] 
+        return self._encode(res, extra), extra 
+ 
+    def step(self, action): 
+        if self._use_admissible_commands: 
+            action = self._last_admissible_commands[action] 
+            self._cmd_hist.append(action) 
+        obs, r, is_done, extra = self.env.step(action) 
+        if self._use_intermedate_reward: 
+            r += extra.get(’intermediate_reward’, 0) 
+        if self._reward_wrong_last_command is not None: 
+            if action not in self._last_extra_info[KEY_ADM_COMMANDS]: 
+                r += self._reward_wrong_last_command 
+        return self._encode(obs, extra), r, is_done, False, extra</code></pre>
+</div>
+</div>
+<p>It’s worth noting that the <span class="cmtt-10x-x-109">step() </span>method is expecting 4 items to be returned from the wrapped environment, but returns 5 elements. This hides the TextWorld environment incompatibility with the modern Gym interface we’ve already discussed.</p>
+<p>Finally, there are two properties that give access to the remembered state:</p>
+<div class="tcolorbox" id="tcolobox-289">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-349"><code>    @property 
+    def last_admissible_commands(self): 
+        if self._last_admissible_commands: 
+            return tuple(self._last_admissible_commands) 
+        return None 
+ 
+    @property 
+    def last_extra_info(self): 
+        return self._last_extra_info</code></pre>
+</div>
+</div>
+<p>To illustrate how the preceding class is supposed to be<span id="dx1-232090"/> applied and what it does with the observation, let’s check the following small interactive session. Here, we register the game, asking for inventory, intermediate reward, admissible commands, and scene description:</p>
+<pre class="lstlisting" id="listing-350"><code>&gt;&gt;&gt; from textworld import gym, EnvInfos 
+&gt;&gt;&gt; from lib import preproc, common 
+&gt;&gt;&gt; env_id = gym.register_game("games/simple1.ulx", request_infos=EnvInfos(inventory=True, intermediate_reward=True, admissible_commands=True, description=True)) 
+&gt;&gt;&gt; env = gym.make(env_id) 
+&gt;&gt;&gt; env.reset()[1] 
+{’intermediate_reward’: 0, ’inventory’: ’You are carrying: a type D latchkey, a teacup and a sponge.’, ’description’: "-= Spare Room =-\nThis might come as a shock to you, but you’ve just walked into a spare room. You can barely contain your excitement.\n\nYou can make out a closed usual looking crate close by. You can make out a rack. However, the rack, like an empty rack, has nothing on it.\n\nThere is an exit to the east. Don’t worry, it is unblocked. You don’t like doors? Why not try going south, that entranceway is unguarded.", ’admissible_commands’: [’drop sponge’, ’drop teacup’, ’drop type D latchkey’, ’examine crate’, ’examine rack’, ’examine sponge’, ’examine teacup’, ’examine type D latchkey’, ’go east’, ’go south’, ’inventory’, ’look’, ’open crate’, ’put sponge on rack’, ’put teacup on rack’, ’put type D latchkey on rack’]}</code></pre>
+<p>So, that’s our <span id="dx1-232097"/>raw observation obtained from the TextWorld environment. Now let’s extract the game vocabulary and apply our preprocessor:</p>
+<pre class="lstlisting" id="listing-351"><code>&gt;&gt;&gt; vocab, action_space, obs_space = common.get_games_spaces(["games/simple1.ulx"]) 
+&gt;&gt;&gt; vocab 
+{0: ’a’, 1: ’about’, 2: ’accomplished’, 3: ’an’, 4: ’and’, 5: ’appears’, 6: ’are’, 7: ’arrive’, 8: ’as’, 9: ’barely’, 10: ’be’, 11: ’because’, 12: ’begin’, 13: ’being’, 14: ’believe’ 
+.... 
+&gt;&gt;&gt; len(vocab) 
+192 
+&gt;&gt;&gt; vocab_rev = common.build_rev_vocab(vocab) 
+&gt;&gt;&gt; vocab_rev 
+{’a’: 0, ’about’: 1, ’accomplished’: 2, ’an’: 3, ’and’: 4, ’appears’: 5, ’are’: 6, ’arrive’: 7 
+... 
+&gt;&gt;&gt; pr_env = preproc.TextWorldPreproc(env, vocab_rev) 
+&gt;&gt;&gt; r = pr_env.reset() 
+&gt;&gt;&gt; r[0] 
+{’obs’: [[142, 132, 166, 106, 26, 8, 0, 136, 167, 188, 17, 188, 86, 180, 82, 0, 142, 132, 188, 20, 9, 27, 191, 57, 188, 20, 103, 121, 0, 24, 178, 101, 35, 23, 18, 188, 20, 103, 121, 0, 129, 77, 161, 129, 94, 3, 50, 129, 73, 111, 115, 85, 163, 84, 3, 58, 167, 161, 44, 152, 186, 85, 84, 172, 188, 152, 94, 41, 184, 110, 169, 72, 141, 159, 53, 84, 173], [188, 6, 0, 170, 36, 92, 0, 157, 4, 0, 143]], ’admissible_commands’: [[42, 143], [42, 157], [42, 170, 36, 92], [55, 35], [55, 129], [55, 143], [55, 157], [55, 170, 36, 92], [71, 44], [71, 141], [83], [100], [117, 35], [127, 143, 115, 129], [127, 157, 115, 129], [127, 170, 36, 92, 115, 129]]} 
+&gt;&gt;&gt; r[1] 
+{’intermediate_reward’: 0, ’inventory’: ’You are carrying: a type D latchkey, a teacup and a sponge.’, ’description’: "-= Spare Room =-\nThis might come as a shock to you, but you’ve just walked into a spare room. You can barely contain your excitement.\n\nYou can make out a closed usual looking crate close by. You can make out a rack. However, the rack, like an empty rack, has nothing on it.\n\nThere is an exit to the east. Don’t worry, it is unblocked. You don’t like doors? Why not try going south, that entranceway is unguarded.", ’admissible_commands’: [’drop sponge’, ’drop teacup’, ’drop type D latchkey’, ’examine crate’, ’examine rack’, ’examine sponge’, ’examine teacup’, ’examine type D latchkey’, ’go east’, ’go south’, ’inventory’, ’look’, ’open crate’, ’put sponge on rack’, ’put teacup on rack’, ’put type D latchkey on rack’]}</code></pre>
+<p>Let’s try to execute an action. The 0th action corresponds to the first entry in the admissible commands list, which is “drop sponge” in our case:</p>
+<pre class="lstlisting" id="listing-352"><code>&gt;&gt;&gt; r[1][’inventory’] 
+’You are carrying: a type D latchkey, a teacup and a sponge.’ 
+&gt;&gt;&gt; obs, reward, is_done, _, info = pr_env.step(0) 
+&gt;&gt;&gt; info[’inventory’] 
+’You are carrying: a type D latchkey and a teacup.’ 
+&gt;&gt;&gt; reward 
+0</code></pre>
+<p>As you can<span id="dx1-232121"/> see, we no longer have the sponge, but it wasn’t the right action to take, thus an intermediate reward was not given.</p>
+<p>Okay, this representation still can’t be fed directly into NNs, but it is much closer to what we want.</p>
+</section>
+<section class="level4 subsectionHead" id="embeddings-and-encoders">
+<h2 class="heading-2" id="sigil_toc_id_207"> <span id="x1-23300013.4.2"/>Embeddings and encoders</h2>
+<p>The next step <span id="dx1-233001"/>in the preprocessing pipeline is implemented in two classes:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">Encoder</span>: A wrapper around the LSTM unit that transforms one single sequence (after embeddings have been applied) into a fixed-size vector</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">Preprocessor</span>: This class is responsible for the application of embeddings and the transformation of individual sequences with corresponding encoder classes</p>
+</li>
+</ul>
+<p>The <span class="cmtt-10x-x-109">Encoder </span>class is simpler, so let’s start with it:</p>
+<div class="tcolorbox" id="tcolobox-290">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-353"><code>class Encoder(nn.Module): 
+    def __init__(self, emb_size: int, out_size: int): 
+        super(Encoder, self).__init__() 
+        self.net = nn.LSTM(input_size=emb_size, hidden_size=out_size, batch_first=True) 
+ 
+    def forward(self, x): 
+        self.net.flatten_parameters() 
+        _, hid_cell = self.net(x) 
+        return hid_cell[0].squeeze(0)</code></pre>
+</div>
+</div>
+<p>The logic is that: we apply the LSTM layer and return its hidden state after processing the sequence.</p>
+<p>The <span class="cmtt-10x-x-109">Preprocessor </span>class is a bit more complicated, as it combines several <span class="cmtt-10x-x-109">Encoder </span>instances and is also responsible for embeddings:</p>
+<div class="tcolorbox" id="tcolobox-291">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-354"><code>class Preprocessor(nn.Module): 
+    def __init__(self, dict_size: int, emb_size: int, num_sequences: int, 
+                 enc_output_size: int, extra_flags: tt.Sequence[str] = ()): 
+        super(Preprocessor, self).__init__() 
+        self._extra_flags = extra_flags 
+        self._enc_output_size = enc_output_size 
+        self.emb = nn.Embedding(num_embeddings=dict_size, embedding_dim=emb_size) 
+        self.encoders = [] 
+        for idx in range(num_sequences): 
+            enc = Encoder(emb_size, enc_output_size) 
+            self.encoders.append(enc) 
+            self.add_module(f"enc_{idx}", enc) 
+        self.enc_commands = Encoder(emb_size, enc_output_size)</code></pre>
+</div>
+</div>
+<p>In the <span id="dx1-233024"/>constructor, we create an embeddings layer, which will map every token in our dictionary into a fixed-size dense vector. Then we create <span class="cmtt-10x-x-109">num</span><span class="cmtt-10x-x-109">_sequences</span> instances of <span class="cmtt-10x-x-109">Encoder </span>for every input sequence and one additional instance to encode command tokens.</p>
+<p>The internal method <span class="cmtt-10x-x-109">_apply</span><span class="cmtt-10x-x-109">_encoder() </span>takes the batch of sequences (every sequence is a list of token IDs) and transforms it with an encoder:</p>
+<div class="tcolorbox" id="tcolobox-292">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-355"><code>    def _apply_encoder(self, batch: tt.List[tt.List[int]], encoder: Encoder): 
+        dev = self.emb.weight.device 
+        batch_t = [self.emb(torch.tensor(sample).to(dev)) for sample in batch] 
+        batch_seq = rnn_utils.pack_sequence(batch_t, enforce_sorted=False) 
+        return encoder(batch_seq)</code></pre>
+</div>
+</div>
+<p>In earlier versions of PyTorch, we needed to sort a batch of variable-length sequences before RNN application. Since PyTorch 1.0, this is no longer needed, as this sorting and transformation is handled by the <span class="cmtt-10x-x-109">PackedSequence </span>class internally. To enable this functionality, we need to pass the <span class="cmtt-10x-x-109">enforce</span><span class="cmtt-10x-x-109">_sorted=False</span> parameter.</p>
+<p>The <span class="cmtt-10x-x-109">encode</span><span class="cmtt-10x-x-109">_observations() </span>method takes a batch of observations (from <span class="cmtt-10x-x-109">TextWorldPreproc</span>) and encodes them into a tensor:</p>
+<div class="tcolorbox" id="tcolobox-293">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-356"><code>    def encode_observations(self, observations: tt.List[dict]) -&gt; torch.Tensor: 
+        sequences = [obs[TextWorldPreproc.OBS_FIELD] for obs in observations ] 
+        res_t = self.encode_sequences(sequences) 
+        if not self._extra_flags: 
+            return res_t 
+        extra = [[obs[field] for field in self._extra_flags] for obs in observations] 
+        extra_t = torch.Tensor(extra).to(res_t.device) 
+        res_t = torch.cat([res_t, extra_t], dim=1) 
+        return res_t</code></pre>
+</div>
+</div>
+<p>Besides variable sequences, we can pass extra “flags” fields directly into the encoded<span id="dx1-233039"/> tensor. This functionality will be used in later experiments and extensions to the basic method.</p>
+<p>Finally, two methods, <span class="cmtt-10x-x-109">encode</span><span class="cmtt-10x-x-109">_sequences() </span>and <span class="cmtt-10x-x-109">encode</span><span class="cmtt-10x-x-109">_commands()</span>, are used to apply different encoders to the batch of variable-length sequences:</p>
+<div class="tcolorbox" id="tcolobox-294">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-357"><code>    def encode_sequences(self, batches): 
+        data = [] 
+        for enc, enc_batch in zip(self.encoders, zip(*batches)): 
+            data.append(self._apply_encoder(enc_batch, enc)) 
+        res_t = torch.cat(data, dim=1) 
+        return res_t 
+ 
+    def encode_commands(self, batch): 
+        return self._apply_encoder(batch, self.enc_commands)</code></pre>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="the-dqn-model-and-the-agent">
+<h2 class="heading-2" id="sigil_toc_id_208"> <span id="x1-23400013.4.3"/>The DQN model and the agent</h2>
+<p>With all those<span id="dx1-234001"/> preparations made, let’s<span id="dx1-234002"/> look <span id="dx1-234003"/>at the brains of our agent: the DQN model. It should accept vectors of <span class="cmtt-10x-x-109">num</span><span class="cmtt-10x-x-109">_sequences </span><span class="cmsy-10x-x-109">×</span><span class="cmtt-10x-x-109">encoder</span><span class="cmtt-10x-x-109">_size </span>and produce a single scalar value. But there is one difference from the other DQN models covered, which is in the way we apply the model:</p>
+<div class="tcolorbox" id="tcolobox-295">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-358"><code>class DQNModel(nn.Module): 
+    def __init__(self, obs_size: int, cmd_size: int, hid_size: int = 256): 
+        super(DQNModel, self).__init__() 
+ 
+        self.net = nn.Sequential( 
+            nn.Linear(obs_size + cmd_size, hid_size), 
+            nn.ReLU(), 
+            nn.Linear(hid_size, 1) 
+        ) 
+ 
+    def forward(self, obs, cmd): 
+        x = torch.cat((obs, cmd), dim=1) 
+        return self.net(x) 
+ 
+    @torch.no_grad() 
+    def q_values(self, obs_t, commands_t): 
+        result = [] 
+        for cmd_t in commands_t: 
+            qval = self(obs_t, cmd_t.unsqueeze(0))[0].cpu().item() 
+            result.append(qval) 
+        return result</code></pre>
+</div>
+</div>
+<p>In the preceding code, the <span class="cmtt-10x-x-109">forward() </span>method accepts two batches — observations and commands — producing the batch of Q-values for every pair. Another method, <span class="cmtt-10x-x-109">q</span><span class="cmtt-10x-x-109">_values()</span>, takes one observation produced by the <span class="cmtt-10x-x-109">Preprocessor </span>class and the tensor of encoded commands, then applies the model and returns a list of Q-values for every command.</p>
+<p>In the <span class="cmtt-10x-x-109">model.py </span>module, we have the <span class="cmtt-10x-x-109">DQNAgent </span>class, which takes the preprocessor and implements the PTAN Agent interface to hide the details of observation preprocessing on decision-making.</p>
+</section>
+<section class="level4 subsectionHead" id="training-code-1">
+<h2 class="heading-2" id="sigil_toc_id_209"> <span id="x1-23500013.4.4"/>Training code</h2>
+<p>With all the preparations and preprocessing in place, the<span id="dx1-235001"/> rest of the code is almost the same as we already implemented in previous chapters, so I won’t repeat the training code; I will just describe the training logic.</p>
+<p>To train the model, the <span class="cmtt-10x-x-109">Chapter13/train</span><span class="cmtt-10x-x-109">_basic.py </span>utility has to be used. It allows several command-line arguments to change the training behavior:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">-g </span>or <span class="cmtt-10x-x-109">--game</span>: This is the prefix of the game files in the <span class="cmtt-10x-x-109">games </span>directory. The provided script generates several games named <span class="cmtt-10x-x-109">simpleNN.ulx</span>, where NN is the game seed.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-s </span>or <span class="cmtt-10x-x-109">--suffices</span>: This is the count of games to be used during the training. If you specify 1 (which is the default), the training will be performed only on the file <span class="cmtt-10x-x-109">simple1.ulx</span>. If option <span class="cmtt-10x-x-109">-s 10 </span>is given, 10 games with indices 1<span class="cmmi-10x-x-109">…</span>10 will be registered and used for training. This option is used to increase the variability in the training games, as our goal is not just to learn how to play concrete games but also (hopefully) to learn how to behave in other similar games.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-v </span>or <span class="cmtt-10x-x-109">--validation</span>: This is the suffix of the game to be used for validation. It equals to <span class="cmtt-10x-x-109">-val </span>by default and defines the game file that will be used to check the generalization of our trained agent.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">--params</span>: This means the hyperparameters to be used. Two sets are defined in <span class="cmtt-10x-x-109">lib/common.py</span>: small and medium. The first one has a small number of embeddings and encoder vectors, which is great for solving a couple of games quickly; however, this set struggles with converging when many games are used for training.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">--dev</span>: This option specifies the device name for computations.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-r </span>or <span class="cmtt-10x-x-109">--run</span>: This is the name of the run and is used in the name of the save directory and TensorBoard.</p>
+</li>
+</ul>
+<p>During the training, validation is performed every 100 training iterations and the validation game is run on the current network. The reward and the number of steps are recorded in TensorBoard and help us to understand the generalization capabilities of our agent. Generalization in RL is known to be a large issue, as with a limited set of trajectories, the training process has a tendency to overfit to some states, which doesn’t guarantee good behavior on unseen games. In comparison to Atari games, where the gameplay normally doesn’t change much, the variability of interactive fiction games might be high, due to different quests, objects, and the way they communicate. So, it’s an interesting experiment to <span id="dx1-235002"/>check how our agent is able to generalize between games.</p>
+</section>
+<section class="level4 subsectionHead" id="training-results">
+<h2 class="heading-2" id="sigil_toc_id_210"> <span id="x1-23600013.4.5"/>Training results</h2>
+<p>By default, the script <span class="cmtt-10x-x-109">games/make</span><span class="cmtt-10x-x-109">_games.sh </span>generates 20 games with names from <span class="cmtt-10x-x-109">simple1.ulx </span>to <span class="cmtt-10x-x-109">simple20.ulx</span>, plus a game for validation: <span class="cmtt-10x-x-109">simple-val.ulx</span>.</p>
+<p>To begin, let’s train <span id="dx1-236001"/>the agent on one game, using the small hyperparameters set:</p>
+<pre class="lstlisting" id="listing-359"><code>$ ./train_basic.py -s 1 --dev cuda -r t1 
+Registered env tw-simple-v0 for game files [’games/simple1.ulx’] 
+Game tw-simple-v1, with file games/simple-val.ulx will be used for validation 
+Episode 1: reward=0 (avg 0.00), steps=50 (avg 50.00), speed=0.0 f/s, elapsed=0:00:04 
+Episode 2: reward=1 (avg 0.02), steps=50 (avg 50.00), speed=0.0 f/s, elapsed=0:00:04 
+1: best avg training reward: 0.020, saved 
+Episode 3: reward=-2 (avg -0.02), steps=50 (avg 50.00), speed=0.0 f/s, elapsed=0:00:04 
+Episode 4: reward=6 (avg 0.10), steps=30 (avg 49.60), speed=0.0 f/s, elapsed=0:00:04 
+...</code></pre>
+<p>Option <span class="cmtt-10x-x-109">-s </span>specifies the number of game indices that will be used for training. In this case, only one will be used. The training stops when the average number of steps in the game drops below 15, which means the agent has found the proper sequence of steps and can reach the end of the game in an efficient way.</p>
+<p>In the case of one game, it takes just 3 minutes and about 120 episodes to solve the game. The following figure shows the reward and number of steps dynamics during the training:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_07.png" width="600"/> <span id="x1-236011r7"/></p>
+<span class="id">Figure 13.7: Training reward (left) and count of steps in episodes (right) for training on one game </span>
+</div>
+<p>But if we check <span id="dx1-236012"/>the validation reward (which is a reward obtained on the game <span class="cmtt-10x-x-109">simple-val.ulx</span>), we see zero improvement over time. In my case, validation reward was zero and count of steps on validation episodes were 50 (which is a default time limit). It just means that the learned agent wasn’t able to generalize.</p>
+<p>If we try to increase the number of games used for the training, the convergence will require more time, as the network needs to discover more sequences of actions in different states. The following are the same charts for reward and steps for 20 games (with option <span class="cmtt-10x-x-109">-s 20 </span>passed):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_08.png" width="600"/> <span id="x1-236013r8"/></p>
+<span class="id">Figure 13.8: Training reward (left) and count of steps in episodes (right) for training on 20 games </span>
+</div>
+<p>As you can see, it takes almost two hours to converge, but still, our small hyperparameter set is able to improve the performance on 20 games played during the training.</p>
+<p>Validation metrics, as shown in the following figure, are now slightly more interesting — at the end of the training, the agent was able to obtain the score of 2 (with maximum 6) and <span id="dx1-236014"/>somewhere in the middle of the training, it got 4. But count of steps on validation game are still 50, which means that the agent just walks around semi-randomly executing some actions. Not very impressive.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_09.png" width="500"/> <span id="x1-236015r9"/></p>
+<span class="id">Figure 13.9: Validation reward during the training on 20 games </span>
+</div>
+<p>I haven’t tried <span id="dx1-236016"/>different hyperparameters on this agent (you can do this with <span class="cmtt-10x-x-109">-s</span> <span class="cmtt-10x-x-109">medium</span>).</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="tweaking-observations">
+<h1 class="heading-1" id="sigil_toc_id_211"> <span id="x1-23700013.5"/>Tweaking observations</h1>
+<p>Our first series<span id="dx1-237001"/> of attempts will be in feeding more information to the agent. Here, I will just briefly introduce the changes made and effect they had on a training result. You can find the full example in <span class="cmtt-10x-x-109">Chapter13/train</span><span class="cmtt-10x-x-109">_preproc.py</span>.</p>
+<section class="level4 subsectionHead" id="tracking-visited-rooms">
+<h2 class="heading-2" id="sigil_toc_id_212"> <span id="x1-23800013.5.1"/>Tracking visited rooms</h2>
+<p>First, you will<span id="dx1-238001"/> notice that our agent has no idea whether the current room was already visited or not. In situations when the agent already knows the optimal way to the goal, it might be not needed (as generated games always have different rooms). But if the policy is not perfect, it might be useful to have a clear indication that we’re visiting the same room over and over again.</p>
+<p>To feed this knowledge into the observation, I implemented a simple room tracking in the <span class="cmtt-10x-x-109">preproc.LocationWrapper </span>class, which tracks visited rooms over the episode. Then this flag is concatenated to the agent’s observation as a single 1 if the room was visited before or 0 if it is a new location.</p>
+<p>To train our agent with this extension, you can run <span class="cmtt-10x-x-109">train</span><span class="cmtt-10x-x-109">_preproc.py </span>with the additional command-line option <span class="cmtt-10x-x-109">--seen-rooms</span>.</p>
+<p>The following are charts comparing our baseline version with this extra observation on 20 games. As you can see, reward on training games are almost the same, but validation reward was improved — we were able to get non-zero validation reward almost during the whole training. But count of steps on validation game are still 50.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_10.png" width="600"/> <span id="x1-238002r10"/></p>
+<span class="id">Figure 13.10: Training reward (left) and validation reward (right) on 20 games </span>
+</div>
+<p>But after trying this extension on 200 games (you need to change the script to generate them), I’ve got an interesting result: after 14 hours of training and 8,000 episodes, the agent was not <span id="dx1-238003"/>just getting the maximum score on validation game but was able to do this efficiently (with count of steps less than 10). This is shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-238004r11"><span class="cmti-10x-x-109">13.11</span></a> and <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-238005r12"><span class="cmti-10x-x-109">13.12</span></a>.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_11.png" width="600"/> <span id="x1-238004r11"/></p>
+<span class="id">Figure 13.11: Training reward (left) and episode steps (right) on 200 games </span>
+</div>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_12.png" width="600"/> <span id="x1-238005r12"/></p>
+<span class="id">Figure 13.12: Validation reward (left) and episode steps (right) </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="relative-actions">
+<h2 class="heading-2" id="sigil_toc_id_213"> <span id="x1-23900013.5.2"/>Relative actions</h2>
+<p>The second<span id="dx1-239001"/> attempt to improve the agent’s learning was about the action space. In principle, our agent’s task is to navigate the rooms and perform specific actions on objects around (like opening the locker and taking something out of it). So, navigation is a very important aspect in learning process.</p>
+<p>At the moment, we move around by executing “absolute coordinate” commands, like “go north” or “go east”, which are room-specific, as different rooms might have different exits available. In addition, after executing some action, the inverse action (to get back to the original room) depends on the first action. For example, if we are in the room with an exit to the north, after using this exit, we need to execute “go south” to get back. But our agent has no memory of the history of actions, so after going north, we have no idea how to get back.</p>
+<p>In the previous section, we added information about whether the room was visited or not. Now we’ll transform absolute actions into relative actions. To get that, our wrapper <span class="cmtt-10x-x-109">preproc.RelativeDirectionsWrapper </span>tracks our “heading direction” and replaces the “go north” or “go east” commands with “go left”, “go right”, “go forward”, or “go back” depending on the heading direction. In this example, when we’re in the room with an exit to the north and we’re heading north, we need to execute the command “go forward” to use the exit. After that, we can run the command “go back” to step back in the originating room. Hopefully, this transformation will allow our model to navigate the TextWorld games with more ease.</p>
+<p>To enable this extension, you need to run <span class="cmtt-10x-x-109">train</span><span class="cmtt-10x-x-109">_preproc.py </span>with the <span class="cmtt-10x-x-109">--relative-actions </span>command-line option. This extension also requires “seen rooms” to be enabled, so here, we’re testing the effect of both modifications combined. On 20 games, training dynamics and validation results are very similar to the baseline version (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-239002r13"><span class="cmti-10x-x-109">13.13</span></a>):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_13.png" width="600"/> <span id="x1-239002r13"/></p>
+<span class="id">Figure 13.13: Training reward (left) and validation reward (right) on 20 games </span>
+</div>
+<p>But on 200 games, the agent was able to get the maximum score on validation game after just 2.5 hours (instead of 13 in the “Seen rooms” extension). The number of steps on validation was also decreased below 10. But, unfortunately, after<span id="dx1-239003"/> further training, validation metrics reverted to lower validation scores, so the agent overfitted to the games and unlearned the skills it had:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_14.png" width="600"/> <span id="x1-239004r14"/></p>
+<span class="id">Figure 13.14: Validation reward (left) and episode steps (right) on 200 games </span>
+</div>
+</section>
+<section class="level4 subsectionHead" id="objective-in-observation">
+<h2 class="heading-2" id="sigil_toc_id_214"> <span id="x1-24000013.5.3"/>Objective in observation</h2>
+<p>Another idea is to<span id="dx1-240001"/> feed the game objective into the agent observations. The objective is presented as text at the beginning of the game, for example, <span class="cmti-10x-x-109">First</span> <span class="cmti-10x-x-109">thing I need you to do is to try to venture east. Then, venture south. After that,</span> <span class="cmti-10x-x-109">try to go to the south. Once you succeed at that, try to go west. If you can finish</span> <span class="cmti-10x-x-109">that, pick up the coin from the floor of the chamber. Once that’s all handled, you</span> <span class="cmti-10x-x-109">can stop!</span>.</p>
+<p>This information might be useful for the agent to plan its actions, so let’s add it to the encoded vectors. We don’t need to implement another wrapper, as our existing ones are flexible enough already. Just a couple of extra arguments need to be passed to them. To enable the objective, you need to run <span class="cmtt-10x-x-109">train</span><span class="cmtt-10x-x-109">_preproc.py </span>with the <span class="cmtt-10x-x-109">--objective </span>command-line argument.</p>
+<p>Results on 20 games are almost identical to the baseline and shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-240002r15"><span class="cmti-10x-x-109">13.15</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_15.png" width="600"/> <span id="x1-240002r15"/></p>
+<span class="id">Figure 13.15: Training reward (left) and validation reward (right) on 20 games </span>
+</div>
+<p>Training on 200 games was less successful than for previous modifications: during the validation, score was around 2-4 but never reached 6. Charts for reward and validation reward are shown in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-240003r16"><span class="cmti-10x-x-109">13.16</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_16.png" width="600"/> <span id="x1-240003r16"/></p>
+<span class="id">Figure 13.16: Training reward (left) and validation reward (right) on 200 games </span>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="transformers-1">
+<h1 class="heading-1" id="sigil_toc_id_215"> <span id="x1-24100013.6"/>Transformers</h1>
+<p>The next<span id="dx1-241001"/> approach we’ll try is pretrained language models, which is a de facto standard in modern NLP. Thanks to public model repositories, like the <a href="https://huggingface.co/docs/hub/en/index">Hugging Face Hub</a>, we don’t need to train them from scratch, which might be very costly. We can just plug the pretrained model into our architecture and fine-tune a small portion of our network to our dataset.</p>
+<p>There is a wide variety of models — different sizes, datasets they were pretrained on, training techniques, etc. But all of them use a simple API, so plugging them into our code is simple and straightforward.</p>
+<p>First, we need to install the libraries. For our task, we’ll use the package <span class="cmtt-10x-x-109">sentence-transformers==2.6.1</span>, which you need to install manually. Once this is done, you can use it to compute embeddings of any sentences given as strings:</p>
+<pre class="lstlisting" id="listing-360"><code>&gt;&gt;&gt; from sentence_transformers import SentenceTransformer 
+&gt;&gt;&gt; tr = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2") 
+&gt;&gt;&gt; tr.get_sentence_embedding_dimension() 
+384 
+&gt;&gt;&gt; r = tr.encode("You’re standing in an ordinary boring room") 
+&gt;&gt;&gt; type(r) 
+&lt;class ’numpy.ndarray’&gt; 
+&gt;&gt;&gt; r.shape 
+(384,) 
+&gt;&gt;&gt; r2 = tr.encode(["sentence 1", "sentence 2"], convert_to_tensor=True) 
+&gt;&gt;&gt; type(r2) 
+&lt;class ’torch.Tensor’&gt; 
+&gt;&gt;&gt; r2.shape 
+torch.Size([2, 384])</code></pre>
+<p>Here we used the <span class="cmtt-10x-x-109">all-MiniLM-L6-v2 </span>model, which is relatively small — 22M parameters trained on 1.2B tokens. You can find more information on the Hugging Face website: <a class="url" href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2"><span class="cmtt-10x-x-109">https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2</span></a>.</p>
+<p>In our case, we’ll use the high-level interface, where we feed strings with sentences, and the library and model are doing all the conversion for us. But there is lots of flexibility if needed.</p>
+<p>The <span class="cmtt-10x-x-109">preproc.TransformerPreprocessor </span>class implements the same interface as our old <span class="cmtt-10x-x-109">Preprocessor </span>class (which used LSTM for embeddings) and I’m not going to show the code as it is very straightforward.</p>
+<p>To train our agent with transformers, you need to run the <span class="cmtt-10x-x-109">Chapter13/train</span><span class="cmtt-10x-x-109">_tr.py</span> module. During the training, transformers turned out to be slower (2 FPS vs 6 FPS on my machine), which is not surprising, as the model is much more complicated than LSTM models. But training dynamics is better on 20 and 200 games. In <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-241017r17"><span class="cmti-10x-x-109">13.17</span></a>, you can see training reward and count of episode steps for <span id="dx1-241016"/>transformers and baseline. The baseline version required 1,000 episodes to reach 15 steps, where transformers required just 400. Validation on 20 games had worse reward than baseline version (max score was 2):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B22150_13_17.png" width="600"/> <span id="x1-241017r17"/></p>
+<span class="id">Figure 13.17: Training reward (left) and training episodes length (right) on 20 games </span>
+</div>
+<p>The same situation was on 200 games — the agent learns more efficiently (in terms of games), but validation is not great. This could be explained by the much larger capacity of transformers — the embeddings they produce are almost 20 times larger than our baseline model (384 vs 20), so it is easier for our agent to just memorize the correct sequence of steps instead of trying to find <span id="dx1-241018"/>high-level generic observations to actions mapping.</p>
+</section>
+<section class="level3 sectionHead" id="chatgpt">
+<h1 class="heading-1" id="sigil_toc_id_216"> <span id="x1-24200013.7"/>ChatGPT</h1>
+<p>To finalize the<span id="dx1-242001"/> discussion of TextWorld, let’s try a different approach — using LLMs. Right after public release at the end of 2022, OpenAI ChatGPT became very popular and literally transformed the chatbot and text-based assistant landscape. Just in a year since its release, hundreds of new use cases appeared and thousands of applications using LLMs under the hood were developed. Let’s try to apply this technology to our problem of solving TextWorld games.</p>
+<section class="level4 subsectionHead" id="setup">
+<h2 class="heading-2" id="sigil_toc_id_217"> <span id="x1-24300013.7.1"/>Setup</h2>
+<p>First, you will<span id="dx1-243001"/> need an account on <a class="url" href="https://openai.com"><span class="cmtt-10x-x-109">https://openai.com</span></a>. We’ll start our experiment with an interactive web-based chat, which could be tried for free and without registration (at the moment of writing), but our next example will use the ChatGPT API, for which you will need to generate an API key at <a class="url" href="https://platform.openai.com"><span class="cmtt-10x-x-109">https://platform.openai.com</span></a>. Once the key is created, you need to set it to the environment variable <span class="cmtt-10x-x-109">OPENAI</span><span class="cmtt-10x-x-109">_API</span><span class="cmtt-10x-x-109">_KEY </span>in the shell you’re using.</p>
+<p>We’ll also use the <span class="cmtt-10x-x-109">langchain </span>library to communicate with ChatGPT from Python, so please install it with the following commands:</p>
+<pre class="lstlisting" id="listing-361"><code>$ pip install langchain==0.1.15 langchain-openai==0.1.2</code></pre>
+<div class="tcolorbox infobox" id="tcolobox-296">
+<div class="tcolorbox-content">
+<p>Note that these packages are quite dynamic and new versions might break compatibility.</p>
+</div>
+</div>
+</section>
+<section class="level4 subsectionHead" id="interactive-mode">
+<h2 class="heading-2" id="sigil_toc_id_218"> <span id="x1-24400013.7.2"/>Interactive mode</h2>
+<p>In our first<span id="dx1-244001"/> example, we’ll use the web-based ChatGPT interface, asking it to generate game commands from room descriptions and game objectives. The code is in <span class="cmtt-10x-x-109">Chapter13/chatgpt</span><span class="cmtt-10x-x-109">_interactive.py </span>and it does the following:</p>
+<ol>
+<li>
+<div id="x1-244003x1">
+<p>Starts the TextWorld environment for the game ID given in the command line</p>
+</div>
+</li>
+<li>
+<div id="x1-244005x2">
+<p>Creates the prompt for ChatGPT with instructions, game objective, and room description</p>
+</div>
+</li>
+<li>
+<div id="x1-244007x3">
+<p>Writes this prompt to the console</p>
+</div>
+</li>
+<li>
+<div id="x1-244009x4">
+<p>Reads the command to be executed from the console</p>
+</div>
+</li>
+<li>
+<div id="x1-244011x5">
+<p>Executes the command in the environment</p>
+</div>
+</li>
+<li>
+<div id="x1-244013x6">
+<p>Repeats from step 2 until the limit of steps has been reached or until we’ve solved the game</p>
+</div>
+</li>
+</ol>
+<p>So, your task is to copy the generated prompt and paste it into the <a class="url" href="https://chat.openai.com"><span class="cmtt-10x-x-109">https://chat.openai.com</span></a> web interface. ChatGPT will generate the command that has to be entered into the console.</p>
+<p>The full code is very simple and short. It has just a single <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_game </span>function, which executes the game loop using the created environment:</p>
+<div class="tcolorbox" id="tcolobox-297">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-362"><code>        env_id = register_game( 
+            gamefile=f"games/{args.game}{index}.ulx", 
+            request_infos=EnvInfos(description=True, objective=True), 
+        ) 
+        env = gym.make(env_id)</code></pre>
+</div>
+</div>
+<p>During environment creation, we ask just for two extra information pieces: room description and game objective. In principle, both are present in free-text observations, so we could parse them from this text. But for convenience, we ask TextWorld to provide this explicitly.</p>
+<p>In the <span id="dx1-244019"/>beginning of the <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_game </span>function, we reset the environment and generate the initial prompt:</p>
+<div class="tcolorbox" id="tcolobox-298">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-363"><code>def play_game(env, max_steps: int = 20) -&gt; bool: 
+    commands = [] 
+ 
+    obs, info = env.reset() 
+ 
+    print(textwrap.dedent("""\ 
+    You’re playing the interactive fiction game. 
+    Here is the game objective: %s 
+ 
+    Here is the room description: %s 
+ 
+    What command do you want to execute next? Reply with 
+    just a command in lowercase and nothing else. 
+    """)  % (info[’objective’], info[’description’])) 
+ 
+    print("=== Send this to chat.openai.com and type the reply...")</code></pre>
+</div>
+</div>
+<p>I haven’t spent much time designing it, as basically, everything worked from the first attempt and I’m sure it could be improved. The last sentence, “Reply with just a command in lowercase and nothing else,” prevents the chatbot from being too verbose and saves us from parsing the output.</p>
+<p>Then we execute the loop until the game is solved or the limit of steps has been reached:</p>
+<div class="tcolorbox" id="tcolobox-299">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-364"><code>    while len(commands) &lt; max_steps: 
+        cmd = input("&gt;&gt;&gt; ") 
+        commands.append(cmd) 
+        obs, r, is_done, info = env.step(cmd) 
+        if is_done: 
+            print(f"You won in {len(commands)} steps! " 
+                  f"Don’t forget to congratulate ChatGPT!") 
+            return True 
+ 
+        print(textwrap.dedent("""\ 
+        Last command result: %s 
+        Room description: %s 
+ 
+        What’s the next command? 
+        """) % (obs, info[’description’])) 
+        print("=== Send this to chat.openai.com and type the reply...") 
+ 
+    print(f"Wasn’t able to solve after {max_steps} steps, commands: {commands}") 
+    return False</code></pre>
+</div>
+</div>
+<p>The continuation <span id="dx1-244055"/>prompt is much simpler — we just give the obtained observation (which is an outcome of the command) and new room description. We don’t need to pass the objective again, as the web interface keeps the context of conversation, so the chatbot is aware of our prior instructions.</p>
+<p>Let’s take a look at one game test (with seed 1). I stripped the room descriptions to decrease the verbosity; otherwise, it would take several pages of the book. But you should copy the generated text fully:</p>
+<pre class="lstlisting" id="listing-365"><code>$ ./chatgpt_interactive.py 1 
+Starting game 1 
+ 
+You’re playing the interactive fiction game. 
+Here is the game objective: Get ready to pick stuff up and put it in places, because you’ve just entered TextWorld! Here is your task for today. First stop, go to the south. And then, head east. With that over with, make an effort to go north. With that accomplished, ensure that the type D locker is open. Then, take the keyboard from the type D locker. That’s it! 
+ 
+Here is the room description: -= Spare Room =- 
+What command do you want to execute next? Reply with 
+just a command in lowercase and nothing else. 
+ 
+=== Send this to chat.openai.com and type the reply... 
+&gt;&gt;&gt; go south 
+Last command result: -= Dish-Pit =- 
+Room description: -= Dish-Pit =- 
+What’s the next command? 
+ 
+=== Send this to chat.openai.com and type the reply... 
+&gt;&gt;&gt; go east 
+Last command result: -= Cookhouse =- 
+Room description: -= Cookhouse =- 
+What’s the next command? 
+ 
+=== Send this to chat.openai.com and type the reply... 
+&gt;&gt;&gt; go north 
+Last command result: -= Studio =- 
+Room description: -= Studio =- 
+What’s the next command? 
+ 
+=== Send this to chat.openai.com and type the reply... 
+&gt;&gt;&gt; open type d locker 
+Last command result: You open the type D locker, revealing a keyboard. 
+Room description: -= Studio =- 
+What’s the next command? 
+ 
+=== Send this to chat.openai.com and type the reply... 
+&gt;&gt;&gt; take keyboard 
+You won in 5 steps! Don’t forget to congratulate ChatGPT!</code></pre>
+<p>As you can see, the LLM was able to solve the task perfectly. What is even more spectacular is that overall task is harder — we ask it to generate commands and not to make a decision from a list of “admissible commands” as earlier<span id="dx1-244093"/> in the chapter.</p>
+</section>
+<section class="level4 subsectionHead" id="chatgpt-api">
+<h2 class="heading-2" id="sigil_toc_id_219"> <span id="x1-24500013.7.3"/>ChatGPT API</h2>
+<p>Since copy-pasting is tedious and boring, let’s automate <span id="dx1-245001"/>our agent using the ChatGPT API. We’ll use the langchain library (<a class="url" href="https://python.langchain.com/"><span class="cmtt-10x-x-109">https://python.langchain.com/</span></a>), which provides enough flexibility and control to leverage the LLM functionality.</p>
+<p>The full code example is in <span class="cmtt-10x-x-109">Chapter13/chatgpt</span><span class="cmtt-10x-x-109">_auto.py</span>. Here, I will cover the core function, <span class="cmtt-10x-x-109">play</span><span class="cmtt-10x-x-109">_game()</span>:</p>
+<div class="tcolorbox" id="tcolobox-300">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-366"><code>from langchain_openai import ChatOpenAI 
+from langchain_core.output_parsers import StrOutputParser 
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder 
+ 
+def play_game(env, max_steps: int = 20) -&gt; bool: 
+    prompt_init = ChatPromptTemplate.from_messages([ 
+        ("system", "You’re playing the interactive fiction game. " 
+                   "Reply with just a command in lowercase and nothing else"), 
+        ("system", "Game objective: {objective}"), 
+        ("user", "Room description: {description}"), 
+        ("user", "What command you want to execute next?"), 
+    ]) 
+    llm = ChatOpenAI() 
+    output_parser = StrOutputParser()</code></pre>
+</div>
+</div>
+<p>Our initial prompt is the same as before — we’re instructing the chatbot about the kind of the game we’re playing and asking it to reply only with commands to be fed into the game.</p>
+<p>Then we reset the environment and generate the first message, passing the information from TextWorld:</p>
+<div class="tcolorbox" id="tcolobox-301">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-367"><code>    commands = [] 
+ 
+    obs, info = env.reset() 
+    init_msg = prompt_init.invoke({ 
+        "objective": info[’objective’], 
+        "description": info[’description’], 
+    }) 
+ 
+    context = init_msg.to_messages() 
+    ai_msg = llm.invoke(init_msg) 
+    context.append(ai_msg) 
+    cmd = output_parser.invoke(ai_msg)</code></pre>
+</div>
+</div>
+<p>The variable <span class="cmtt-10x-x-109">context </span>is very important and it contains the list of all messages (both from human and the chatbot) in our conversation so far. We’ll pass those messages to the chatbot to preserve the process of the game. This is needed because the game objective is being shown only once and not repeated again. Without the history, the agent doesn’t have enough information to perform the required sequence of steps. On the other hand, having lots of text passed to the chatbot might lead to high costs (as the ChatGPT API is billed for tokens being processed). Our game is not long (5-7 steps is enough to finish the task), so it is not a major concern, but for more complex games, history might be optimized.</p>
+<p>Then the game loop follows, which is very similar to what we had in interactive version, but without<span id="dx1-245028"/> console communication:</p>
+<div class="tcolorbox" id="tcolobox-302">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-368"><code>    prompt_next = ChatPromptTemplate.from_messages([ 
+        MessagesPlaceholder(variable_name="chat_history"), 
+        ("user", "Last command result: {result}"), 
+        ("user", "Room description: {description}"), 
+        ("user", "What command you want to execute next?"), 
+    ]) 
+ 
+    for _ in range(max_steps): 
+        commands.append(cmd) 
+        print("&gt;&gt;&gt;", cmd) 
+        obs, r, is_done, info = env.step(cmd) 
+        if is_done: 
+            print(f"I won in {len(commands)} steps!") 
+            return True 
+ 
+        user_msgs = prompt_next.invoke({ 
+            "chat_history": context, 
+            "result": obs.strip(), 
+            "description": info[’description’], 
+        }) 
+        context = user_msgs.to_messages() 
+        ai_msg = llm.invoke(user_msgs) 
+        context.append(ai_msg) 
+        cmd = output_parser.invoke(ai_msg)</code></pre>
+</div>
+</div>
+<p>In the continuation prompt, we pass the history of conversation, result of last command, description of the current room, and ask for the next command.</p>
+<p>We also limit the amount of steps to prevent the agent from getting stuck in loops (it happens sometimes). If the game isn’t solved after 20 steps, we exit the loop:</p>
+<div class="tcolorbox" id="tcolobox-303">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-369"><code>    print(f"Wasn’t able to solve after {max_steps} steps, commands: {commands}") 
+    return False</code></pre>
+</div>
+</div>
+<p>I did experiment with the preceding code on 20 TextWorld games (with seeds 1<span class="cmmi-10x-x-109">…</span>20) and it was able to solve 9 games out of 20. Most of the failed situations were because the agent went into the loop — issuing the wrong command not properly interpreted by TextWorld (like “take the key” instead of “take the key from the box”), or getting stuck in navigation.</p>
+<p>In two games, ChatGPT failed because of generating the command “exit”, which makes TextWorld stop immediately. Most likely, detecting this command or prohibiting its generation in the prompt might increase the number of solved games. But still, even 9 games solved by the agent without any prior training is quite an impressive result. In terms of ChatGPT costs, running the experiment<span id="dx1-245055"/> took 450K tokens to be processed, which cost me <span class="tcrm-1095">$</span>0.20. Not a big price for having fun!</p>
+</section>
+</section>
+<section class="level3 sectionHead" id="summary-12">
+<h1 class="heading-1" id="sigil_toc_id_220"> <span id="x1-24600013.8"/>Summary</h1>
+<p>In this chapter, you have seen how DQN can be applied to interactive fiction games, which is an interesting and challenging domain at the intersection of RL and NLP. You learned how to handle complex textual data with NLP tools and experimented with fun and challenging interactive fiction environments, with lots of opportunities for future practical experimentation. In addition, we used the transformer model from the Hugging Face library and experimented with ChatGPT.</p>
+<p>In the next chapter, we will continue our exploration of “RL in the wild” and check the applicability of RL methods in web automation.</p>
+</section>
+</section>
+</div></body></html>

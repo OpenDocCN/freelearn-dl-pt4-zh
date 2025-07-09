@@ -1,0 +1,643 @@
+<html><head></head><body>
+<div id="sbo-rt-content"><section class="level2 chapterHead" id="chapter-10-stocks-trading-using-rl">
+<h1 class="chapterNumber">10</h1>
+<h1 class="chapterTitle" id="sigil_toc_id_413">
+<span id="x1-16900010"/>Stocks Trading Using RL
+    </h1>
+<p>Rather than learning new methods to solve toy <span class="cmbx-10x-x-109">reinforcement learning </span>(<span class="cmbx-10x-x-109">RL</span>) problems in this chapter, we will try to utilize our <span class="cmbx-10x-x-109">deep Q-network </span>(<span class="cmbx-10x-x-109">DQN</span>) knowledge to deal with the much more practical problem of financial trading. I can’t promise that the code will make you super rich on the stock market or Forex, because my goal is much less ambitious: to demonstrate how to go beyond the Atari games and apply RL to a different practical domain.</p>
+<p>In this chapter, we will:</p>
+<ul>
+<li>
+<p>Implement our own OpenAI Gym environment to simulate the stock market</p>
+</li>
+<li>
+<p>Apply the DQN method that you learned in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a> and <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a> to train an agent to trade stocks to maximize profit</p>
+</li>
+</ul>
+<section class="level3 sectionHead" id="why-trading">
+<h1 class="heading-1" id="sigil_toc_id_150"> <span id="x1-17000010.1"/>Why trading?</h1>
+<p>There are a <span id="dx1-170001"/>lot of financial instruments traded on markets every day: goods, stocks, and currencies. Even weather forecasts can be bought or sold using so-called “weather derivatives,” which is just a consequence of the complexity of the modern world and financial markets. If your income depends on future weather conditions, as it does for a business growing crops, then you might want to hedge the risks by buying weather derivatives. All these different items have a price that changes over time. Trading is the activity of buying and selling financial instruments with different goals, like making a profit (investment), gaining protection from future price movement (hedging), or just getting what you need (like buying steel or exchanging USD for JPY to pay a contract).</p>
+<p>Since the <span id="dx1-170002"/>first financial market was established, people have been trying to predict future price movements, as this promises many benefits, like “profit from nowhere” or protecting capital from sudden market movements. This problem is known to be complex, and there are a lot of financial consultants, investment funds, banks, and individual traders trying to predict the market and find the best moments to buy and sell to maximize profit.</p>
+<p>The question is: can we look at the problem from the RL angle? Let’s say that we have some observation of the market, and we want to make a decision: buy, sell, or wait. If we buy before the price goes up, our profit will be positive; otherwise, we will get a negative reward. What we’re trying to do is get as much profit as possible. The connections between market trading and RL are quite obvious. First, let’s define the problem statement more clearly.</p>
+</section>
+<section class="level3 sectionHead" id="problem-statement-and-key-decisions">
+<h1 class="heading-1" id="sigil_toc_id_151"> <span id="x1-17100010.2"/>Problem statement and key decisions</h1>
+<p>The finance <span id="dx1-171001"/>domain is large and complex, so you can easily spend several years learning something new every day. In our example, we will just scratch the surface a bit with our RL tools, and our problem will be <span id="dx1-171002"/>formulated as simply as possible, using price as an observation. We will investigate whether it will be possible for our agent to learn when the best time is to buy one single share and then close the position to maximize the profit. The purpose of this example is to show how flexible the RL model can be and what the first steps are that you usually need to take to apply RL to a real-life use case.</p>
+<p>As you already know, to formulate RL problems, three things are needed: observation of the environment, possible actions, and a reward system. In previous chapters, all three were already given to us, and the internal machinery of the environment was hidden. Now we’re in a different situation, so we need to decide ourselves what our agent will see and what set of actions it can take. The reward system is also not given as a strict set of rules; rather, it will be guided by our feelings and knowledge of the domain, which gives us lots of flexibility.</p>
+<p>Flexibility, in this case, is good and bad at the same time. It’s good that we have the freedom to pass some information to the agent that we feel will be important to learn efficiently. For example, you can provide to the trading agent not only prices, but also news or important statistics (which are known to influence financial markets a lot). The bad part is that this flexibility usually means that to find a good agent, you need to try a lot of variants of data representation, and it’s not always obvious which will work better. In our case, we will implement the basic trading agent in its simplest form, as we discussed in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch005.xhtml#x1-190001"><span class="cmti-10x-x-109">1</span></a>:</p>
+<ul>
+<li class="bulletList">
+<p><strong>Observation:</strong> The observation will include the following information:</p>
+<ul>
+<li class="bulletList level-2">
+<p>N past bars, where each has open, high, low, and close prices</p>
+</li>
+<li class="bulletList level-2">
+<p>An indication that the share was bought some time ago (only one share at a time will be possible)</p>
+</li>
+<li class="bulletList level-2">
+<p>The profit or loss that we currently have from our current position (the share bought)</p>
+</li>
+</ul>
+</li>
+<li class="bulletList">
+<p><strong>Action:</strong> At every step, after every minute’s bar, the agent can take one of the following actions:</p>
+<ul>
+<li class="bulletList level-2">
+<p><span class="cmbx-10x-x-109">Do nothing</span>: Skip the bar without taking an action</p>
+</li>
+<li class="bulletList level-2">
+<p><span class="cmbx-10x-x-109">Buy a share</span>: If the agent has already got the share, nothing will be bought; otherwise, we will pay the commission, which is usually some small percentage of the current price</p>
+</li>
+<li class="bulletList level-2">
+<p><span class="cmbx-10x-x-109">Close the position</span>: If we do not have a previously purchased share, nothing will happen; otherwise, we will pay the commission for the trade</p>
+</li>
+</ul>
+</li>
+<li class="bulletList">
+<p><strong>Reward:</strong> The reward that the agent receives can be expressed in various ways:</p>
+<ul>
+<li class="bulletList level-2">
+<p>As the first option, we can split the reward into multiple steps during our ownership of the share. In that case, the reward on every step will be equal to the last bar’s movement.</p>
+</li>
+<li class="bulletList level-2">
+<p>Alternatively, the agent can receive the reward only after the <span class="cmti-10x-x-109">close</span> action and get the full reward at once.</p>
+</li>
+</ul>
+<p>At first sight, both variants should have the same final result, but maybe with different convergence speeds. However, in practice, the difference could be dramatic. The environment in my implementation supports both variants, so you can experiment with the difference.</p>
+</li>
+</ul>
+<p>One last <span id="dx1-171003"/>decision to make is how to represent the prices <span id="dx1-171004"/>in our environment observation. Ideally, we would like our agent to be independent of actual price values and take into account relative movement, such as “the stock has grown 1% during the last bar” or “the stock has lost 5%.” This makes sense, as different stocks’ prices can vary, but they can have similar movement patterns. In finance, there is a branch of analytics called <span class="cmti-10x-x-109">technical analysis </span>that studies such patterns to help to make predictions from them. We would like our system to be able to discover the patterns (if they exist). To achieve this, we will convert every bar’s open, high, low, and close prices to three numbers showing high, low, and close prices represented as a percentage of the open price.</p>
+<p>This representation has its own drawbacks, as we’re potentially losing the information about key price levels. For example, it’s known that markets have a tendency to bounce from round price numbers (like <span class="tcrm-1095">$</span>70,000 per bitcoin) and levels that were turning points in the past. However, as already stated, we’re just playing with the data here and checking the concept. Representation in the form of relative price movement will help the system to find repeating patterns in the price level (if they exist, of course), regardless of the absolute price position. Potentially, the neural network (NN) could learn this on its own (it’s just the mean price that needs to be subtracted from the absolute price values), but relative representation simplifies the NN’s task.</p>
+</section>
+<section class="level3 sectionHead" id="data">
+<h1 class="heading-1" id="sigil_toc_id_152"> <span id="x1-17200010.3"/>Data</h1>
+<p>In our example, we will use the Russian stock market prices from the period of 2015-2016, which <span id="dx1-172001"/>are placed in <span class="cmtt-10x-x-109">Chapter10/data/ch10-small-quotes.tgz </span>and have to be unpacked before model training.</p>
+<p>Inside the archive, we have CSV files with M1 bars, which means that every row in each CSV file corresponds to a single minute in time, and price movement during that minute is captured with four prices:</p>
+<ul>
+<li>
+<p><span class="cmbx-10x-x-109">Open</span>: The price at the beginning of the minute</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">High</span>: The maximum price during the interval</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Low</span>: The minimum price</p>
+</li>
+<li>
+<p><span class="cmbx-10x-x-109">Close</span>: The last price of the minute time interval</p>
+</li>
+</ul>
+<p>Every minute <span id="dx1-172002"/>interval is called a bar and allows us to have an idea of price movement within the interval. For example, in the <span class="cmtt-10x-x-109">YNDX</span><span class="cmtt-10x-x-109">_160101</span><span class="cmtt-10x-x-109">_161231.csv </span>file (which has Yandex company stocks for 2016), we have 130k lines in this form:</p>
+<div class="tcolorbox" id="tcolobox-205">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-261"><code>&lt;DATE&gt;,&lt;TIME&gt;,&lt;OPEN&gt;,&lt;HIGH&gt;,&lt;LOW&gt;,&lt;CLOSE&gt;,&lt;VOL&gt; 
+20160104,100100,1148.90000,1148.90000,1148.90000,1148.90000,0 
+20160104,100200,1148.90000,1148.90000,1148.90000,1148.90000,50 
+20160104,100300,1149.00000,1149.00000,1149.00000,1149.00000,33 
+20160104,100400,1149.00000,1149.00000,1149.00000,1149.00000,4 
+20160104,100500,1153.00000,1153.00000,1153.00000,1153.00000,0 
+20160104,100600,1156.90000,1157.90000,1153.00000,1153.00000,43 
+20160104,100700,1150.60000,1150.60000,1150.40000,1150.40000,5 
+20160104,100800,1150.20000,1150.20000,1150.20000,1150.20000,4 
+20160104,100900,1150.50000,1150.50000,1150.50000,1150.50000,2 
+20160104,101000,1150.00000,1150.00000,1150.00000,1150.00000,43 
+20160104,101100,1149.70000,1149.70000,1149.70000,1149.70000,0 
+20160104,101200,1150.20000,1150.20000,1149.50000,1149.70000,165 
+...</code></pre>
+</div>
+</div>
+<p>The first two columns are the date and time for the minute; the next four columns are open, high, low, and close prices; and the last value represents the number of buy and sell orders performed during the bar (also called <span class="cmbx-10x-x-109">volume</span>). The exact interpretation of volume is market-dependent, but usually, it give you an idea about how active the market was.</p>
+<p>The typical <span id="dx1-172017"/>way to represent those prices is called a <span class="cmbx-10x-x-109">candlestick chart</span>, where every bar is shown as a candle. Part of Yandex’s quotes for one day in February 2016 is shown in the following chart:</p>
+<div class="minipage">
+<p><img alt="PIC" height="288" src="../Images/file95.png" width="288"/> <span id="x1-172018r1"/></p>
+<span class="id">Figure 10.1: Price data for Yandex in February 2016 </span>
+</div>
+<p>The archive <span id="dx1-172019"/>contains two files with M1 data for 2016 and 2015. We will use data from 2016 for model training and data from 2015 for validation (but the order is arbitrary; you can swap them or even use different time intervals and check the effect).</p>
+</section>
+<section class="level3 sectionHead" id="the-trading-environment">
+<h1 class="heading-1" id="sigil_toc_id_153"> <span id="x1-17300010.4"/>The trading environment</h1>
+<p>As we have a lot <span id="dx1-173001"/>of code that is supposed to work with the Gym API, we will implement the trading functionality following Gym’s <span class="cmtt-10x-x-109">Env </span>class, which should be already familiar to you. Our environment is implemented in the <span class="cmtt-10x-x-109">StocksEnv </span>class in the <span class="cmtt-10x-x-109">Chapter10/lib/environ.py </span>module. It uses several internal classes to keep its state and encode observations.</p>
+<p>Let’s first look at the public API class:</p>
+<div class="tcolorbox" id="tcolobox-206">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-262"><code>import typing as tt 
+import gymnasium as gym 
+from gymnasium import spaces 
+from gymnasium.utils import seeding 
+from gymnasium.envs.registration import EnvSpec 
+import enum 
+import numpy as np 
+from . import data 
+ 
+DEFAULT_BARS_COUNT = 10 
+DEFAULT_COMMISSION_PERC = 0.1 
+ 
+class Actions(enum.Enum): 
+    Skip = 0 
+    Buy = 1 
+    Close = 2</code></pre>
+</div>
+</div>
+<p>We encode all <span id="dx1-173018"/>available actions as an enumerator’s fields and provide just three actions: do nothing, buy a single share, and close the existing position.</p>
+<div class="tcolorbox tipbox" id="tcolobox-207">
+<div class="tcolorbox-content">
+<p>In our market model, we allow only the single share to be bought, neither supporting extending existing positions nor opening “short positions” (when you selling the share you don’t have, expecting the price to decrease in the future). That was an intentional decision, as I tried to keep the example simple and to avoid overcomplications. Why don’t you try experimenting with other options?</p>
+</div>
+</div>
+<p>Next, we have the environment class:</p>
+<div class="tcolorbox" id="tcolobox-208">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-263"><code>class StocksEnv(gym.Env): 
+    spec = EnvSpec("StocksEnv-v0")</code></pre>
+</div>
+</div>
+<p>The field <span class="cmtt-10x-x-109">spec </span>is required for <span class="cmtt-10x-x-109">gym.Env </span>compatibility and registers our environment in the Gym internal registry.</p>
+<p>This class provides two ways to create its instance:</p>
+<div class="tcolorbox" id="tcolobox-209">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-264"><code>    @classmethod 
+    def from_dir(cls, data_dir: str, **kwargs): 
+        prices = { 
+            file: data.load_relative(file) 
+            for file in data.price_files(data_dir) 
+        } 
+        return StocksEnv(prices, **kwargs)</code></pre>
+</div>
+</div>
+<p>As you can see in the preceding code, the first way is to call the class method <span class="cmtt-10x-x-109">from</span><span class="cmtt-10x-x-109">_dir </span>with the <span class="cmtt-10x-x-109">data </span>directory as the argument. In that case, it will load all quotes from the CSV files in the directory and construct the environment. To deal with price data in our form, we have several helper functions in <span class="cmtt-10x-x-109">Chapter10/lib/data.py</span>. Another way is to construct the class instance directly. In that case, you should pass the <span class="cmtt-10x-x-109">prices </span>dictionary, which has to map the quote name to the <span class="cmtt-10x-x-109">Prices </span>dataclass declared in <span class="cmtt-10x-x-109">data.py</span>. This object has five fields containing <span class="cmtt-10x-x-109">open</span>, <span class="cmtt-10x-x-109">high</span>, <span class="cmtt-10x-x-109">low</span>, <span class="cmtt-10x-x-109">close</span>, and <span class="cmtt-10x-x-109">volume </span>time series as one-dimensional NumPy arrays. The module <span class="cmtt-10x-x-109">data.py </span>also provides several helping functions, like converting the prices into relative format, enumerating files in the given directory, etc.</p>
+<p>The following is the constructor of the environment:</p>
+<div class="tcolorbox" id="tcolobox-210">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-265"><code>    def __init__( 
+            self, prices: tt.Dict[str, data.Prices], 
+            bars_count: int = DEFAULT_BARS_COUNT, 
+            commission: float = DEFAULT_COMMISSION_PERC, 
+            reset_on_close: bool = True, state_1d: bool = False, 
+            random_ofs_on_reset: bool = True, 
+            reward_on_close: bool = False, volumes=False 
+    ):</code></pre>
+</div>
+</div>
+<p>It accepts a lot of <span id="dx1-173036"/>arguments to tweak the environment’s behavior and observation representation:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">prices</span>: Contains one or more stock prices for one or more instruments as a dict, where keys are the instrument’s name and the value is a container object <span class="cmtt-10x-x-109">data.Prices</span>, which holds price data arrays.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">bars</span><span class="cmtt-10x-x-109">_count</span>: The count of bars that we pass in the observation. By default, this is 10 bars.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">commission</span>: The percentage of the stock price that we have to pay to the broker on buying and selling the stock. By default, it’s 0.1%.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">reset</span><span class="cmtt-10x-x-109">_on</span><span class="cmtt-10x-x-109">_close</span>: If this parameter is set to <span class="cmtt-10x-x-109">True</span>, which it is by default, every time the agent asks us to close the existing position (in other words, sell a share), we stop the episode. Otherwise, the episode will continue until the end of our time series, which is one year of data.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">conv</span><span class="cmtt-10x-x-109">_1d</span>: This Boolean argument switches between different representations of price data in the observation passed to the agent. If it is set to <span class="cmtt-10x-x-109">True</span>, observations have a 2D shape, with different price components for subsequent bars organized in rows. For example, high prices (max price for the bar) are placed on the first row, low prices on the second, and close prices on the third. This representation is suitable for doing 1D convolution on time series, where every row in the data has the same meaning as different color planes (red, green, or blue) in Atari 2D images. If we set this option to <span class="cmtt-10x-x-109">False</span>, we have one single array of data with every bar’s components placed together. This organization is convenient for a fully connected network architecture. Both representations are illustrated in <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-173037r2"><span class="cmti-10x-x-109">10.2</span></a>.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">random</span><span class="cmtt-10x-x-109">_ofs</span><span class="cmtt-10x-x-109">_on</span><span class="cmtt-10x-x-109">_reset</span>: If the parameter is <span class="cmtt-10x-x-109">True </span>(by default), on every reset of the environment, the random offset in the time series will be chosen. Otherwise, we will start from the beginning of the data.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">reward</span><span class="cmtt-10x-x-109">_on</span><span class="cmtt-10x-x-109">_close</span>: This Boolean parameter switches between the two reward schemes discussed previously. If it is set to <span class="cmtt-10x-x-109">True</span>, the agent will receive a reward only on the “close” action issue. Otherwise, we will give a small reward every bar, corresponding to price movement during that bar.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">volumes</span>: This argument switches on volumes in observations and is disabled by default.</p>
+</li>
+</ul>
+<div class="minipage">
+<p><img alt="PIC" height="500" src="../Images/file96.png" width="500"/> <span id="x1-173037r2"/></p>
+<span class="id">Figure 10.2: Different data representations for the NN </span>
+</div>
+<p>Now we will continue looking at the <span id="dx1-173038"/>environment constructor:</p>
+<div class="tcolorbox" id="tcolobox-211">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-266"><code>        self._prices = prices 
+        if state_1d: 
+            self._state = State1D(bars_count, commission, reset_on_close, 
+                                  reward_on_close=reward_on_close, volumes=volumes) 
+        else: 
+            self._state = State(bars_count, commission, reset_on_close, 
+                                reward_on_close=reward_on_close, volumes=volumes) 
+        self.action_space = spaces.Discrete(n=len(Actions)) 
+        self.observation_space = spaces.Box( 
+            low=-np.inf, high=np.inf, shape=self._state.shape, dtype=np.float32) 
+         self.random_ofs_on_reset = random_ofs_on_reset</code></pre>
+</div>
+</div>
+<p>Most of the functionality of the <span class="cmtt-10x-x-109">StocksEnv </span>class is implemented in two internal classes: <span class="cmtt-10x-x-109">State </span>and <span class="cmtt-10x-x-109">State1D</span>. They are responsible for observation preparation and our bought share state and reward. They implement a different representation of our data in the observations, and we will take a look at their code later. In the constructor, we create the state object, action space, and observation space fields that are required by Gym.</p>
+<p>This method defines the <span class="cmtt-10x-x-109">reset() </span>functionality for our environment:</p>
+<div class="tcolorbox" id="tcolobox-212">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-267"><code>    def reset(self, *, seed: int | None = None, options: dict[str, tt.Any] | None = None): 
+        # make selection of the instrument and it’s offset. Then reset the state 
+        super().reset(seed=seed, options=options) 
+        self._instrument = self.np_random.choice(list(self._prices.keys())) 
+        prices = self._prices[self._instrument] 
+        bars = self._state.bars_count 
+        if self.random_ofs_on_reset: 
+            offset = self.np_random.choice(prices.high.shape[0]-bars*10) + bars 
+        else: 
+            offset = bars 
+        self._state.reset(prices, offset) 
+        return self._state.encode(), {}</code></pre>
+</div>
+</div>
+<p>According to the <span class="cmtt-10x-x-109">gym.Env </span>semantics, we randomly switch the time series that we <span id="dx1-173062"/>will work on and select the starting offset in this time series. The selected price and offset are passed to our internal state instance, which then asks for an initial observation using its <span class="cmtt-10x-x-109">encode() </span>function.</p>
+<p>This method has to handle the action chosen by the agent and return the next observation, reward, and done flag:</p>
+<div class="tcolorbox" id="tcolobox-213">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-268"><code>    def step(self, action_idx: int) -&gt; tt.Tuple[np.ndarray, float, bool, bool, dict]: 
+        action = Actions(action_idx) 
+        reward, done = self._state.step(action) 
+        obs = self._state.encode() 
+        info = { 
+            "instrument": self._instrument, 
+            "offset": self._state._offset 
+        } 
+        return obs, reward, done, False, info</code></pre>
+</div>
+</div>
+<p>All real functionality is implemented in our state classes, so this method is a very simple wrapper around the call to state methods.</p>
+<div class="tcolorbox infobox" id="tcolobox-214">
+<div class="tcolorbox-content">
+<p>The API for <span class="cmtt-10x-x-109">gym.Env </span>allows you to define the <span class="cmtt-10x-x-109">render() </span>method handler, which is supposed to render the current state in human or machine-readable format. Generally, this method is used to peek inside the environment state and is useful for debugging or tracing the agent’s behavior. For example, the market environment could render current prices as a chart to visualize what the agent sees at that moment. Our environment doesn’t support rendering (as this functionality is optional), so we don’t define this function at all.</p>
+</div>
+</div>
+<p>Let’s now look at the internal <span class="cmtt-10x-x-109">environ.State </span>class, which implements the core of the environment’s functionality:</p>
+<div class="tcolorbox" id="tcolobox-215">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-269"><code>class State: 
+    def __init__(self, bars_count: int, commission_perc: float, reset_on_close: bool, 
+                 reward_on_close: bool = True, volumes: bool = True): 
+        assert bars_count &gt; 0 
+        assert commission_perc &gt;= 0.0 
+        self.bars_count = bars_count 
+        self.commission_perc = commission_perc 
+        self.reset_on_close = reset_on_close 
+        self.reward_on_close = reward_on_close 
+        self.volumes = volumes 
+        self.have_position = False 
+        self.open_price = 0.0 
+        self._prices = None 
+        self._offset = None</code></pre>
+</div>
+</div>
+<p>The constructor does nothing more than just check and remember the arguments in the object’s fields.</p>
+<p>The <span class="cmtt-10x-x-109">reset() </span>method <span id="dx1-173086"/>is called every time that the environment is asked to reset and has to save the passed prices data and starting offset:</p>
+<div class="tcolorbox" id="tcolobox-216">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-270"><code>    def reset(self, prices: data.Prices, offset: int): 
+        assert offset &gt;= self.bars_count-1 
+        self.have_position = False 
+        self.open_price = 0.0 
+        self._prices = prices 
+        self._offset = offset</code></pre>
+</div>
+</div>
+<p>In the beginning, we don’t have any shares bought, so our state has <span class="cmtt-10x-x-109">have</span><span class="cmtt-10x-x-109">_position=False </span>and <span class="cmtt-10x-x-109">open</span><span class="cmtt-10x-x-109">_price=0.0</span>.</p>
+<p>The <span class="cmtt-10x-x-109">shape </span>property returns the tuple with dimensions of the NumPy array with encoded state:</p>
+<div class="tcolorbox" id="tcolobox-217">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-271"><code>    @property 
+    def shape(self) -&gt; tt.Tuple[int, ...]: 
+        # [h, l, c] * bars + position_flag + rel_profit 
+        if self.volumes: 
+            return 4 * self.bars_count + 1 + 1, 
+        else: 
+            return 3 * self.bars_count + 1 + 1,</code></pre>
+</div>
+</div>
+<p>The <span class="cmtt-10x-x-109">State </span>class is encoded into a single vector (top part in the <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-173037r2"><span class="cmti-10x-x-109">10.2</span></a>), which includes prices with optional volumes and two numbers indicating the presence of a bought share and position profit.</p>
+<p>The <span class="cmtt-10x-x-109">encode() </span>method packs prices at the current offset into a NumPy array, which will be the observation of the agent:</p>
+<div class="tcolorbox" id="tcolobox-218">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-272"><code>    def encode(self) -&gt; np.ndarray: 
+        res = np.ndarray(shape=self.shape, dtype=np.float32) 
+        shift = 0 
+        for bar_idx in range(-self.bars_count+1, 1): 
+            ofs = self._offset + bar_idx 
+            res[shift] = self._prices.high[ofs] 
+            shift += 1 
+            res[shift] = self._prices.low[ofs] 
+            shift += 1 
+            res[shift] = self._prices.close[ofs] 
+            shift += 1 
+            if self.volumes: 
+                res[shift] = self._prices.volume[ofs] 
+                shift += 1 
+        res[shift] = float(self.have_position) 
+        shift += 1 
+        if not self.have_position: 
+            res[shift] = 0.0 
+        else: 
+            res[shift] = self._cur_close() / self.open_price - 1.0 
+        return res</code></pre>
+</div>
+</div>
+<p>This helper method calculates the current bar’s close price:</p>
+<div class="tcolorbox" id="tcolobox-219">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-273"><code>    def _cur_close(self) -&gt; float: 
+        open = self._prices.open[self._offset] 
+        rel_close = self._prices.close[self._offset] 
+        return open * (1.0 + rel_close)</code></pre>
+</div>
+</div>
+<p>Prices passed to the <span class="cmtt-10x-x-109">State </span>class have the relative form with respect to the open price: the high, low, and <span id="dx1-173125"/>close components are relative ratios to the open price. This representation was already discussed when we talked about the training data, and it will (probably) help our agent to learn price patterns that are independent of actual price value.</p>
+<p>The <span class="cmtt-10x-x-109">step() </span>method is the most complicated piece of code in the <span class="cmtt-10x-x-109">State</span> class:</p>
+<div class="tcolorbox" id="tcolobox-220">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-274"><code>    def step(self, action: Actions) -&gt; tt.Tuple[float, bool]: 
+        reward = 0.0 
+        done = False 
+        close = self._cur_close()</code></pre>
+</div>
+</div>
+<p>It is responsible for performing one step in our environment. On exit, it has to return the reward in a percentage and an indication of the episode ending.</p>
+<p>If the agent has decided to buy a share, we change our state and pay the commission:</p>
+<div class="tcolorbox" id="tcolobox-221">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-275"><code>        if action == Actions.Buy and not self.have_position: 
+            self.have_position = True 
+            self.open_price = close 
+            reward -= self.commission_perc</code></pre>
+</div>
+</div>
+<p>In our state, we assume the <span id="dx1-173134"/>instant order execution at the current bar’s close price, which is a simplification on our side; normally, an order can be executed on a different price, which is called <span class="cmti-10x-x-109">price slippage</span>.</p>
+<p>If we have a position and the agent asks us to close it, we pay commission again, change the <span class="cmtt-10x-x-109">done </span>flag if we’re in <span class="cmtt-10x-x-109">reset</span><span class="cmtt-10x-x-109">_on</span><span class="cmtt-10x-x-109">_close </span>mode, give a final reward for the whole position, and change our state:</p>
+<div class="tcolorbox" id="tcolobox-222">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-276"><code>        elif action == Actions.Close and self.have_position: 
+            reward -= self.commission_perc 
+            done |= self.reset_on_close 
+            if self.reward_on_close: 
+                reward += 100.0 * (close / self.open_price - 1.0) 
+            self.have_position = False 
+            self.open_price = 0.0</code></pre>
+</div>
+</div>
+<p>In the rest of the function, we modify the current offset and give the reward for the last bar movement:</p>
+<div class="tcolorbox" id="tcolobox-223">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-277"><code>        self._offset += 1 
+        prev_close = close 
+        close = self._cur_close() 
+        done |= self._offset &gt;= self._prices.close.shape[0]-1 
+ 
+        if self.have_position and not self.reward_on_close: 
+            reward += 100.0 * (close / prev_close - 1.0) 
+ 
+        return reward, done</code></pre>
+</div>
+</div>
+<p>That’s it for the <span class="cmtt-10x-x-109">State </span>class, so let’s look at <span class="cmtt-10x-x-109">State1D</span>, which has the same behavior and just overrides the representation of the state passed to the agent:</p>
+<div class="tcolorbox" id="tcolobox-224">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-278"><code>class State1D(State): 
+    @property 
+    def shape(self) -&gt; tt.Tuple[int, ...]: 
+        if self.volumes: 
+            return 6, self.bars_count 
+        else: 
+            return 5, self.bars_count</code></pre>
+</div>
+</div>
+<p>The shape of this representation is different, as our prices are encoded as a 2D matrix suitable for a 1D convolution operator.</p>
+<p>This method encodes the prices in our matrix, depending on the current offset, whether we need volumes, and whether we have stock:</p>
+<div class="tcolorbox" id="tcolobox-225">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-279"><code>    def encode(self) -&gt; np.ndarray: 
+        res = np.zeros(shape=self.shape, dtype=np.float32) 
+        start = self._offset-(self.bars_count-1) 
+        stop = self._offset+1 
+        res[0] = self._prices.high[start:stop] 
+        res[1] = self._prices.low[start:stop] 
+        res[2] = self._prices.close[start:stop] 
+        if self.volumes: 
+            res[3] = self._prices.volume[start:stop] 
+            dst = 4 
+        else: 
+            dst = 3 
+        if self.have_position: 
+            res[dst] = 1.0 
+            res[dst+1] = self._cur_close() / self.open_price - 1.0 
+        return res</code></pre>
+</div>
+</div>
+<p>That’s it for our trading<span id="dx1-173174"/> environment. Compatibility with the Gym API allows us to plug it into the familiar classes that we used to handle the Atari games. Let’s do that now.</p>
+</section>
+<section class="level3 sectionHead" id="models">
+<h1 class="heading-1" id="sigil_toc_id_154"> <span id="x1-17400010.5"/>Models</h1>
+<p>In this example, two <span id="dx1-174001"/>architectures of DQN are used: a simple feed-forward network with three layers and a network with 1D convolution as a feature extractor, followed by two fully connected layers to output Q-values. Both of them use the dueling architecture described in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>. Double DQN and two-step Bellman unrolling have also been used. The rest of the process is the same as in a classical DQN (from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="#"><span class="cmti-10x-x-109">6</span></a>). Both models are in <span class="cmtt-10x-x-109">Chapter10/lib/models.py </span>and are very simple. Let’s start with the feed-forward model:</p>
+<div class="tcolorbox" id="tcolobox-226">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-280"><code>class SimpleFFDQN(nn.Module): 
+    def __init__(self, obs_len: int, actions_n: int): 
+        super(SimpleFFDQN, self).__init__() 
+ 
+        self.fc_val = nn.Sequential( 
+            nn.Linear(obs_len, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, 1) 
+        ) 
+ 
+        self.fc_adv = nn.Sequential( 
+            nn.Linear(obs_len, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, actions_n) 
+        ) 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        val = self.fc_val(x) 
+        adv = self.fc_adv(x) 
+        return val + (adv - adv.mean(dim=1, keepdim=True))</code></pre>
+</div>
+</div>
+<p>The feed forward model <span id="dx1-174026"/>uses independent networks for Q-value and advantage prediction.</p>
+<p>The convolutional model has a common feature extraction layer with the 1D convolution operations and two fully connected heads to output the value of the state and advantages for actions:</p>
+<div class="tcolorbox" id="tcolobox-227">
+<div class="tcolorbox-content">
+<pre class="lstinputlisting" id="listing-281"><code>class DQNConv1D(nn.Module): 
+    def __init__(self, shape: tt.Tuple[int, ...], actions_n: int): 
+        super(DQNConv1D, self).__init__() 
+ 
+        self.conv = nn.Sequential( 
+            nn.Conv1d(shape[0], 128, 5), 
+            nn.ReLU(), 
+            nn.Conv1d(128, 128, 5), 
+            nn.ReLU(), 
+            nn.Flatten(), 
+        ) 
+        size = self.conv(torch.zeros(1, *shape)).size()[-1] 
+ 
+        self.fc_val = nn.Sequential( 
+            nn.Linear(size, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, 1) 
+        ) 
+ 
+        self.fc_adv = nn.Sequential( 
+            nn.Linear(size, 512), 
+            nn.ReLU(), 
+            nn.Linear(512, actions_n) 
+        ) 
+ 
+ 
+    def forward(self, x: torch.Tensor) -&gt; torch.Tensor: 
+        conv_out = self.conv(x) 
+        val = self.fc_val(conv_out) 
+        adv = self.fc_adv(conv_out) 
+        return val + (adv - adv.mean(dim=1, keepdim=True))</code></pre>
+</div>
+</div>
+<p>As you can see, the <span id="dx1-174058"/>model is very similar to the DQN Dueling architecture we used in Atari examples.</p>
+</section>
+<section class="level3 sectionHead" id="training-code">
+<h1 class="heading-1" id="sigil_toc_id_155"> <span id="x1-17500010.6"/>Training code</h1>
+<p>We have two very <span id="dx1-175001"/>similar training modules in this example: one for the feed-forward model and one for 1D convolutions. For both of them, there is nothing new added to our examples from <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>:</p>
+<ul>
+<li>
+<p>They’re using epsilon-greedy action selection to perform exploration. The epsilon linearly decays over the first 1M steps from 1.0 to 0.1.</p>
+</li>
+<li>
+<p>A simple experience replay buffer of size 100k is being used, which is initially populated with 10k transitions.</p>
+</li>
+<li>
+<p>For every 1,000 steps, we calculate the mean value for the fixed set of states to check the dynamics of the Q-values during the training.</p>
+</li>
+<li>
+<p>For every 100k steps, we perform validation: 100 episodes are played on the training data and on previously unseen quotes. Validation results are recorded in TensorBoard, such as the mean profit, the mean count of bars, and the share held. This step allows us to check for overfitting conditions.</p>
+</li>
+</ul>
+<p>The training modules are in <span class="cmtt-10x-x-109">Chapter10/train</span><span class="cmtt-10x-x-109">_model.py </span>(feed-forward model) and <span class="cmtt-10x-x-109">Chapter10/train</span><span class="cmtt-10x-x-109">_model</span><span class="cmtt-10x-x-109">_conv.py </span>(with a 1D convolutional layer). Both versions accept the same command-line options.</p>
+<p>To start the training, you need to pass training data with the <span class="cmtt-10x-x-109">--data</span> option, which could be an individual CSV file or the whole directory with files. By default, the training module uses Yandex quotes for 2016 (file <span class="cmtt-10x-x-109">data/YNDX</span><span class="cmtt-10x-x-109">_160101</span><span class="cmtt-10x-x-109">_161231.csv</span>). For the validation data, there is an option, <span class="cmtt-10x-x-109">--val</span>, that takes Yandex 2015 quotes by default. Another required option will be <span class="cmtt-10x-x-109">-r</span>, which is used to pass the name of the run. This name will be used in the TensorBoard run name and to create directories with saved models.</p>
+</section>
+<section class="level3 sectionHead" id="results-7">
+<h1 class="heading-1" id="sigil_toc_id_156"> <span id="x1-17600010.7"/>Results</h1>
+<p>Now that we’ve implemented them, let’s compare the performance of our two models, starting with feed-forward variant.</p>
+<section class="level4 subsectionHead" id="the-feed-forward-model">
+<h2 class="heading-2" id="sigil_toc_id_157"> <span id="x1-17700010.7.1"/>The feed-forward model</h2>
+<p>During the <span id="dx1-177001"/>training, the average reward obtained by the agent was slowly but <span id="dx1-177002"/>consistently growing. After 300k episodes, the growth slowed down. The following are charts (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-177003r3"><span class="cmti-10x-x-109">10.3</span></a>) showing the raw reward during the training and the same data smoothed with the simple moving average of the last 15 values:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_03.png" width="600"/> <span id="x1-177003r3"/></p>
+<span class="id">Figure 10.3: Reward during the training. Raw values (left) and smoothed (right) </span>
+</div>
+<p>Another pair of charts (<span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-177004r4"><span class="cmti-10x-x-109">10.4</span></a>) shows the reward obtained from testing performed on the same training data but without random actions (<span class="cmmi-10x-x-109">𝜖 </span>= 0):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_04.png" width="600"/> <span id="x1-177004r4"/></p>
+<span class="id">Figure 10.4: Reward from the tests. Raw values (left) and smoothed (right) </span>
+</div>
+<p>Both the training and testing reward charts show that the agent is learning how to increase the profit over time.</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_05.png" width="600"/> <span id="x1-177005r5"/></p>
+<span class="id">Figure 10.5: Length of the episodes. Raw values (left) and smoothed (right) </span>
+</div>
+<p>The <span id="dx1-177006"/>length of <span id="dx1-177007"/>each episode also increased after 100k episodes, as the agent learned that holding the share might be profitable.</p>
+<p>In addition, we monitor the predicted value of the random set of states. The following chart shows that the network becomes more and more optimistic about those states during the training:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_06.png" width="500"/> <span id="x1-177008r6"/></p>
+<span class="id">Figure 10.6: Value predicted for a random set of states </span>
+</div>
+<p>All charts look good so far, but all of them were obtained using the training data. It is great that our agent is learning how to get profits on the historical data. But will it work on data never seen before? To check that, we perform validation on 2,015 quotes, and the reward is shown in the <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-177009r7"><span class="cmti-10x-x-109">10.7</span></a>:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_07.png" width="600"/> <span id="x1-177009r7"/></p>
+<span class="id">Figure 10.7: Reward on validation dataset. Raw values (left) and smoothed (right) </span>
+</div>
+<p>This chart is a bit disappointing: the <span id="dx1-177010"/>reward doesn’t have an uptrend. In the smoothed version <span id="dx1-177011"/>of the chart, we might even see the opposite — the reward is slowly decreasing after the first hour of training (at that point, we had a significant increase in training episode length on <span class="cmti-10x-x-109">Figure</span><span class="cmti-10x-x-109"> </span><a href="#x1-177005r5"><span class="cmti-10x-x-109">10.5</span></a>). This might be an indication of overfitting of the agent, which starts after 1M training iterations. But still, for the first 4 hours of training, the reward is above -0.2% (which is a broker commission in our environment — 0.1% when we buy stock and 0.1% for selling it) and means that our agent is better than a random “buying-and-selling monkey.”</p>
+<p>During the <span id="dx1-177012"/>training, our code saves models for later experiments. It does this every time the mean Q-values on our held-out-states set update the maximum or when the reward on the validation sets beats the previous record. There is a tool that loads the model, trades on prices you’ve provided to it with the command-line option, and draws the plots with the profit change over time. The tool is called <span class="cmtt-10x-x-109">Chapter10/run</span><span class="cmtt-10x-x-109">_model.py </span>and it can be used like this:</p>
+<pre class="lstlisting" id="listing-282"><code>Chapter10$ ./run_model.py -d data/YNDX_160101_161231.csv -m saves/simple-t1/mean_value-0.277.data -b 10 -n YNDX16</code></pre>
+<p>The options that the tool accepts are as follows:</p>
+<ul>
+<li>
+<p><span class="cmtt-10x-x-109">-d</span>: This is the path to the quotes to use. In the shown command, we apply the model to the data that it was trained on.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-m</span>: This is the path to the model file. By default, the training code saves it in the <span class="cmtt-10x-x-109">saves </span>directory.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-b</span>: This shows how many bars to pass to the model in the context. It has to match the count of bars used on training, which is 10 by default and can be changed in the training code.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">-n</span>: This is the suffix to be appended to the images produced.</p>
+</li>
+<li>
+<p><span class="cmtt-10x-x-109">--commission</span>: This allows you to redefine the broker’s commission, which has a default of 0.1%.</p>
+</li>
+</ul>
+<p>At the end, the tool creates a chart of the total profit dynamics (in percentages). The following is the reward chart on Yandex 2016 quotes (used for training):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_08.png" width="600"/> <span id="x1-177014r8"/></p>
+<span class="id">Figure 10.8: Trading profit on the training data (left) and validation (right) </span>
+</div>
+<p>The result on the training data looks amazing: 150% profit in just a year. However, the result on the validation dataset is much worse, as we’ve seen from the validation plots in TensorBoard.</p>
+<p>To check that our system is profitable with zero commission, we can rerun on the same data with the <span class="cmtt-10x-x-109">--commission 0.0 </span>option:</p>
+<div class="minipage">
+<p><img alt="PIC" height="162" src="../Images/file108.png" width="161"/> <span id="x1-177015r9"/></p>
+<span class="id">Figure 10.9: Trading profit on validation data without broker’s commission </span>
+</div>
+<p>We have some bad days with drawdown, but the overall results are good: without commission, our agent can be profitable. Of course, the commission is not the only issue. Our order simulation is very primitive and doesn’t take into account real-life situations, such as price spread and a slip in order execution.</p>
+<p>If we take the model with the best reward on the validation set, the reward dynamics are a bit better. Profitability is lower, but the drawdown on unseen quotes is much lower (and commission was enabled for the following charts):</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_10.png" width="600"/> <span id="x1-177016r10"/></p>
+<span class="id">Figure 10.10: The reward from the model with the best validation reward. Training data (left) and validation (right) </span>
+</div>
+<p>But, of course, taking <span id="dx1-177017"/>the best model based on <span class="cmti-10x-x-109">validation data </span>is cheating — by using validation results for model’s selection, we are ruining the idea of validation. So, the charts above are just to illustrate that there are <span class="cmti-10x-x-109">some models</span> that might work alright even on unseen data.</p>
+</section>
+<section class="level4 subsectionHead" id="the-convolution-model">
+<h2 class="heading-2" id="sigil_toc_id_158"> <span id="x1-17800010.7.2"/>The convolution model</h2>
+<p>The <span id="dx1-178001"/>second model <span id="dx1-178002"/>implemented in this example uses 1D convolution filters to extract features from the price data. This allows us to increase the number of bars in the context window that our agent sees on every step without a significant increase in the network size. By default, the convolution model example uses 50 bars of context. The training code is in <span class="cmtt-10x-x-109">Chapter10/train</span><span class="cmtt-10x-x-109">_model</span><span class="cmtt-10x-x-109">_conv.py</span>, and it accepts the same set of command-line parameters as the feed-forward version.</p>
+<p>Training dynamics are almost identical, but the reward obtained on the validation set is slightly higher and starts to overfit later:</p>
+<div class="minipage">
+<p><img alt="PIC" height="300" src="../Images/B21150_10_11.png" width="600"/> <span id="x1-178003r11"/></p>
+<span class="id">Figure 10.11: Reward during the training. Raw values (left) and smoothed (right) </span>
+</div>
+<div class="minipage">
+<p> <img alt="PIC" height="300" src="../Images/B21150_10_12.png" width="600"/> <span id="x1-178004r12"/></p>
+<span class="id">Figure 10.12: Reward on validation dataset. Raw values (left) and smoothed (right) </span>
+</div>
+</section>
+</section>
+<section class="level3 sectionHead" id="things-to-try-1">
+<h1 class="heading-1" id="sigil_toc_id_159"> <span id="x1-17900010.8"/>Things to try</h1>
+<p>As already <span id="dx1-179001"/>mentioned, financial markets are large and <span id="dx1-179002"/>complicated. The methods that we’ve tried are just the very beginning. Using RL to create a complete and profitable trading strategy is a large project, which can take several months of dedicated labor. However, there are things that we can try to get a better understanding of the topic:</p>
+<ul>
+<li>
+<p>Our data representation is definitely not perfect. We don’t take into account significant price levels (support and resistance), round price values, and other financial markets information. Incorporating them into the observation could be a challenging problem, which you could try exploring.</p>
+</li>
+<li>
+<p>Analyze market prices at different timeframes. Low-level data like one-minute bars are noisy (as they include lots of small price movements caused by individual trades), and it is like looking at the market using a microscope. At larger scales, such as one-hour or one-day bars, you can see large, long trends in data movement, which could be extremely important for price prediction.</p>
+<p>In principle, our agent can look at price at various scales at the same time, taking into account not just recent low-level movements but overall trends (and recent <span class="cmbx-10x-x-109">natural language processing </span>(<span class="cmbx-10x-x-109">NLP</span>) innovations like transformers, attention mechanisms, and long context windows might be really helpful there).</p>
+</li>
+<li>
+<p>More training data is needed. One year of data for one stock is just 130k bars, which might be not enough to capture all market situations. Ideally, a real-life agent should be trained on a much larger dataset, such as the prices for hundreds of stocks for the past 10 years or more.</p>
+</li>
+<li>
+<p>Experiment with the network architecture. The convolution model has shown a bit faster convergence than the feed-forward model, but there are a lot of things to optimize: the count of layers, kernel size, residual architecture, attention mechanism, and so on.</p>
+</li>
+<li>
+<p>There are lots of similarities between NLP and financial data analysis: both work with human-created sequences of data that have variable length. You can try to represent price bars as “words” in some “financial language” (like “up price movement 1%” <span class="cmsy-10x-x-109">→ </span>token A, “up price movement 2%” <span class="cmsy-10x-x-109">→ </span>token B) and then apply NLP methods to this language. For example, train embeddings from the “sentences” to capture financial markets’ structure, or use transformers or even LLMs for data prediction and classification.</p>
+</li>
+</ul>
+</section>
+<section class="level3 sectionHead" id="summary-9">
+<h1 class="heading-1" id="sigil_toc_id_160"> <span id="x1-18000010.9"/>Summary</h1>
+<p>In this chapter, we saw a practical example of RL and implemented a trading agent and a custom Gym environment. We tried two different architectures: a feed-forward network with price history on input and a 1D convolution network. Both architectures used the DQN method, with some of the extensions described in <span class="cmti-10x-x-109">Chapter</span><span class="cmti-10x-x-109"> </span><a href="ch012.xhtml#x1-1240008"><span class="cmti-10x-x-109">8</span></a>.</p>
+<p>This was the last chapter in Part 2 of this book. In Part 3, we will talk about a different family of RL methods: <span class="cmti-10x-x-109">policy gradients</span>. We’ve touched on this approach a bit, but in the upcoming chapters, we will go much deeper into the subject, covering the REINFORCE method and the best method in the family: Asynchronous Advantage Actor-Critic, also known as A3C.</p>
+</section>
+<section class="level3 likesectionHead" id="leave-a-review-1">
+<h1 class="heading-1" id="sigil_toc_id_161"><span id="x1-181000"/>Leave a Review!</h1>
+<p>Thank you for purchasing this book from Packt Publishing—we hope you enjoy it! Your feedback is invaluable and helps us improve and grow. Once you’ve completed reading it, please take a moment to leave an Amazon review; it will only take a minute, but it makes a big difference for readers like you. Scan the QR code below to receive a free ebook of your choice. <a class="url" href="https://packt.link/NzOWQ"><span class="cmtt-10x-x-109">https://packt.link/NzOWQ</span></a></p>
+<p><img alt="PIC" height="85" src="../Images/file3.png" width="85"/></p>
+</section>
+</section>
+</div>
+
+<div id="sbo-rt-content"><h1 class="partNumber" style="padding-top:280px;">Part 3</h1>
+<h1 class="partTitle" id="sigil_toc_id_428">Policy-based methods</h1>
+</div></body></html>

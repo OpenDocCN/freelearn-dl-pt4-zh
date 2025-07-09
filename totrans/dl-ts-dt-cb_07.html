@@ -1,0 +1,661 @@
+<html><head></head><body>
+<div id="book-content">
+<div id="sbo-rt-content"><div id="_idContainer042">
+			<h1 id="_idParaDest-287" class="chapter-number"><a id="_idTextAnchor390"/>7</h1>
+			<h1 id="_idParaDest-288"><a id="_idTextAnchor391"/>Probabilistic Time Series Forecasting</h1>
+			<p>In the preceding chapters, we delved into time series problems from a point forecasting perspective. Point forecasting models predict a single value. However, forecasts are inherently uncertain, so it makes sense to quantify the uncertainty around a prediction. This is the goal of probabilistic forecasting, which can be a valuable approach for <span class="No-Break">better-informed decision-making.</span></p>
+			<p>In this chapter, we’ll focus on three types of probabilistic forecasting settings. We’ll delve into exceedance probability forecasting, which helps us estimate the likelihood of a time series surpassing a predefined threshold. We will also deal with prediction intervals, which provide a range of possible values within which a future observation is likely to fall. Finally, we will explore predicted probability forecasting, which offers a probabilistic assessment of individual outcomes, providing a fine-grained perspective of <span class="No-Break">future possibilities.</span></p>
+			<p>This chapter covers the <span class="No-Break">following recipes:</span></p>
+			<ul>
+				<li>Introduction to exceedance <span class="No-Break">probability forecasting</span></li>
+				<li>Exceedance probability forecasting with <span class="No-Break">an LSTM</span></li>
+				<li>Creating prediction intervals using <span class="No-Break">conformal prediction</span></li>
+				<li>Probabilistic forecasting with <span class="No-Break">an LSTM</span></li>
+				<li>Probabilistic forecasting <span class="No-Break">with DeepAR</span></li>
+				<li>Introduction to <span class="No-Break">Gaussian Processes</span></li>
+				<li>Using Prophet for <span class="No-Break">probabilistic forecasting</span></li>
+			</ul>
+			<h1 id="_idParaDest-289"><a id="_idTextAnchor392"/>Technical requirements</h1>
+			<p>We’ll focus on the PyTorch ecosystem in this chapter. Here’s the full list of libraries that will be used in <span class="No-Break">this chapter:</span></p>
+			<ul>
+				<li><span class="No-Break">NumPy (1.26.2)</span></li>
+				<li><span class="No-Break">pandas (2.1.3)</span></li>
+				<li><span class="No-Break">scikit-learn (1.3.2)</span></li>
+				<li>PyTorch <span class="No-Break">Forecasting (1.0.0)</span></li>
+				<li>PyTorch <span class="No-Break">Lightning (2.1.2)</span></li>
+				<li><span class="No-Break">torch (2.1.1)</span></li>
+				<li><span class="No-Break">statsforecast (1.6.0)</span></li>
+				<li><span class="No-Break">GluonTS (0.14.2)</span></li>
+				<li><span class="No-Break">gpytorch (1.11)</span></li>
+				<li><span class="No-Break">prophet (1.1.5)</span></li>
+			</ul>
+			<p>You can install these libraries using <strong class="source-inline">pip</strong>, Python’s package manager. For example, to install <strong class="source-inline">scikit-learn</strong>, you can run the <span class="No-Break">following command:</span></p>
+			<pre class="console">
+pip install -U scikit-learn</pre>			<p>The code for this chapter can be found in this book’s GitHub <span class="No-Break">repository: </span><a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook"><span class="No-Break">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook</span></a><span class="No-Break">.</span><a id="_idTextAnchor393"/><a id="_idTextAnchor394"/></p>
+			<h1 id="_idParaDest-290"><a id="_idTextAnchor395"/><a id="_idTextAnchor396"/><a id="_idTextAnchor397"/><a id="_idTextAnchor398"/>Introduction to exceedance probability forecasting</h1>
+			<p>This recipe <a id="_idIndexMarker435"/>introduces exceedance probability forecasting problems. Exceedance events occur when a time series exceeds a predefined threshold in a predefined future period. This problem is relevant when the tails of the time series distribution can have a significant impact on the domain. For example, consider the case of the inflation rate in the economy. Central banks leverage this type of forecast to assess the possibility that the inflation rate will exceed some critical threshold, above which they might consider increasing <span class="No-Break">interest rates.</span></p>
+			<p>From a data science perspective, exceedance events are binary problems. Thus, it is common to tackle them using binary probabilistic classification models. One of the challenges is that the class representing the exceedance events is rare, which makes the learning task <span class="No-Break">more difficult.</span><a id="_idTextAnchor399"/></p>
+			<h2 id="_idParaDest-291"><a id="_idTextAnchor400"/>Getting ready</h2>
+			<p>We’ll use a multivariate time series as an example to describe what an exceedance probability <a id="_idIndexMarker436"/>task is and why they are relevant. Specifically, we’ll use the solar radiation dataset that was used in previous chapters (check, for example, the <em class="italic">Preparing a multivariate time series for supervised learning</em> recipe from <a href="B21145_04.xhtml#_idTextAnchor259"><span class="No-Break"><em class="italic">Chapter 4</em></span></a><span class="No-Break">).</span></p>
+			<p>Let’s start by loading the dataset <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">pandas</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+import pandas as pd
+mvtseries = pd.read_csv
+    ('assets/data/daily_multivariate_timeseries.csv',
+    parse_dates=['datetime'],
+    index_col='datetime')</pre>			<p>Now, let’s see how to define an exceedance problem using this <span class="No-Break">time series<a id="_idTextAnchor401"/>.</span></p>
+			<h2 id="_idParaDest-292"><a id="_idTextAnchor402"/>How to do it…</h2>
+			<p>Exceedance probability forecasting is the process of predicting the probability that a time series will exceed a critical threshold in a future period. We’ll use a data module from PyTorch Lightning, which can be used to handle all the necessary steps for defining <span class="No-Break">the task.</span></p>
+			<p>The main component of this module is the <strong class="source-inline">setup()</strong> method. Most of the steps were already explained in the <em class="italic">Feedforward neural networks for multivariate time series forecasting</em> recipe. To create an exceedance task, we must start by defining the new binary target variable, <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+mvtseries['target'] = 
+    \(mvtseries['Incoming Solar'].diff() &lt; -2000).astype(int<a id="_idTextAnchor403"/>)</pre>			<p>In the preceding code, we use the <strong class="source-inline">diff</strong><strong class="source-inline">()</strong> method to compute how the solar radiation values change between consecutive observations. Then, we check whether the total daily solar radiation (in watts/m<span class="superscript">2</span>) decreases by <strong class="source-inline">2000</strong> from one day to the next. This value was set arbitrarily. The intuition is that this should be a major event that we are interested in predicting. In this case study, such significant decreases in solar radiation <a id="_idIndexMarker437"/>mean that power systems will not be able to produce as much solar energy from photovoltaic devices. Therefore, predicting these events promptly allows power systems to generate energy from alternative <span class="No-Break">sources efficiently.</span></p>
+			<p>Here’s a plot of the differenced series and the <span class="No-Break">selected threshold:</span></p>
+			<div>
+				<div id="_idContainer033" class="IMG---Figure">
+					<img src="image/B21145_07_001.jpg" alt="Figure 7.1: Difference in total daily solar radiation in consecutive observations" width="1400" height="825"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.1: Difference in total daily solar radiation in consecutive observations</p>
+			<p>Afterward, we pass this variable as the target variable in the <strong class="source-inline">TimeSeriesDataSet</strong> instance within the data module. Let’s start by loading the required libraries and building the constructor of the <span class="No-Break">data modules:</span></p>
+			<pre class="source-code">
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from pytorch_forecasting import TimeSeriesDataSet
+from pytorch_lightning import LightningDataModule
+class ExceedanceDataModule(LightningDataModule):
+    def __init__(self,
+                 data: pd.DataFrame,
+                 test_size: float = 0.2,
+                 batch_size: int = 1):
+        super().__init__()
+        self.data = data
+        self.var_names = self.data.columns.tolist()
+        self.batch_size = batch_size
+        self.test_size = test_size
+        self.training = None
+        self.validation = None
+        self.test = None
+        self.predict_set = None</pre>			<p>In the <a id="_idIndexMarker438"/>constructor, we store all the elements that are used during the data preprocessing stage. The <strong class="source-inline">setup()</strong> method of the class is implemented in the <span class="No-Break">following code:</span></p>
+			<pre class="source-code">
+    def setup(self, stage=None):
+        self.data['target'] = (
+            self.data['Incoming Solar'].diff() &lt; -2000).astype(int)
+        self.data['time_index'] = np.arange(self.data.shape[0])
+        self.data['group_id'] = 0
+        unique_times = self.data['time_index'].sort_values().unique()
+        tr_ind, ts_ind = \
+            train_test_split(unique_times,
+                test_size=self.test_size,
+                shuffle=False)
+        tr_ind, vl_ind = train_test_split(tr_ind,
+                test_size=0.1, shuffle=False)
+        training_df = self.data.loc[
+            self.data['time_index'].isin(tr_ind), :]
+        validation_df = self.data.loc[
+            self.data['time_index'].isin(vl_ind), :]
+        test_df = self.data.loc[
+            self.data['time_index'].isin(ts_ind), :]
+        self.training = TimeSeriesDataSet(
+            data=training_df,
+            time_idx="time_index",
+            target="target",
+            group_ids=['group_id'],
+            max_encoder_length=14,
+            max_prediction_length=7,
+            time_varying_unknown_reals=self.var_names,
+            scalers={k: MinMaxScaler()
+                     for k in self.var_names
+                     if k != 'target'}
+        )
+        self.validation = TimeSeriesDataSet.from_dataset(
+            self.training, validation_df)
+        self.test = TimeSeriesDataSet.from_dataset(
+            self.training, test_df)
+        self.predict_set = TimeSeriesDataSet.from_dataset(
+            self.training, self.data, predict=True)</pre>			<p>This function <a id="_idIndexMarker439"/>works similarly to a standard auto-regressive pipeline. The crucial difference is that we’re setting the target variable to a binary variable that denotes whether there’s an exceedance event. We also set up the training, validation, and testing sets to build and evaluate the model. We set the number of lags to <strong class="source-inline">14</strong> (<strong class="source-inline">max_encoder_length</strong>) and the forecasting horizon to <span class="No-Break"><strong class="source-inline">7</strong></span><span class="No-Break"> (</span><span class="No-Break"><strong class="source-inline">max_prediction_length</strong></span><span class="No-Break">).</span></p>
+			<p>The remaining methods of the <strong class="source-inline">LightningDataModule</strong> instance are similar to what we built in the previous chapter (for example, see the <em class="italic">Feedforward neural networks for multivariate time series </em><span class="No-Break"><em class="italic">forecasting</em></span><span class="No-Break"> recipe):</span></p>
+			<pre class="source-code">
+    def train_dataloader(self):
+        return self.training.to_dataloader(
+            batch_size=self.batch_size, shuffle=False)
+    def val_dataloader(self):
+        return self.validation.to_dataloader(
+            batch_size=self.batch_size, shuffle=False)
+    def test_dataloader(self):
+        return self.test.to_dataloader(
+            batch_size=self.batch_size, shuffle=False)
+    def predict_dataloader(self):
+        return self.predict_set.to_dataloader(
+            batch_size=1, shuffle=False)</pre>			<p>Here’s <a id="_idIndexMarker440"/>how to get a single observation using this <span class="No-Break">data module:</span></p>
+			<pre class="source-code">
+datamodule = ExceedanceDataModule(data=mvtseries)
+datamodule.setup()
+x, y = next(iter(datamodule.train_dataloader()))</pre>			<p>In the preceding code, we create an instance of <strong class="source-inline">ExceedanceDataModule</strong>, after which we use the <strong class="source-inline">iter</strong><strong class="source-inline">()</strong> and <strong class="source-inline">next</strong><strong class="source-inline">()</strong> methods to get observations <span class="No-Break">from it.</span></p>
+			<h2 id="_idParaDest-293"><a id="_idTextAnchor404"/>How it works…</h2>
+			<p>Exceedance problems can also be tackled with an auto-regressive approach. So, we can predict the probability of an exceedance event based on the value of recent observations of the <span class="No-Break">time series.</span></p>
+			<p>An exceedance probability forecasting problem is a particular type of binary classification <a id="_idIndexMarker441"/>task that can be defined using a time series where the events are defined by exceedance. Yet, other types of events can be defined that are not necessarily based on exceedance events, and a probabilistic model can be built accordingly. The required logic is all set in the <strong class="source-inline">setup()</strong> method, which encapsulates all the <span class="No-Break">preprocessing s<a id="_idTextAnchor405"/>teps.</span></p>
+			<h2 id="_idParaDest-294"><a id="_idTextAnchor406"/>There’s more…</h2>
+			<p>In this recipe, we used a single multivariate time series to describe exceedance tasks. Yet, we remark that our approach can be defined trivially for datasets involving multiple time series using the data <span class="No-Break">module framework.</span></p>
+			<p>There is a <a id="_idIndexMarker442"/>related problem to exceedance probability forecasting tasks called <strong class="bold">time series classification</strong>, in which a given time series has an associated label. We’ll learn about this problem in the <span class="No-Break">next chapter.</span></p>
+			<h1 id="_idParaDest-295"><a id="_idTextAnchor407"/>Exceedance probability forecasting with an LSTM</h1>
+			<p>This recipe <a id="_idIndexMarker443"/>describes creating a probabilistic <a id="_idIndexMarker444"/>deep learning model to tackle exceedance tasks with a multivariate <span class="No-Break">time series.</span></p>
+			<h2 id="_idParaDest-296"><a id="_idTextAnchor408"/>Getting ready</h2>
+			<p>We’ll continue our example with the solar radiation dataset. Here’s the data module that we defined in the <span class="No-Break">previous recipe:</span></p>
+			<pre class="source-code">
+N_LAGS = 14
+HORIZON = 7
+mvtseries = pd.read_csv('assets/daily_multivariate_timeseries.csv',
+        parse_dates=['datetime'],
+        index_col='datetime')
+datamodule = ExceedanceDataModule(data=mvtseries,
+        batch_size=64, test_size=0.3)</pre>			<p>Now, let’s see how to create a classifier using an LSTM neural network and <span class="No-Break">PyTorch’s </span><span class="No-Break"><strong class="source-inline">LightningModule</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-297"><a id="_idTextAnchor409"/>How to do it…</h2>
+			<p>We will <a id="_idIndexMarker445"/>set up a binary classification <a id="_idIndexMarker446"/>using PyTorch Lightning’s <strong class="source-inline">LightningModule</strong>. Here’s the constructor and the <span class="No-Break"><strong class="source-inline">forward()</strong></span><span class="No-Break"> method:</span></p>
+			<pre class="source-code">
+import torch.nn as nn
+import lightning.pytorch as pl
+class ExceedanceLSTM(pl.LightningModule):
+    def __init__(self, input_dim, hidden_dim, num_layers):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.lstm = nn.LSTM(input_dim, self.hidden_dim,
+                    num_layers, batch_first=True)
+        self.fc = nn.Linear(self.hidden_dim, 1)
+    def forward(self, x):
+        h0 = torch.zeros(self.lstm.num_layers, x.size(0),
+            self.hidden_dim).to(self.device)
+        c0 = torch.zeros(self.lstm.num_layers, x.size(0),
+            self.hidden_dim).to(self.device)
+        out, _ = self.lstm(x, (h0, c0))
+        out = self.fc(out[:, -1, :])
+        out = torch.sigmoid(out)
+        return out</pre>			<p>The LSTM <a id="_idIndexMarker447"/>architecture is similar <a id="_idIndexMarker448"/>to what we learned about in <a href="B21145_04.xhtml#_idTextAnchor259"><span class="No-Break"><em class="italic">Chapter 4</em></span></a> – we create an LSTM layer based on PyTorch and set up its configuration regarding the number of layers, number of units, and input dimension (number of time series variables). During the forward pass, the output of the LSTM layer is passed onto a linear layer. In the previous recipes involving predicting the numeric value of future observations, this would be the final layer of the network. Yet, for classification, we add a sigmoid layer (<strong class="source-inline">torch.sigmoid</strong>), which transforms the model’s output into a value between <strong class="source-inline">0</strong> <span class="No-Break">and </span><span class="No-Break"><strong class="source-inline">1</strong></span><span class="No-Break">.</span></p>
+			<p>The training and validation steps of the module are coded <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        y_bin = (y[0] &gt; 0).any(axis=1).long().type(torch.FloatTensor)
+        y_pred = self(x['encoder_cont'])
+        loss = F.binary_cross_entropy(y_pred.squeeze(-1), y_bin)
+        self.log('train_loss', loss)
+        return loss
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_bin = (y[0] &gt; 0).any(axis=1).long().type(torch.FloatTensor)
+        y_pred = self(x['encoder_cont'])
+        loss = F.binary_cross_entropy(y_pred.squeeze(-1), y_bin)
+        self.log('val_loss', loss)
+        return loss
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=0.001)</pre>			<p>In the <a id="_idIndexMarker449"/>preceding code, the training <a id="_idIndexMarker450"/>and validation methods follow <span class="No-Break">similar steps:</span></p>
+			<ol>
+				<li>First, we check if any of the observations in the forecasting horizon is positive (in the <strong class="source-inline">y[0] &gt; 0).any(axis=1).long()</strong> snippet). In effect, we’re building a neural network that models whether there’s an exceedance event in any of the next <span class="No-Break"><strong class="source-inline">7</strong></span><span class="No-Break"> observations.</span></li>
+				<li>We convert the output of this test into a <strong class="source-inline">torch.FloatTensor</strong> data structure, which is required for the <strong class="source-inline">loss</strong><strong class="source-inline">()</strong> function <span class="No-Break">to work.</span></li>
+				<li>Then, we compare the prediction with the actual value using binary cross entropy (<strong class="source-inline">F.binary_cross_entropy</strong>), which is used to train <span class="No-Break">the model.</span></li>
+			</ol>
+			<p>Besides <a id="_idIndexMarker451"/>these methods, we also set <a id="_idIndexMarker452"/>up the optimizer as Adam with a 0.001 learning rate. Finally, we set up the <span class="No-Break">testing method:</span></p>
+			<pre class="source-code">
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_bin = (y[0] &gt; 0).any(axis=1).long().type(torch.FloatTensor)
+        y_pred = self(x['encoder_cont'])
+        loss = F.binary_cross_entropy(y_pred.squeeze(-1), y_bin)
+        auroc = AUROC(task='binary')
+        auc_score = auroc(y_pred, y_bin)
+        self.log('test_bce', loss)
+        self.log('test_auc', auc_score)</pre>			<p>In the preceding code, we add the area under the <strong class="source-inline">ROC</strong> curve as an evaluation metric, which is commonly used to test binary <span class="No-Break">classification models.</span></p>
+			<p>Finally, we must train and test <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+model = ExceedanceLSTM(input_dim=10, hidden_dim=32, num_layers=1)
+early_stop_callback = EarlyStopping(monitor="val_loss",
+                                    min_delta=1e-4,
+                                    patience=10,
+                                    verbose=False,
+                                    mode="min")
+trainer = pl.Trainer(
+    max_epochs=100,
+    accelerator="cpu",
+    callbacks=[early_stop_callback]
+)
+trainer.fit(model, datamodule)
+trainer.test(model, datamodule)</pre>			<p>As you can see, the workflow follows the PyTorch Lightning style, where a <strong class="source-inline">Trainer</strong> instance uses the neural network model and the data module for training <span class="No-Break">and testing.</span></p>
+			<h2 id="_idParaDest-298"><a id="_idTextAnchor410"/>How it works…</h2>
+			<p>The deep <a id="_idIndexMarker453"/>learning models we built in <a id="_idIndexMarker454"/>the previous chapters can be extended for classification predictive tasks. In this case, we added a sigmoid layer, which maps the output of the previous layer into a <strong class="source-inline">0–1</strong> value range. This value can be interpreted as the likelihood of the observations belonging to the positive class, which in our case is the <span class="No-Break">exceedance event.</span></p>
+			<p>Classification models are no longer optimized with metrics such as mean squared error. For binary problems, we use binary cross entropy. In the testing phase, we added the area under the <strong class="source-inline">ROC</strong> curve as a secondary evaluation metric, which is helpful in understanding how the model distinguishes the two classes. The following figure shows the results of the <span class="No-Break">ROC curve:</span></p>
+			<div>
+				<div id="_idContainer034" class="IMG---Figure">
+					<img src="image/B21145_07_002.jpg" alt="Figure 7.2: Results of the exceedance probability model in a ROC curve" width="677" height="475"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.2: Results of the exceedance probability model in a ROC curve</p>
+			<p>The ROC <a id="_idIndexMarker455"/>curve provides a way of <a id="_idIndexMarker456"/>visualizing the performance of the probabilistic classifier for different decision thresholds. Results on the diagonal line denote a performance identical to a random guess. As the curve goes toward the top-left corner, it indicates better performance by <span class="No-Break">the model.</span></p>
+			<p>Besides these tweaks to the pipeline, the design pattern provided by PyTorch Lightning makes the overall code similar to what we used in previous chapters for building models for <span class="No-Break">point forecasting.</span></p>
+			<h2 id="_idParaDest-299"><a id="_idTextAnchor411"/>There’s more…</h2>
+			<p>We remark that while we are focusing on an LSTM here, other architectures can be used, such as feedforward neural networks or convolutional <span class="No-Break">neural networks.</span></p>
+			<h1 id="_idParaDest-300"><a id="_idTextAnchor412"/>Creating prediction intervals using conformal prediction</h1>
+			<p>In this recipe, we’ll explore how to create prediction intervals. Prediction intervals describe <a id="_idIndexMarker457"/>the range of values within which future observations will likely fall with some confidence level. The greater the confidence required, the larger the intervals <span class="No-Break">will be.</span></p>
+			<p>In <a id="_idIndexMarker458"/>practice, the model predicts not just a single point but a distribution for future observations. Various techniques exist to construct these intervals, including parametric methods that assume a specific distribution of errors and non-parametric methods that use empirical data to <span class="No-Break">estimate intervals.</span></p>
+			<p>We’ll resort to a conformal prediction approach, which is increasingly popular among data <span class="No-Break">science practitioners.</span></p>
+			<h2 id="_idParaDest-301"><a id="_idTextAnchor413"/>Getting ready</h2>
+			<p>We’ll build prediction intervals for an ARIMA model, which is a popular forecasting approach. Yet, conformal prediction is agnostic to the underlying method and can be applied to other <span class="No-Break">forecasting methods.</span></p>
+			<p>Let’s start by loading a time series. In this example, we’ll work with a univariate <span class="No-Break">time series:</span></p>
+			<pre class="source-code">
+import pandas as pd
+dataset = pd.read_csv(
+    "assets/daily_multivariate_timeseries.csv",
+    parse_dates=["datetime"],
+)</pre>			<p>Let’s see how to create prediction intervals using <span class="No-Break">this dataset.</span></p>
+			<h2 id="_idParaDest-302"><a id="_idTextAnchor414"/>How to do it…</h2>
+			<p>The data is split into training and testing sets to fit the ARIMA model. We’ll focus on the <strong class="source-inline">statsforecast</strong> Python library, so we need to transform the time series into a <strong class="source-inline">pandas</strong> DataFrame with <span class="No-Break">three columns:</span></p>
+			<ul>
+				<li><strong class="source-inline">ds</strong>: The timestep for the <span class="No-Break">corresponding observation</span></li>
+				<li><strong class="source-inline">unique_id</strong>: The identifier of the time series, which is constant since we’re working with a single <span class="No-Break">time series</span></li>
+				<li><strong class="source-inline">y</strong>: The value of <span class="No-Break">the observation</span></li>
+			</ul>
+			<p>This <a id="_idIndexMarker459"/>process is done <span class="No-Break">as follows:</span></p>
+			<pre class="source-code">
+series = dataset[['Incoming Solar']].reset_index()
+series['id'] = 'Solar'
+series = series.rename(columns={'index': 'ds', 'Incoming Solar': 'y', 
+    'id': 'unique_id'})</pre>			<p>Next, we <a id="_idIndexMarker460"/>must split the data into training and <span class="No-Break">testing sets:</span></p>
+			<pre class="source-code">
+from sklearn.model_selection import train_test_split
+HORIZON = 7
+train, test = train_test_split(series, test_size=HORIZON)</pre>			<p>The test set is composed of the last <span class="No-Break"><strong class="source-inline">7</strong></span><span class="No-Break"> observations.</span></p>
+			<p>Now, we must set up the conformal method using the <strong class="source-inline">ConformalIntervals</strong> class from <strong class="source-inline">statsforecast</strong>. We must also create an ARIMA model and pass the conformal instance <span class="No-Break">to it:</span></p>
+			<pre class="source-code">
+from statsforecast.utils import ConformalIntervals
+intervals = ConformalIntervals(h=HORIZON)
+models = [
+    ARIMA(order=(2, 0, 2),
+          season_length=365,
+          prediction_intervals=intervals),
+]</pre>			<p>In the <a id="_idIndexMarker461"/>preceding code, we set <a id="_idIndexMarker462"/>the seasonal length to <strong class="source-inline">365</strong> since our data is daily, and we expect that solar radiation will exhibit a repeating <span class="No-Break">yearly variation.</span></p>
+			<p>Finally, we must use the <strong class="source-inline">StatsForecast</strong> class instance to get the forecasts from <span class="No-Break">the model:</span></p>
+			<pre class="source-code">
+sf = StatsForecast(
+    df=train,
+    models=models,
+    freq='D',
+)
+forecasts = sf.forecast(h=HORIZON, level=[95])</pre>			<p>Here, we set the level of the prediction intervals to <strong class="source-inline">95</strong>. This means that we expect that the actual value will be within the respective interval with <span class="No-Break">95% confidence.</span></p>
+			<p>Here’s a plot of the prediction interval <span class="No-Break">we obtained:</span></p>
+			<div>
+				<div id="_idContainer035" class="IMG---Figure">
+					<img src="image/B21145_07_003.jpg" alt=" Figure 7.3: ARIMA model forecasts and their respective intervals" width="1458" height="575"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US"> Figure 7.3: ARIMA model forecasts and their respective intervals</p>
+			<h2 id="_idParaDest-303"><a id="_idTextAnchor415"/>How it works…</h2>
+			<p>Conformal prediction involves using a subset of historical data to fit the ARIMA model. Then, another subset is used to calibrate the conformal prediction, typically through <a id="_idIndexMarker463"/>calculating nonconformity scores that measure the deviation between the actual observed values <a id="_idIndexMarker464"/>and the model’s predictions. The calibration step allows a threshold to be determined that corresponds to the desired confidence level (for example, 95%). This threshold is used for future forecasts to construct intervals around the predicted values, providing a range within which the actual values are expected to fall with the specified <span class="No-Break">confidence level.</span></p>
+			<p>Conformal prediction helps quantify the uncertainty behind point forecasts by building intervals around these. In this recipe, we trained an ARIMA model and built intervals around its predictions using conformal prediction. We set the confidence level to <strong class="source-inline">95</strong>, but we can explore several values at the same time. You can do this by changing the level argument to <strong class="source-inline">level=[80, 95]</strong>, <span class="No-Break">for example.</span></p>
+			<p>Overall, this recipe follows a simple train plus testing cycle that uses the <strong class="source-inline">statsforecast</strong> Python <span class="No-Break">library framework.</span></p>
+			<h1 id="_idParaDest-304"><a id="_idTextAnchor416"/>Probabilistic forecasting with an LSTM</h1>
+			<p>This <a id="_idIndexMarker465"/>recipe will walk <a id="_idIndexMarker466"/>you through building an LSTM neural network for probabilistic forecasting using <span class="No-Break">PyTorch Lightning.</span></p>
+			<h2 id="_idParaDest-305"><a id="_idTextAnchor417"/>Getting ready</h2>
+			<p>In this recipe, we’ll introduce probabilistic forecasting with LSTM networks. This approach combines the strengths of LSTM models in capturing long-term dependencies within sequential data with the nuanced perspective of probabilistic forecasting. This method goes beyond traditional point estimates by predicting a range of possible future outcomes, each accompanied by a probability. This means that we are incorporating uncertainty <span class="No-Break">into forecasts.</span></p>
+			<p>This recipe uses the same dataset that we used in <a href="B21145_04.xhtml#_idTextAnchor259"><span class="No-Break"><em class="italic">Chapter 4</em></span></a>, in the <em class="italic">Feedforward neural networks for multivariate time series forecasting</em> recipe. We’ll also use the same data module we created in that recipe, which is <span class="No-Break">called </span><span class="No-Break"><strong class="source-inline">MultivariateSeriesDataModule</strong></span><span class="No-Break">.</span></p>
+			<p>Let’s explore how to use this data module to build an LSTM model for <span class="No-Break">probabilistic forecasting.</span></p>
+			<h2 id="_idParaDest-306"><a id="_idTextAnchor418"/>How to do it…</h2>
+			<p>In this subsection,  we’ll define a probabilistic LSTM model that outputs the predictive mean and standard deviation for each forecasted point of the time series. This technique involves designing the LSTM model to predict parameters that define a probability distribution for future outcomes rather than outputting a single value. The model is usually configured to output parameters of a specific distribution, such as the mean and variance for a Gaussian distribution. These describe the expected value and the spread of future <span class="No-Break">values, respectively:</span></p>
+			<ol>
+				<li>Let’s start by defining <span class="No-Break">a callback:</span><pre class="source-code">
+class LossTrackingCallback(Callback):
+    def __init__(self):
+        self.train_losses = []
+        self.val_losses = []
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.logged_metrics.get("train_loss_epoch"):
+            self.train_losses.append(
+                trainer.logged_metrics["train_loss_epoch"].item())
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if trainer.logged_metrics.get("val_loss_epoch"):
+            self.val_losses.append(
+                trainer.logged_metrics["val_loss_epoch"].item())</pre><p class="list-inset">The <strong class="source-inline">LossTrackingCallback</strong> class is used to monitor the training and validation losses throughout the epochs. This is important for diagnosing the learning <a id="_idIndexMarker467"/>process of the model, identifying overfitting, and deciding when to <span class="No-Break">stop training.</span></p></li>				<li>Then, we <a id="_idIndexMarker468"/>must build the LSTM model based on PyTorch Lightning’s <span class="No-Break"><strong class="source-inline">LightningModule</strong></span><span class="No-Break"> class:</span><pre class="source-code">
+class ProbabilisticLSTM(LightningModule):
+    def __init__(self, input_size,
+                 hidden_size, seq_len,
+                 num_layers=2):
+        super().__init__()
+        self.save_hyperparameters()
+        self.lstm = nn.LSTM(input_size, hidden_size,
+            num_layers, batch_first=True)
+        self.fc_mu = nn.Linear(hidden_size, 1)
+        self.fc_sigma = nn.Linear(hidden_size, 1)
+        self.hidden_size = hidden_size
+        self.softplus = nn.Softplus()
+    def forward(self, x):
+        lstm_out, _ = self.lstm(x)
+        lstm_out = lstm_out[:, -1, :]
+        mu = self.fc_mu(lstm_out)
+        sigma = self.softplus(self.fc_sigma(lstm_out))
+        return mu, sigma</pre><p class="list-inset">The <strong class="source-inline">ProbabilisticLSTM</strong> class defines the LSTM architecture for our probabilistic <a id="_idIndexMarker469"/>forecasts. The class includes layers to compute the predictive mean (<strong class="source-inline">fc_mu</strong>) and standard <a id="_idIndexMarker470"/>deviation (<strong class="source-inline">fc_sigma</strong>) of the forecast distribution. The standard deviation is passed through a <strong class="source-inline">Softplus</strong><strong class="source-inline">()</strong> activation function to ensure it is always positive, reflecting the nature of <span class="No-Break">standard deviation.</span></p></li>				<li>The following code implements the training and validation steps, along with the network <span class="No-Break">configuration parameters:</span><pre class="source-code">
+    def training_step(self, batch, batch_idx):
+        x, y = batch[0]["encoder_cont"], batch[1][0]
+        mu, sigma = self.forward(x)
+        dist = torch.distributions.Normal(mu, sigma)
+        loss = -dist.log_prob(y).mean()
+        self.log(
+            "train_loss", loss, on_step=True,
+            on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"loss": loss, "log": {"train_loss": loss}}
+    def validation_step(self, batch, batch_idx):
+        x, y = batch[0]["encoder_cont"], batch[1][0]
+        mu, sigma = self.forward(x)
+        dist = torch.distributions.Normal(mu, sigma)
+        loss = -dist.log_prob(y).mean()
+        self.log(
+            "val_loss", loss, on_step=True,
+            on_epoch=True, prog_bar=True, logger=True
+        )
+        return {"val_loss": loss}
+    def configure_optimizers(self):
+        optimizer = optim.Adam(self.parameters(), lr=0.0001)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, "min")
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "val_loss",
+        }</pre></li>				<li>After defining the model architecture, we initialize the data module and set up training callbacks. As we saw previously, the <strong class="source-inline">EarlyStopping</strong> callback is a valuable <a id="_idIndexMarker471"/>tool for preventing overfitting by halting the training process once the <a id="_idIndexMarker472"/>model ceases to improve on the validation set. The <strong class="source-inline">ModelCheckpoint</strong> callback ensures that we capture and save the best version of the model based on its validation performance. Together, these callbacks optimize the training process, aiding in developing a robust and <span class="No-Break">well-tuned model:</span><pre class="source-code">
+datamodule = ContinuousDataModule(data=mvtseries)
+datamodule.setup()
+model = ProbabilisticLSTM(
+    input_size = input_size, hidden_size=hidden_size,
+    seq_len=seq_len
+)
+early_stop_callback = EarlyStopping(monitor="val_loss", 
+    patience=5)
+checkpoint_callback = ModelCheckpoint(
+    dirpath="./model_checkpoint/", save_top_k=1, 
+    monitor="val_loss"
+)
+loss_tracking_callback = LossTrackingCallback()
+trainer = Trainer(
+    max_epochs=100,
+    callbacks=[early_stop_callback, checkpoint_callback,
+    loss_tracking_callback],
+)
+trainer.fit(model, datamodule)</pre><p class="list-inset">Using the <strong class="source-inline">Trainer</strong> class from PyTorch Lightning simplifies the training process, handling the complex training loops internally and allowing us to focus on <a id="_idIndexMarker473"/>defining the model and its behavior. It increases the code’s readability and maintainability, making experimenting with different model <span class="No-Break">configurations easier.</span></p></li>				<li>After <a id="_idIndexMarker474"/>training, assessing the model’s performance and visualizing its probabilistic forecasts is very important. The graphical representation of the forecasted means, alongside their uncertainty intervals against the actual values, offers a clear depiction of the model’s predictive power and the inherent uncertainty in its predictions. We built a visualization framework to plot the forecasts. You can check the functions at the following <span class="No-Break">link: </span><a href="https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook"><span class="No-Break">https://github.com/PacktPublishing/Deep-Learning-for-Time-Series-Data-Cookbook</span></a><span class="No-Break">.</span></li>
+			</ol>
+			<p>The <a id="_idIndexMarker475"/>following figure <a id="_idIndexMarker476"/>illustrates the true values of our time series in blue, with the forecasted means depicted by the dashed <span class="No-Break">red line:</span></p>
+			<div>
+				<div id="_idContainer036" class="IMG---Figure">
+					<img src="image/B21145_07_004.jpg" alt="Figure 7.4: Probabilistic forecasts with uncertainty intervals and true values" width="1195" height="632"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.4: Probabilistic forecasts with uncertainty intervals and true values</p>
+			<p>The shaded area represents the uncertainty interval, calculated as a standard deviation from the forecasted mean. This probabilistic approach to forecasting provides a more comprehensive picture than point estimates as it accounts for the variability and uncertainty inherent in the time series data. The overlap between the uncertainty intervals and the actual values indicates areas where the model has higher confidence in its predictions. Conversely, wider intervals may suggest periods of more significant uncertainty, potentially due to inherent noise in the data or complex underlying dynamics that the model finds more challenging <span class="No-Break">to capture.</span></p>
+			<p>Moreover, the following figure provides insights into the training dynamics of our probabilistic <span class="No-Break">LSTM model:</span></p>
+			<div>
+				<div id="_idContainer037" class="IMG---Figure">
+					<img src="image/B21145_07_005.jpg" alt="Figure 7.5: Training and validation loss over epochs, demonstrating the learning progress of the probabilistic LSTM model" width="856" height="474"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.5: Training and validation loss over epochs, demonstrating the learning progress of the probabilistic LSTM model</p>
+			<p>The relatively stable and low validation loss suggests that our model generalizes well without overfitting the <span class="No-Break">training data.</span></p>
+			<h2 id="_idParaDest-307"><a id="_idTextAnchor419"/>How it works…</h2>
+			<p>The probabilistic LSTM model extends beyond traditional point prediction models. Unlike <a id="_idIndexMarker477"/>point forecasts, which output a single expected value, this model predicts a full distribution <a id="_idIndexMarker478"/>characterized by mean and standard <span class="No-Break">deviation parameters.</span></p>
+			<p>This probabilistic approach provides a richer representation by capturing the uncertainty inherent in the data. The mean of the distribution gives the expected value of the forecast, while the standard deviation quantifies the confidence in the prediction, expressing the expected variability around <span class="No-Break">the mean.</span></p>
+			<p>To train this model, we use a loss function that differs from those used in point prediction models. Instead of using MSE or MAE, which minimizes the difference between predicted and actual values, the probabilistic LSTM employs a negative log-likelihood loss function. This loss function, often called the probabilistic loss, maximizes the likelihood of the observed data under the <span class="No-Break">predicted distribution.</span></p>
+			<p>This <a id="_idIndexMarker479"/>probabilistic loss function is particularly suited for uncertainty estimation as it directly <a id="_idIndexMarker480"/>penalizes the divergence between the predicted probability distribution and the observed values. When the predicted distribution assigns a high probability to the actual observed values, the negative log-likelihood is low, and thus the loss <span class="No-Break">is low.</span></p>
+			<h1 id="_idParaDest-308"><a id="_idTextAnchor420"/>Probabilistic forecasting with DeepAR</h1>
+			<p>This <a id="_idIndexMarker481"/>time, we’ll turn our attention to <strong class="source-inline">DeepAR</strong>, a state-of-the-art method for probabilistic forecasting. We’ll also <a id="_idIndexMarker482"/>leverage the <strong class="source-inline">neuralforecast</strong> framework to exemplify how to apply <strong class="source-inline">DeepAR</strong> for <span class="No-Break">this task.</span></p>
+			<h2 id="_idParaDest-309"><a id="_idTextAnchor421"/>Getting ready</h2>
+			<p>We’ll continue with the same dataset that we used in the <span class="No-Break">previous recipe.</span></p>
+			<p>Since we are using a different Python package, we need to change our preprocessing steps to get the data into a suitable format. Now, each row corresponds to a single observation at a given time for a specific time series. This is similar to what we did in the <em class="italic">Prediction intervals using conformal </em><span class="No-Break"><em class="italic">prediction</em></span><span class="No-Break"> recipe:</span></p>
+			<pre class="source-code">
+def load_and_prepare_data(file_path, time_column, series_column, 
+    aggregation_freq):
+    """Load the time series data and prepare it for modeling."""
+    dataset = pd.read_csv(file_path, parse_dates=[time_column])
+    dataset.set_index(time_column, inplace=True)
+    target_series = (
+        dataset[series_column].resample(aggregation_freq).mean()
+    )
+    return target_series
+def add_time_features(dataframe, date_column):
+    """Add time-related features to the DataFrame."""
+    dataframe["week_of_year"] = (
+        dataframe[date_column].dt.isocalendar().week.astype(float)
+    )
+    dataframe["month"] = dataframe[date_column].dt.month.astype(float)
+    dataframe["sin_week"] = np.sin(
+        2 * np.pi * dataframe["week_of_year"] / 52
+    )
+    dataframe["cos_week"] = np.cos(
+        2 * np.pi * dataframe["week_of_year"] / 52
+    )
+    dataframe["sin_2week"] = np.sin(
+        4 * np.pi * dataframe["week_of_year"] / 52
+    )
+    dataframe["cos_2week"] = np.cos(
+        4 * np.pi * dataframe["week_of_year"] / 52
+    )
+    dataframe["sin_month"] = np.sin(
+        2 * np.pi * dataframe["month"] / 12
+    )
+    dataframe["cos_month"] = np.cos(
+        2 * np.pi * dataframe["month"] / 12
+    )
+    return dataframe
+def scale_features(dataframe, feature_columns):
+    """Scale features."""
+    scaler = MinMaxScaler()
+    dataframe[feature_columns] = (
+        scaler.fit_transform(dataframe[feature_columns])
+    )
+    return dataframe, scaler
+FILE_PATH = "assets/daily_multivariate_timeseries.csv"
+TIME_COLUMN = "datetime"
+TARGET_COLUMN = "Incoming Solar"
+AGGREGATION_FREQ = "W"
+weekly_data = load_and_prepare_data(
+    FILE_PATH, TIME_COLUMN, TARGET_COLUMN, AGGREGATION_FREQ
+)
+weekly_data = (
+    weekly_data.reset_index().rename(columns={TARGET_COLUMN: "y"})
+)
+weekly_data = add_time_features(weekly_data, TIME_COLUMN)
+numerical_features = [
+    "y",
+    "week_of_year",
+    "sin_week",
+    "cos_week",
+    "sin_2week",
+    "cos_2week",
+    "sin_month",
+    "cos_month",
+]
+features_to_scale = ["y", "week_of_year"]
+weekly_data, scaler = scale_features(weekly_data, features_to_scale)</pre>			<p>In this <a id="_idIndexMarker483"/>case, we select the targeted series within the dataset and resample it to a weekly frequency, aggregating the data points using the mean. </p>
+			<p>Next, <a id="_idIndexMarker484"/>we show how to enhance the dataset by adding time-related features. We introduce Fourier series components for the week and month of the year. By incorporating sine and cosine transformations, we capture the cyclical nature of time in our data. Additionally, we scale the target using <span class="No-Break">a </span><span class="No-Break"><strong class="source-inline">MinMaxScaler</strong></span><span class="No-Break">.</span></p>
+			<p>Finally, we split our dataset into training and <span class="No-Break">testing sets:</span></p>
+			<pre class="source-code">
+def split_data(dataframe, date_column, split_time):
+    """Split the data into training and test sets."""
+    train = dataframe[dataframe[date_column] &lt;= split_time]
+    test = dataframe[dataframe[date_column] &gt; split_time]
+    return train, test
+SPLIT_TIME = weekly_data["ds"].max() - pd.Timedelta(weeks=52)
+train, test = split_data(weekly_data, "ds", SPLIT_TIME)</pre>			<p>Now, let’s see how to build a <strong class="source-inline">DeepAR</strong> model <span class="No-Break">using </span><span class="No-Break"><strong class="source-inline">neuralforecast</strong></span><span class="No-Break">.</span></p>
+			<h2 id="_idParaDest-310"><a id="_idTextAnchor422"/>How to do it…</h2>
+			<p>With the data prepared, we can define and train the <strong class="source-inline">DeepAR</strong> model. The <strong class="source-inline">NeuralForecast</strong> class receives a list of models as input. In this case, we only define <a id="_idIndexMarker485"/>the <strong class="source-inline">DeepAR</strong> class. The library <a id="_idIndexMarker486"/>provides a straightforward way to specify the architecture and training behavior of the model. After training, we generate forecasts using the <span class="No-Break"><strong class="source-inline">predict()</strong></span><span class="No-Break"> method:</span></p>
+			<pre class="source-code">
+nf = NeuralForecast(
+    models=[
+        DeepAR(
+            h=52,
+            input_size=52,
+            lstm_n_layers=3,
+            lstm_hidden_size=128,
+            trajectory_samples=100,
+            loss=DistributionLoss(
+                distribution="Normal", level=[80, 90], 
+                    return_params=False
+            ),
+            futr_exog_list=[
+                "week_of_year",
+                "sin_week",
+                "cos_week",
+                "sin_2week",
+                "cos_2week",
+                "sin_month",
+                "cos_month",
+            ],
+            learning_rate=0.001,
+            max_steps=1000,
+            val_check_steps=10,
+            start_padding_enabled=True,
+            early_stop_patience_steps=30,
+            scaler_type="identity",
+            enable_progress_bar=True,
+        ),
+    ],
+    freq="W",
+)
+nf.fit(df=train, val_size=52)
+Y_hat_df = nf.predict(
+    futr_df=test[
+        [
+            "ds",
+            "unique_id",
+            "week_of_year",
+            "sin_week",
+            "cos_week",
+            "sin_2week",
+            "cos_2week",
+            "sin_month",
+            "cos_month",
+        ]
+    ]
+)</pre>			<p>The <a id="_idIndexMarker487"/>following figure illustrates <a id="_idIndexMarker488"/>a probabilistic forecast generated <span class="No-Break">by </span><span class="No-Break"><strong class="source-inline">DeepAR</strong></span><span class="No-Break">:</span></p>
+			<div>
+				<div id="_idContainer038" class="IMG---Figure">
+					<img src="image/B21145_07_006.jpg" alt="Figure 7.6: DeepAR probabilistic forecast showing the mean prediction and associated uncertainty" width="987" height="579"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.6: DeepAR probabilistic forecast showing the mean prediction and associated uncertainty</p>
+			<p>The solid line represents the mean prediction, while the shaded region shows the uncertainty bounds for the 80% and 95% confidence intervals. This plot shows the range of likely future values and is more informative than a single predicted value, especially for decision-making <span class="No-Break">under uncertainty.</span></p>
+			<h2 id="_idParaDest-311"><a id="_idTextAnchor423"/>How it works…</h2>
+			<p><strong class="source-inline">DeepAR</strong> is a probabilistic forecasting method that generates a probability distribution, such as a normal distribution or a negative binomial distribution, for each future time point. Once again, we are interested in capturing the uncertainty in our predictions rather than just producing <span class="No-Break">point forecasts.</span></p>
+			<p>The <strong class="source-inline">DeepAR</strong> model uses an autoregressive recurrent network structure and conditions <a id="_idIndexMarker489"/>it on past observations, covariates, and an embedding of the time series. The output is a set of parameters, typically the mean and variance, which define the distribution of future values. During <a id="_idIndexMarker490"/>training, the model maximizes the likelihood of the observed data given <span class="No-Break">these parameters.</span></p>
+			<p><strong class="source-inline">DeepAR</strong> is designed to work well with multiple related time series, enabling it to learn complex patterns across similar sequences and improve prediction accuracy by leveraging <span class="No-Break">cross-series information.</span></p>
+			<h1 id="_idParaDest-312"><a id="_idTextAnchor424"/>Introduction to Gaussian Processes</h1>
+			<p>In this <a id="_idIndexMarker491"/>recipe, we’ll introduce <strong class="bold">Gaussian Processes</strong> (<strong class="bold">GP</strong>), a powerful algorithm for probabilistic <span class="No-Break">machine learning.</span></p>
+			<h2 id="_idParaDest-313"><a id="_idTextAnchor425"/>Getting ready</h2>
+			<p>GP offers a flexible, probabilistic approach to modeling in machine learning. This section introduces the concept of GP and prepares the necessary environment for forecasting using a <span class="No-Break">GP model.</span></p>
+			<p>We need to import a new library to be able to fit GP, <span class="No-Break">namely </span><span class="No-Break"><strong class="source-inline">gpytorch</strong></span><span class="No-Break">:</span></p>
+			<pre class="source-code">
+import torch
+import gpytorch
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from pytorch_lightning import LightningDataModule</pre>			<p>Then, we must read the multivariate time series data and process it, scaling both the features and target variable, as scaled data typically improves GP modeling <span class="No-Break">performance significantly.</span></p>
+			<h2 id="_idParaDest-314"><a id="_idTextAnchor426"/>How to do it…</h2>
+			<p>We’ll <a id="_idIndexMarker492"/>use the <strong class="source-inline">gpytorch</strong> library to implement a <span class="No-Break">GP model:</span></p>
+			<ol>
+				<li>The key components in a GP model are the mean and covariance functions, which are defined in the <span class="No-Break"><strong class="source-inline">GPModel</strong></span><span class="No-Break"> class:</span><pre class="source-code">
+class GPModel(gpytorch.models.ExactGP):
+    def init(self, train_x, train_y, likelihood):
+        super(GPModel, self).init(train_x, train_y, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel()) + gpytorch.kernels.ScaleKernel(gpytorch.kernels.PeriodicKernel())
+    def forward(self, x):
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(
+            mean_x, covar_x)</pre></li>				<li>The model <a id="_idIndexMarker493"/>is then trained using the standard PyTorch training loop, optimizing the <span class="No-Break">marginal log-likelihood:</span><pre class="source-code">
+likelihood = GaussianLikelihood()
+model = GPModel(datamodule.train_x[:, 0], datamodule.train_y, 
+    likelihood)
+model.train()
+likelihood.train()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+mll = ExactMarginalLogLikelihood(likelihood, model)
+training_iter = 100
+for i in range(training_iter):
+    optimizer.zero_grad()
+    output = model(datamodule.train_x[:, 0])
+    loss = -mll(output, datamodule.train_y)
+    loss.backward()
+    optimizer.step()</pre><p class="list-inset">After training, the GP model can make predictions for new data points. The key advantage of GP is its ability to quantify uncertainty in these predictions. The following code snippet demonstrates how predictions are made using a trained <span class="No-Break">GP model:</span></p><pre class="source-code">with torch.no_grad(), gpytorch.settings.fast_pred_var():
+    observed_pred = likelihood
+        (model(datamodule.original_x[:, 0]))</pre><p class="list-inset">Here’s a <a id="_idIndexMarker494"/>visualization of the fitted values of <span class="No-Break">the model:</span></p></li>			</ol>
+			<div>
+				<div id="_idContainer039" class="IMG---Figure">
+					<img src="image/B21145_07_007.jpg" alt="Figure 7.7: A visualization of the GP model’s predictions" width="831" height="496"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.7: A visualization of the GP model’s predictions</p>
+			<p>This preceding figure illustrates the GP model’s ability to fit the historical data and forecast future values with quantified uncertainty. The shaded areas around the predictions visually represent the model’s forecast confidence, with wider intervals indicating more <span class="No-Break">significant uncertainty.</span></p>
+			<h2 id="_idParaDest-315"><a id="_idTextAnchor427"/>How it works…</h2>
+			<p>GP offers a sophisticated way to analyze and understand complicated datasets. It differs from typical models because it doesn’t rely on a fixed number of parameters to describe data. Instead, GP uses a limitless range of possible functions, which gives it great adaptability to fit any type of data <span class="No-Break">generation process.</span></p>
+			<p>GP is a collection of random variables. The key characteristic of these variables in GP is that one variable affects or is related to the values of others. The dependency pattern is governed by the Gaussian distribution. A GP can model a wide variety of functions (for example, nonlinear, noisy, and others). This method is particularly useful in our current setting because it adopts a probabilistic approach to modeling. GP can not only predict the most likely outcome but also quantify the uncertainty of <span class="No-Break">these predictions.</span></p>
+			<p>GP is <a id="_idIndexMarker495"/>defined by the mean and <span class="No-Break">kernel functions:</span></p>
+			<ul>
+				<li><strong class="bold">Mean function</strong>: The <a id="_idIndexMarker496"/>baseline expectation for the function’s values. It provides a starting point for predictions and is often set <span class="No-Break">to zero.</span></li>
+				<li><strong class="bold">Kernel function</strong>: The core <a id="_idIndexMarker497"/>of a GP, this determines the relationship between data points by encoding the function’s properties (for example, smoothness, periodicity, and so on). It influences how predictions are made by assessing the similarity <span class="No-Break">among points.</span></li>
+			</ul>
+			<p>The kernel function is the essential component of a GP model’s predictive accuracy, adapting the model to the data’s underlying structure. In practice, you can mix different kernels to capture various aspects of the data. For instance, combining a kernel that’s good for smooth data with one good for periodic data can help model data with <span class="No-Break">both characteristics.</span></p>
+			<p>Training a GP involves fine-tuning specific parameters in the kernel to fit your data best. This is often done using optimization techniques such as gradient descent. Once the GP has been trained, it can predict new <span class="No-Break">data points.</span></p>
+			<h1 id="_idParaDest-316"><a id="_idTextAnchor428"/>Using Prophet for probabilistic forecasting</h1>
+			<p>In this <a id="_idIndexMarker498"/>recipe, we’ll show how to use Prophet for <span class="No-Break">probabilistic forecasting.</span></p>
+			<h2 id="_idParaDest-317"><a id="_idTextAnchor429"/>Getting ready</h2>
+			<p>Prophet is a tool developed by Facebook for forecasting time series data. It’s particularly adept at handling data with strong seasonal patterns and irregular events such as holidays. To get started with Prophet, we need to prepare our data <span class="No-Break">and environment.</span></p>
+			<p>The process begins with loading and preprocessing the time series data so that it fits the format <a id="_idIndexMarker499"/>Prophet requires. Each time series in Prophet must have two columns – <strong class="source-inline">ds</strong> (the timestamp) and <strong class="source-inline">y</strong> (the value we wish <span class="No-Break">to predict):</span></p>
+			<pre class="source-code">
+import pandas as pd
+from prophet import Prophet
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+mvtseries = pd.read_csv(
+"assets/daily_multivariate_timeseries.csv",
+parse_dates=["datetime"],
+)
+mvtseries['ds'] = mvtseries['datetime']
+mvtseries['y'] = mvtseries['Incoming Solar']</pre>			<p>Now, let’s see how to build a <span class="No-Break">Prophet model.</span></p>
+			<h2 id="_idParaDest-318"><a id="_idTextAnchor430"/>How to do it…</h2>
+			<p>Follow these steps to build a <span class="No-Break">Prophet model:</span></p>
+			<ol>
+				<li>After preprocessing, we must divide the dataset into training and testing sets. Prophet is then used to fit the model on the <span class="No-Break">training data:</span><pre class="source-code">
+train_data, test_data = train_test_split(mvtseries, 
+    test_size=0.2, shuffle=False)</pre></li>				<li>Then, we must create a Prophet instance and train it, <span class="No-Break">as follows:</span><pre class="source-code">
+model = Prophet()
+model.fit(train_data[['ds', 'y']])</pre></li>				<li>We can use the model to make future predictions once the model has been trained. This involves creating a future <strong class="source-inline">dataframe</strong> for the desired forecast period and then using the model to predict <span class="No-Break">the values:</span><pre class="source-code">
+future = model.make_future_dataframe(periods=len(test_data))
+forecast = model.predict(future)</pre></li>				<li>Here’s <a id="_idIndexMarker500"/>how to visualize <span class="No-Break">the forecasts:</span><pre class="source-code">
+fig = model.plot(forecast)
+plt.show()</pre><p class="list-inset">These forecasts are shown in the <span class="No-Break">following figure:</span></p></li>			</ol>
+			<div>
+				<div id="_idContainer040" class="IMG---Figure">
+					<img src="image/B21145_07_008.jpg" alt="Figure 7.8: Prophet forecast with uncertainty intervals and observed data" width="982" height="581"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.8: Prophet forecast with uncertainty intervals and observed data</p>
+			<p>In addition to the basic forecasting model, Prophet also provides functionality to dissect <a id="_idIndexMarker501"/>and understand various components of the time series. This can be particularly useful for gaining insights into the underlying patterns of the data. Here’s how to visualize the forecasts by <span class="No-Break">each component:</span></p>
+			<pre class="source-code">
+fig = model.plot_components(forecast)
+plt.show()</pre>			<p>Here’s <span class="No-Break">the plot:</span></p>
+			<div>
+				<div id="_idContainer041" class="IMG---Figure">
+					<img src="image/B21145_07_009.jpg" alt="Figure 7.9: Prophet model components showing trend, as well as weekly and yearly seasonality" width="900" height="900"/>
+				</div>
+			</div>
+			<p class="IMG---Caption" lang="en-US" xml:lang="en-US">Figure 7.9: Prophet model components showing trend, as well as weekly and yearly seasonality</p>
+			<p>The top <a id="_idIndexMarker502"/>plot illustrates the overall trend in the data over time. Here, we can see a general upward trend, suggesting that the value we predict increases over the years. The middle plot shows the weekly seasonality. This plot indicates how each day of the week affects our forecasting value. For instance, there might be peaks on specific days associated with weekly events or habits. The bottom plot represents yearly seasonality, showing how the time of the year influences the forecast. This could capture increased activity during certain months or <span class="No-Break">seasonal effects.</span></p>
+			<h2 id="_idParaDest-319"><a id="_idTextAnchor431"/>How it works…</h2>
+			<p>Prophet is an additive model that decomposes the time series into several components: trend, seasonality, and holidays. In this recipe, we used the default parameters <a id="_idIndexMarker503"/>of the model. However, you can tweak Prophet with several parameters. Check out the documentation at <a href="https://facebook.github.io/prophet/docs/quick_start.html">https://facebook.github.io/prophet/docs/quick_start.html</a> for <span class="No-Break">more information.</span></p>
+			<p>The <strong class="source-inline">prophet</strong> library requires the data to be framed in a specific format: a <strong class="source-inline">pandas</strong> DataFrame with two columns: <strong class="source-inline">ds</strong> (timestamps) and <strong class="source-inline">y</strong> (the values). Then, the training and inference steps are carried out using a <strong class="source-inline">fit()</strong> method and a <strong class="source-inline">predict()</strong> method, respectively. You can also visualize the predictions by each component, which gives the model a more <span class="No-Break">interpretable characteristic.</span></p>
+			<h2 id="_idParaDest-320"><a id="_idTextAnchor432"/>There’s more…</h2>
+			<p>There’s a newer extension of the Prophet model called <strong class="source-inline">NeuralProphet</strong>. It incorporates neural network models for improved forecasting, especially in complex patterns and multiple <span class="No-Break">seasonality scenarios.</span></p>
+		</div>
+	</div>
+</div>
+</body></html>

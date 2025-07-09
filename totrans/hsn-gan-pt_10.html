@@ -1,0 +1,366 @@
+<html><head></head><body>
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Training Your GANs to Break Different Models</h1>
+                </header>
+            
+            <article>
+                
+<p>There has been a clear trend that people enjoy using <span>deep learning methods to solve</span> problems in the computer vision field. Has one of your classmates or colleagues ever shown off their latest image classifier to you? Now, with GANs, you may actually get the chance to show them what you can do by generating adversarial examples to break their previous models.</p>
+<p>We will be looking into the fundamentals of adversarial examples and how to attack and confuse a CNN model with <strong>FGSM</strong> <span>(</span><strong>Fast Gradient Sign Method</strong><span>). We will also learn how to train an ensemble classifier with several pre-trained CNN models via transfer learning on Kaggle's Cats vs. Dogs dataset, following which, we will learn how to use an</span> accimage <span>library to speed up your image loading even more and train a GAN model to generate adversarial examples and fool the image classifier.</span></p>
+<p>The following topics will be covered in this chapter:</p>
+<ul>
+<li>Adversarial examples – attacking deep learning models</li>
+<li>Generative adversarial examples</li>
+</ul>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Adversarial examples – attacking deep learning models</h1>
+                </header>
+            
+            <article>
+                
+<p>It is known that with deep learning methods that have huge numbers of parameters, sometimes more than tens of millions, it becomes more difficult for humans to comprehend what exactly they have learned, except the fact that they perform unexpectedly well in CV and NLP fields. If someone around you feels exceptionally comfortable using deep learning to solve each and every practical problem without a second thought, what we are about to learn in this chapter will help them to realize the potential risks their models are exposed to.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">What are adversarial examples and how are they created?</h1>
+                </header>
+            
+            <article>
+                
+<p>Adversarial examples are a kind of sample (often modified based on real data) that are easily mistakenly classified by a machine learning system (and sometimes look normal to the human eye). Modifications to image data could be a small amount of added noise (<a href="https://openai.com/blog/adversarial-example-research">https://openai.com/blog/adversarial-example-research</a>) or a small image patch (Tom B. Brown, et al, 2017). Sometimes, printing them on paper and taking pictures of adversarial examples also fools neural networks. It is even possible to 3D-print an object that fools neural networks from almost all perspectives (Anish Athalye, et al, 2018). Although you can create some <span>random</span> samples that look like nothing natural and still cause neural networks to make mistakes, it is far more interesting to study the adversarial examples that look normal to humans but are misclassified by neural networks. </p>
+<p>Be assured that we are not going off-topic discussing adversarial examples here. For starters, Ian Goodfellow, known as the father of GANs, has spent a decent amount of time studying adversarial examples. Adversarial examples and GANs might be siblings! Joking aside, GANs are good for generating convincing and realistic samples, as well as generating samples that fool other classifier models. In this chapter, we will first walk through how to construct adversarial examples and attack a small model in PyTorch. Then, we will show you how to use GANs to generate adversarial examples to attack a large model.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Adversarial attacking with PyTorch</h1>
+                </header>
+            
+            <article>
+                
+<p>There is an excellent toolbox for adversarial attacks, defense, and benchmarks for TensorFlow called CleverHans (<a href="https://github.com/tensorflow/cleverhans">https://github.com/tensorflow/cleverhans</a>). Currently, the developers are making plans to support PyTorch (<a href="https://github.com/tensorflow/cleverhans/blob/master/tutorials/future/torch/cifar10_tutorial.py">https://github.com/tensorflow/cleverhans/blob/master/tutorials/future/torch/cifar10_tutorial.py</a>). In this section, we will need to implement an adversarial example in PyTorch.</p>
+<p>The following code snippet is based on the official tutorial by PyTorch: <a href="https://pytorch.org/tutorials/beginner/fgsm_tutorial.html">https://pytorch.org/tutorials/beginner/fgsm_tutorial.html</a>. We will slightly modify the model and the creation of adversarial examples will be performed in batchs. Start with a blank file named <kbd>advAttackGAN.py</kbd>:</p>
+<ol>
+<li>Import the modules:</li>
+</ol>
+<pre style="padding-left: 60px">import torch<br/>import torch.nn as nn<br/>import torch.nn.functional as F<br/>import torch.optim as optim<br/>import matplotlib.pyplot as plt<br/><br/>from torchvision import datasets, transforms<br/><br/>print("PyTorch version: {}".format(torch.__version__))<br/>print("CUDA version: {}\n".format(torch.version.cuda))</pre>
+<ol start="2">
+<li>Define the device and the perturbation factors:</li>
+</ol>
+<pre style="padding-left: 60px">use_cuda = True<br/>device = torch.device("cuda:0" if use_cuda and torch.cuda.is_available() else "cpu")<br/><br/>epsilons = [.05, .1, .15, .2, .25, .3]</pre>
+<ol start="3">
+<li>Define the CNN model, which is known as the LeNet-5 model:</li>
+</ol>
+<pre style="padding-left: 60px">class Net(nn.Module):<br/>    def __init__(self):<br/>        super(Net, self).__init__()<br/>        self.conv1 = nn.Conv2d(1, 20, kernel_size=5)<br/>        self.conv2 = nn.Conv2d(20, 50, kernel_size=5)<br/>        self.fc1 = nn.Linear(800, 500)<br/>        self.fc2 = nn.Linear(500, 10)<br/><br/>    def forward(self, x):<br/>        x = F.relu(F.max_pool2d(self.conv1(x), 2))<br/>        x = F.relu(F.max_pool2d(self.conv2(x), 2))<br/>        x = F.relu(self.fc1(x.view(-1, 800)))<br/>        x = self.fc2(x)<br/>        return x</pre>
+<ol start="4">
+<li>Define the data loader for both training and testing. Here, we'll use the MNIST dataset:</li>
+</ol>
+<pre style="padding-left: 60px">batch_size = 64<br/>train_data = datasets.MNIST('/home/john/Data/mnist', train=True, download=True,<br/>                            transform=transforms.Compose([<br/>                                transforms.ToTensor(),<br/>                                # transforms.Normalize((0.1307,), (0.3081,)),<br/>                                ]))<br/>train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size,<br/>                                           shuffle=True, pin_memory=True)<br/><br/>test_data = datasets.MNIST('/home/john/Data/mnist', train=False, download=True,<br/>                           transform=transforms.Compose([<br/>                                transforms.ToTensor(),<br/>                                # transforms.Normalize((0.1307,), (0.3081,)),<br/>                                ]))<br/>test_loader = torch.utils.data.DataLoader(test_data, batch_size=1000,<br/>                                          shuffle=False, pin_memory=True)</pre>
+<p style="padding-left: 60px">Note that, to make the defined perturbation factors work for our model, we are not normalizing (whitening) the data by subtracting the mean value and dividing by the standard deviation value.</p>
+<ol start="5">
+<li>Create the <kbd>model</kbd>, <kbd>optimizer</kbd>, and <kbd>loss</kbd> functions:</li>
+</ol>
+<pre style="padding-left: 60px">model = Net().to(device)<br/>optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=3e-5)<br/>criterion = nn.CrossEntropyLoss()</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<ol start="6">
+<li>Define the <kbd>train</kbd> and <kbd>test</kbd> functions:</li>
+</ol>
+<pre style="padding-left: 60px">def train(model, device, train_loader, optimizer):<br/>    model.train()<br/>    for batch_idx, (data, target) in enumerate(train_loader):<br/>        data, target = data.to(device), target.to(device)<br/>        optimizer.zero_grad()<br/>        output = model(data)<br/>        loss = criterion(output, target)<br/>        loss.backward()<br/>        optimizer.step()<br/>        if batch_idx % 250 == 0:<br/>            print('[{}/{}]\tLoss: {:.6f}'.format(<br/>                batch_idx * batch_size, len(train_data), loss.item()))<br/><br/>def test(model, device, test_loader):<br/>    model.eval()<br/>    test_loss = 0<br/>    correct = 0<br/>    with torch.no_grad():<br/>        for data, target in test_loader:<br/>            data, target = data.to(device), target.to(device)<br/>            output = model(data)<br/>            test_loss += criterion(output, target).item()<br/>            pred = output.max(1, keepdim=True)[1]<br/>            correct += pred.eq(target.view_as(pred)).sum().item()<br/>    test_loss /= len(test_loader)<br/>    print('\nTest loss: {:.4f}, accuracy: {:.4f}%\n'.format(<br/>        test_loss, 100. * correct / len(test_data)))</pre>
+<ol start="7">
+<li>Let's train the model and see what this small model is capable of:</li>
+</ol>
+<pre style="padding-left: 60px">model.train()<br/>for epoch in range(5):<br/> print('Train Epoch: {}'.format(epoch))<br/> train(model, device, train_loader, optimizer)<br/> test(model, device, test_loader)</pre>
+<p style="padding-left: 60px">The output messages may look like these:</p>
+<pre style="padding-left: 60px">PyTorch version: 1.3.1<br/>CUDA version: 10.0.130<br/><br/>Train Epoch: 0<br/>[0/60000] Loss: 2.307504<br/>[16000/60000] Loss: 0.148560<br/>...<br/>Test loss: 0.0229, accuracy: 99.3100%</pre>
+<p style="padding-left: 60px">We can see that our small CNN model achieves 99.31% test accuracy after only 5 epochs of training.</p>
+<ol start="8">
+<li>Now, implement FGSM to create an adversarial example from the read sample and its derivatives:</li>
+</ol>
+<pre style="padding-left: 60px">def fgsm_attack(image, epsilon, data_grad):<br/>    sign_data_grad = data_grad.sign()<br/>    perturbed_image = image + epsilon*sign_data_grad<br/>    perturbed_image = torch.clamp(perturbed_image, 0, 1)<br/>    return perturbed_image</pre>
+<ol start="9">
+<li>Use <kbd>fgsm_attack</kbd> to perturbate test images and see what happens:</li>
+</ol>
+<pre style="padding-left: 60px">def adv_test(model, device, test_loader, epsilon):<br/>    model.eval()<br/>    correct = 0<br/>    adv_examples = []<br/>    #* grads of params are needed<br/>    for data, target in test_loader:<br/>        data, target = data.to(device), target.to(device)<br/><br/>        # Set requires_grad attribute of tensor. Important for Attack<br/>        data.requires_grad = True<br/>        output = model(data)<br/>        init_pred = output.max(1, keepdim=True)[1]<br/>        init_pred = init_pred.view_as(target)<br/>        loss = criterion(output, target)<br/>        model.zero_grad()<br/>        loss.backward()<br/><br/>        perturbed_data = fgsm_attack(data, epsilon, data.grad.data)<br/>        output = model(perturbed_data)<br/>        final_pred = output.max(1, keepdim=True)[1]<br/>        # final_pred has shape [1000, 1], target has shape [1000]. Must reshape final_pred<br/>        final_pred = final_pred.view_as(target)<br/>        correct += final_pred.eq(target).sum().item()<br/>        if len(adv_examples) &lt; 5 and not (final_pred == target).all():<br/>            indices = torch.arange(5)<br/>            for i in range(indices.shape[0]):<br/>                adv_ex = perturbed_data[indices[i]].squeeze().detach().cpu().numpy()<br/>                adv_examples.append((init_pred[indices[i]].item(), final_pred[indices[i]].item(), adv_ex))<br/>                if (len(adv_examples) &gt;= 5):<br/>                    break<br/>    final_acc = 100. * correct / len(test_data)<br/>    print("Epsilon: {}\tTest Accuracy = {}/{} = {:.4f}".format(<br/>        epsilon, correct, len(test_data), final_acc))<br/>    return final_acc, adv_examples<br/><br/>accuracies = []<br/>examples = []<br/><br/># Run test for each epsilon<br/>for eps in epsilons:<br/>    acc, ex = adv_test(model, device, test_loader, eps)<br/>    accuracies.append(acc)<br/>    examples.append(ex)</pre>
+<p style="padding-left: 60px">Here, we save the first five test images to <kbd>adv_examples</kbd> to show the predicted labels before and after perturbation. You can always replace the <kbd>indices = torch.arange(5)</kbd> <span>line </span><span>with the following line to only show adversarial examples that cause the model to fail:</span></p>
+<pre style="padding-left: 60px">indices = torch.ne(final_pred.ne(target), init_pred.ne(target)).nonzero()</pre>
+<p style="padding-left: 60px">The output messages in the Terminal may look like these:</p>
+<pre style="padding-left: 60px">Epsilon: 0.05 Test Accuracy = 9603/10000 = 96.0300<br/>Epsilon: 0.1 Test Accuracy = 8646/10000 = 86.4600<br/>Epsilon: 0.15 Test Accuracy = 6744/10000 = 67.4400<br/>Epsilon: 0.2 Test Accuracy = 4573/10000 = 45.7300<br/>Epsilon: 0.25 Test Accuracy = 2899/10000 = 28.9900<br/>Epsilon: 0.3 Test Accuracy = 1670/10000 = 16.7000</pre>
+<p style="padding-left: 60px">We can see that, as <kbd>epsilon</kbd> increases, more samples are mistakenly classified by the model. The test accuracy of the model drops to 16.7% at worst.</p>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<ol start="10">
+<li>Finally, illustrate the perturbed images with <kbd>matplotlib</kbd>:</li>
+</ol>
+<pre style="padding-left: 60px">cnt = 0<br/>plt.figure(figsize=(8,10))<br/>for i in range(len(epsilons)):<br/>    for j in range(len(examples[i])):<br/>        cnt += 1<br/>        plt.subplot(len(epsilons),len(examples[0]),cnt)<br/>        plt.xticks([], [])<br/>        plt.yticks([], [])<br/>        if j == 0:<br/>            plt.ylabel("Eps: {}".format(epsilons[i]), fontsize=14)<br/>        orig,adv,ex = examples[i][j]<br/>        plt.title("{} -&gt; {}".format(orig, adv))<br/>        plt.imshow(ex, cmap="gray")<br/>plt.tight_layout()<br/>plt.show()</pre>
+<p>Here are the first five test images and their predicted labels before and after perturbation with different factor values:</p>
+<div class="CDPAlignCenter CDPAlign packt_figref"><img src="assets/c40dba63-d0ee-4476-9f3b-b8d4a4f906f7.png" style="width:23.67em;height:29.25em;"/></div>
+<div class="CDPAlignCenter CDPAlign packt_figref">Adversarial examples created from MNIST</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Generative adversarial examples</h1>
+                </header>
+            
+            <article>
+                
+<p>We have been using GANs to generate various types of images in the previous chapters. Now, it's time to try generating adversarial examples with GANs and break some models! </p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Preparing an ensemble classifier for Kaggle's Cats vs. Dogs</h1>
+                </header>
+            
+            <article>
+                
+<p>To make our demonstration more similar to practical scenarios, we will train a decent model on Kaggle's Cats vs. Dogs dataset (<a href="https://www.kaggle.com/c/dogs-vs-cats">https://www.kaggle.com/c/dogs-vs-cats</a>), then break the model with adversarial examples generated by GAN. This dataset contains 25,000 training images and 12,500 testing images of either dogs or cats. Here, we will only use the 25,000 training images in our experiment.</p>
+<p>For convenience, after downloading the dataset, put images of cats and dogs in separate folders, so that the file structure looks like this:</p>
+<pre>/cats-dogs-kaggle<br/>    /cat<br/>        /cat.0.jpg<br/>        /cat.1.jpg<br/>        ...<br/>    /dog<br/>        /dog.0.jpg<br/>        /dog.1.jpg<br/>        ...</pre>
+<p>The model we are training on this dataset is formed of several pre-trained models provided by PyTorch Hub (<a href="https://github.com/pytorch/hub">https://github.com/pytorch/hub</a>). We will also need to perform transfer training on the pre-trained models to fit our dataset:</p>
+<div class="CDPAlignCenter CDPAlign"><img class="alignnone size-full wp-image-608 image-border" src="assets/76921976-ed7d-47c0-8a37-cbf386539d27.png" style="width:29.83em;height:12.42em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Ensemble model for Kaggle's Cats vs. Dogs</div>
+<p>Now, we need to load and preprocess the data, create an ensemble classifier, and train this model. Here are the detailed steps:</p>
+<ol>
+<li>Create a Python file named <kbd>cats_dogs.py</kbd> and import the Python modules:</li>
+</ol>
+<pre style="padding-left: 60px">import argparse<br/>import os<br/>import random<br/>import sys<br/><br/>import matplotlib.pyplot as plt<br/>import numpy as np<br/>import torch<br/>import torch.nn as nn<br/>import torch.backends.cudnn as cudnn<br/>import torch.utils.data<br/>import torchvision<br/>import torchvision.datasets as dset<br/>import torchvision.utils as vutils<br/><br/>import utils<br/>from advGAN import AdvGAN_Attack<br/>from data_utils import data_prefetcher, _transforms_catsdogs<br/>from model_ensemble import transfer_init, ModelEnsemble</pre>
+<p style="padding-left: 60px">Here, the custom module files, <kbd>advGAN</kbd>, <kbd>data_utils</kbd>,<kbd> </kbd>and <kbd>model_ensemble</kbd>, will be created later.</p>
+<ol start="2">
+<li>Define the main entry point in <span><kbd>cats_dogs.py</kbd>, in which argument values are parsed and the image decoding backend is defined. Here, only some of the lines are shown due to the length. The full source code is available in the <kbd>cats_dogs</kbd> folder, under the code repository for this chapter:</span></li>
+</ol>
+<pre style="padding-left: 60px">if __name__ == '__main__':<br/>    from utils import boolean_string<br/>    legal_models = ['resnet18', 'resnet34', 'mobilenet_v2', 'shufflenet_v2_x1_0',<br/>                    'squeezenet1_1', 'densenet121', 'googlenet', 'resnext50_32x4d',<br/>                    'vgg11']<br/>    parser = argparse.ArgumentParser(description='Hands-On GANs - Chapter 8')<br/>    parser.add_argument('--model', type=str, default='resnet18',<br/>                        help='one of {}'.format(legal_models))<br/>    parser.add_argument('--cuda', type=boolean_string,<br/>                        default=True, help='enable CUDA.')<br/>    parser.add_argument('--train_single', type=boolean_string,<br/>                        default=True, help='train single model.')<br/>    parser.add_argument('--train_ensemble', type=boolean_string,<br/>                        default=True, help='train final model.')<br/>    parser.add_argument('--data_split', type=float, default=0.8,<br/>                        help='split ratio for train and val data')<br/>    parser.add_argument('--data_dir', type=str,<br/>                        default='./cats_dogs_kaggle', help='Directory for dataset.')<br/>    parser.add_argument('--out_dir', type=str,<br/>                        default='./output', help='Directory for output.')<br/>    parser.add_argument('--epochs', type=int, default=60,<br/>                        help='number of epochs')<br/>    parser.add_argument('--batch_size', type=int,<br/>                        default=128, help='size of batches')<br/>    parser.add_argument('--lr', type=float, default=0.01, help='learning rate')<br/>    parser.add_argument('--classes', type=int, default=2,<br/>                        help='number of classes')<br/>    parser.add_argument('--img_size', type=int,<br/>                        default=224, help='size of images')<br/>    parser.add_argument('--channels', type=int, default=3,<br/>                        help='number of image channels')<br/>    parser.add_argument('--log_interval', type=int, default=100,<br/>                        help='interval between logging and image sampling')<br/>    parser.add_argument('--seed', type=int, default=1, help='random seed')<br/><br/>    FLAGS = parser.parse_args()<br/>    FLAGS.cuda = FLAGS.cuda and torch.cuda.is_available()<br/><br/>    if FLAGS.seed is not None:<br/>        torch.manual_seed(FLAGS.seed)<br/>        if FLAGS.cuda:<br/>            torch.cuda.manual_seed(FLAGS.seed)<br/>        np.random.seed(FLAGS.seed)<br/><br/>    cudnn.benchmark = True<br/><br/>    # if FLAGS.train:<br/>    if FLAGS.train_single or FLAGS.train_ensemble:<br/>        utils.clear_folder(FLAGS.out_dir)<br/><br/>    log_file = os.path.join(FLAGS.out_dir, 'log.txt')<br/>    print("Logging to {}\n".format(log_file))<br/>    sys.stdout = utils.StdOut(log_file)<br/><br/>    print("PyTorch version: {}".format(torch.__version__))<br/>    print("CUDA version: {}\n".format(torch.version.cuda))<br/><br/>    print(" " * 9 + "Args" + " " * 9 + "| " + "Type" +<br/>          " | " + "Value")<br/>    print("-" * 50)<br/>    for arg in vars(FLAGS):<br/>        arg_str = str(arg)<br/>        var_str = str(getattr(FLAGS, arg))<br/>        type_str = str(type(getattr(FLAGS, arg)).__name__)<br/>        print(" " + arg_str + " " * (20-len(arg_str)) + "|" +<br/>              " " + type_str + " " * (10-len(type_str)) + "|" +<br/>              " " + var_str)<br/><br/>    ...<br/><br/>    try:<br/>        import accimage<br/>        torchvision.set_image_backend('accimage')<br/>        print('Image loader backend: accimage')<br/>    except:<br/>        print('Image loader backend: PIL')<br/><br/>    ...<br/><br/>    main()</pre>
+<p style="padding-left: 60px">Here, we use <kbd>accimage</kbd> as an image decoding backend for <kbd>torchvision</kbd>. <strong>Accimage</strong> (<a href="https://github.com/pytorch/accimage">https://github.com/pytorch/accimage</a>) is an image decoding and preprocessing library designed for <span><kbd>torchvision</kbd>, which uses Intel IPP (<a href="https://software.intel.com/en-us/intel-ipp">https://software.intel.com/en-us/intel-ipp</a>) to improve processing speed.</span></p>
+<ol start="3">
+<li>Above the main entry point, define the <kbd>main</kbd> function, in which we first load and split the training images into a training set and a validation set:</li>
+</ol>
+<pre style="padding-left: 60px">FLAGS = None<br/><br/>def main():<br/>    device = torch.device("cuda:0" if FLAGS.cuda else "cpu")<br/><br/>    print('Loading data...\n')<br/>    train_transform, _ = _transforms_catsdogs(FLAGS)<br/>    train_data = dset.ImageFolder(root=FLAGS.data_dir, transform=train_transform)<br/>    assert train_data<br/><br/>    num_train = len(train_data)<br/>    indices = list(range(num_train))<br/>    random.shuffle(indices)<br/>    split = int(np.floor(FLAGS.data_split * num_train))<br/><br/>    train_loader = torch.utils.data.DataLoader(<br/>        train_data, batch_size=FLAGS.batch_size,<br/>        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),<br/>        num_workers=2)<br/><br/>    valid_loader = torch.utils.data.DataLoader(<br/>        train_data, batch_size=FLAGS.batch_size,<br/>        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),<br/>        num_workers=2)</pre>
+<p style="padding-left: 60px">We split the 25,000 training images into 2 collections, in which 80% of the images are randomly selected to form the training set and the remaining 20% form the validation set. Here, <kbd>_transforms_catsdogs</kbd> is defined in <kbd>data_utils.py</kbd>:</p>
+<pre style="padding-left: 60px">import numpy as np<br/>import torch<br/>import torchvision.transforms as transforms<br/><br/>def _transforms_catsdogs(args):<br/>    train_transform = transforms.Compose([<br/>        transforms.Resize((args.img_size, args.img_size)),<br/>        transforms.RandomHorizontalFlip(),<br/>        transforms.ToTensor(),<br/>    ])<br/><br/>    valid_transform = transforms.Compose([<br/>        transforms.ToTensor()<br/>        ])<br/>    return train_transform, valid_transform</pre>
+<p style="padding-left: 60px">Again, we are not whitening the images. However, if you are interested in how to efficiently calculate the mean and standard deviation values of a dataset, the code snippet is provided in the <kbd>mean_std.py</kbd> file.</p>
+<div class="packt_tip">Be comfortable with using <kbd>multiprocessing.Pool</kbd> to process your data, which is demonstrated in <kbd>mean_std.py</kbd>.</div>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<ol start="4">
+<li>Get the pre-trained model files from PyTorch Hub and start transfer learning:</li>
+</ol>
+<p> </p>
+<pre style="padding-left: 60px">    if FLAGS.train_single:<br/>        print('Transfer training model {}...\n'.format(FLAGS.model))<br/>        model = torch.hub.load('pytorch/vision', FLAGS.model, pretrained=True)<br/>        for param in model.parameters():<br/>            param.requires_grad = False<br/><br/>        model, param_to_train = transfer_init(model, FLAGS.model, FLAGS.classes)<br/>        model.to(device)<br/><br/>        optimizer = torch.optim.SGD(<br/>            param_to_train, FLAGS.lr,<br/>            momentum=0.9, weight_decay=5e-4)<br/>        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)<br/><br/>        criterion = nn.CrossEntropyLoss()<br/><br/>        # Train<br/>        best_acc = 0.0<br/>        for epoch in range(25):<br/>            model.train()<br/>            scheduler.step()<br/>            print('Epoch {}, lr: {}'.format(epoch, scheduler.get_lr()[0]))<br/>            prefetcher = data_prefetcher(train_loader)<br/>            data, target = prefetcher.next()<br/>            batch_idx = 0<br/>            while data is not None:<br/>                optimizer.zero_grad()<br/>                output = model(data)<br/>                pred = output.max(1, keepdim=True)[1]<br/>                loss = criterion(output, target)<br/>                loss.backward()<br/>                optimizer.step()<br/>                correct = pred.eq(target.view_as(pred)).sum().item()<br/>                if batch_idx % FLAGS.log_interval == 0:<br/>                    print('[{}/{}]\tloss: {:.4f}\tbatch accuracy: {:.4f}%'.format(<br/>                        batch_idx * FLAGS.batch_size, num_train,<br/>                        loss.item(), 100 * correct / data.size(0)))<br/>                data, target = prefetcher.next()<br/>                batch_idx += 1<br/>            # Eval<br/>            ...</pre>
+<p style="padding-left: 60px">The code for evaluation is omitted due to the length. Here, <kbd>transfer_init</kbd> is defined in <kbd>model_ensemble.py</kbd> and is responsible for replacing the second to the last layer in each model so that we can train it for any number of classes:</p>
+<pre style="padding-left: 60px">import os<br/><br/>import torch<br/>import torch.nn as nn<br/><br/>def transfer_init(model, model_name, num_class):<br/>    param_to_train = None<br/>    if model_name in ['resnet18', 'resnet34', 'shufflenet_v2_x1_0', 'googlenet', 'resnext50_32x4d']:<br/>        num_features = model.fc.in_features<br/>        model.fc = nn.Linear(num_features, num_class)<br/>        param_to_train = model.fc.parameters()<br/>    elif model_name in ['mobilenet_v2']:<br/>        num_features = model.classifier[1].in_features<br/>        model.classifier[1] = nn.Linear(num_features, num_class)<br/>        param_to_train = model.classifier[1].parameters()<br/>    elif model_name in ['squeezenet1_1']:<br/>        num_features = model.classifier[1].in_channels<br/>        model.classifier[1] = nn.Conv2d(num_features, num_class, kernel_size=1)<br/>        param_to_train = model.classifier[1].parameters()<br/>    elif model_name in ['densenet121']:<br/>        num_features = model.classifier.in_features<br/>        model.classifier = nn.Linear(num_features, num_class)<br/>        param_to_train = model.classifier.parameters()<br/>    elif model_name in ['vgg11']:<br/>        num_features = model.classifier[6].in_features<br/>        model.classifier[6] = nn.Linear(num_features, num_class)<br/>        param_to_train = model.classifier[6].parameters()<br/>    return model, param_to_train</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<div class="packt_infobox">Here's why we can transfer the knowledge learned from one domain (trained on ImageNet) to another domain (Cats vs. Dogs) by simply replacing the last layer (usually a fully connected layer). All of the convolution layers in a CNN are responsible for extracting features from the image and intermediate feature maps. The fully connected layer can be seen as recombining the highest-level features to form the final abstraction of the raw data. It is obvious that good models trained on ImageNet are good at extracting features. Therefore, recombining those features differently is highly likely to be capable for an easier dataset such as Cats vs. Dogs.</div>
+<p style="padding-left: 60px">Also, <kbd>data_prefetcher</kbd> is used to speed up the training process. It's defined in <kbd>data_utils.py</kbd>:</p>
+<pre style="padding-left: 60px">class data_prefetcher():<br/>    def __init__(self, loader):<br/>        self.loader = iter(loader)<br/>        self.stream = torch.cuda.Stream()<br/>        self.preload()<br/><br/>    def preload(self):<br/>        try:<br/>            self.next_input, self.next_target = next(self.loader)<br/>        except StopIteration:<br/>            self.next_input = None<br/>            self.next_target = None<br/>            return<br/>        with torch.cuda.stream(self.stream):<br/>            self.next_input = self.next_input.cuda(non_blocking=True)<br/>            self.next_target = self.next_target.cuda(non_blocking=True)<br/>            self.next_input = self.next_input.float()<br/><br/>    def next(self):<br/>        torch.cuda.current_stream().wait_stream(self.stream)<br/>        input = self.next_input<br/>        target = self.next_target<br/>        self.preload()<br/>        return input, target</pre>
+<p style="padding-left: 30px">The training of these individual models can be really fast. Here is the GPU memory consumption and validation accuracy after 25 epochs of transfer learning:</p>
+<table border="1" style="border-collapse: collapse;width: 100%">
+<tbody>
+<tr>
+<td><strong>Model</strong></td>
+<td><strong>Memory</strong></td>
+<td><strong>Accuracy</strong></td>
+</tr>
+<tr>
+<td>MobileNet V2</td>
+<td>1665MB</td>
+<td>98.14%</td>
+</tr>
+<tr>
+<td>ResNet-18</td>
+<td>1185MB</td>
+<td>98.24%</td>
+</tr>
+<tr>
+<td>DenseNet</td>
+<td>1943MB</td>
+<td>98.76%</td>
+</tr>
+<tr>
+<td>GoogleNet</td>
+<td>1447MB</td>
+<td>98.06%</td>
+</tr>
+<tr>
+<td>ResNeXt-50</td>
+<td>1621MB</td>
+<td>98.98%</td>
+</tr>
+</tbody>
+</table>
+<p style="padding-left: 60px">ResNet-34, ShuffleNet V2, SqueezeNet, and VGG-11 are not selected due to either low performance or high memory consumption (over 2 GB).</p>
+<div class="packt_tip">Saving your model to the hard drive with <kbd>torch.save(model.state_dict(), PATH)</kbd> will only export the parameter values and you need to explicitly define <kbd>model</kbd> before loading it in another script. However, <kbd>torch.save(model, PATH)</kbd> will save everything, including the model definition, to the file.</div>
+<ol start="5">
+<li>Put together the ensemble classifier in <kbd>model_ensemble.py</kbd>:</li>
+</ol>
+<pre style="padding-left: 60px">class ModelEnsemble(nn.Module):<br/>    def __init__(self, model_names, num_class, model_path):<br/>        super(ModelEnsemble, self).__init__()<br/>        self.model_names = model_names<br/>        self.num_class = num_class<br/>        models = []<br/>        for m in self.model_names:<br/>            model = torch.load(os.path.join(model_path, '{}.pth'.format(m)))<br/>            for param in model.parameters():<br/>                param.requires_grad = False<br/>            models.append(model)<br/>        self.models = nn.Sequential(*models)<br/>        self.vote_layer = nn.Linear(len(self.model_names)*self.num_class, self.num_class)<br/><br/>    def forward(self, input):<br/>        raw_outputs = []<br/>        for m in self.models:<br/>            _out = m(input)<br/>            raw_outputs.append(_out)<br/>        raw_out = torch.cat(raw_outputs, dim=1)<br/>        output = self.vote_layer(raw_out)<br/>        return output</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p style="padding-left: 60px">Here, the prediction results from all models are combined together to give the final prediction in <kbd>vote_layer</kbd>.</p>
+<p> </p>
+<div class="packt_tip packt_infobox">Alternatively, you can always directly put together the feature maps from the last convolution layers in the pretrained models and train one single fully connected layer to predict the image label.</div>
+<ol start="6">
+<li>Get back to the <kbd>cats_dogs.py</kbd> file and start training the <span>ensemble classifier</span>:</li>
+</ol>
+<pre style="padding-left: 60px"> elif FLAGS.train_ensemble:<br/> print('Loading model...\n')<br/> model_names = ['mobilenet_v2', 'resnet18', 'densenet121',<br/> 'googlenet', 'resnext50_32x4d']<br/> model = ModelEnsemble(model_names, FLAGS.classes, FLAGS.model_dir)<br/> model.to(device)<br/><br/> optimizer = torch.optim.SGD(<br/> model.vote_layer.parameters(), FLAGS.lr,<br/> momentum=0.9, weight_decay=5e-4)<br/> scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.1)<br/><br/> criterion = nn.CrossEntropyLoss()<br/><br/> # Train<br/> print('Training ensemble model...\n')<br/> for epoch in range(2):<br/> model.train()<br/> scheduler.step()<br/> print('Epoch {}, lr: {}'.format(epoch, scheduler.get_lr()[0]))<br/> prefetcher = data_prefetcher(train_loader)<br/> data, target = prefetcher.next()<br/> batch_idx = 0<br/> while data is not None:<br/> optimizer.zero_grad()<br/> output = model(data)<br/> pred = output.max(1, keepdim=True)[1]<br/> loss = criterion(output, target)<br/> loss.backward()<br/> optimizer.step()<br/> correct = pred.eq(target.view_as(pred)).sum().item()<br/> if batch_idx % FLAGS.log_interval == 0:<br/> print('[{}/{}]\tloss: {:.4f}\tbatch accuracy: {:.4f}%'.format(<br/> batch_idx * FLAGS.batch_size, num_train,<br/> loss.item(), 100 * correct / data.size(0)))<br/> data, target = prefetcher.next()<br/> batch_idx += 1<br/> # Eval<br/> ...</pre>
+<p>Again, the code for evaluation is omitted due to the length. Validation accuracy of the ensemble classifier reaches 99.32% after only 2 epochs of training. The training of the ensemble classifier only takes 2775 MB of the GPU memory and the exported model file size is no more than 200 MB.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Breaking the classifier with advGAN</h1>
+                </header>
+            
+            <article>
+                
+<p>The GAN model we'll use for generating adversarial examples is largely borrowed from <a href="https://github.com/mathcbc/advGAN_pytorch">https://github.com/mathcbc/advGAN_pytorch</a>. Let's create two files named <kbd>advGAN.py</kbd> and <kbd>models.py</kbd> and put the following code in these files:</p>
+<ol>
+<li><kbd><span>advGAN.py</span></kbd>: Within this file, you will see the following:</li>
+</ol>
+<pre style="padding-left: 60px">import torch.nn as nn<br/>import torch<br/>import numpy as np<br/>import models<br/>import torch.nn.functional as F<br/>import torchvision<br/>import os<br/><br/>def weights_init(m):<br/>    classname = m.__class__.__name__<br/>    if classname.find('Conv') != -1:<br/>        nn.init.normal_(m.weight.data, 0.0, 0.02)<br/>    elif classname.find('BatchNorm') != -1:<br/>        nn.init.normal_(m.weight.data, 1.0, 0.02)<br/>        nn.init.constant_(m.bias.data, 0)<br/><br/>class AdvGAN_Attack:<br/>    def __init__(self,<br/>                 device,<br/>                 model,<br/>                 model_num_labels,<br/>                 image_nc,<br/>                 box_min,<br/>                 box_max,<br/>                 model_path):<br/>        output_nc = image_nc<br/>        self.device = device<br/>        self.model_num_labels = model_num_labels<br/>        self.model = model<br/>        self.input_nc = image_nc<br/>        self.output_nc = output_nc<br/>        self.box_min = box_min<br/>        self.box_max = box_max<br/>        self.model_path = model_path<br/><br/>        self.gen_input_nc = image_nc<br/>        self.netG = models.Generator(self.gen_input_nc, image_nc).to(device)<br/>        self.netDisc = models.Discriminator(image_nc).to(device)<br/><br/>        # initialize all weights<br/>        self.netG.apply(weights_init)<br/>        self.netDisc.apply(weights_init)<br/><br/>        # initialize optimizers<br/>        self.optimizer_G = torch.optim.Adam(self.netG.parameters(),<br/>                                            lr=0.001)<br/>        self.optimizer_D = torch.optim.Adam(self.netDisc.parameters(),<br/>                                            lr=0.001)<br/><br/>    def train_batch(self, x, labels):<br/>        # optimize D<br/>        for i in range(1):<br/>            perturbation = self.netG(x)<br/><br/>            adv_images = torch.clamp(perturbation, -0.3, 0.3) + x<br/>            adv_images = torch.clamp(adv_images, self.box_min, <br/>              self.box_max)<br/><br/>            self.optimizer_D.zero_grad()<br/>            pred_real = self.netDisc(x)<br/>            loss_D_real = F.mse_loss(pred_real, <br/>              torch.ones_like(pred_real, device=self.device))<br/>            loss_D_real.backward()<br/><br/>            pred_fake = self.netDisc(adv_images.detach())<br/>            loss_D_fake = F.mse_loss(pred_fake, <br/>              torch.zeros_like(pred_fake, device=self.device))<br/>            loss_D_fake.backward()<br/>            loss_D_GAN = loss_D_fake + loss_D_real<br/>            self.optimizer_D.step()<br/><br/>        # optimize G<br/>        for i in range(1):<br/>            self.optimizer_G.zero_grad()<br/><br/>            pred_fake = self.netDisc(adv_images)<br/>            loss_G_fake = F.mse_loss(pred_fake, <br/>              torch.ones_like(pred_fake, device=self.device))<br/>            loss_G_fake.backward(retain_graph=True)<br/><br/>            C = 0.1<br/>            loss_perturb = torch.mean(torch.norm(perturbation.view(perturbation.shape[0], -1), 2, dim=1))<br/><br/>            logits_model = self.model(adv_images)<br/>            probs_model = F.softmax(logits_model, dim=1)<br/>            onehot_labels = torch.eye(self.model_num_labels, device=self.device)[labels]<br/><br/>            real = torch.sum(onehot_labels * probs_model, dim=1)<br/>            other, _ = torch.max((1 - onehot_labels) * probs_model - onehot_labels * 10000, dim=1)<br/>            zeros = torch.zeros_like(other)<br/>            loss_adv = torch.max(real - other, zeros)<br/>            loss_adv = torch.sum(loss_adv)<br/><br/>            adv_lambda = 10<br/>            pert_lambda = 1<br/>            loss_G = adv_lambda * loss_adv + pert_lambda *  <br/>             loss_perturb<br/>            loss_G.backward()<br/>            self.optimizer_G.step()<br/><br/>        return loss_D_GAN.item(), loss_G_fake.item(), <br/>         loss_perturb.item(), loss_adv.item()<br/><br/>    def train(self, train_dataloader, epochs):<br/>        ...<br/><br/>    def adv_example(self, data):<br/>        perturbation = self.netG(data)<br/>        adv_images = torch.clamp(perturbation, -0.3, 0.3) + data<br/>        adv_images = torch.clamp(adv_images, self.box_min,  <br/>          self.box_max)<br/>        return adv_images</pre>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mce-root"/>
+<p class="mceNonEditable"/>
+<p class="mceNonEditable"/>
+<p style="padding-left: 60px">Part of the code is omitted due to the length. We can see that this GAN model is only responsible for generating the noise part in the adversarial example, which is clamped to [-0.3, 0.3] before being added to the original image. During training, MSE loss is used to measure the discriminator loss. L1-loss is used to calculate the adversarial loss for the generator. The L2-norm of the generated perturbation noise is also included in the generator loss. However, the performance of the GAN is highly related to the classifier (<kbd>self.model</kbd>) we are aiming to break, which means that the GAN model needs to be retrained each time a new classifier is introduced.</p>
+<p style="padding-left: 60px">The code in <kbd>models.py</kbd> is omitted here but is available in the code repository for this chapter, since you can basically design the discriminator and generator any way you like. Here, we use a 4-layer CNN as the discriminator network and a 14-layer ResNet-like CNN as the generator network.</p>
+<p style="padding-left: 60px">Back to <kbd>cats_dogs.py</kbd>, we need to train the GAN model to learn how to break the ensemble classifier.</p>
+<ol start="2">
+<li>Redefine the data loader because we need a smaller batch size to fit in the 11 GB GPU memory:</li>
+</ol>
+<pre>        print('Training GAN for adversarial attack...\n')<br/>        train_loader = torch.utils.data.DataLoader(<br/>            train_data, batch_size=16,<br/>             <br/><br/>        sampler=torch.utils.data.sampler.SubsetRandomSampler<br/>            (indices[:split]),<br/>            num_workers=2)</pre>
+<ol start="3">
+<li>Start training the GAN model:</li>
+</ol>
+<pre>        model.eval()<br/>        advGAN = AdvGAN_Attack(device, model, FLAGS.classes,<br/>                               FLAGS.channels, 0, 1, FLAGS.model_dir)<br/>        advGAN.train(train_loader, FLAGS.epochs)</pre>
+<ol start="4">
+<li>Attack the ensemble classifier with the GAN:</li>
+</ol>
+<pre style="padding-left: 60px">        print('Attacking ensemble model...\n')<br/>        test_loss = 0<br/>        test_correct = 0<br/>        adv_examples = []<br/>        with torch.no_grad():<br/>            valid_prefetcher = data_prefetcher(valid_loader)<br/>            data, target = valid_prefetcher.next()<br/>            while data is not None:<br/>                output = model(data)<br/>                init_pred = output.max(1, keepdim=True)[1]<br/>                init_pred = init_pred.view_as(target)<br/><br/>                perturbed_data = advGAN.adv_example(data)<br/>                output = model(perturbed_data)<br/>                test_loss += criterion(output, target).item()<br/>                final_pred = output.max(1, keepdim=True)[1]<br/>                final_pred = final_pred.view_as(target)<br/>                test_correct += final_pred.eq(target).sum().item()<br/>                if len(adv_examples) &lt; 64 and not (final_pred == target).all():<br/>                    indices = torch.ne(final_pred.ne(target), init_pred.ne(target)).nonzero()<br/>                    for i in range(indices.shape[0]):<br/>                        adv_ex = perturbed_data[indices[i]].squeeze().detach().cpu().numpy()<br/>                        adv_examples.append((init_pred[indices[i]].item(), final_pred[indices[i]].item(), adv_ex))<br/>                        if (len(adv_examples) &gt;= 64):<br/>                            break<br/>                data, target = valid_prefetcher.next()<br/>        test_loss /= len(valid_loader)<br/>        print('Eval loss: {:.4f}, accuracy: {:.4f}'.format(<br/>            test_loss, 100 * test_correct / (1-FLAGS.data_split) / num_train))</pre>
+<p style="padding-left: 60px"><span>It takes about 6 hours to finish 60 epochs of training on the GAN model. The attack result may look like this:</span></p>
+<pre style="padding-left: 60px">Attacking ensemble model...<br/><br/>Eval loss: 2.1465, accuracy: 10.3000</pre>
+<p style="padding-left: 60px">We can see that the validation accuracy drops <span>from 99.32%</span> to 10.3% as a result of the adversarial attack by the GAN.</p>
+<p class="mce-root"/>
+<ol start="5">
+<li>Display some of the misclassified images with <kbd>matplotlib</kbd>:</li>
+</ol>
+<pre>        cnt = 0<br/>        plt.figure(figsize=(8,10))<br/>        for i in range(8):<br/>            for j in range(8):<br/>                cnt += 1<br/>                plt.subplot(8, 8, cnt)<br/>                plt.xticks([], [])<br/>                plt.yticks([], [])<br/>                orig, adv, ex = adv_examples[i*8+j]<br/>                ex = np.transpose(ex, (1, 2, 0))<br/>                plt.title("{} -&gt; {}".format(orig, adv))<br/>                plt.imshow(ex)<br/>        plt.tight_layout()<br/>        plt.show()</pre>
+<p>Now that everything in the code is finished, it's time to finally actually run our program.  We need to do this multiple times, once for each model. Create an empty folder named models in your code folder to hold the saved models.</p>
+<p>We'll start the program from the command line:</p>
+<pre><strong>$ python cats_dogs.py --model resnet34 --train_single True</strong><br/><strong>$ python cats_dogs.py --model mobilenet_v2 --train_single True --data_dir ./cats-dogs-kaggle</strong><br/><strong>$ python cats_dogs.py --model shufflenet_v2_x1_0 --train_single True --data_dir ./cats-dogs-kaggle</strong><br/><strong>$ python cats_dogs.py --model squeezenet1_1 --train_single True --data_dir ./cats-dogs-kaggle </strong><br/><strong>$ python cats_dogs.py --model densenet121 --train_single True --data_dir ./cats-dogs-kaggle</strong><br/><strong>$ python cats_dogs.py --model googlenet --train_single True --data_dir ./cats-dogs-kaggle</strong><br/><strong>$ python cats_dogs.py --model resnext50_32x4d --train_single True --data_dir ./cats-dogs-kaggle</strong><br/><strong>$ python cats_dogs.py --model vgg11 --train_single True --data_dir ./cats-dogs-kaggle</strong></pre>
+<p>Once all the models have run, we can finally test our ensemble code:</p>
+<pre><strong>$ python cats_dogs.py --train_single False --train_ensemble True</strong></pre>
+<p><span>Here are </span>some<span> of the </span>pertubated<span> images generated by the GAN that </span>fool<span>ed our ensemble classifier:</span></p>
+<div class="packt_figref CDPAlignCenter CDPAlign"><img src="assets/0156142b-1ebb-4e7d-b7b9-67837d9e8eab.png" style="width:38.42em;height:48.08em;"/></div>
+<div class="packt_figref CDPAlignCenter CDPAlign">Adversarial examples generated by the GAN</div>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">Summary</h1>
+                </header>
+            
+            <article>
+                
+<p>A lot that has gone on in this chapter. You've learned the basics of Fast Gradient Sign Methods, how to train a  classifier with pre-trained models, how to deal with transfer learning, and much more.</p>
+<p>In the next chapter, we will show how to combine <strong>NLP</strong> (<strong>Natural Language Processing</strong>) with GANs and generate images from the description text.</p>
+
+
+            </article>
+
+            
+        </section>
+    
+
+        <section>
+
+                            <header>
+                    <h1 class="header-title">References and further reading list</h1>
+                </header>
+            
+            <article>
+                
+<ol>
+<li>Goodfellow I, Papernot N, Huang S, et. al. (Feb 24, 2017). <em>Attacking machine learning with adversarial examples</em>. Retrieved from <a href="https://openai.com/blog/adversarial-example-research">https://openai.com/blog/adversarial-example-research</a>.</li>
+<li>Brown T, Mané D, Roy A, et al (2017). <em>Adversarial Patch</em>. NIPS.</li>
+<li>Athalye A, Engstrom L, Ilyas A. (2018). <em>Synthesizing Robust Adversarial Examples</em>. ICML.</li>
+</ol>
+
+
+            </article>
+
+            
+        </section>
+    </body></html>
