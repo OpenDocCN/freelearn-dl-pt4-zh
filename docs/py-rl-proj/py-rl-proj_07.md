@@ -1,4 +1,4 @@
-# 创建聊天机器人
+# 第七章：创建聊天机器人
 
 对话代理和聊天机器人近年来不断崛起。许多企业已开始依靠聊天机器人来回答客户的咨询，这一做法取得了显著成功。聊天机器人在过去一年增长了 5.6 倍 ([`chatbotsmagazine.com/chatbot-report-2018-global-trends-and-analysis-4d8bbe4d924b`](https://chatbotsmagazine.com/chatbot-report-2018-global-trends-and-analysis-4d8bbe4d924b))。聊天机器人可以帮助组织与客户进行沟通和互动，且无需人工干预，成本非常低廉。超过 51%的客户表示，他们希望企业能够 24/7 提供服务，并期望在一小时内得到回复。为了以一种负担得起的方式实现这一成功，尤其是在拥有大量客户的情况下，企业必须依赖聊天机器人。
 

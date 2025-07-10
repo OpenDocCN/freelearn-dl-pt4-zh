@@ -1,4 +1,4 @@
-# 使用 TensorFlow 和 Spark 进行图像分类
+# 第十三章：使用 TensorFlow 和 Spark 进行图像分类
 
 本章将涵盖以下内容：
 

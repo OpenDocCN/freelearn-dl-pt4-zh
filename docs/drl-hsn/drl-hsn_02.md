@@ -1,6 +1,6 @@
-# 2
 
-# OpenAI Gym API 和 Gymnasium
+
+# 第二章：OpenAI Gym API 和 Gymnasium
 
 在第一章中，我们讨论了强化学习（RL）的理论概念后，接下来让我们开始一些实际操作。在本章中，你将学习 Gymnasium 的基础知识，这是一种为 RL 智能体和大量 RL 环境提供统一 API 的库。最初，这个 API 是在 OpenAI Gym 库中实现的，但它不再维护。在本书中，我们将使用 Gymnasium——OpenAI Gym 的一个分支，实现在同一 API 下的功能。无论如何，统一的 API 让环境的细节无须担心，避免了编写冗余代码，从而可以用更通用的方式实现智能体。
 

@@ -1,4 +1,4 @@
-# 在你自己的模型中使用 FastText
+# 第七章：在你自己的模型中使用 FastText
 
 在本节中，你将学习如何将 fastText 模型与其他流行的 NLP 库（如 Gensim 和 spaCy）结合使用。你还将了解如何将 fastText 作为你管道的一部分，这个管道可能还会包含这些其他工具。
 

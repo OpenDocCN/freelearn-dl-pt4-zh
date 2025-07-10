@@ -1,4 +1,4 @@
-# Python 中的 FastText
+# 第八章：Python 中的 FastText
 
 fastText 的使用专门是为了将单词和句子转换为高效的向量表示。尽管 fastText 是用 C++编写的，但有社区编写的 Python 绑定可以训练和使用这些模型。同时，Python 是自然语言处理（NLP）中最流行的语言之一，因此有许多其他流行的 Python 库支持 fastText 模型及其训练。Gensim 和 Spacy 是两个受欢迎的库，它们使得加载这些向量、转换、词形还原以及高效地执行其他 NLP 任务变得简单。本章将重点介绍如何使用 Python 与 fastText 及其流行库配合使用，同时展示这两个库在处理 fastText 模型时可以完成的一些常见任务。
 

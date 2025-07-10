@@ -1,4 +1,4 @@
-# 介绍 FastText
+# 第二章：介绍 FastText
 
 欢迎来到 *fastText 快速入门指南*。在本章中，你将学习如何安装 fastText，并创建一个稳定的环境，以便将 fastText 应用到你的自然语言处理应用中。
 

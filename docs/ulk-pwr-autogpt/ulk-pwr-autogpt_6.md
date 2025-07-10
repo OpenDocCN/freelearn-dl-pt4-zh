@@ -1,6 +1,6 @@
-# 6
 
-# 使用 Docker 和高级设置为企业级项目扩展 Auto-GPT
+
+# 第六章：使用 Docker 和高级设置为企业级项目扩展 Auto-GPT
 
 在 *第二章**,* 我们介绍了如何使用 Docker 启动 Auto-GPT；现在，我们将深入探讨 Docker 的使用。
 

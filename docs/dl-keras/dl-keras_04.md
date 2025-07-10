@@ -1,4 +1,4 @@
-# 生成对抗网络与 WaveNet
+# 第四章：生成对抗网络与 WaveNet
 
 在本章中，我们将讨论**生成对抗网络**（**GANs**）和 WaveNet。GAN 被 Yann LeCun（深度学习的奠基人之一）称为*过去 10 年中机器学习领域最有趣的想法*（[`www.quora.com/What-are-some-recent-and-potentially-upcoming-breakthroughs-in-deep-learning`](https://www.quora.com/What-are-some-recent-and-potentially-upcoming-breakthroughs-in-deep-learning)）。GAN 能够学习如何生成看起来真实的合成数据。例如，计算机可以学习如何绘画并创造逼真的图像。这个概念最初由 Ian Goodfellow 提出（更多信息请参见：*NIPS 2016 教程：生成对抗网络*，I. Goodfellow，2016）；他曾与蒙特利尔大学、Google Brain 合作，最近也参与了 OpenAI 的工作（[`openai.com/`](https://openai.com/)）。WaveNet 是 Google DeepMind 提出的一种深度生成网络，用于教计算机如何再现人类语音和乐器声音，且质量令人印象深刻。
 

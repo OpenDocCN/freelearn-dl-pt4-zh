@@ -1,4 +1,4 @@
-# 自动图像描述
+# 第十一章：自动图像描述
 
 在上一章中，我们了解了如何构建物体检测和分类模型，这非常令人兴奋。但在这一章中，我们将做一些更令人印象深刻的事情，结合计算机视觉和自然语言处理的当前最先进技术，形成一个完整的图像描述方法（[`www.cs.cmu.edu/~afarhadi/papers/sentence.pdf`](https://www.cs.cmu.edu/~afarhadi/papers/sentence.pdf)）。这将负责构建任何提供图像的计算机生成的自然描述。
 

@@ -1,4 +1,4 @@
-# 在 R 中使用 TensorFlow 构建深度学习模型
+# 第八章：在 R 中使用 TensorFlow 构建深度学习模型
 
 本章内容将介绍如何在 R 中使用 TensorFlow。我们已经在使用 TensorFlow 了很多，因为 Keras 是一个高级神经网络 API，它可以使用 TensorFlow、CNTK 或 Theano。在 R 中，Keras 背后使用的是 TensorFlow。尽管使用 TensorFlow 开发深度学习模型较为复杂，但 TensorFlow 中有两个有趣的包可能会被忽视：TensorFlow 估算器和 TensorFlow 运行。我们将在本章中介绍这两个包。
 

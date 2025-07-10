@@ -1,4 +1,4 @@
-# 探索学习环境的全景 - Roboschool、Gym-Retro、StarCraft-II、DeepMindLab
+# 第九章：探索学习环境的全景 - Roboschool、Gym-Retro、StarCraft-II、DeepMindLab
 
 在你不断积累经验的过程中，已经走过了很长一段路，目的是通过动手实践构建智能体，解决各种具有挑战性的问题。在前几章中，我们探讨了 OpenAI Gym 中提供的几个环境。在本章中，我们将超越 Gym，看看一些其他开发完善的环境，供你训练智能体或进行实验。
 
