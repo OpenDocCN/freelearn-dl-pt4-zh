@@ -1,6 +1,6 @@
-# Github DevOps 加速指南
+# PyTorch 1.x 生成对抗网络实用指南
 
-> 原文：[`annas-archive.org/md5/677f27c30764b3701bc2b6cf6de3a30e`](https://annas-archive.org/md5/677f27c30764b3701bc2b6cf6de3a30e)
+> 原文：[`annas-archive.org/md5/4ceb429939c3f8c63a03485ea60a4ebe`](https://annas-archive.org/md5/4ceb429939c3f8c63a03485ea60a4ebe)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 

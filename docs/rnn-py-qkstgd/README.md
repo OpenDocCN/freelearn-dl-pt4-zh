@@ -1,6 +1,6 @@
-# Github DevOps 加速指南
+# Python 循环神经网络快速启动指南
 
-> 原文：[`annas-archive.org/md5/677f27c30764b3701bc2b6cf6de3a30e`](https://annas-archive.org/md5/677f27c30764b3701bc2b6cf6de3a30e)
+> 原文：[`annas-archive.org/md5/e92cc5bb94ebbc685e165e06708ba6e3`](https://annas-archive.org/md5/e92cc5bb94ebbc685e165e06708ba6e3)
 > 
 > 译者：[飞龙](https://github.com/wizardforcel)
 > 
